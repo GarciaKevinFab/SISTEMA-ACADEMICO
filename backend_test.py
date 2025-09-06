@@ -220,8 +220,9 @@ class AcademicSystemTester:
 
     def test_create_course(self, token: str) -> Optional[str]:
         """Test course creation"""
+        timestamp = datetime.now().strftime('%H%M%S')
         course_data = {
-            "code": "EDI101",
+            "code": f"EDI{timestamp}",
             "name": "Fundamentos de Educación Inicial",
             "credits": 4,
             "semester": 1,
