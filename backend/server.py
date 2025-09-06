@@ -77,6 +77,21 @@ class GradeStatus(str, Enum):
     INCOMPLETE = "INCOMPLETE"
     WITHDRAWN = "WITHDRAWN"
 
+class ProcedureStatus(str, Enum):
+    RECEIVED = "RECEIVED"        # Recibido
+    IN_PROCESS = "IN_PROCESS"    # En proceso
+    COMPLETED = "COMPLETED"      # Finalizado
+    REJECTED = "REJECTED"        # Rechazado
+    PENDING_INFO = "PENDING_INFO" # Pendiente de información
+
+class ProcedureArea(str, Enum):
+    ACADEMIC = "ACADEMIC"        # Académica
+    ADMINISTRATIVE = "ADMINISTRATIVE"  # Administrativa
+    FINANCIAL = "FINANCIAL"      # Financiera
+    LEGAL = "LEGAL"             # Legal
+    HR = "HR"                   # Recursos Humanos
+    GENERAL = "GENERAL"         # General
+
 # Pydantic Models
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
