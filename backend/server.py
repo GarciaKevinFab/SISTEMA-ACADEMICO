@@ -105,7 +105,7 @@ class StudentCreate(BaseModel):
     last_name: str = Field(..., min_length=2, max_length=50)
     second_last_name: Optional[str] = Field(None, max_length=50)
     birth_date: date
-    gender: str = Field(..., regex="^(M|F)$")
+    gender: str = Field(..., pattern="^(M|F)$")
     
     # Identity Document
     document_type: DocumentType
