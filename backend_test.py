@@ -21,6 +21,9 @@ class AcademicSystemTester:
         self.external_user_token = None
         self.applicant_token = None
         self.academic_staff_token = None
+        self.finance_admin_token = None
+        self.cashier_token = None
+        self.warehouse_token = None
         self.tests_run = 0
         self.tests_passed = 0
         self.created_resources = {
