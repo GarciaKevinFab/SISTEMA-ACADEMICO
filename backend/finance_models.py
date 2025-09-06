@@ -44,7 +44,7 @@ class CashSession(BaseModel):
     
     # Status and dates
     status: str = "OPEN"  # CashSessionStatus
-    opened_at: datetime = Field(default_factory=datetime.utcnow)
+    opened_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     closed_at: Optional[datetime] = None
     reconciled_at: Optional[datetime] = None
     
