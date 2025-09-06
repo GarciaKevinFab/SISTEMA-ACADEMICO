@@ -872,7 +872,107 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_user)):
             "approved_courses": approved_courses
         }
     
+    # Add Mesa de Partes stats for all roles
+    if current_user.role in [UserRole.ADMIN, UserRole.ADMIN_WORKER]:
+        # Admin/Worker stats
+        total_procedures = await db.procedures.count_documents({})
+        pending_procedures = await db.procedures.count_documents({"status": {"$in": ["RECEIVED", "IN_PROCESS"]}})
+        my_assigned = await db.procedures.count_documents({"assigned_to": current_user.id})
+        
+        stats.update({
+            "total_procedures": total_procedures,
+            "pending_procedures": pending_procedures,
+            "my_assigned_procedures": my_assigned
+        })
+    
+    elif current_user.role == UserRole.EXTERNAL_USER:
+        # External user stats
+        my_procedures = await db.procedures.count_documents({"created_by": current_user.id})
+        my_pending = await db.procedures.count_documents({
+            "created_by": current_user.id, 
+            "status": {"$in": ["RECEIVED", "IN_PROCESS"]}
+        })
+        
+        stats.update({
+            "my_procedures": my_procedures,
+            "my_pending_procedures": my_pending
+        })
+    
     return stats
+
+@api_router.get("/dashboard/procedure-stats", dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.ADMIN_WORKER]))])
+async def get_procedure_stats(current_user: User = Depends(get_current_user)):
+    """Get detailed Mesa de Partes statistics"""
+    
+    # Status distribution
+    status_stats = await db.procedures.aggregate([
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]).to_list(10)
+    
+    # Area distribution
+    area_stats = await db.procedures.aggregate([
+        {"$group": {"_id": "$area", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]).to_list(10)
+    
+    # Monthly trends (last 6 months)
+    six_months_ago = datetime.now() - timedelta(days=180)
+    monthly_stats = await db.procedures.aggregate([
+        {"$match": {"created_at": {"$gte": six_months_ago.isoformat()}}},
+        {
+            "$group": {
+                "_id": {
+                    "year": {"$year": {"$dateFromString": {"dateString": "$created_at"}}},
+                    "month": {"$month": {"$dateFromString": {"dateString": "$created_at"}}}
+                },
+                "count": {"$sum": 1}
+            }
+        },
+        {"$sort": {"_id.year": 1, "_id.month": 1}}
+    ]).to_list(12)
+    
+    # Average processing time
+    completed_procedures = await db.procedures.find({
+        "status": "COMPLETED",
+        "completed_at": {"$exists": True}
+    }).to_list(1000)
+    
+    processing_times = []
+    for proc in completed_procedures:
+        if proc.get("completed_at") and proc.get("created_at"):
+            created = datetime.fromisoformat(proc["created_at"])
+            completed = datetime.fromisoformat(proc["completed_at"])
+            processing_times.append((completed - created).days)
+    
+    avg_processing_time = sum(processing_times) / len(processing_times) if processing_times else 0
+    
+    # Top procedure types
+    type_stats = await db.procedures.aggregate([
+        {
+            "$lookup": {
+                "from": "procedure_types",
+                "localField": "procedure_type_id",
+                "foreignField": "id",
+                "as": "type_info"
+            }
+        },
+        {"$unwind": "$type_info"},
+        {"$group": {"_id": "$type_info.name", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10}
+    ]).to_list(10)
+    
+    return {
+        "status_distribution": status_stats,
+        "area_distribution": area_stats,
+        "monthly_trends": monthly_stats,
+        "average_processing_days": round(avg_processing_time, 1),
+        "top_procedure_types": type_stats,
+        "total_procedures": await db.procedures.count_documents({}),
+        "total_completed": await db.procedures.count_documents({"status": "COMPLETED"}),
+        "total_pending": await db.procedures.count_documents({"status": {"$in": ["RECEIVED", "IN_PROCESS"]}}),
+    }
 
 # Health check
 @api_router.get("/health")
