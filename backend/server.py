@@ -59,6 +59,11 @@ class UserRole(str, Enum):
     EXTERNAL_USER = "EXTERNAL_USER"  # Usuario externo
     APPLICANT = "APPLICANT"  # Postulante
     ACADEMIC_STAFF = "ACADEMIC_STAFF"  # Personal académico
+    FINANCE_ADMIN = "FINANCE_ADMIN"  # Administrador financiero
+    CASHIER = "CASHIER"  # Cajero/a
+    WAREHOUSE = "WAREHOUSE"  # Almacén
+    HR_ADMIN = "HR_ADMIN"  # Administrador RRHH
+    LOGISTICS = "LOGISTICS"  # Logística
 
 class DocumentType(str, Enum):
     DNI = "DNI"
