@@ -200,7 +200,7 @@ class EnrollmentCreate(BaseModel):
     student_id: str
     course_id: str
     academic_year: int = Field(..., ge=2020, le=2030)
-    academic_period: str = Field(..., regex="^(I|II|III)$")
+    academic_period: str = Field(..., pattern="^(I|II|III)$")
     teacher_id: Optional[str] = None
 
 class Enrollment(BaseModel):
