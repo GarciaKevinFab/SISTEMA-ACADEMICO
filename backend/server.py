@@ -4102,7 +4102,7 @@ async def create_requirement(requirement_data: RequirementCreate, current_user: 
     
     # Calculate estimated total
     estimated_total = sum(
-        item.get('estimated_unit_price', 0) * item['quantity'] 
+        (item.estimated_unit_price or 0) * item.quantity 
         for item in requirement_data.items
     )
     requirement_dict['estimated_total'] = estimated_total
