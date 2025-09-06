@@ -112,7 +112,7 @@ class StudentCreate(BaseModel):
     document_number: str = Field(..., min_length=8, max_length=20)
     
     # Contact Information
-    email: Optional[str] = Field(None, regex=r'^[\w\.-]+@[\w\.-]+\.\w+$')
+    email: Optional[str] = Field(None, pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$')
     phone: Optional[str] = Field(None, max_length=15)
     address: str = Field(..., min_length=10, max_length=200)
     district: str = Field(..., min_length=2, max_length=50)
