@@ -399,6 +399,291 @@ class NotificationLog(BaseModel):
     sent_at: datetime = Field(default_factory=datetime.utcnow)
     delivery_status: str = "PENDING"  # PENDING, SENT, FAILED
 
+# Admission Module Models
+class CareerCreate(BaseModel):
+    code: str = Field(..., min_length=3, max_length=10)
+    name: str = Field(..., min_length=5, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    duration_years: int = Field(..., ge=1, le=10)
+    is_active: bool = True
+
+class Career(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    code: str
+    name: str
+    description: Optional[str] = None
+    duration_years: int
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class AdmissionCallCreate(BaseModel):
+    name: str = Field(..., min_length=5, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+    academic_year: int = Field(..., ge=2024, le=2030)
+    academic_period: str = Field(..., pattern="^(I|II|III)$")
+    
+    # Fechas importantes
+    registration_start: datetime
+    registration_end: datetime
+    exam_date: Optional[datetime] = None
+    results_date: Optional[datetime] = None
+    
+    # Configuración
+    application_fee: float = Field(default=0.0, ge=0)
+    max_applications_per_career: int = Field(default=1, ge=1, le=3)
+    
+    # Carreras y vacantes
+    available_careers: List[str] = []  # Career IDs
+    career_vacancies: Dict[str, int] = {}  # Career ID -> number of vacancies
+    
+    # Requisitos
+    minimum_age: int = Field(default=16, ge=15, le=30)
+    maximum_age: int = Field(default=35, ge=20, le=50)
+    required_documents: List[str] = ["BIRTH_CERTIFICATE", "STUDY_CERTIFICATE", "PHOTO", "DNI_COPY"]
+    
+    # Estado
+    is_active: bool = True
+
+class AdmissionCall(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: Optional[str] = None
+    academic_year: int
+    academic_period: str
+    
+    # Fechas importantes
+    registration_start: datetime
+    registration_end: datetime
+    exam_date: Optional[datetime] = None
+    results_date: Optional[datetime] = None
+    
+    # Configuración
+    application_fee: float = 0.0
+    max_applications_per_career: int = 1
+    
+    # Carreras y vacantes
+    available_careers: List[str] = []
+    career_vacancies: Dict[str, int] = {}
+    
+    # Requisitos
+    minimum_age: int = 16
+    maximum_age: int = 35
+    required_documents: List[str] = []
+    
+    # Estado y contadores
+    status: AdmissionStatus = AdmissionStatus.OPEN
+    is_active: bool = True
+    total_applications: int = 0
+    
+    # Auditoría
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: str
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class ApplicantCreate(BaseModel):
+    # Información personal
+    first_name: str = Field(..., min_length=2, max_length=50)
+    last_name: str = Field(..., min_length=2, max_length=50)
+    second_last_name: Optional[str] = Field(None, max_length=50)
+    birth_date: date
+    gender: str = Field(..., pattern="^(M|F)$")
+    
+    # Documentos de identidad
+    document_type: DocumentType
+    document_number: str = Field(..., min_length=8, max_length=20)
+    
+    # Contacto
+    email: str = Field(..., pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$')
+    phone: str = Field(..., min_length=9, max_length=15)
+    address: str = Field(..., min_length=10, max_length=200)
+    district: str = Field(..., min_length=2, max_length=50)
+    province: str = Field(..., min_length=2, max_length=50)
+    department: str = Field(..., min_length=2, max_length=50)
+    
+    # Información académica
+    high_school_name: str = Field(..., min_length=5, max_length=100)
+    high_school_year: int = Field(..., ge=2010, le=2025)
+    
+    # Información especial
+    has_disability: bool = False
+    disability_description: Optional[str] = None
+    conadis_number: Optional[str] = None
+    
+    # Información socioeconómica (opcional)
+    guardian_name: Optional[str] = Field(None, max_length=100)
+    guardian_phone: Optional[str] = Field(None, max_length=15)
+    monthly_family_income: Optional[str] = None  # Range como "500-1000"
+    
+    @validator('document_number')
+    def validate_document_number(cls, v, values):
+        document_type = values.get('document_type')
+        if document_type == DocumentType.DNI:
+            if not v.isdigit() or len(v) != 8:
+                raise ValueError('DNI must be exactly 8 digits')
+        return v
+
+class Applicant(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    applicant_code: str = Field(default_factory=lambda: f"APL{datetime.now().year}{str(uuid.uuid4())[:6].upper()}")
+    
+    # Información personal
+    first_name: str
+    last_name: str
+    second_last_name: Optional[str] = None
+    birth_date: date
+    gender: str
+    
+    # Documentos de identidad
+    document_type: DocumentType
+    document_number: str
+    
+    # Contacto
+    email: str
+    phone: str
+    address: str
+    district: str
+    province: str
+    department: str
+    
+    # Información académica
+    high_school_name: str
+    high_school_year: int
+    
+    # Información especial
+    has_disability: bool = False
+    disability_description: Optional[str] = None
+    conadis_number: Optional[str] = None
+    
+    # Información socioeconómica
+    guardian_name: Optional[str] = None
+    guardian_phone: Optional[str] = None
+    monthly_family_income: Optional[str] = None
+    
+    # Sistema
+    user_id: Optional[str] = None  # Link to User if they register
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class ApplicationCreate(BaseModel):
+    admission_call_id: str
+    applicant_id: str
+    career_preferences: List[str] = Field(..., min_items=1, max_items=3)  # Career IDs in order of preference
+    
+    # Motivación
+    motivation_letter: Optional[str] = Field(None, max_length=1000)
+    career_interest_reason: Optional[str] = Field(None, max_length=500)
+
+class Application(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    application_number: str = Field(default_factory=lambda: f"ADM{datetime.now().year}{str(uuid.uuid4())[:8].upper()}")
+    
+    admission_call_id: str
+    applicant_id: str
+    career_preferences: List[str] = []  # Career IDs in order of preference
+    
+    # Estado y seguimiento
+    status: ApplicationStatus = ApplicationStatus.REGISTERED
+    
+    # Evaluación
+    exam_score: Optional[float] = Field(None, ge=0, le=20)
+    interview_score: Optional[float] = Field(None, ge=0, le=20)
+    final_score: Optional[float] = Field(None, ge=0, le=20)
+    
+    # Resultado
+    admitted_career: Optional[str] = None  # Career ID if admitted
+    admission_position: Optional[int] = None  # Position in ranking
+    
+    # Motivación
+    motivation_letter: Optional[str] = None
+    career_interest_reason: Optional[str] = None
+    
+    # Documentos
+    required_documents_submitted: List[str] = []
+    documents_complete: bool = False
+    
+    # Fechas importantes
+    submitted_at: datetime = Field(default_factory=datetime.utcnow)
+    evaluated_at: Optional[datetime] = None
+    result_published_at: Optional[datetime] = None
+    
+    # Auditoría
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class ApplicantDocumentCreate(BaseModel):
+    applicant_id: str
+    document_type: ApplicantDocumentType
+    file_name: str
+    file_path: str
+    file_size: int
+    file_extension: str
+
+class ApplicantDocument(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    applicant_id: str
+    document_type: ApplicantDocumentType
+    file_name: str
+    file_path: str
+    file_size: int
+    file_extension: str
+    is_verified: bool = False
+    verified_by: Optional[str] = None
+    verified_at: Optional[datetime] = None
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+
+class AdmissionEvaluationCreate(BaseModel):
+    application_id: str
+    exam_score: Optional[float] = Field(None, ge=0, le=20)
+    interview_score: Optional[float] = Field(None, ge=0, le=20)
+    observations: Optional[str] = Field(None, max_length=500)
+
+class AdmissionEvaluation(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    application_id: str
+    
+    # Puntajes
+    exam_score: Optional[float] = None
+    interview_score: Optional[float] = None
+    final_score: Optional[float] = None
+    
+    # Detalles
+    observations: Optional[str] = None
+    
+    # Auditoría
+    evaluated_by: str
+    evaluated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class AdmissionResultCreate(BaseModel):
+    admission_call_id: str
+    application_id: str
+    career_id: str
+    is_admitted: bool
+    position: int
+    result_type: str = Field(..., pattern="^(ADMITTED|WAITING_LIST|NOT_ADMITTED)$")
+
+class AdmissionResult(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    admission_call_id: str
+    application_id: str
+    career_id: str
+    
+    # Resultado
+    is_admitted: bool
+    position: int  # Position in ranking
+    result_type: str  # ADMITTED, WAITING_LIST, NOT_ADMITTED
+    
+    # Puntajes finales
+    final_score: float
+    
+    # Publicación
+    published_at: datetime = Field(default_factory=datetime.utcnow)
+    is_published: bool = True
+    
+    # Auditoría
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: str
+
 # Utility functions
 def hash_password(password: str):
     return pwd_context.hash(password)
