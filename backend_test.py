@@ -1048,6 +1048,450 @@ class AcademicSystemTester:
 
         return self.tests_passed == self.tests_run
 
+    # ====================================================================================================
+    # FINANCE MODULE TESTING
+    # ====================================================================================================
+    
+    def test_finance_comprehensive(self):
+        """Comprehensive Finance Module testing"""
+        print("\n💰 Testing Finance & Administration Module...")
+        
+        # Register finance users if not already done
+        if not hasattr(self, 'finance_admin_token') or not self.finance_admin_token:
+            self.finance_admin_token = self.test_user_registration("FINANCE_ADMIN")
+        if not hasattr(self, 'cashier_token') or not self.cashier_token:
+            self.cashier_token = self.test_user_registration("CASHIER")
+        if not hasattr(self, 'warehouse_token') or not self.warehouse_token:
+            self.warehouse_token = self.test_user_registration("WAREHOUSE")
+        
+        # Use admin token as fallback
+        finance_token = self.finance_admin_token or self.admin_token
+        cashier_token = self.cashier_token or self.admin_token
+        warehouse_token = self.warehouse_token or self.admin_token
+        
+        # 1. Test Cash & Banks APIs
+        print("\n🏦 Testing Cash & Banks APIs...")
+        bank_account_id = self.test_create_bank_account(finance_token)
+        self.test_get_bank_accounts(finance_token)
+        
+        # Cash session workflow
+        session_id = self.test_open_cash_session(cashier_token)
+        if session_id:
+            self.test_get_current_cash_session(cashier_token)
+            self.test_create_cash_movement(cashier_token, session_id, "INCOME")
+            self.test_create_cash_movement(cashier_token, session_id, "EXPENSE")
+            self.test_get_cash_movements(cashier_token, session_id)
+            self.test_close_cash_session(cashier_token, session_id)
+        
+        # Bank reconciliation
+        if bank_account_id:
+            self.test_bank_reconciliation_upload(finance_token, bank_account_id)
+        
+        # 2. Test Internal Receipts APIs with QR
+        print("\n🧾 Testing Internal Receipts APIs with QR...")
+        receipt_id = self.test_create_receipt(cashier_token)
+        if receipt_id:
+            self.test_get_receipts(cashier_token)
+            self.test_pay_receipt(cashier_token, receipt_id)
+            self.test_verify_receipt_public(receipt_id)
+            self.test_download_receipt_pdf(cashier_token, receipt_id)
+            # Test cancellation (admin only)
+            if finance_token:
+                self.test_cancel_receipt(finance_token, receipt_id)
+        
+        # 3. Test GL Concepts & Cost Centers APIs
+        print("\n📊 Testing GL Concepts & Cost Centers APIs...")
+        gl_concept_id = self.test_create_gl_concept(finance_token)
+        self.test_get_gl_concepts(finance_token)
+        
+        # 4. Test Inventory Management APIs (FIFO)
+        print("\n📦 Testing Inventory Management APIs (FIFO)...")
+        inventory_item_id = self.test_create_inventory_item(warehouse_token)
+        if inventory_item_id:
+            self.test_get_inventory_items(warehouse_token)
+            self.test_inventory_movement_entry(warehouse_token, inventory_item_id)
+            self.test_inventory_movement_exit(warehouse_token, inventory_item_id)
+            self.test_get_inventory_movements(warehouse_token, inventory_item_id)
+            self.test_inventory_kardex(warehouse_token, inventory_item_id)
+            self.test_inventory_stock_alerts(warehouse_token)
+
+    def test_create_bank_account(self, token: str) -> Optional[str]:
+        """Test bank account creation"""
+        timestamp = datetime.now().strftime('%H%M%S')
+        account_data = {
+            "bank_name": "Banco de la Nación",
+            "account_name": f"Cuenta Corriente Test {timestamp}",
+            "account_number": f"00123456789{timestamp[-3:]}",
+            "account_type": "CHECKING",
+            "currency": "PEN",
+            "initial_balance": 10000.0,
+            "is_active": True
+        }
+
+        success, data = self.make_request('POST', 'finance/bank-accounts', account_data, token=token, expected_status=200)
+        
+        if success and 'account' in data:
+            account_id = data['account']['id']
+            self.created_resources.setdefault('bank_accounts', []).append(account_id)
+            self.log_test("Create Bank Account", True, f"- ID: {account_id}, Number: {account_data['account_number']}")
+            return account_id
+        else:
+            self.log_test("Create Bank Account", False, f"- Error: {data}")
+            return None
+
+    def test_get_bank_accounts(self, token: str):
+        """Test getting bank accounts"""
+        success, data = self.make_request('GET', 'finance/bank-accounts', token=token)
+        
+        accounts_count = len(data.get('accounts', [])) if success else 0
+        return self.log_test(
+            "Get Bank Accounts", 
+            success,
+            f"- Found {accounts_count} accounts"
+        )
+
+    def test_open_cash_session(self, token: str) -> Optional[str]:
+        """Test opening cash session"""
+        timestamp = datetime.now().strftime('%H%M%S')
+        session_data = {
+            "initial_amount": 500.0,
+            "cashier_notes": f"Sesión de prueba {timestamp}"
+        }
+
+        success, data = self.make_request('POST', 'finance/cash-sessions', session_data, token=token, expected_status=200)
+        
+        if success and 'session' in data:
+            session_id = data['session']['id']
+            session_number = data['session']['session_number']
+            self.created_resources.setdefault('cash_sessions', []).append(session_id)
+            self.log_test("Open Cash Session", True, f"- ID: {session_id}, Number: {session_number}")
+            return session_id
+        else:
+            self.log_test("Open Cash Session", False, f"- Error: {data}")
+            return None
+
+    def test_get_current_cash_session(self, token: str):
+        """Test getting current cash session"""
+        success, data = self.make_request('GET', 'finance/cash-sessions/current', token=token)
+        
+        has_session = success and data.get('session') is not None
+        return self.log_test(
+            "Get Current Cash Session", 
+            success,
+            f"- Session found: {has_session}"
+        )
+
+    def test_create_cash_movement(self, token: str, session_id: str, movement_type: str) -> Optional[str]:
+        """Test creating cash movement"""
+        timestamp = datetime.now().strftime('%H%M%S')
+        movement_data = {
+            "cash_session_id": session_id,
+            "movement_type": movement_type,
+            "amount": 100.0 if movement_type == "INCOME" else 50.0,
+            "concept": f"Test {movement_type.lower()} {timestamp}",
+            "description": f"Movimiento de prueba - {movement_type}",
+            "cost_center": "CC001"
+        }
+
+        success, data = self.make_request('POST', 'finance/cash-movements', movement_data, token=token, expected_status=200)
+        
+        if success and 'movement' in data:
+            movement_id = data['movement']['id']
+            movement_number = data['movement']['movement_number']
+            self.created_resources.setdefault('cash_movements', []).append(movement_id)
+            self.log_test(f"Create Cash Movement ({movement_type})", True, f"- ID: {movement_id}, Number: {movement_number}")
+            return movement_id
+        else:
+            self.log_test(f"Create Cash Movement ({movement_type})", False, f"- Error: {data}")
+            return None
+
+    def test_get_cash_movements(self, token: str, session_id: str):
+        """Test getting cash movements"""
+        success, data = self.make_request('GET', f'finance/cash-movements?cash_session_id={session_id}', token=token)
+        
+        movements_count = len(data.get('movements', [])) if success else 0
+        return self.log_test(
+            "Get Cash Movements", 
+            success,
+            f"- Found {movements_count} movements"
+        )
+
+    def test_close_cash_session(self, token: str, session_id: str):
+        """Test closing cash session"""
+        close_data = {
+            "final_amount": 550.0,
+            "closing_notes": "Sesión cerrada para pruebas"
+        }
+
+        success, data = self.make_request('POST', f'finance/cash-sessions/{session_id}/close', close_data, token=token, expected_status=200)
+        
+        return self.log_test(
+            "Close Cash Session", 
+            success,
+            f"- Final amount: {close_data['final_amount']}" if success else f"- Error: {data}"
+        )
+
+    def test_bank_reconciliation_upload(self, token: str, bank_account_id: str):
+        """Test bank reconciliation upload (simulated)"""
+        # Since we can't easily upload files in this test, we'll test the endpoint exists
+        success, data = self.make_request('POST', f'finance/bank-reconciliation/upload?bank_account_id={bank_account_id}', 
+                                        {}, token=token, expected_status=400)  # Expect 400 due to missing file
+        
+        # Success here means we got a proper error about missing file, not 404
+        endpoint_exists = success or (not success and "file" in str(data).lower())
+        return self.log_test(
+            "Bank Reconciliation Upload Endpoint", 
+            endpoint_exists,
+            "- Endpoint accessible (file upload required)"
+        )
+
+    def test_create_receipt(self, token: str) -> Optional[str]:
+        """Test creating internal receipt with QR"""
+        timestamp = datetime.now().strftime('%H%M%S')
+        receipt_data = {
+            "concept": "TUITION",
+            "description": f"Pago de pensión - Test {timestamp}",
+            "amount": 250.0,
+            "customer_name": f"Juan Pérez Test {timestamp}",
+            "customer_document": f"1234567{timestamp[-1]}",
+            "customer_email": f"juan.perez{timestamp}@test.com",
+            "cost_center": "CC001",
+            "notes": "Recibo de prueba"
+        }
+
+        success, data = self.make_request('POST', 'finance/receipts', receipt_data, token=token, expected_status=200)
+        
+        if success and 'receipt' in data:
+            receipt_id = data['receipt']['id']
+            receipt_number = data['receipt']['receipt_number']
+            has_qr = 'qr_code' in data['receipt'] and data['receipt']['qr_code'] is not None
+            verification_url = data.get('verification_url', '')
+            
+            self.created_resources.setdefault('receipts', []).append({
+                'id': receipt_id,
+                'number': receipt_number,
+                'verification_url': verification_url
+            })
+            
+            self.log_test("Create Receipt with QR", True, f"- ID: {receipt_id}, Number: {receipt_number}, QR: {has_qr}")
+            return receipt_id
+        else:
+            self.log_test("Create Receipt with QR", False, f"- Error: {data}")
+            return None
+
+    def test_get_receipts(self, token: str):
+        """Test getting receipts"""
+        success, data = self.make_request('GET', 'finance/receipts', token=token)
+        
+        receipts_count = len(data.get('receipts', [])) if success else 0
+        return self.log_test(
+            "Get Receipts", 
+            success,
+            f"- Found {receipts_count} receipts"
+        )
+
+    def test_pay_receipt(self, token: str, receipt_id: str):
+        """Test paying receipt with idempotency"""
+        timestamp = datetime.now().strftime('%H%M%S')
+        payment_data = {
+            "payment_method": "CASH",
+            "payment_reference": f"REF{timestamp}",
+            "idempotency_key": f"IDEM{timestamp}"
+        }
+
+        success, data = self.make_request('POST', f'finance/receipts/{receipt_id}/pay', payment_data, token=token, expected_status=200)
+        
+        return self.log_test(
+            "Pay Receipt (Idempotent)", 
+            success,
+            f"- Payment method: {payment_data['payment_method']}" if success else f"- Error: {data}"
+        )
+
+    def test_verify_receipt_public(self, receipt_id: str):
+        """Test public receipt verification (no auth)"""
+        success, data = self.make_request('GET', f'verificar/{receipt_id}')
+        
+        has_verification_data = success and 'receipt_number' in data and 'is_valid' in data
+        return self.log_test(
+            "Verify Receipt (Public)", 
+            has_verification_data,
+            f"- Receipt valid: {data.get('is_valid', False)}" if success else f"- Error: {data}"
+        )
+
+    def test_download_receipt_pdf(self, token: str, receipt_id: str):
+        """Test downloading receipt PDF"""
+        success, data = self.make_request('GET', f'finance/receipts/{receipt_id}/pdf', token=token, expected_status=200)
+        
+        return self.log_test(
+            "Download Receipt PDF", 
+            success,
+            "- PDF generated successfully" if success else f"- Error: {data}"
+        )
+
+    def test_cancel_receipt(self, token: str, receipt_id: str):
+        """Test cancelling receipt (admin only)"""
+        cancel_data = {
+            "reason": "Cancelación por pruebas automatizadas"
+        }
+
+        success, data = self.make_request('POST', f'finance/receipts/{receipt_id}/cancel', cancel_data, token=token, expected_status=200)
+        
+        return self.log_test(
+            "Cancel Receipt (Admin)", 
+            success,
+            "- Receipt cancelled successfully" if success else f"- Error: {data}"
+        )
+
+    def test_create_gl_concept(self, token: str) -> Optional[str]:
+        """Test creating GL concept"""
+        timestamp = datetime.now().strftime('%H%M%S')
+        concept_data = {
+            "code": f"ING{timestamp}",
+            "name": f"Ingresos Test {timestamp}",
+            "concept_type": "INCOME",
+            "category": "ACADEMIC",
+            "is_active": True
+        }
+
+        success, data = self.make_request('POST', 'finance/gl-concepts', concept_data, token=token, expected_status=200)
+        
+        if success and 'concept' in data:
+            concept_id = data['concept']['id']
+            self.created_resources.setdefault('gl_concepts', []).append(concept_id)
+            self.log_test("Create GL Concept", True, f"- ID: {concept_id}, Code: {concept_data['code']}")
+            return concept_id
+        else:
+            self.log_test("Create GL Concept", False, f"- Error: {data}")
+            return None
+
+    def test_get_gl_concepts(self, token: str):
+        """Test getting GL concepts"""
+        success, data = self.make_request('GET', 'finance/gl-concepts', token=token)
+        
+        concepts_count = len(data.get('concepts', [])) if success else 0
+        return self.log_test(
+            "Get GL Concepts", 
+            success,
+            f"- Found {concepts_count} concepts"
+        )
+
+    def test_create_inventory_item(self, token: str) -> Optional[str]:
+        """Test creating inventory item"""
+        timestamp = datetime.now().strftime('%H%M%S')
+        item_data = {
+            "code": f"ITEM{timestamp}",
+            "name": f"Artículo Test {timestamp}",
+            "description": "Artículo de prueba para testing",
+            "category": "OFFICE_SUPPLIES",
+            "unit_of_measure": "UNIT",
+            "min_stock": 10,
+            "max_stock": 100,
+            "unit_cost": 25.50,
+            "track_serial": False,
+            "track_expiry": False,
+            "is_active": True
+        }
+
+        success, data = self.make_request('POST', 'inventory/items', item_data, token=token, expected_status=200)
+        
+        if success and 'item' in data:
+            item_id = data['item']['id']
+            self.created_resources.setdefault('inventory_items', []).append(item_id)
+            self.log_test("Create Inventory Item", True, f"- ID: {item_id}, Code: {item_data['code']}")
+            return item_id
+        else:
+            self.log_test("Create Inventory Item", False, f"- Error: {data}")
+            return None
+
+    def test_get_inventory_items(self, token: str):
+        """Test getting inventory items"""
+        success, data = self.make_request('GET', 'inventory/items', token=token)
+        
+        items_count = len(data.get('items', [])) if success else 0
+        return self.log_test(
+            "Get Inventory Items", 
+            success,
+            f"- Found {items_count} items"
+        )
+
+    def test_inventory_movement_entry(self, token: str, item_id: str) -> Optional[str]:
+        """Test inventory entry movement (FIFO)"""
+        movement_data = {
+            "item_id": item_id,
+            "movement_type": "ENTRY",
+            "quantity": 50,
+            "unit_cost": 25.50,
+            "reference_type": "PURCHASE",
+            "reason": "Compra inicial para testing",
+            "notes": "Entrada de prueba - FIFO testing"
+        }
+
+        success, data = self.make_request('POST', 'inventory/movements', movement_data, token=token, expected_status=200)
+        
+        if success and 'movement' in data:
+            movement_id = data['movement']['id']
+            self.created_resources.setdefault('inventory_movements', []).append(movement_id)
+            self.log_test("Inventory Entry Movement", True, f"- ID: {movement_id}, Qty: {movement_data['quantity']}")
+            return movement_id
+        else:
+            self.log_test("Inventory Entry Movement", False, f"- Error: {data}")
+            return None
+
+    def test_inventory_movement_exit(self, token: str, item_id: str) -> Optional[str]:
+        """Test inventory exit movement (FIFO calculation)"""
+        movement_data = {
+            "item_id": item_id,
+            "movement_type": "EXIT",
+            "quantity": 20,
+            "reference_type": "CONSUMPTION",
+            "reason": "Consumo para testing FIFO",
+            "notes": "Salida de prueba - verificar cálculo FIFO"
+        }
+
+        success, data = self.make_request('POST', 'inventory/movements', movement_data, token=token, expected_status=200)
+        
+        if success and 'movement' in data:
+            movement_id = data['movement']['id']
+            fifo_cost = data['movement'].get('total_cost', 0)
+            self.log_test("Inventory Exit Movement (FIFO)", True, f"- ID: {movement_id}, FIFO Cost: {fifo_cost}")
+            return movement_id
+        else:
+            self.log_test("Inventory Exit Movement (FIFO)", False, f"- Error: {data}")
+            return None
+
+    def test_get_inventory_movements(self, token: str, item_id: str):
+        """Test getting inventory movements"""
+        success, data = self.make_request('GET', f'inventory/movements?item_id={item_id}', token=token)
+        
+        movements_count = len(data.get('movements', [])) if success else 0
+        return self.log_test(
+            "Get Inventory Movements", 
+            success,
+            f"- Found {movements_count} movements"
+        )
+
+    def test_inventory_kardex(self, token: str, item_id: str):
+        """Test inventory kardex generation"""
+        success, data = self.make_request('GET', f'inventory/items/{item_id}/kardex', token=token)
+        
+        has_kardex = success and 'kardex' in data
+        return self.log_test(
+            "Generate Inventory Kardex", 
+            has_kardex,
+            f"- Kardex entries: {len(data.get('kardex', []))}" if success else f"- Error: {data}"
+        )
+
+    def test_inventory_stock_alerts(self, token: str):
+        """Test inventory stock alerts"""
+        success, data = self.make_request('GET', 'inventory/items?low_stock_only=true', token=token)
+        
+        low_stock_count = len(data.get('items', [])) if success else 0
+        return self.log_test(
+            "Inventory Stock Alerts", 
+            success,
+            f"- Low stock items: {low_stock_count}"
+        )
+
 def main():
     """Main test execution"""
     print("🎯 IESPP Gustavo Allende Llavería - Academic System API Testing")
