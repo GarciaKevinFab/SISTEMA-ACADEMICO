@@ -173,15 +173,18 @@ backend:
 
   - task: "GL Concepts & Cost Centers APIs"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Implemented GL concepts and cost centers management for income/expense tracking"
+      - working: true
+        agent: "testing"
+        comment: "✅ PASSED: GL concept creation and retrieval working correctly. Supports INCOME/EXPENSE types with proper categorization. Role-based access control working for FINANCE_ADMIN role. API endpoints responding correctly with proper validation."
 
   - task: "Inventory Management APIs (FIFO)"
     implemented: true
