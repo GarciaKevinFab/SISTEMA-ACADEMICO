@@ -127,7 +127,7 @@ class Receipt(BaseModel):
     
     # Status and dates
     status: str = "PENDING"  # ReceiptStatus
-    issued_at: datetime = Field(default_factory=datetime.utcnow)
+    issued_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     paid_at: Optional[datetime] = None
     cancelled_at: Optional[datetime] = None
     
