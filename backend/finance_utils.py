@@ -1,16 +1,22 @@
 import qrcode
 import io
 import base64
-from datetime import datetime
-from typing import Optional, Dict, Any
+from datetime import datetime, date, timezone
+from typing import Dict, Any, Optional, List
+from reportlab.lib.pagesizes import A4, letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 import uuid
 
-def generate_qr_code(data: str) -> str:
-    """Generate QR code and return as base64 string"""
+def generate_qr_code(data: str, size: int = 10) -> str:
+    """Generate QR code as base64 string"""
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10,
+        box_size=size,
         border=4,
     )
     qr.add_data(data)
@@ -21,63 +27,113 @@ def generate_qr_code(data: str) -> str:
     img.save(buffer, format='PNG')
     buffer.seek(0)
     
-    return base64.b64encode(buffer.getvalue()).decode()
+    # Convert to base64
+    img_data = base64.b64encode(buffer.getvalue()).decode()
+    return f"data:image/png;base64,{img_data}"
 
-def generate_receipt_number(series: str = "001") -> tuple[str, int]:
-    """Generate receipt number with series and correlative"""
-    # In a real implementation, this would get the next correlative from database
-    correlative = int(datetime.now().strftime('%m%d%H%M%S'))
-    receipt_number = f"REC-{series}-{correlative:08d}"
+def format_currency(amount: float, currency: str = "PEN") -> str:
+    """Format currency amount"""
+    symbol = "S/." if currency == "PEN" else "$"
+    return f"{symbol} {amount:,.2f}"
+
+def calculate_tax(subtotal: float, tax_rate: float = 0.18) -> float:
+    """Calculate tax amount (IGV)"""
+    return round(subtotal * tax_rate, 2)
+
+def calculate_receipt_correlative(series: str, year: int) -> int:
+    """Calculate next receipt correlative number"""
+    # This would typically query the database for the last correlative
+    # For now, return a UUID-based number
+    return int(str(uuid.uuid4().int)[:8]) % 100000
+
+def generate_receipt_number(series: str = "001", year: int = None) -> tuple[str, int]:
+    """Generate receipt number and correlative"""
+    if year is None:
+        year = datetime.now().year
+    
+    correlative = calculate_receipt_correlative(series, year)
+    receipt_number = f"{series}-{correlative:06d}"
+    
     return receipt_number, correlative
 
-def calculate_weighted_average_cost(current_stock: int, current_cost: float, 
-                                  new_quantity: int, new_cost: float) -> float:
-    """Calculate weighted average cost for inventory"""
-    if current_stock + new_quantity == 0:
-        return 0.0
+def prepare_for_mongo(data: dict) -> dict:
+    """Prepare data for MongoDB storage"""
+    prepared = data.copy()
     
-    total_value = (current_stock * current_cost) + (new_quantity * new_cost)
-    total_quantity = current_stock + new_quantity
+    # Convert date objects to ISO strings
+    for key, value in prepared.items():
+        if isinstance(value, date) and not isinstance(value, datetime):
+            prepared[key] = value.isoformat()
+        elif isinstance(value, datetime):
+            prepared[key] = value.isoformat()
     
-    return round(total_value / total_quantity, 4)
+    return prepared
 
-def validate_cash_session(session_data: Dict) -> tuple[bool, str]:
-    """Validate cash session data"""
-    if session_data.get('status') != 'OPEN':
-        return False, "Cash session is not open"
+def parse_from_mongo(data: dict) -> dict:
+    """Parse data from MongoDB"""
+    parsed = data.copy()
     
-    return True, "Valid"
+    # This would contain logic to parse dates back from strings
+    # Implementation depends on specific needs
+    
+    return parsed
 
-def calculate_fifo_cost(movements: list, quantity_needed: int) -> tuple[float, list]:
-    """Calculate FIFO cost for inventory exit"""
-    remaining_quantity = quantity_needed
+def calculate_inventory_fifo(
+    current_stock: int,
+    inventory_movements: List[Dict[str, Any]],
+    exit_quantity: int
+) -> tuple[float, List[Dict[str, Any]]]:
+    """
+    Calculate FIFO cost for inventory exit
+    Returns: (total_cost, cost_breakdown)
+    """
+    # Sort entries by date (FIFO)
+    entries = [m for m in inventory_movements if m['movement_type'] == 'ENTRY']
+    entries.sort(key=lambda x: x['created_at'])
+    
+    remaining_to_exit = exit_quantity
     total_cost = 0.0
-    used_movements = []
+    cost_breakdown = []
     
-    for movement in movements:
-        if remaining_quantity <= 0:
+    for entry in entries:
+        if remaining_to_exit <= 0:
             break
             
-        available_qty = movement.get('available_quantity', 0)
-        if available_qty <= 0:
+        available_quantity = entry.get('remaining_quantity', entry['quantity'])
+        if available_quantity <= 0:
             continue
             
-        use_qty = min(remaining_quantity, available_qty)
-        cost = movement.get('unit_cost', 0) * use_qty
+        exit_from_this_entry = min(remaining_to_exit, available_quantity)
+        unit_cost = entry.get('unit_cost', 0)
+        entry_cost = exit_from_this_entry * unit_cost
         
-        total_cost += cost
-        remaining_quantity -= use_qty
-        
-        used_movements.append({
-            'movement_id': movement.get('id'),
-            'quantity_used': use_qty,
-            'unit_cost': movement.get('unit_cost', 0)
+        total_cost += entry_cost
+        cost_breakdown.append({
+            'entry_id': entry['id'],
+            'entry_date': entry['created_at'],
+            'quantity': exit_from_this_entry,
+            'unit_cost': unit_cost,
+            'total_cost': entry_cost
         })
+        
+        remaining_to_exit -= exit_from_this_entry
     
-    if remaining_quantity > 0:
-        return 0.0, []  # Not enough stock
+    return total_cost, cost_breakdown
+
+def validate_ruc(ruc: str) -> bool:
+    """Validate Peruvian RUC"""
+    if not ruc or len(ruc) != 11 or not ruc.isdigit():
+        return False
     
-    return total_cost, used_movements
+    # RUC validation algorithm
+    factors = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2]
+    check_digit = int(ruc[10])
+    
+    total = sum(int(ruc[i]) * factors[i] for i in range(10))
+    remainder = total % 11
+    calculated_check_digit = 11 - remainder if remainder >= 2 else remainder
+    
+    return check_digit == calculated_check_digit
 
 async def log_audit_trail(db, table_name: str, record_id: str, action: str, 
                          old_values: Optional[Dict] = None, new_values: Optional[Dict] = None,
@@ -92,38 +148,151 @@ async def log_audit_trail(db, table_name: str, record_id: str, action: str,
         "new_values": new_values,
         "user_id": user_id,
         "ip_address": ip_address,
-        "timestamp": datetime.utcnow()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
     
     await db.audit_logs.insert_one(audit_log)
 
-def format_currency(amount: float, currency: str = "PEN") -> str:
-    """Format currency for display"""
-    if currency == "PEN":
-        return f"S/. {amount:,.2f}"
-    elif currency == "USD":
-        return f"$ {amount:,.2f}"
-    else:
-        return f"{amount:,.2f}"
+class PDFGenerator:
+    """PDF generation utilities for financial documents"""
+    
+    def __init__(self):
+        self.styles = getSampleStyleSheet()
+        self.header_style = ParagraphStyle(
+            'CustomHeader',
+            parent=self.styles['Heading1'],
+            fontSize=16,
+            alignment=TA_CENTER,
+            spaceAfter=30
+        )
+        self.normal_style = self.styles['Normal']
+        self.bold_style = ParagraphStyle(
+            'Bold',
+            parent=self.styles['Normal'],
+            fontName='Helvetica-Bold'
+        )
+    
+    def create_receipt_pdf(
+        self, 
+        receipt_data: Dict[str, Any], 
+        qr_code_data: str,
+        output_path: str
+    ) -> str:
+        """Generate receipt PDF with QR code"""
+        
+        doc = SimpleDocTemplate(output_path, pagesize=A4)
+        story = []
+        
+        # Header
+        header = Paragraph(
+            "INSTITUTO DE EDUCACIÓN SUPERIOR PEDAGÓGICO PÚBLICO<br/>"
+            "\"GUSTAVO ALLENDE LLAVERÍA\"<br/>"
+            "BOLETA INTERNA DE COBRO",
+            self.header_style
+        )
+        story.append(header)
+        story.append(Spacer(1, 20))
+        
+        # Receipt information
+        info_data = [
+            ['Número:', receipt_data.get('receipt_number', '')],
+            ['Serie:', receipt_data.get('series', '')],
+            ['Fecha:', receipt_data.get('issued_at', datetime.now()).strftime('%d/%m/%Y')],
+            ['Cliente:', receipt_data.get('customer_name', '')],
+            ['Documento:', receipt_data.get('customer_document', '')],
+        ]
+        
+        info_table = Table(info_data, colWidths=[2*inch, 4*inch])
+        info_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        story.append(info_table)
+        story.append(Spacer(1, 20))
+        
+        # Details
+        details_data = [
+            ['CONCEPTO', 'DESCRIPCIÓN', 'IMPORTE'],
+            [
+                receipt_data.get('concept', ''),
+                receipt_data.get('description', ''),
+                format_currency(receipt_data.get('amount', 0))
+            ]
+        ]
+        
+        details_table = Table(details_data, colWidths=[2*inch, 3*inch, 1.5*inch])
+        details_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        story.append(details_table)
+        story.append(Spacer(1, 30))
+        
+        # Total
+        total_data = [
+            ['TOTAL A PAGAR:', format_currency(receipt_data.get('amount', 0))]
+        ]
+        total_table = Table(total_data, colWidths=[4.5*inch, 1.5*inch])
+        total_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 12),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.lightgrey),
+            ('BOX', (0, 0), (-1, -1), 2, colors.black),
+        ]))
+        story.append(total_table)
+        story.append(Spacer(1, 30))
+        
+        # QR Code
+        if qr_code_data:
+            qr_img = Image(io.BytesIO(base64.b64decode(qr_code_data.split(',')[1])), 
+                          width=1.5*inch, height=1.5*inch)
+            qr_table = Table([[qr_img, 'Escanee para verificar']], colWidths=[2*inch, 4*inch])
+            qr_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+                ('ALIGN', (1, 0), (1, 0), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]))
+            story.append(qr_table)
+        
+        # Footer
+        story.append(Spacer(1, 50))
+        footer = Paragraph(
+            "Este documento es válido como comprobante de pago interno.<br/>"
+            "Para consultas: tesoreria@iesppgal.edu.pe",
+            self.normal_style
+        )
+        story.append(footer)
+        
+        doc.build(story)
+        return output_path
 
-def validate_receipt_data(receipt_data: Dict) -> tuple[bool, str]:
-    """Validate receipt data before creation"""
-    required_fields = ['concept', 'description', 'amount', 'customer_name', 'customer_document']
-    
-    for field in required_fields:
-        if not receipt_data.get(field):
-            return False, f"Field {field} is required"
-    
-    if receipt_data.get('amount', 0) <= 0:
-        return False, "Amount must be greater than 0"
-    
-    if len(receipt_data.get('customer_document', '')) not in [8, 11]:
-        return False, "Document must be 8 (DNI) or 11 (RUC) digits"
-    
-    return True, "Valid"
+# Constants for financial operations
+RECEIPT_SERIES_MAPPING = {
+    "ENROLLMENT": "001",
+    "TUITION": "002", 
+    "CERTIFICATE": "003",
+    "PROCEDURE": "004",
+    "OTHER": "999"
+}
 
-def get_next_correlative(db_collection, series: str = "001") -> int:
-    """Get next correlative number for a series"""
-    # This would be implemented with proper database queries
-    # For now, using timestamp-based approach
-    return int(datetime.now().strftime('%H%M%S'))
+TAX_RATES = {
+    "IGV": 0.18,
+    "RETENTION": 0.08,
+    "PERCEPTION": 0.04
+}
+
+COST_CENTERS = {
+    "ACADEMIC": "CC001",
+    "ADMINISTRATIVE": "CC002", 
+    "INFRASTRUCTURE": "CC003",
+    "TECHNOLOGY": "CC004"
+}
