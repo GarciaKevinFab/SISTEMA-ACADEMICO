@@ -3618,6 +3618,245 @@ async def get_inventory_items(
         "limit": limit
     }
 
+@api_router.post("/inventory/movements", dependencies=[Depends(require_role([UserRole.WAREHOUSE, UserRole.FINANCE_ADMIN]))])
+async def create_inventory_movement(movement_data: InventoryMovementCreate, current_user: User = Depends(get_current_user)):
+    """Create inventory movement with FIFO cost calculation"""
+    
+    # Get inventory item
+    item = await db.inventory_items.find_one({"id": movement_data.item_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+    
+    current_stock = item.get("current_stock", 0)
+    
+    # For exits, check stock availability and calculate FIFO cost
+    if movement_data.movement_type == InventoryMovementType.EXIT.value:
+        if current_stock < movement_data.quantity:
+            raise HTTPException(status_code=400, detail="Insufficient stock")
+        
+        # Get previous entries for FIFO calculation
+        previous_movements = await db.inventory_movements.find({
+            "item_id": movement_data.item_id,
+            "movement_type": InventoryMovementType.ENTRY.value
+        }).sort("created_at", 1).to_list(1000)
+        
+        total_cost, cost_breakdown = calculate_inventory_fifo(
+            current_stock, previous_movements, movement_data.quantity
+        )
+        
+        # Use calculated cost if not provided
+        if not movement_data.unit_cost:
+            movement_data.unit_cost = total_cost / movement_data.quantity if movement_data.quantity > 0 else 0
+    
+    # Create movement
+    movement_dict = movement_data.dict()
+    movement_dict.update({
+        'stock_before': current_stock,
+        'created_by': current_user.id
+    })
+    
+    # Calculate new stock
+    if movement_data.movement_type == InventoryMovementType.ENTRY.value:
+        new_stock = current_stock + movement_data.quantity
+    elif movement_data.movement_type == InventoryMovementType.EXIT.value:
+        new_stock = current_stock - movement_data.quantity
+    else:  # ADJUSTMENT
+        new_stock = movement_data.quantity  # Quantity represents the new total
+    
+    movement_dict['stock_after'] = new_stock
+    
+    if movement_data.unit_cost:
+        movement_dict['total_cost'] = movement_data.quantity * movement_data.unit_cost
+    
+    movement = InventoryMovement(**movement_dict)
+    movement_doc = prepare_for_mongo(movement.dict())
+    
+    await db.inventory_movements.insert_one(movement_doc)
+    
+    # Update inventory item stock
+    update_data = {"current_stock": new_stock}
+    
+    # Update unit cost for entries (weighted average)
+    if movement_data.movement_type == InventoryMovementType.ENTRY.value and movement_data.unit_cost:
+        current_value = item.get("total_value", 0)
+        new_value = current_value + movement_dict['total_cost']
+        new_unit_cost = new_value / new_stock if new_stock > 0 else 0
+        
+        update_data.update({
+            "unit_cost": new_unit_cost,
+            "total_value": new_value
+        })
+    
+    # Update available stock (current - reserved)
+    update_data["available_stock"] = max(0, new_stock - item.get("reserved_stock", 0))
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.inventory_items.update_one({"id": movement_data.item_id}, {"$set": update_data})
+    
+    await log_audit_trail(
+        db, "inventory_movements", movement.id, "CREATE", 
+        None, movement_doc, current_user.id
+    )
+    
+    logger.info(f"Inventory movement {movement.movement_number} created by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "movement": movement,
+        "new_stock": new_stock
+    }
+
+@api_router.get("/inventory/movements")
+async def get_inventory_movements(
+    item_id: Optional[str] = None,
+    movement_type: Optional[str] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(require_role([UserRole.WAREHOUSE, UserRole.FINANCE_ADMIN]))
+):
+    """Get inventory movements"""
+    
+    filter_query = {}
+    
+    if item_id:
+        filter_query["item_id"] = item_id
+    if movement_type:
+        filter_query["movement_type"] = movement_type
+    if date_from:
+        filter_query["created_at"] = {"$gte": date_from.isoformat()}
+    if date_to:
+        if "created_at" in filter_query:
+            filter_query["created_at"]["$lte"] = date_to.isoformat()
+        else:
+            filter_query["created_at"] = {"$lte": date_to.isoformat()}
+    
+    movements = await db.inventory_movements.find(filter_query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.inventory_movements.count_documents(filter_query)
+    
+    # Enrich with item data
+    enriched_movements = []
+    for movement in movements:
+        item = await db.inventory_items.find_one({"id": movement["item_id"]})
+        
+        movement_obj = InventoryMovement(**movement)
+        enriched_movement = {
+            **movement_obj.dict(),
+            "item": InventoryItem(**item) if item else None
+        }
+        enriched_movements.append(enriched_movement)
+    
+    return {
+        "movements": enriched_movements,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+@api_router.get("/inventory/items/{item_id}/kardex")
+async def get_item_kardex(
+    item_id: str,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    current_user: User = Depends(require_role([UserRole.WAREHOUSE, UserRole.FINANCE_ADMIN]))
+):
+    """Get item kardex (movement history) with FIFO cost tracking"""
+    
+    item = await db.inventory_items.find_one({"id": item_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    filter_query = {"item_id": item_id}
+    
+    if date_from:
+        filter_query["created_at"] = {"$gte": date_from.isoformat()}
+    if date_to:
+        if "created_at" in filter_query:
+            filter_query["created_at"]["$lte"] = date_to.isoformat()
+        else:
+            filter_query["created_at"] = {"$lte": date_to.isoformat()}
+    
+    movements = await db.inventory_movements.find(filter_query).sort("created_at", 1).to_list(1000)
+    
+    # Calculate running totals and costs
+    kardex_entries = []
+    running_stock = 0
+    running_value = 0.0
+    
+    for movement in movements:
+        movement_obj = InventoryMovement(**movement)
+        
+        if movement["movement_type"] == InventoryMovementType.ENTRY.value:
+            entry_value = movement.get("total_cost", 0)
+            running_value += entry_value
+            running_stock += movement["quantity"]
+        elif movement["movement_type"] == InventoryMovementType.EXIT.value:
+            exit_cost = movement.get("total_cost", 0)
+            running_value -= exit_cost
+            running_stock -= movement["quantity"]
+        else:  # ADJUSTMENT
+            # For adjustments, recalculate based on new quantity
+            if running_stock != 0:
+                unit_cost = running_value / running_stock
+            else:
+                unit_cost = movement.get("unit_cost", 0)
+            
+            running_stock = movement["stock_after"]
+            running_value = running_stock * unit_cost
+        
+        average_cost = running_value / running_stock if running_stock > 0 else 0
+        
+        kardex_entry = {
+            **movement_obj.dict(),
+            "running_stock": running_stock,
+            "running_value": running_value,
+            "average_unit_cost": average_cost
+        }
+        kardex_entries.append(kardex_entry)
+    
+    return {
+        "item": InventoryItem(**item),
+        "kardex": kardex_entries,
+        "current_stock": running_stock,
+        "current_value": running_value,
+        "current_average_cost": running_value / running_stock if running_stock > 0 else 0
+    }
+
+@api_router.get("/inventory/alerts")
+async def get_inventory_alerts(
+    current_user: User = Depends(require_role([UserRole.WAREHOUSE, UserRole.FINANCE_ADMIN]))
+):
+    """Get inventory alerts (low stock, expired items, etc.)"""
+    
+    alerts = []
+    
+    # Low stock items
+    low_stock_items = await db.inventory_items.find({
+        "is_active": True,
+        "$expr": {"$lte": ["$current_stock", "$min_stock"]}
+    }).to_list(100)
+    
+    for item in low_stock_items:
+        alerts.append({
+            "type": "LOW_STOCK",
+            "severity": "HIGH" if item["current_stock"] == 0 else "MEDIUM",
+            "item_id": item["id"],
+            "item_code": item["code"],
+            "item_name": item["name"],
+            "current_stock": item["current_stock"],
+            "min_stock": item["min_stock"],
+            "message": f"Stock bajo: {item['name']} ({item['current_stock']} unidades)"
+        })
+    
+    return {
+        "alerts": alerts,
+        "total": len(alerts),
+        "summary": {
+            "low_stock": len([a for a in alerts if a["type"] == "LOW_STOCK"])
+        }
+    }
+
 # Include API router
 app.include_router(api_router)
 
