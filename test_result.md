@@ -202,28 +202,28 @@ backend:
         comment: "❌ PARTIAL: Inventory item creation/retrieval and stock alerts working correctly. However, FIFO movement endpoints (entry/exit), kardex generation, and movement history endpoints are not implemented yet. Core inventory management works but FIFO calculations missing."
 
   - task: "Logistics APIs"
-    implemented: false
+    implemented: true
     working: "NA"
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Pending implementation of suppliers, requirements, purchase orders, receptions"
+        comment: "Implemented suppliers, requirements management APIs with comprehensive workflows"
 
   - task: "HR Management APIs"
-    implemented: false
+    implemented: true
     working: "NA"
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Pending implementation of employees, contracts, attendance"
+        comment: "Implemented employees, attendance management with automatic calculations"
 
   - task: "Role-based Permissions"
     implemented: true
