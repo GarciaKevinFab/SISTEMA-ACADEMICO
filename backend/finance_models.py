@@ -1,6 +1,4 @@
-<file>
-      <absolute_file_name>/app/backend/finance_models.py</absolute_file_name>
-      <content">from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator
 from typing import List, Dict, Any, Optional
 from datetime import datetime, date
 from enum import Enum
