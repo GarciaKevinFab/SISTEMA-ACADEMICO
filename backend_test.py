@@ -339,7 +339,8 @@ class AcademicSystemTester:
                 "department": "Test", "program": "Test", "entry_year": 2024
             }, token=self.student_token, expected_status=403)
             
-            self.log_test("Student Cannot Create Student", not success, "- Access properly denied")
+            # Success means we got 403 (access denied), which is correct
+            self.log_test("Student Cannot Create Student", success, "- Access properly denied")
 
         # Test teacher trying to create course (should fail - only ADMIN can)
         if self.teacher_token:
@@ -348,7 +349,8 @@ class AcademicSystemTester:
                 "semester": 1, "program": "Test"
             }, token=self.teacher_token, expected_status=403)
             
-            self.log_test("Teacher Cannot Create Course", not success, "- Access properly denied")
+            # Success means we got 403 (access denied), which is correct
+            self.log_test("Teacher Cannot Create Course", success, "- Access properly denied")
 
     def run_comprehensive_test(self):
         """Run all tests in sequence"""
