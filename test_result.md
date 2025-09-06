@@ -297,10 +297,9 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Cash & Banks APIs"
-    - "Internal Receipts APIs with QR"
-    - "GL Concepts & Cost Centers APIs"
     - "Inventory Management APIs (FIFO)"
+    - "Logistics APIs"
+    - "HR Management APIs"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
