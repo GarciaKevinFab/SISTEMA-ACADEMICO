@@ -1018,11 +1018,15 @@ class AcademicSystemTester:
         # 9. Role-based Permissions
         self.test_role_permissions()
 
-        # 10. Mesa de Partes Testing
+        # 10. Admission Module Testing
+        print("\n🎓 Testing Admission Module...")
+        self.test_admission_comprehensive()
+
+        # 11. Mesa de Partes Testing
         print("\n📋 Testing Mesa de Partes Virtual...")
         self.test_mesa_de_partes_comprehensive()
 
-        # 11. Final Results
+        # 12. Final Results
         print("\n" + "=" * 60)
         print(f"📊 TEST RESULTS SUMMARY")
         print("=" * 60)
