@@ -55,6 +55,8 @@ class UserRole(str, Enum):
     TEACHER = "TEACHER"
     STUDENT = "STUDENT"
     REGISTRAR = "REGISTRAR"
+    ADMIN_WORKER = "ADMIN_WORKER"  # Trabajador administrativo
+    EXTERNAL_USER = "EXTERNAL_USER"  # Usuario externo
 
 class DocumentType(str, Enum):
     DNI = "DNI"
