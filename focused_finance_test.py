@@ -240,7 +240,21 @@ class FocusedFinanceTester:
         """Test receipt payment parameter format issues"""
         print("\n🧾 Testing Receipt Payment Parameter Issues...")
         
-        token = self.admin_token
+        # Register cashier user for receipt operations
+        timestamp = datetime.now().strftime('%H%M%S')
+        cashier_data = {
+            "username": f"test_cashier_{timestamp}",
+            "email": f"test_cashier_{timestamp}@iespp.edu.pe",
+            "password": "TestPass123!",
+            "full_name": f"Test Cashier {timestamp}",
+            "role": "CASHIER"
+        }
+        
+        success, data = self.make_request('POST', 'auth/register', cashier_data)
+        if success and 'access_token' in data:
+            token = data['access_token']
+        else:
+            token = self.admin_token
         if not token:
             print("❌ No token available for receipt testing")
             return
