@@ -1829,6 +1829,230 @@ async def get_my_applications(current_user: User = Depends(get_current_user)):
         "total": len(enriched_applications)
     }
 
+# Admission Module - Evaluations Management
+@api_router.post("/evaluations", dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.ACADEMIC_STAFF]))])
+async def create_evaluation(evaluation_data: AdmissionEvaluationCreate, current_user: User = Depends(get_current_user)):
+    """Create or update an evaluation for an application"""
+    
+    # Verify application exists
+    application = await db.applications.find_one({"id": evaluation_data.application_id})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Check if evaluation already exists
+    existing_evaluation = await db.admission_evaluations.find_one({"application_id": evaluation_data.application_id})
+    
+    if existing_evaluation:
+        # Update existing evaluation
+        update_data = evaluation_data.dict()
+        update_data["evaluated_by"] = current_user.id
+        update_data["evaluated_at"] = datetime.utcnow()
+        
+        # Calculate final score
+        exam_score = update_data.get("exam_score")
+        interview_score = update_data.get("interview_score")
+        final_score = calculate_final_score(exam_score, interview_score)
+        update_data["final_score"] = final_score
+        
+        await db.admission_evaluations.update_one(
+            {"application_id": evaluation_data.application_id},
+            {"$set": update_data}
+        )
+        
+        # Update application with scores
+        await db.applications.update_one(
+            {"id": evaluation_data.application_id},
+            {
+                "$set": {
+                    "exam_score": exam_score,
+                    "interview_score": interview_score, 
+                    "final_score": final_score,
+                    "status": ApplicationStatus.EVALUATED.value,
+                    "evaluated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        evaluation = AdmissionEvaluation(**{**update_data, "id": existing_evaluation["id"]})
+        message = "Evaluation updated successfully"
+        
+    else:
+        # Create new evaluation
+        evaluation = AdmissionEvaluation(**evaluation_data.dict())
+        evaluation.evaluated_by = current_user.id
+        
+        # Calculate final score
+        final_score = calculate_final_score(evaluation.exam_score, evaluation.interview_score)
+        evaluation.final_score = final_score
+        
+        evaluation_doc = evaluation.dict()
+        await db.admission_evaluations.insert_one(evaluation_doc)
+        
+        # Update application with scores
+        await db.applications.update_one(
+            {"id": evaluation_data.application_id},
+            {
+                "$set": {
+                    "exam_score": evaluation.exam_score,
+                    "interview_score": evaluation.interview_score,
+                    "final_score": final_score,
+                    "status": ApplicationStatus.EVALUATED.value,
+                    "evaluated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        message = "Evaluation created successfully"
+    
+    logger.info(f"Evaluation for application {evaluation_data.application_id} created/updated by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "evaluation": evaluation,
+        "message": message
+    }
+
+@api_router.get("/evaluations", dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.ACADEMIC_STAFF]))])
+async def get_evaluations(
+    application_id: Optional[str] = None,
+    admission_call_id: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """Get evaluations"""
+    
+    filter_query = {}
+    if application_id:
+        filter_query["application_id"] = application_id
+    
+    evaluations = await db.admission_evaluations.find(filter_query).sort("evaluated_at", -1).to_list(100)
+    
+    # Enrich with application data if needed
+    enriched_evaluations = []
+    for evaluation in evaluations:
+        # Get application
+        application = await db.applications.find_one({"id": evaluation["application_id"]})
+        if admission_call_id and application and application.get("admission_call_id") != admission_call_id:
+            continue
+            
+        evaluation_obj = AdmissionEvaluation(**evaluation)
+        enriched_evaluation = {
+            **evaluation_obj.dict(),
+            "application": Application(**application) if application else None
+        }
+        enriched_evaluations.append(enriched_evaluation)
+    
+    return {
+        "evaluations": enriched_evaluations,
+        "total": len(enriched_evaluations)
+    }
+
+# Admission Module - Results Management
+@api_router.post("/admission-results/publish/{admission_call_id}", dependencies=[Depends(require_role([UserRole.ADMIN]))])
+async def publish_admission_results(admission_call_id: str, current_user: User = Depends(get_current_user)):
+    """Publish admission results for an admission call"""
+    
+    try:
+        results_summary = await publish_admission_results(admission_call_id)
+        
+        logger.info(f"Admission results published for call {admission_call_id} by {current_user.username}")
+        
+        return {
+            "status": "success",
+            "message": "Admission results published successfully",
+            "summary": results_summary
+        }
+        
+    except Exception as e:
+        logger.error(f"Error publishing admission results: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error publishing results: {str(e)}")
+
+@api_router.get("/admission-results", dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.ACADEMIC_STAFF]))])
+async def get_admission_results(
+    admission_call_id: Optional[str] = None,
+    career_id: Optional[str] = None,
+    result_type: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """Get admission results"""
+    
+    filter_query = {}
+    if admission_call_id:
+        filter_query["admission_call_id"] = admission_call_id
+    if career_id:
+        filter_query["career_id"] = career_id
+    if result_type:
+        filter_query["result_type"] = result_type
+    
+    results = await db.admission_results.find(filter_query).sort([("career_id", 1), ("position", 1)]).to_list(500)
+    
+    # Enrich with application and applicant data
+    enriched_results = []
+    for result in results:
+        # Get application
+        application = await db.applications.find_one({"id": result["application_id"]})
+        
+        # Get applicant
+        applicant = None
+        if application:
+            applicant = await db.applicants.find_one({"id": application["applicant_id"]})
+        
+        # Get career
+        career = await db.careers.find_one({"id": result["career_id"]})
+        
+        result_obj = AdmissionResult(**result)
+        enriched_result = {
+            **result_obj.dict(),
+            "application": Application(**application) if application else None,
+            "applicant": Applicant(**applicant) if applicant else None,
+            "career": Career(**career) if career else None
+        }
+        enriched_results.append(enriched_result)
+    
+    return {
+        "results": enriched_results,
+        "total": len(enriched_results)
+    }
+
+# Public endpoint for checking admission results
+@api_router.get("/public/admission-results/check")
+async def check_admission_result(document_number: str, admission_call_id: str):
+    """Check admission result by document number (public endpoint)"""
+    
+    # Find applicant by document number
+    applicant = await db.applicants.find_one({"document_number": document_number})
+    if not applicant:
+        raise HTTPException(status_code=404, detail="Applicant not found")
+    
+    # Find application
+    application = await db.applications.find_one({
+        "admission_call_id": admission_call_id,
+        "applicant_id": applicant["id"]
+    })
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Find result
+    result = await db.admission_results.find_one({"application_id": application["id"]})
+    if not result:
+        raise HTTPException(status_code=404, detail="Results not yet published")
+    
+    # Get career details
+    career = await db.careers.find_one({"id": result["career_id"]})
+    
+    # Get admission call details
+    admission_call = await db.admission_calls.find_one({"id": admission_call_id})
+    
+    return {
+        "applicant_name": f"{applicant['first_name']} {applicant['last_name']} {applicant.get('second_last_name', '')}".strip(),
+        "document_number": applicant["document_number"],
+        "career": career["name"] if career else "N/A",
+        "result_type": result["result_type"],
+        "is_admitted": result["is_admitted"],
+        "position": result["position"],
+        "final_score": result["final_score"],
+        "admission_call": admission_call["name"] if admission_call else "N/A"
+    }
+
 @api_router.get("/admission-calls/{call_id}")
 async def get_admission_call(call_id: str, current_user: User = Depends(get_current_user)):
     """Get specific admission call details"""
