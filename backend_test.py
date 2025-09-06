@@ -1337,11 +1337,8 @@ class AcademicSystemTester:
 
     def test_cancel_receipt(self, token: str, receipt_id: str):
         """Test cancelling receipt (admin only)"""
-        cancel_data = {
-            "reason": "Cancelación por pruebas automatizadas"
-        }
-
-        success, data = self.make_request('POST', f'finance/receipts/{receipt_id}/cancel', cancel_data, token=token, expected_status=200)
+        # Parameters are passed as query parameters
+        success, data = self.make_request('POST', f'finance/receipts/{receipt_id}/cancel?reason=Cancelación por pruebas automatizadas', {}, token=token, expected_status=200)
         
         return self.log_test(
             "Cancel Receipt (Admin)", 
