@@ -459,4 +459,4 @@ class AuditLog(BaseModel):
     new_values: Optional[Dict[str, Any]] = None
     user_id: str
     ip_address: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
