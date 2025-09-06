@@ -1064,7 +1064,7 @@ const StudentsPage = () => {
             <SelectValue placeholder="Filtrar por programa" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todos los programas</SelectItem>
+            <SelectItem value="ALL">Todos los programas</SelectItem>
             {uniquePrograms.map(program => (
               <SelectItem key={program} value={program}>{program}</SelectItem>
             ))}
