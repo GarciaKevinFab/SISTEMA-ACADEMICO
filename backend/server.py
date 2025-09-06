@@ -1036,19 +1036,22 @@ async def create_procedure(procedure_data: ProcedureCreate, current_user: User =
     # Calculate deadline
     deadline = calculate_deadline(procedure_type['processing_days'])
     
-    # Create procedure
-    procedure = Procedure(**procedure_data.dict())
-    procedure.tracking_code = tracking_code
-    procedure.created_by = current_user.id
-    procedure.area = ProcedureArea(procedure_type['area'])
-    procedure.deadline = deadline
+    # Create procedure data with required fields
+    procedure_dict = procedure_data.dict()
+    procedure_dict['tracking_code'] = tracking_code
+    procedure_dict['created_by'] = current_user.id
+    procedure_dict['area'] = ProcedureArea(procedure_type['area'])
+    procedure_dict['deadline'] = deadline
     
     # For external users, use their provided info
     if current_user.role == UserRole.EXTERNAL_USER:
         if not procedure_data.applicant_name or not procedure_data.applicant_email:
             # Use user data if not provided
-            procedure.applicant_name = procedure.applicant_name or current_user.full_name
-            procedure.applicant_email = procedure.applicant_email or current_user.email
+            procedure_dict['applicant_name'] = procedure_dict.get('applicant_name') or current_user.full_name
+            procedure_dict['applicant_email'] = procedure_dict.get('applicant_email') or current_user.email
+    
+    # Create procedure object
+    procedure = Procedure(**procedure_dict)
     
     procedure_doc = procedure.dict()
     # Convert datetime objects to ISO format for MongoDB
