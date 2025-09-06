@@ -495,6 +495,365 @@ class AcademicSystemTester:
             f"- Stats available: {list(data.keys()) if success else 'N/A'}"
         )
 
+    def test_get_careers(self, token: str = None):
+        """Test getting careers (public endpoint)"""
+        success, data = self.make_request('GET', 'careers', token=token)
+        
+        careers_count = len(data.get('careers', [])) if success else 0
+        expected_careers = [
+            "Educación Inicial", "Educación Primaria", "Educación Física", 
+            "Educación Artística", "Comunicación", "Matemática"
+        ]
+        
+        has_expected_careers = False
+        if success and data.get('careers'):
+            career_names = [career['name'] for career in data['careers']]
+            has_expected_careers = any(name in career_names for name in expected_careers)
+        
+        return self.log_test(
+            "Get Careers", 
+            success and careers_count >= 6 and has_expected_careers,
+            f"- Found {careers_count} careers, Expected careers present: {has_expected_careers}"
+        )
+
+    def test_get_public_admission_calls(self):
+        """Test getting public admission calls (no auth required)"""
+        success, data = self.make_request('GET', 'public/admission-calls')
+        
+        calls_count = len(data.get('admission_calls', [])) if success else 0
+        return self.log_test(
+            "Get Public Admission Calls", 
+            success,
+            f"- Found {calls_count} public admission calls"
+        )
+
+    def test_create_admission_call(self, token: str) -> Optional[str]:
+        """Test creating admission call (ADMIN only)"""
+        # First get available careers
+        success, careers_data = self.make_request('GET', 'careers', token=token)
+        if not success or not careers_data.get('careers'):
+            self.log_test("Create Admission Call", False, "- No careers available")
+            return None
+        
+        career_ids = [career['id'] for career in careers_data['careers'][:3]]  # Use first 3 careers
+        
+        timestamp = datetime.now().strftime('%H%M%S')
+        admission_call_data = {
+            "name": f"Proceso de Admisión Test {timestamp}",
+            "description": "Convocatoria de prueba para testing automatizado",
+            "academic_year": 2025,
+            "academic_period": "I",
+            "registration_start": "2025-01-15T08:00:00",
+            "registration_end": "2025-02-15T18:00:00",
+            "exam_date": "2025-03-01T09:00:00",
+            "results_date": "2025-03-15T14:00:00",
+            "application_fee": 50.0,
+            "max_applications_per_career": 2,
+            "available_careers": career_ids,
+            "career_vacancies": {
+                career_ids[0]: 30,
+                career_ids[1]: 25,
+                career_ids[2]: 20
+            },
+            "minimum_age": 16,
+            "maximum_age": 35,
+            "required_documents": ["BIRTH_CERTIFICATE", "STUDY_CERTIFICATE", "PHOTO", "DNI_COPY"],
+            "is_active": True
+        }
+
+        success, data = self.make_request('POST', 'admission-calls', admission_call_data, token=token, expected_status=200)
+        
+        if success and 'admission_call' in data:
+            admission_call_id = data['admission_call']['id']
+            self.created_resources.setdefault('admission_calls', []).append(admission_call_id)
+            self.log_test("Create Admission Call", True, f"- ID: {admission_call_id}")
+            return admission_call_id
+        else:
+            self.log_test("Create Admission Call", False, f"- Error: {data}")
+            return None
+
+    def test_create_applicant(self, token: str = None) -> Optional[str]:
+        """Test creating applicant with Peruvian validations"""
+        timestamp = datetime.now().strftime('%H%M%S')
+        applicant_data = {
+            "first_name": "Ana María",
+            "last_name": "González",
+            "second_last_name": "Pérez",
+            "birth_date": "1998-03-15",
+            "gender": "F",
+            "document_type": "DNI",
+            "document_number": f"7654321{timestamp[-1]}",  # Valid 8-digit DNI
+            "email": f"ana.gonzalez{timestamp}@gmail.com",
+            "phone": "987654321",
+            "address": "Jr. Los Olivos 456, Urbanización Las Flores",
+            "district": "San Martín de Porres",
+            "province": "Lima",
+            "department": "Lima",
+            "high_school_name": "I.E. José María Eguren",
+            "high_school_year": 2016,
+            "has_disability": False,
+            "guardian_name": "Carlos González Ruiz",
+            "guardian_phone": "987654322",
+            "monthly_family_income": "1000-1500"
+        }
+
+        success, data = self.make_request('POST', 'applicants', applicant_data, token=token, expected_status=200)
+        
+        if success and 'applicant' in data:
+            applicant_id = data['applicant']['id']
+            self.created_resources.setdefault('applicants', []).append(applicant_id)
+            self.log_test("Create Applicant", True, f"- ID: {applicant_id}, DNI: {applicant_data['document_number']}")
+            return applicant_id
+        else:
+            self.log_test("Create Applicant", False, f"- Error: {data}")
+            return None
+
+    def test_create_applicant_with_conadis(self, token: str = None) -> Optional[str]:
+        """Test creating applicant with CONADIS card"""
+        timestamp = datetime.now().strftime('%H%M%S')
+        applicant_data = {
+            "first_name": "Luis Alberto",
+            "last_name": "Mendoza",
+            "second_last_name": "Silva",
+            "birth_date": "1997-07-22",
+            "gender": "M",
+            "document_type": "DNI",
+            "document_number": f"5432109{timestamp[-1]}",
+            "email": f"luis.mendoza{timestamp}@gmail.com",
+            "phone": "987654323",
+            "address": "Av. Universitaria 789, Pueblo Joven El Porvenir",
+            "district": "Los Olivos",
+            "province": "Lima",
+            "department": "Lima",
+            "high_school_name": "I.E. César Vallejo",
+            "high_school_year": 2015,
+            "has_disability": True,
+            "disability_description": "Discapacidad auditiva parcial",
+            "conadis_number": f"CON{timestamp}002",
+            "guardian_name": "Rosa Silva Vega",
+            "guardian_phone": "987654324"
+        }
+
+        success, data = self.make_request('POST', 'applicants', applicant_data, token=token, expected_status=200)
+        
+        if success and 'applicant' in data:
+            applicant_id = data['applicant']['id']
+            self.created_resources.setdefault('applicants', []).append(applicant_id)
+            self.log_test("Create Applicant with CONADIS", True, f"- ID: {applicant_id}, CONADIS: {applicant_data['conadis_number']}")
+            return applicant_id
+        else:
+            self.log_test("Create Applicant with CONADIS", False, f"- Error: {data}")
+            return None
+
+    def test_create_application(self, token: str, admission_call_id: str, applicant_id: str) -> Optional[str]:
+        """Test creating application with career preferences"""
+        # Get available careers from admission call
+        success, call_data = self.make_request('GET', f'admission-calls', token=token)
+        if not success:
+            self.log_test("Create Application", False, "- Cannot get admission calls")
+            return None
+        
+        # Find our admission call
+        admission_call = None
+        for call in call_data.get('admission_calls', []):
+            if call['id'] == admission_call_id:
+                admission_call = call
+                break
+        
+        if not admission_call or not admission_call.get('available_careers'):
+            self.log_test("Create Application", False, "- No available careers in admission call")
+            return None
+        
+        career_preferences = admission_call['available_careers'][:2]  # Select first 2 careers
+        
+        application_data = {
+            "admission_call_id": admission_call_id,
+            "applicant_id": applicant_id,
+            "career_preferences": career_preferences,
+            "motivation_letter": "Deseo estudiar en esta institución porque considero que tiene la mejor formación pedagógica del país. Mi vocación es enseñar y formar a las nuevas generaciones.",
+            "career_interest_reason": "Siempre he tenido pasión por la educación y creo que puedo contribuir significativamente al desarrollo educativo del país."
+        }
+
+        success, data = self.make_request('POST', 'applications', application_data, token=token, expected_status=200)
+        
+        if success and 'application' in data:
+            application_id = data['application']['id']
+            self.created_resources.setdefault('applications', []).append(application_id)
+            self.log_test("Create Application", True, f"- ID: {application_id}, Careers: {len(career_preferences)}")
+            return application_id
+        else:
+            self.log_test("Create Application", False, f"- Error: {data}")
+            return None
+
+    def test_create_evaluation(self, token: str, application_id: str) -> Optional[str]:
+        """Test creating evaluation for application"""
+        evaluation_data = {
+            "application_id": application_id,
+            "exam_score": 16.5,
+            "interview_score": 18.0,
+            "observations": "Excelente desempeño en el examen escrito y muy buena presentación en la entrevista personal."
+        }
+
+        success, data = self.make_request('POST', 'evaluations', evaluation_data, token=token, expected_status=200)
+        
+        if success and 'evaluation' in data:
+            evaluation_id = data['evaluation']['id']
+            final_score = data['evaluation'].get('final_score', 0)
+            self.created_resources.setdefault('evaluations', []).append(evaluation_id)
+            self.log_test("Create Evaluation", True, f"- ID: {evaluation_id}, Final Score: {final_score}")
+            return evaluation_id
+        else:
+            self.log_test("Create Evaluation", False, f"- Error: {data}")
+            return None
+
+    def test_admission_dashboard_stats(self, token: str, role: str):
+        """Test admission dashboard statistics"""
+        success, data = self.make_request('GET', 'dashboard/admission-stats', token=token)
+        
+        has_stats = success and any(key in data for key in ['status_distribution', 'career_distribution', 'total_applicants'])
+        return self.log_test(
+            f"Admission Dashboard Stats ({role})", 
+            has_stats,
+            f"- Stats available: {list(data.keys()) if success else 'N/A'}"
+        )
+
+    def test_dni_validation(self, token: str = None):
+        """Test DNI validation (must be exactly 8 digits)"""
+        print("\n🔍 Testing DNI Validation...")
+        
+        # Test invalid DNI (7 digits)
+        invalid_applicant_data = {
+            "first_name": "Test", "last_name": "Invalid", "birth_date": "1990-01-01",
+            "gender": "M", "document_type": "DNI", "document_number": "1234567",  # 7 digits
+            "email": "test.invalid@gmail.com", "phone": "987654321",
+            "address": "Test Address", "district": "Test", "province": "Test", 
+            "department": "Test", "high_school_name": "Test School", "high_school_year": 2015
+        }
+        
+        success, data = self.make_request('POST', 'applicants', invalid_applicant_data, token=token, expected_status=422)
+        self.log_test("DNI Validation (7 digits)", success, "- Properly rejected invalid DNI")
+        
+        # Test invalid DNI (9 digits)
+        invalid_applicant_data["document_number"] = "123456789"  # 9 digits
+        success, data = self.make_request('POST', 'applicants', invalid_applicant_data, token=token, expected_status=422)
+        self.log_test("DNI Validation (9 digits)", success, "- Properly rejected invalid DNI")
+        
+        # Test invalid DNI (letters)
+        invalid_applicant_data["document_number"] = "1234567A"  # Contains letter
+        success, data = self.make_request('POST', 'applicants', invalid_applicant_data, token=token, expected_status=422)
+        self.log_test("DNI Validation (letters)", success, "- Properly rejected invalid DNI")
+
+    def test_age_validation(self, token: str = None):
+        """Test age validation (15-50 years)"""
+        print("\n🎂 Testing Age Validation...")
+        
+        # Test too young (14 years old)
+        young_applicant_data = {
+            "first_name": "Test", "last_name": "Young", "birth_date": "2010-01-01",
+            "gender": "M", "document_type": "DNI", "document_number": "12345678",
+            "email": "test.young@gmail.com", "phone": "987654321",
+            "address": "Test Address", "district": "Test", "province": "Test", 
+            "department": "Test", "high_school_name": "Test School", "high_school_year": 2023
+        }
+        
+        success, data = self.make_request('POST', 'applicants', young_applicant_data, token=token, expected_status=400)
+        self.log_test("Age Validation (too young)", success, "- Properly rejected applicant under 15")
+        
+        # Test too old (51 years old)
+        old_applicant_data = young_applicant_data.copy()
+        old_applicant_data.update({
+            "last_name": "Old", "birth_date": "1973-01-01",
+            "email": "test.old@gmail.com", "document_number": "87654321"
+        })
+        
+        success, data = self.make_request('POST', 'applicants', old_applicant_data, token=token, expected_status=400)
+        self.log_test("Age Validation (too old)", success, "- Properly rejected applicant over 50")
+
+    def test_scoring_system(self, token: str, application_id: str):
+        """Test scoring system (80% exam + 20% interview)"""
+        print("\n📊 Testing Scoring System...")
+        
+        # Test with known scores
+        evaluation_data = {
+            "application_id": application_id,
+            "exam_score": 15.0,  # 80% weight
+            "interview_score": 20.0,  # 20% weight
+            "observations": "Testing scoring calculation"
+        }
+        # Expected final score: (15.0 * 0.8) + (20.0 * 0.2) = 12.0 + 4.0 = 16.0
+        
+        success, data = self.make_request('POST', 'evaluations', evaluation_data, token=token, expected_status=200)
+        
+        if success and 'evaluation' in data:
+            final_score = data['evaluation'].get('final_score', 0)
+            expected_score = 16.0
+            score_correct = abs(final_score - expected_score) < 0.1
+            self.log_test("Scoring System Calculation", score_correct, f"- Expected: {expected_score}, Got: {final_score}")
+        else:
+            self.log_test("Scoring System Calculation", False, f"- Error: {data}")
+
+    def test_admission_comprehensive(self):
+        """Comprehensive Admission Module testing"""
+        print("\n🎓 Testing Admission Module...")
+        
+        # 1. Test getting careers (public)
+        self.test_get_careers()
+        
+        # 2. Test public admission calls
+        self.test_get_public_admission_calls()
+        
+        # 3. Test creating admission call (ADMIN only)
+        admission_call_id = None
+        if self.admin_token:
+            admission_call_id = self.test_create_admission_call(self.admin_token)
+        
+        # 4. Test creating applicants with validations
+        applicant_id = self.test_create_applicant()
+        applicant_conadis_id = self.test_create_applicant_with_conadis()
+        
+        # 5. Test DNI and age validations
+        self.test_dni_validation()
+        self.test_age_validation()
+        
+        # 6. Test creating applications
+        application_id = None
+        if admission_call_id and applicant_id:
+            application_id = self.test_create_application(self.admin_token, admission_call_id, applicant_id)
+        
+        # 7. Test evaluation system
+        evaluation_id = None
+        if application_id and self.admin_token:
+            evaluation_id = self.test_create_evaluation(self.admin_token, application_id)
+            
+        # 8. Test scoring system
+        if application_id and self.admin_token:
+            self.test_scoring_system(self.admin_token, application_id)
+        
+        # 9. Test admission dashboard statistics
+        if self.admin_token:
+            self.test_admission_dashboard_stats(self.admin_token, "ADMIN")
+        
+        # 10. Test role permissions for Admission
+        print("\n🔐 Testing Admission Permissions...")
+        
+        # Test STUDENT cannot create admission calls
+        if self.student_token:
+            success, data = self.make_request('POST', 'admission-calls', {
+                "name": "Unauthorized Call",
+                "academic_year": 2025,
+                "academic_period": "I",
+                "registration_start": "2025-01-01T00:00:00",
+                "registration_end": "2025-02-01T00:00:00",
+                "available_careers": [],
+                "career_vacancies": {}
+            }, token=self.student_token, expected_status=403)
+            self.log_test("Student Cannot Create Admission Call", success, "- Access properly denied")
+        
+        # Test EXTERNAL_USER cannot access admission dashboard stats
+        if self.external_user_token:
+            success, data = self.make_request('GET', 'dashboard/admission-stats', token=self.external_user_token, expected_status=403)
+            self.log_test("External User Cannot Access Admission Stats", success, "- Access properly denied")
+
     def test_mesa_de_partes_comprehensive(self):
         """Comprehensive Mesa de Partes testing"""
         print("\n📋 Testing Mesa de Partes Virtual Module...")
