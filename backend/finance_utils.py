@@ -125,13 +125,18 @@ def validate_ruc(ruc: str) -> bool:
     if not ruc or len(ruc) != 11 or not ruc.isdigit():
         return False
     
-    # RUC validation algorithm
+    # RUC validation algorithm (MOD 11)
     factors = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2]
     check_digit = int(ruc[10])
     
     total = sum(int(ruc[i]) * factors[i] for i in range(10))
     remainder = total % 11
-    calculated_check_digit = 11 - remainder if remainder >= 2 else remainder
+    
+    # Calculate check digit based on remainder
+    if remainder < 2:
+        calculated_check_digit = remainder
+    else:
+        calculated_check_digit = 11 - remainder
     
     return check_digit == calculated_check_digit
 
