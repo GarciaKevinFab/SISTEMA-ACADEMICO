@@ -1396,7 +1396,166 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_user)):
             "my_pending_procedures": my_pending
         })
     
+    # Add Admission stats
+    if current_user.role in [UserRole.ADMIN, UserRole.ACADEMIC_STAFF]:
+        # Admin/Academic staff stats
+        total_applicants = await db.applicants.count_documents({})
+        total_applications = await db.applications.count_documents({})
+        active_admission_calls = await db.admission_calls.count_documents({"is_active": True, "status": "OPEN"})
+        pending_evaluations = await db.applications.count_documents({"status": "DOCUMENTS_COMPLETE"})
+        
+        stats.update({
+            "total_applicants": total_applicants,
+            "total_applications": total_applications,
+            "active_admission_calls": active_admission_calls,
+            "pending_evaluations": pending_evaluations
+        })
+    
+    elif current_user.role == UserRole.APPLICANT:
+        # Applicant stats
+        # Find applicant profile
+        applicant = await db.applicants.find_one({"user_id": current_user.id})
+        if applicant:
+            my_applications = await db.applications.count_documents({"applicant_id": applicant["id"]})
+            pending_applications = await db.applications.count_documents({
+                "applicant_id": applicant["id"],
+                "status": {"$in": ["REGISTERED", "DOCUMENTS_PENDING", "DOCUMENTS_COMPLETE"]}
+            })
+            
+            stats.update({
+                "my_applications": my_applications,
+                "pending_applications": pending_applications
+            })
+        else:
+            stats.update({
+                "my_applications": 0,
+                "pending_applications": 0
+            })
+    
     return stats
+
+@api_router.get("/dashboard/admission-stats", dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.ACADEMIC_STAFF]))])
+async def get_admission_stats(current_user: User = Depends(get_current_user)):
+    """Get detailed admission statistics"""
+    
+    # Applications by status
+    status_stats = await db.applications.aggregate([
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]).to_list(10)
+    
+    # Applications by career
+    career_stats = await db.applications.aggregate([
+        {"$unwind": "$career_preferences"},
+        {
+            "$lookup": {
+                "from": "careers",
+                "localField": "career_preferences",
+                "foreignField": "id",
+                "as": "career_info"
+            }
+        },
+        {"$unwind": "$career_info"},
+        {"$group": {"_id": "$career_info.name", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10}
+    ]).to_list(10)
+    
+    # Applications by gender
+    gender_stats = await db.applications.aggregate([
+        {
+            "$lookup": {
+                "from": "applicants",
+                "localField": "applicant_id",
+                "foreignField": "id",
+                "as": "applicant_info"
+            }
+        },
+        {"$unwind": "$applicant_info"},
+        {"$group": {"_id": "$applicant_info.gender", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]).to_list(10)
+    
+    # Applications by department (geography)
+    geography_stats = await db.applications.aggregate([
+        {
+            "$lookup": {
+                "from": "applicants",
+                "localField": "applicant_id",
+                "foreignField": "id",
+                "as": "applicant_info"
+            }
+        },
+        {"$unwind": "$applicant_info"},
+        {"$group": {"_id": "$applicant_info.department", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10}
+    ]).to_list(10)
+    
+    # Applications by age group
+    age_distribution = {}
+    applications = await db.applications.find({}).to_list(1000)
+    for app in applications:
+        applicant = await db.applicants.find_one({"id": app["applicant_id"]})
+        if applicant:
+            age = calculate_age(date.fromisoformat(applicant["birth_date"]))
+            age_group = f"{(age // 5) * 5}-{(age // 5) * 5 + 4}"
+            age_distribution[age_group] = age_distribution.get(age_group, 0) + 1
+    
+    age_stats = [{"_id": k, "count": v} for k, v in sorted(age_distribution.items())]
+    
+    # Monthly application trends (last 6 months)
+    six_months_ago = datetime.now() - timedelta(days=180)
+    monthly_stats = await db.applications.aggregate([
+        {"$match": {"submitted_at": {"$gte": six_months_ago}}},
+        {
+            "$group": {
+                "_id": {
+                    "year": {"$year": "$submitted_at"},
+                    "month": {"$month": "$submitted_at"}
+                },
+                "count": {"$sum": 1}
+            }
+        },
+        {"$sort": {"_id.year": 1, "_id.month": 1}}
+    ]).to_list(12)
+    
+    # Score distribution
+    score_stats = await db.applications.aggregate([
+        {"$match": {"final_score": {"$exists": True, "$ne": None}}},
+        {
+            "$group": {
+                "_id": {
+                    "$switch": {
+                        "branches": [
+                            {"case": {"$gte": ["$final_score", 18]}, "then": "18-20"},
+                            {"case": {"$gte": ["$final_score", 16]}, "then": "16-18"},
+                            {"case": {"$gte": ["$final_score", 14]}, "then": "14-16"},
+                            {"case": {"$gte": ["$final_score", 12]}, "then": "12-14"},
+                            {"case": {"$gte": ["$final_score", 10]}, "then": "10-12"}
+                        ],
+                        "default": "0-10"
+                    }
+                },
+                "count": {"$sum": 1}
+            }
+        },
+        {"$sort": {"_id": -1}}
+    ]).to_list(10)
+    
+    return {
+        "status_distribution": status_stats,
+        "career_distribution": career_stats,
+        "gender_distribution": gender_stats,
+        "geography_distribution": geography_stats,
+        "age_distribution": age_stats,
+        "monthly_trends": monthly_stats,
+        "score_distribution": score_stats,
+        "total_applicants": await db.applicants.count_documents({}),
+        "total_applications": await db.applications.count_documents({}),
+        "total_evaluated": await db.applications.count_documents({"status": "EVALUATED"}),
+        "total_admitted": await db.admission_results.count_documents({"is_admitted": True})
+    }
 
 @api_router.get("/dashboard/procedure-stats", dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.ADMIN_WORKER]))])
 async def get_procedure_stats(current_user: User = Depends(get_current_user)):
