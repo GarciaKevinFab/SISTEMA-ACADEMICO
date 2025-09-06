@@ -94,6 +94,34 @@ class ProcedureArea(str, Enum):
     HR = "HR"                   # Recursos Humanos
     GENERAL = "GENERAL"         # General
 
+class AdmissionStatus(str, Enum):
+    OPEN = "OPEN"               # Abierta
+    CLOSED = "CLOSED"           # Cerrada
+    SUSPENDED = "SUSPENDED"     # Suspendida
+
+class ApplicationStatus(str, Enum):
+    REGISTERED = "REGISTERED"   # Registrado
+    DOCUMENTS_PENDING = "DOCUMENTS_PENDING"  # Documentos pendientes
+    DOCUMENTS_COMPLETE = "DOCUMENTS_COMPLETE"  # Documentos completos
+    EVALUATED = "EVALUATED"     # Evaluado
+    ADMITTED = "ADMITTED"       # Admitido
+    NOT_ADMITTED = "NOT_ADMITTED"  # No admitido
+    WAITING_LIST = "WAITING_LIST"  # Lista de espera
+
+class DocumentType(str, Enum):
+    DNI = "DNI"
+    FOREIGN_CARD = "FOREIGN_CARD"
+    PASSPORT = "PASSPORT"
+    CONADIS_CARD = "CONADIS_CARD"
+
+class ApplicantDocumentType(str, Enum):
+    BIRTH_CERTIFICATE = "BIRTH_CERTIFICATE"  # Partida de nacimiento
+    STUDY_CERTIFICATE = "STUDY_CERTIFICATE"  # Certificado de estudios
+    PHOTO = "PHOTO"                          # Fotografía
+    DNI_COPY = "DNI_COPY"                   # Copia de DNI
+    CONADIS_COPY = "CONADIS_COPY"           # Copia carné CONADIS
+    OTHER = "OTHER"                         # Otro documento
+
 # Pydantic Models
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
