@@ -355,6 +355,10 @@ async def create_student(student_data: StudentCreate, current_user: User = Depen
     student.created_by = current_user.id
     
     student_doc = student.dict()
+    # Convert date objects to ISO format strings for MongoDB
+    if 'birth_date' in student_doc and hasattr(student_doc['birth_date'], 'isoformat'):
+        student_doc['birth_date'] = student_doc['birth_date'].isoformat()
+    
     await db.students.insert_one(student_doc)
     
     logger.info(f"Student {student.student_code} created by {current_user.username}")
