@@ -710,6 +710,71 @@ const Dashboard = () => {
             </>
           )}
           
+          {user?.role === 'APPLICANT' && (
+            <>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Mis Postulaciones</CardTitle>
+                  <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-blue-600">{stats.my_applications || 0}</div>
+                  <p className="text-xs text-muted-foreground">Total postulaciones</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">En Proceso</CardTitle>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-orange-600">{stats.pending_applications || 0}</div>
+                  <p className="text-xs text-muted-foreground">Pendientes</p>
+                </CardContent>
+              </Card>
+            </>
+          )}
+          
+          {user?.role === 'ACADEMIC_STAFF' && (
+            <>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Postulantes</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-blue-600">{stats.total_applicants || 0}</div>
+                  <p className="text-xs text-muted-foreground">Registrados</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Pendiente Evaluación</CardTitle>
+                  <Award className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-orange-600">{stats.pending_evaluations || 0}</div>
+                  <p className="text-xs text-muted-foreground">Por evaluar</p>
+                </CardContent>
+              </Card>
+            </>
+          )}
+          
+          {(user?.role === 'ADMIN') && (
+            <>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Convocatorias Activas</CardTitle>
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-green-600">{stats.active_admission_calls || 0}</div>
+                  <p className="text-xs text-muted-foreground">Abiertas</p>
+                </CardContent>
+              </Card>
+            </>
+          )}
+          
           {user?.role === 'TEACHER' && (
             <>
               <Card>
