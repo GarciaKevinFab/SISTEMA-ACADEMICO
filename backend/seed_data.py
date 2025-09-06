@@ -6,7 +6,7 @@ Creates initial data for the Finance and Administration module
 
 import asyncio
 import os
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 import uuid
