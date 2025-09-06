@@ -1656,7 +1656,7 @@ class AcademicSystemTester:
         """Test creating supplier record with RUC validation"""
         timestamp = datetime.now().strftime('%H%M%S')
         supplier_data = {
-            "ruc": f"2055678901{timestamp[-1]}",  # Valid 11-digit RUC format
+            "ruc": "20556789011",  # Valid RUC with proper check digit
             "company_name": f"Distribuidora Educativa Test {timestamp} S.A.C.",
             "trade_name": f"EduTest {timestamp}",
             "contact_person": "Carlos Mendoza",
