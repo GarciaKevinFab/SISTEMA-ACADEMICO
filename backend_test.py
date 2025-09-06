@@ -750,7 +750,7 @@ class AcademicSystemTester:
         success, data = self.make_request('POST', 'applicants', invalid_applicant_data, token=token, expected_status=422)
         self.log_test("DNI Validation (letters)", success, "- Properly rejected invalid DNI")
 
-    def test_age_validation(self, token: str = None):
+    def test_age_validation(self, token: str):
         """Test age validation (15-50 years)"""
         print("\n🎂 Testing Age Validation...")
         
