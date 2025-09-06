@@ -3533,6 +3533,91 @@ async def download_receipt_pdf(
         filename=f"boleta_{receipt['receipt_number']}.pdf"
     )
 
+# ====================================================================================================
+# INCOME/EXPENSE & INVENTORY APIs
+# ====================================================================================================
+
+@api_router.post("/finance/gl-concepts", dependencies=[Depends(require_role([UserRole.FINANCE_ADMIN]))])
+async def create_gl_concept(concept_data: GLConceptCreate, current_user: User = Depends(get_current_user)):
+    """Create GL concept for income/expense tracking"""
+    
+    existing_concept = await db.gl_concepts.find_one({"code": concept_data.code})
+    if existing_concept:
+        raise HTTPException(status_code=400, detail="GL concept with this code already exists")
+    
+    concept_dict = concept_data.dict()
+    concept_dict['created_by'] = current_user.id
+    concept = GLConcept(**concept_dict)
+    
+    concept_doc = prepare_for_mongo(concept.dict())
+    await db.gl_concepts.insert_one(concept_doc)
+    
+    await log_audit_trail(db, "gl_concepts", concept.id, "CREATE", None, concept_doc, current_user.id)
+    
+    return {"status": "success", "concept": concept}
+
+@api_router.get("/finance/gl-concepts")
+async def get_gl_concepts(
+    concept_type: Optional[str] = None,
+    is_active: bool = True,
+    current_user: User = Depends(require_role([UserRole.FINANCE_ADMIN, UserRole.CASHIER]))
+):
+    """Get GL concepts"""
+    filter_query = {"is_active": is_active}
+    if concept_type:
+        filter_query["concept_type"] = concept_type
+    
+    concepts = await db.gl_concepts.find(filter_query).sort("code", 1).to_list(100)
+    return {"concepts": [GLConcept(**c) for c in concepts]}
+
+@api_router.post("/inventory/items", dependencies=[Depends(require_role([UserRole.WAREHOUSE, UserRole.FINANCE_ADMIN]))])
+async def create_inventory_item(item_data: InventoryItemCreate, current_user: User = Depends(get_current_user)):
+    """Create inventory item"""
+    
+    existing_item = await db.inventory_items.find_one({"code": item_data.code})
+    if existing_item:
+        raise HTTPException(status_code=400, detail="Item with this code already exists")
+    
+    item_dict = item_data.dict()
+    item_dict['created_by'] = current_user.id
+    item = InventoryItem(**item_dict)
+    
+    item_doc = prepare_for_mongo(item.dict())
+    await db.inventory_items.insert_one(item_doc)
+    
+    await log_audit_trail(db, "inventory_items", item.id, "CREATE", None, item_doc, current_user.id)
+    
+    return {"status": "success", "item": item}
+
+@api_router.get("/inventory/items")
+async def get_inventory_items(
+    category: Optional[str] = None,
+    is_active: bool = True,
+    low_stock_only: bool = False,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(require_role([UserRole.WAREHOUSE, UserRole.FINANCE_ADMIN, UserRole.LOGISTICS]))
+):
+    """Get inventory items"""
+    
+    filter_query = {"is_active": is_active}
+    
+    if category:
+        filter_query["category"] = category
+    
+    if low_stock_only:
+        filter_query["$expr"] = {"$lte": ["$current_stock", "$min_stock"]}
+    
+    items = await db.inventory_items.find(filter_query).sort("code", 1).skip(skip).limit(limit).to_list(limit)
+    total = await db.inventory_items.count_documents(filter_query)
+    
+    return {
+        "items": [InventoryItem(**item) for item in items],
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
