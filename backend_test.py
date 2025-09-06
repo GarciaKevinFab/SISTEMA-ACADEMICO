@@ -615,7 +615,7 @@ class AcademicSystemTester:
             self.log_test("Create Applicant", False, f"- Error: {data}")
             return None
 
-    def test_create_applicant_with_conadis(self, token: str = None) -> Optional[str]:
+    def test_create_applicant_with_conadis(self, token: str) -> Optional[str]:
         """Test creating applicant with CONADIS card"""
         timestamp = datetime.now().strftime('%H%M%S')
         applicant_data = {
