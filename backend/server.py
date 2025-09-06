@@ -1477,6 +1477,201 @@ async def get_procedure_stats(current_user: User = Depends(get_current_user)):
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow()}
 
+# Admission Module - Careers Management
+@api_router.post("/careers", dependencies=[Depends(require_role([UserRole.ADMIN]))])
+async def create_career(career_data: CareerCreate, current_user: User = Depends(get_current_user)):
+    """Create a new career"""
+    
+    # Check if career with same code exists
+    existing_career = await db.careers.find_one({"code": career_data.code})
+    if existing_career:
+        raise HTTPException(status_code=400, detail="Career with this code already exists")
+    
+    career = Career(**career_data.dict())
+    career_doc = career.dict()
+    
+    await db.careers.insert_one(career_doc)
+    
+    logger.info(f"Career {career.code} created by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "career": career,
+        "message": "Career created successfully"
+    }
+
+@api_router.get("/careers")
+async def get_careers(
+    is_active: bool = True,
+    current_user: User = Depends(get_current_user)
+):
+    """Get available careers"""
+    filter_query = {"is_active": is_active}
+    
+    careers = await db.careers.find(filter_query).sort("name", 1).to_list(100)
+    
+    return {
+        "careers": [Career(**career) for career in careers],
+        "total": len(careers)
+    }
+
+# Admission Module - Admission Calls Management
+@api_router.post("/admission-calls", dependencies=[Depends(require_role([UserRole.ADMIN]))])
+async def create_admission_call(admission_call_data: AdmissionCallCreate, current_user: User = Depends(get_current_user)):
+    """Create a new admission call"""
+    
+    # Validate careers exist
+    for career_id in admission_call_data.available_careers:
+        career = await db.careers.find_one({"id": career_id})
+        if not career:
+            raise HTTPException(status_code=400, detail=f"Career {career_id} not found")
+    
+    # Validate dates
+    if admission_call_data.registration_end <= admission_call_data.registration_start:
+        raise HTTPException(status_code=400, detail="Registration end date must be after start date")
+    
+    admission_call = AdmissionCall(**admission_call_data.dict())
+    admission_call.created_by = current_user.id
+    
+    admission_call_doc = admission_call.dict()
+    # Convert datetime objects for MongoDB
+    for field in ['registration_start', 'registration_end', 'exam_date', 'results_date']:
+        if admission_call_doc.get(field):
+            admission_call_doc[field] = admission_call_doc[field].isoformat()
+    
+    await db.admission_calls.insert_one(admission_call_doc)
+    
+    logger.info(f"Admission call {admission_call.name} created by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "admission_call": admission_call,
+        "message": "Admission call created successfully"
+    }
+
+@api_router.get("/admission-calls")
+async def get_admission_calls(
+    is_active: bool = True,
+    academic_year: Optional[int] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """Get admission calls"""
+    filter_query = {"is_active": is_active}
+    if academic_year:
+        filter_query["academic_year"] = academic_year
+    
+    admission_calls = await db.admission_calls.find(filter_query).sort("created_at", -1).to_list(50)
+    
+    # Enrich with career information
+    enriched_calls = []
+    for call in admission_calls:
+        # Get career details
+        career_details = []
+        for career_id in call.get('available_careers', []):
+            career = await db.careers.find_one({"id": career_id})
+            if career:
+                career_info = {
+                    **Career(**career).dict(),
+                    "vacancies": call.get('career_vacancies', {}).get(career_id, 0)
+                }
+                career_details.append(career_info)
+        
+        admission_call_obj = AdmissionCall(**call)
+        enriched_call = {
+            **admission_call_obj.dict(),
+            "careers": career_details
+        }
+        enriched_calls.append(enriched_call)
+    
+    return {
+        "admission_calls": enriched_calls,
+        "total": len(enriched_calls)
+    }
+
+@api_router.get("/admission-calls/{call_id}")
+async def get_admission_call(call_id: str, current_user: User = Depends(get_current_user)):
+    """Get specific admission call details"""
+    
+    admission_call = await db.admission_calls.find_one({"id": call_id})
+    if not admission_call:
+        raise HTTPException(status_code=404, detail="Admission call not found")
+    
+    # Get career details
+    career_details = []
+    for career_id in admission_call.get('available_careers', []):
+        career = await db.careers.find_one({"id": career_id})
+        if career:
+            career_info = {
+                **Career(**career).dict(),
+                "vacancies": admission_call.get('career_vacancies', {}).get(career_id, 0)
+            }
+            career_details.append(career_info)
+    
+    # Get application statistics
+    total_applications = await db.applications.count_documents({"admission_call_id": call_id})
+    
+    return {
+        "admission_call": AdmissionCall(**admission_call),
+        "careers": career_details,
+        "statistics": {
+            "total_applications": total_applications
+        }
+    }
+
+# Public endpoint for viewing admission calls (no auth required)
+@api_router.get("/public/admission-calls")
+async def get_public_admission_calls():
+    """Get active admission calls for public view"""
+    current_date = datetime.now()
+    
+    filter_query = {
+        "is_active": True,
+        "status": "OPEN",
+        "registration_end": {"$gte": current_date.isoformat()}
+    }
+    
+    admission_calls = await db.admission_calls.find(filter_query).sort("registration_start", 1).to_list(10)
+    
+    # Enrich with career information
+    enriched_calls = []
+    for call in admission_calls:
+        career_details = []
+        for career_id in call.get('available_careers', []):
+            career = await db.careers.find_one({"id": career_id})
+            if career:
+                career_info = {
+                    "id": career['id'],
+                    "code": career['code'],
+                    "name": career['name'],
+                    "description": career.get('description'),
+                    "duration_years": career['duration_years'],
+                    "vacancies": call.get('career_vacancies', {}).get(career_id, 0)
+                }
+                career_details.append(career_info)
+        
+        public_call = {
+            "id": call['id'],
+            "name": call['name'],
+            "description": call.get('description'),
+            "academic_year": call['academic_year'],
+            "academic_period": call['academic_period'],
+            "registration_start": call['registration_start'],
+            "registration_end": call['registration_end'],
+            "exam_date": call.get('exam_date'),
+            "results_date": call.get('results_date'),
+            "application_fee": call.get('application_fee', 0),
+            "minimum_age": call.get('minimum_age', 16),
+            "maximum_age": call.get('maximum_age', 35),
+            "required_documents": call.get('required_documents', []),
+            "careers": career_details
+        }
+        enriched_calls.append(public_call)
+    
+    return {
+        "admission_calls": enriched_calls,
+        "total": len(enriched_calls)
+    }
+
 # Mesa de Partes - Procedure Types Management
 @api_router.post("/procedure-types", dependencies=[Depends(require_role([UserRole.ADMIN]))])
 async def create_procedure_type(procedure_type_data: ProcedureTypeCreate, current_user: User = Depends(get_current_user)):
