@@ -356,6 +356,230 @@ class AcademicSystemTester:
             # Success means we got 403 (access denied), which is correct
             self.log_test("Teacher Cannot Create Course", success, "- Access properly denied")
 
+    def test_get_procedure_types(self, token: str):
+        """Test getting procedure types (should have 6 predefined types)"""
+        success, data = self.make_request('GET', 'procedure-types', token=token)
+        
+        types_count = len(data.get('procedure_types', [])) if success else 0
+        expected_types = [
+            "Solicitud de Certificado de Estudios",
+            "Solicitud de Constancia de Matrícula", 
+            "Solicitud de Traslado",
+            "Reclamo o Queja",
+            "Solicitud de Información",
+            "Solicitud de Beca"
+        ]
+        
+        has_expected_types = False
+        if success and data.get('procedure_types'):
+            type_names = [pt['name'] for pt in data['procedure_types']]
+            has_expected_types = all(name in type_names for name in expected_types)
+        
+        return self.log_test(
+            "Get Procedure Types", 
+            success and types_count >= 6 and has_expected_types,
+            f"- Found {types_count} types, Expected types present: {has_expected_types}"
+        )
+
+    def test_create_procedure_type(self, token: str) -> Optional[str]:
+        """Test creating a new procedure type (ADMIN only)"""
+        timestamp = datetime.now().strftime('%H%M%S')
+        procedure_type_data = {
+            "name": f"Test Procedure Type {timestamp}",
+            "description": "Test procedure type for automated testing",
+            "area": "ADMINISTRATIVE",
+            "required_documents": ["DNI", "Test Document"],
+            "processing_days": 5,
+            "is_active": True
+        }
+
+        success, data = self.make_request('POST', 'procedure-types', procedure_type_data, token=token, expected_status=200)
+        
+        if success and 'procedure_type' in data:
+            procedure_type_id = data['procedure_type']['id']
+            self.created_resources['procedure_types'].append(procedure_type_id)
+            self.log_test("Create Procedure Type", True, f"- ID: {procedure_type_id}")
+            return procedure_type_id
+        else:
+            self.log_test("Create Procedure Type", False, f"- Error: {data}")
+            return None
+
+    def test_create_procedure(self, token: str, procedure_type_id: str, role: str) -> Optional[str]:
+        """Test creating a new procedure"""
+        timestamp = datetime.now().strftime('%H%M%S')
+        procedure_data = {
+            "procedure_type_id": procedure_type_id,
+            "subject": f"Test Procedure {timestamp}",
+            "description": f"This is a test procedure created for automated testing at {datetime.now()}",
+            "applicant_name": f"Test Applicant {timestamp}",
+            "applicant_email": f"test.applicant{timestamp}@iespp.edu.pe",
+            "applicant_phone": "987654321",
+            "applicant_document": f"1234567{timestamp[-1]}",
+            "priority": "NORMAL",
+            "observations": "Test observations"
+        }
+
+        success, data = self.make_request('POST', 'procedures', procedure_data, token=token, expected_status=200)
+        
+        if success and 'procedure' in data:
+            procedure_id = data['procedure']['id']
+            tracking_code = data.get('tracking_code', '')
+            self.created_resources['procedures'].append({
+                'id': procedure_id,
+                'tracking_code': tracking_code,
+                'role': role
+            })
+            self.log_test(f"Create Procedure ({role})", True, f"- ID: {procedure_id}, Code: {tracking_code}")
+            return procedure_id
+        else:
+            self.log_test(f"Create Procedure ({role})", False, f"- Error: {data}")
+            return None
+
+    def test_get_procedures(self, token: str, role: str):
+        """Test getting procedures list"""
+        success, data = self.make_request('GET', 'procedures', token=token)
+        
+        procedures_count = len(data.get('procedures', [])) if success else 0
+        return self.log_test(
+            f"Get Procedures ({role})", 
+            success,
+            f"- Found {procedures_count} procedures"
+        )
+
+    def test_track_procedure_public(self, tracking_code: str):
+        """Test public procedure tracking (no auth required)"""
+        success, data = self.make_request('GET', f'procedures/tracking/{tracking_code}')
+        
+        has_tracking_info = success and 'tracking_code' in data and 'status' in data
+        return self.log_test(
+            "Track Procedure (Public)", 
+            has_tracking_info,
+            f"- Code: {tracking_code}, Status: {data.get('status', 'N/A') if success else 'N/A'}"
+        )
+
+    def test_update_procedure_status(self, token: str, procedure_id: str, role: str):
+        """Test updating procedure status (ADMIN/ADMIN_WORKER only)"""
+        status_update_data = {
+            "status": "IN_PROCESS",
+            "comment": "Procedure is now being processed",
+            "notify_applicant": True
+        }
+
+        success, data = self.make_request('PUT', f'procedures/{procedure_id}/status', status_update_data, token=token, expected_status=200)
+        
+        return self.log_test(
+            f"Update Procedure Status ({role})", 
+            success,
+            f"- New Status: IN_PROCESS" if success else f"- Error: {data}"
+        )
+
+    def test_assign_procedure(self, token: str, procedure_id: str, assignee_user_id: str, role: str):
+        """Test assigning procedure to a user"""
+        success, data = self.make_request('PUT', f'procedures/{procedure_id}/assign', None, token=token, expected_status=200)
+        
+        # Note: The endpoint expects assign_to_user_id as a parameter, but let's test the basic endpoint first
+        return self.log_test(
+            f"Assign Procedure ({role})", 
+            success,
+            f"- Assigned successfully" if success else f"- Error: {data}"
+        )
+
+    def test_procedure_dashboard_stats(self, token: str, role: str):
+        """Test Mesa de Partes dashboard statistics"""
+        success, data = self.make_request('GET', 'dashboard/procedure-stats', token=token)
+        
+        has_stats = success and any(key in data for key in ['status_distribution', 'area_distribution', 'total_procedures'])
+        return self.log_test(
+            f"Procedure Dashboard Stats ({role})", 
+            has_stats,
+            f"- Stats available: {list(data.keys()) if success else 'N/A'}"
+        )
+
+    def test_mesa_de_partes_comprehensive(self):
+        """Comprehensive Mesa de Partes testing"""
+        print("\n📋 Testing Mesa de Partes Virtual Module...")
+        
+        # 1. Test getting predefined procedure types
+        if self.admin_token:
+            self.test_get_procedure_types(self.admin_token)
+        
+        # 2. Test creating new procedure type (ADMIN only)
+        procedure_type_id = None
+        if self.admin_token:
+            procedure_type_id = self.test_create_procedure_type(self.admin_token)
+        
+        # 3. Get first available procedure type for testing
+        if not procedure_type_id and self.admin_token:
+            success, data = self.make_request('GET', 'procedure-types', token=self.admin_token)
+            if success and data.get('procedure_types'):
+                procedure_type_id = data['procedure_types'][0]['id']
+                print(f"ℹ️  Using existing procedure type: {procedure_type_id}")
+        
+        # 4. Test creating procedures with different roles
+        procedure_ids = []
+        if procedure_type_id:
+            if self.external_user_token:
+                proc_id = self.test_create_procedure(self.external_user_token, procedure_type_id, "EXTERNAL_USER")
+                if proc_id:
+                    procedure_ids.append(proc_id)
+            
+            if self.admin_token:
+                proc_id = self.test_create_procedure(self.admin_token, procedure_type_id, "ADMIN")
+                if proc_id:
+                    procedure_ids.append(proc_id)
+        
+        # 5. Test getting procedures with different roles
+        if self.external_user_token:
+            self.test_get_procedures(self.external_user_token, "EXTERNAL_USER")
+        if self.admin_worker_token:
+            self.test_get_procedures(self.admin_worker_token, "ADMIN_WORKER")
+        if self.admin_token:
+            self.test_get_procedures(self.admin_token, "ADMIN")
+        
+        # 6. Test public tracking
+        if self.created_resources['procedures']:
+            tracking_code = self.created_resources['procedures'][0]['tracking_code']
+            if tracking_code:
+                self.test_track_procedure_public(tracking_code)
+        
+        # 7. Test status updates (ADMIN/ADMIN_WORKER only)
+        if procedure_ids and self.admin_token:
+            self.test_update_procedure_status(self.admin_token, procedure_ids[0], "ADMIN")
+        
+        if procedure_ids and self.admin_worker_token:
+            if len(procedure_ids) > 1:
+                self.test_update_procedure_status(self.admin_worker_token, procedure_ids[1], "ADMIN_WORKER")
+        
+        # 8. Test dashboard statistics
+        if self.admin_token:
+            self.test_procedure_dashboard_stats(self.admin_token, "ADMIN")
+        if self.admin_worker_token:
+            self.test_procedure_dashboard_stats(self.admin_worker_token, "ADMIN_WORKER")
+        
+        # 9. Test role permissions for Mesa de Partes
+        print("\n🔐 Testing Mesa de Partes Permissions...")
+        
+        # Test EXTERNAL_USER cannot create procedure types
+        if self.external_user_token:
+            success, data = self.make_request('POST', 'procedure-types', {
+                "name": "Unauthorized Type",
+                "area": "ADMINISTRATIVE",
+                "processing_days": 5
+            }, token=self.external_user_token, expected_status=403)
+            self.log_test("External User Cannot Create Procedure Type", success, "- Access properly denied")
+        
+        # Test EXTERNAL_USER cannot access procedure dashboard stats
+        if self.external_user_token:
+            success, data = self.make_request('GET', 'dashboard/procedure-stats', token=self.external_user_token, expected_status=403)
+            self.log_test("External User Cannot Access Procedure Stats", success, "- Access properly denied")
+        
+        # Test STUDENT cannot update procedure status
+        if self.student_token and procedure_ids:
+            success, data = self.make_request('PUT', f'procedures/{procedure_ids[0]}/status', {
+                "status": "COMPLETED"
+            }, token=self.student_token, expected_status=403)
+            self.log_test("Student Cannot Update Procedure Status", success, "- Access properly denied")
+
     def run_comprehensive_test(self):
         """Run all tests in sequence"""
         print("🚀 Starting Comprehensive Backend API Testing")
