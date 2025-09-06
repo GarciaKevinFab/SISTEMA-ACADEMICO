@@ -1254,6 +1254,499 @@ const EnrollmentsPage = () => <div className="p-6"><h2 className="text-2xl font-
 const GradesPage = () => <div className="p-6"><h2 className="text-2xl font-bold">Gestión de Calificaciones</h2><p className="text-gray-600 mt-2">Funcionalidad en desarrollo...</p></div>;
 const ReportsPage = () => <div className="p-6"><h2 className="text-2xl font-bold">Reportes Académicos</h2><p className="text-gray-600 mt-2">Funcionalidad en desarrollo...</p></div>;
 
+// Mesa de Partes Components
+const ProceduresPage = () => {
+  const { user } = useAuth();
+  const [procedures, setProcedures] = useState([]);
+  const [procedureTypes, setProcedureTypes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedArea, setSelectedArea] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
+  const [trackingCode, setTrackingCode] = useState('');
+  const [trackingResult, setTrackingResult] = useState(null);
+  const [formData, setFormData] = useState({
+    procedure_type_id: '',
+    subject: '',
+    description: '',
+    applicant_name: '',
+    applicant_email: '',
+    applicant_phone: '',
+    applicant_document: '',
+    priority: 'NORMAL',
+    observations: ''
+  });
+
+  useEffect(() => {
+    fetchProcedures();
+    fetchProcedureTypes();
+  }, []);
+
+  const fetchProcedures = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (selectedStatus) params.append('status', selectedStatus);
+      if (selectedArea) params.append('area', selectedArea);
+      
+      const response = await axios.get(`${API}/procedures?${params.toString()}`);
+      setProcedures(response.data.procedures);
+    } catch (error) {
+      console.error('Error fetching procedures:', error);
+      toast.error('Error al cargar trámites');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProcedureTypes = async () => {
+    try {
+      const response = await axios.get(`${API}/procedure-types`);
+      setProcedureTypes(response.data.procedure_types);
+    } catch (error) {
+      console.error('Error fetching procedure types:', error);
+    }
+  };
+
+  const handleCreateProcedure = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.post(`${API}/procedures`, formData);
+      toast.success(`Trámite creado exitosamente. Código: ${response.data.tracking_code}`);
+      setIsCreateModalOpen(false);
+      setFormData({
+        procedure_type_id: '',
+        subject: '',
+        description: '',
+        applicant_name: '',
+        applicant_email: '',
+        applicant_phone: '',
+        applicant_document: '',
+        priority: 'NORMAL',
+        observations: ''
+      });
+      fetchProcedures();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Error al crear trámite');
+    }
+  };
+
+  const handleTrackProcedure = async () => {
+    try {
+      const response = await axios.get(`${API}/procedures/tracking/${trackingCode}`);
+      setTrackingResult(response.data);
+    } catch (error) {
+      toast.error('No se encontró el trámite con ese código');
+      setTrackingResult(null);
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    const statusConfig = {
+      'RECEIVED': { color: 'bg-blue-100 text-blue-800', label: 'Recibido', icon: FileText },
+      'IN_PROCESS': { color: 'bg-yellow-100 text-yellow-800', label: 'En Proceso', icon: Clock },
+      'COMPLETED': { color: 'bg-green-100 text-green-800', label: 'Finalizado', icon: CheckCircle },
+      'REJECTED': { color: 'bg-red-100 text-red-800', label: 'Rechazado', icon: XCircle },
+      'PENDING_INFO': { color: 'bg-orange-100 text-orange-800', label: 'Pendiente Info', icon: AlertCircle }
+    };
+    
+    const config = statusConfig[status] || statusConfig['RECEIVED'];
+    const Icon = config.icon;
+    
+    return (
+      <Badge className={`${config.color} flex items-center gap-1`}>
+        <Icon className="h-3 w-3" />
+        {config.label}
+      </Badge>
+    );
+  };
+
+  const getPriorityBadge = (priority) => {
+    const priorityConfig = {
+      'LOW': { color: 'bg-gray-100 text-gray-800', label: 'Baja' },
+      'NORMAL': { color: 'bg-blue-100 text-blue-800', label: 'Normal' },
+      'HIGH': { color: 'bg-orange-100 text-orange-800', label: 'Alta' },
+      'URGENT': { color: 'bg-red-100 text-red-800', label: 'Urgente' }
+    };
+    
+    const config = priorityConfig[priority] || priorityConfig['NORMAL'];
+    
+    return (
+      <Badge className={config.color}>
+        {config.label}
+      </Badge>
+    );
+  };
+
+  const filteredProcedures = procedures.filter(procedure => {
+    const matchesSearch = 
+      procedure.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      procedure.tracking_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (procedure.applicant_name && procedure.applicant_name.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    return matchesSearch;
+  });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Mesa de Partes Virtual</h2>
+        <div className="flex gap-2">
+          <Dialog open={isTrackingModalOpen} onOpenChange={setIsTrackingModalOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="flex items-center gap-2">
+                <Search className="h-4 w-4" />
+                Rastrear Trámite
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Rastrear Trámite</DialogTitle>
+                <DialogDescription>
+                  Ingrese el código de seguimiento para ver el estado de su trámite
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="tracking_code">Código de Seguimiento</Label>
+                  <Input
+                    id="tracking_code"
+                    value={trackingCode}
+                    onChange={(e) => setTrackingCode(e.target.value)}
+                    placeholder="IESPP-20241206-ABC12345"
+                  />
+                </div>
+                <Button onClick={handleTrackProcedure} className="w-full">
+                  <Search className="h-4 w-4 mr-2" />
+                  Buscar Trámite
+                </Button>
+                
+                {trackingResult && (
+                  <div className="mt-4 p-4 border rounded-lg">
+                    <h4 className="font-semibold">{trackingResult.subject}</h4>
+                    <p className="text-sm text-gray-600 mb-2">Código: {trackingResult.tracking_code}</p>
+                    <div className="flex items-center gap-2 mb-2">
+                      {getStatusBadge(trackingResult.status)}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Creado: {new Date(trackingResult.created_at).toLocaleDateString()}
+                    </p>
+                    {trackingResult.deadline && (
+                      <p className="text-xs text-gray-500">
+                        Plazo: {new Date(trackingResult.deadline).toLocaleDateString()}
+                      </p>
+                    )}
+                    
+                    {trackingResult.timeline && trackingResult.timeline.length > 0 && (
+                      <div className="mt-4">
+                        <h5 className="font-medium text-sm mb-2">Cronología:</h5>
+                        <div className="space-y-2">
+                          {trackingResult.timeline.map((event, index) => (
+                            <div key={index} className="flex items-center gap-2 text-xs">
+                              <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                              <span>{new Date(event.date).toLocaleDateString()}</span>
+                              <span className="font-medium">{event.status || event.action}</span>
+                              {event.comment && <span className="text-gray-600">- {event.comment}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+          
+          {user?.role === 'EXTERNAL_USER' && (
+            <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nuevo Trámite
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Registrar Nuevo Trámite</DialogTitle>
+                  <DialogDescription>
+                    Complete los datos del trámite que desea registrar
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleCreateProcedure} className="space-y-4">
+                  <div>
+                    <Label htmlFor="procedure_type_id">Tipo de Trámite *</Label>
+                    <Select 
+                      value={formData.procedure_type_id} 
+                      onValueChange={(value) => setFormData({...formData, procedure_type_id: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccione tipo de trámite" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {procedureTypes.map((type) => (
+                          <SelectItem key={type.id} value={type.id}>
+                            {type.name} - {type.area}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="subject">Asunto *</Label>
+                    <Input
+                      id="subject"
+                      value={formData.subject}
+                      onChange={(e) => setFormData({...formData, subject: e.target.value})}
+                      required
+                      placeholder="Asunto del trámite"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="description">Descripción *</Label>
+                    <Textarea
+                      id="description"
+                      value={formData.description}
+                      onChange={(e) => setFormData({...formData, description: e.target.value})}
+                      required
+                      placeholder="Describa detalladamente su solicitud"
+                      rows={4}
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="applicant_name">Nombre Completo *</Label>
+                      <Input
+                        id="applicant_name"
+                        value={formData.applicant_name}
+                        onChange={(e) => setFormData({...formData, applicant_name: e.target.value})}
+                        required
+                        placeholder="Nombres y apellidos"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="applicant_document">Documento</Label>
+                      <Input
+                        id="applicant_document"
+                        value={formData.applicant_document}
+                        onChange={(e) => setFormData({...formData, applicant_document: e.target.value})}
+                        placeholder="DNI o documento"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="applicant_email">Email *</Label>
+                      <Input
+                        id="applicant_email"
+                        type="email"
+                        value={formData.applicant_email}
+                        onChange={(e) => setFormData({...formData, applicant_email: e.target.value})}
+                        required
+                        placeholder="correo@ejemplo.com"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="applicant_phone">Teléfono</Label>
+                      <Input
+                        id="applicant_phone"
+                        value={formData.applicant_phone}
+                        onChange={(e) => setFormData({...formData, applicant_phone: e.target.value})}
+                        placeholder="Número de teléfono"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="priority">Prioridad</Label>
+                    <Select 
+                      value={formData.priority} 
+                      onValueChange={(value) => setFormData({...formData, priority: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="LOW">Baja</SelectItem>
+                        <SelectItem value="NORMAL">Normal</SelectItem>
+                        <SelectItem value="HIGH">Alta</SelectItem>
+                        <SelectItem value="URGENT">Urgente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="observations">Observaciones</Label>
+                    <Textarea
+                      id="observations"
+                      value={formData.observations}
+                      onChange={(e) => setFormData({...formData, observations: e.target.value})}
+                      placeholder="Información adicional (opcional)"
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-end space-x-2">
+                    <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                      Registrar Trámite
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-4 items-center">
+        <div className="flex-1 max-w-md">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Buscar por asunto, código o solicitante..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
+        <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Filtrar por estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Todos los estados</SelectItem>
+            <SelectItem value="RECEIVED">Recibido</SelectItem>
+            <SelectItem value="IN_PROCESS">En Proceso</SelectItem>
+            <SelectItem value="COMPLETED">Finalizado</SelectItem>
+            <SelectItem value="REJECTED">Rechazado</SelectItem>
+            <SelectItem value="PENDING_INFO">Pendiente Info</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={selectedArea} onValueChange={setSelectedArea}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Filtrar por área" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Todas las áreas</SelectItem>
+            <SelectItem value="ACADEMIC">Académica</SelectItem>
+            <SelectItem value="ADMINISTRATIVE">Administrativa</SelectItem>
+            <SelectItem value="FINANCIAL">Financiera</SelectItem>
+            <SelectItem value="LEGAL">Legal</SelectItem>
+            <SelectItem value="HR">Recursos Humanos</SelectItem>
+            <SelectItem value="GENERAL">General</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Procedures List */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trámite</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Solicitante</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prioridad</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredProcedures.map((procedure) => (
+                  <tr key={procedure.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {procedure.subject}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {procedure.procedure_type?.name} - {procedure.area}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
+                      {procedure.tracking_code}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {procedure.applicant_name || 'N/A'}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {procedure.applicant_email}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {getStatusBadge(procedure.status)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {getPriorityBadge(procedure.priority)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(procedure.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        {(user?.role === 'ADMIN' || user?.role === 'ADMIN_WORKER') && (
+                          <Button variant="ghost" size="sm">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {filteredProcedures.length === 0 && (
+        <div className="text-center py-12">
+          <FileCheck className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No se encontraron trámites</h3>
+          <p className="text-gray-500 mb-4">
+            {searchTerm || selectedStatus || selectedArea
+              ? 'No hay trámites que coincidan con los filtros aplicados.'
+              : 'Aún no hay trámites registrados en el sistema.'
+            }
+          </p>
+          {user?.role === 'EXTERNAL_USER' && !searchTerm && !selectedStatus && !selectedArea && (
+            <Button onClick={() => setIsCreateModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="h-4 w-4 mr-2" />
+              Registrar Primer Trámite
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Main App Component
 function App() {
   return (
