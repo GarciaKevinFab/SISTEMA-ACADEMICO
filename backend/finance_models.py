@@ -238,7 +238,7 @@ class IncomeExpense(BaseModel):
     # Audit
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     created_by: str
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # Inventory Models
 class InventoryItemCreate(BaseModel):
