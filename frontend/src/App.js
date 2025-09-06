@@ -205,6 +205,18 @@ const LoginPage = () => {
                 <span>Reportes Académicos</span>
               </div>
             </div>
+            <div className="flex justify-center gap-4">
+              <Link to="/admision">
+                <Button className="bg-white text-blue-600 hover:bg-gray-100 px-8 py-3 text-lg">
+                  <GraduationCap className="h-5 w-5 mr-2" />
+                  Ver Convocatorias
+                </Button>
+              </Link>
+              <Button variant="outline" className="border-white text-white hover:bg-white hover:text-blue-600 px-8 py-3 text-lg">
+                <FileText className="h-5 w-5 mr-2" />
+                Conocer Más
+              </Button>
+            </div>
           </div>
         </div>
       </div>
