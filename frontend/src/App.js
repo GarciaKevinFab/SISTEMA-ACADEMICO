@@ -1328,6 +1328,74 @@ const EnrollmentsPage = () => <div className="p-6"><h2 className="text-2xl font-
 const GradesPage = () => <div className="p-6"><h2 className="text-2xl font-bold">Gestión de Calificaciones</h2><p className="text-gray-600 mt-2">Funcionalidad en desarrollo...</p></div>;
 const ReportsPage = () => <div className="p-6"><h2 className="text-2xl font-bold">Reportes Académicos</h2><p className="text-gray-600 mt-2">Funcionalidad en desarrollo...</p></div>;
 
+// Admission Module Main Component
+const AdmissionPage = () => {
+  const { user } = useAuth();
+
+  if (user?.role === 'APPLICANT') {
+    return <ApplicantProfile />;
+  }
+
+  if (user?.role === 'ADMIN') {
+    return (
+      <Tabs defaultValue="dashboard" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          <TabsTrigger value="convocatorias">Convocatorias</TabsTrigger>
+          <TabsTrigger value="postulantes">Postulantes</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="dashboard">
+          <AdmissionDashboard />
+        </TabsContent>
+        
+        <TabsContent value="convocatorias">
+          <AdmissionCallsManagement />
+        </TabsContent>
+        
+        <TabsContent value="postulantes">
+          <div className="p-6">
+            <h2 className="text-2xl font-bold">Gestión de Postulantes</h2>
+            <p className="text-gray-600 mt-2">Panel de gestión de postulantes en desarrollo...</p>
+          </div>
+        </TabsContent>
+      </Tabs>
+    );
+  }
+
+  if (user?.role === 'ACADEMIC_STAFF') {
+    return (
+      <Tabs defaultValue="dashboard" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          <TabsTrigger value="evaluaciones">Evaluaciones</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="dashboard">
+          <AdmissionDashboard />
+        </TabsContent>
+        
+        <TabsContent value="evaluaciones">
+          <div className="p-6">
+            <h2 className="text-2xl font-bold">Gestión de Evaluaciones</h2>
+            <p className="text-gray-600 mt-2">Sistema de evaluaciones en desarrollo...</p>
+          </div>
+        </TabsContent>
+      </Tabs>
+    );
+  }
+
+  // Default view for other roles
+  return (
+    <div className="p-6">
+      <h2 className="text-2xl font-bold">Módulo de Admisión</h2>
+      <p className="text-gray-600 mt-2">
+        Acceso no autorizado para el rol actual: {user?.role}
+      </p>
+    </div>
+  );
+};
+
 // Mesa de Partes Components
 const ProceduresPage = () => {
   const { user } = useAuth();
