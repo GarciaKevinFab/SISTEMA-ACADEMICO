@@ -1318,6 +1318,65 @@ async def assign_procedure(
 # Include router
 app.include_router(api_router)
 
+# Initialize default procedure types
+@app.on_event("startup")
+async def create_default_procedure_types():
+    """Create default procedure types if they don't exist"""
+    default_types = [
+        {
+            "name": "Solicitud de Certificado de Estudios",
+            "description": "Solicitud de certificado oficial de estudios cursados",
+            "area": "ACADEMIC",
+            "required_documents": ["DNI", "Comprobante de pago"],
+            "processing_days": 5
+        },
+        {
+            "name": "Solicitud de Constancia de Matrícula",
+            "description": "Constancia que acredita estar matriculado en el instituto",
+            "area": "ACADEMIC", 
+            "required_documents": ["DNI"],
+            "processing_days": 3
+        },
+        {
+            "name": "Solicitud de Traslado",
+            "description": "Solicitud de traslado a otra institución educativa",
+            "area": "ACADEMIC",
+            "required_documents": ["DNI", "Solicitud", "Certificado de estudios"],
+            "processing_days": 15
+        },
+        {
+            "name": "Reclamo o Queja",
+            "description": "Presentación de reclamos o quejas sobre servicios",
+            "area": "ADMINISTRATIVE",
+            "required_documents": ["DNI", "Documento sustentatorio"],
+            "processing_days": 10
+        },
+        {
+            "name": "Solicitud de Información",
+            "description": "Pedido de acceso a información pública",
+            "area": "ADMINISTRATIVE",
+            "required_documents": ["DNI"],
+            "processing_days": 7
+        },
+        {
+            "name": "Solicitud de Beca",
+            "description": "Postulación a programas de becas estudiantiles",
+            "area": "FINANCIAL",
+            "required_documents": ["DNI", "Declaración jurada", "Comprobantes de ingresos"],
+            "processing_days": 20
+        }
+    ]
+    
+    try:
+        existing_count = await db.procedure_types.count_documents({})
+        if existing_count == 0:
+            for type_data in default_types:
+                procedure_type = ProcedureType(**type_data)
+                await db.procedure_types.insert_one(procedure_type.dict())
+            logger.info(f"Created {len(default_types)} default procedure types")
+    except Exception as e:
+        logger.error(f"Error creating default procedure types: {str(e)}")
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
