@@ -718,6 +718,189 @@ def calculate_deadline(processing_days: int) -> datetime:
             days_added += 1
     return current_date
 
+def calculate_age(birth_date: date) -> int:
+    """Calculate age from birth date"""
+    today = date.today()
+    return today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+
+def calculate_final_score(exam_score: float = None, interview_score: float = None) -> float:
+    """Calculate final admission score (80% exam + 20% interview)"""
+    if exam_score is None and interview_score is None:
+        return 0.0
+    
+    exam_weight = 0.8
+    interview_weight = 0.2
+    
+    final_exam = (exam_score or 0) * exam_weight
+    final_interview = (interview_score or 0) * interview_weight
+    
+    return round(final_exam + final_interview, 2)
+
+def generate_applicant_code(year: int = None) -> str:
+    """Generate unique applicant code"""
+    year = year or datetime.now().year
+    random_part = str(uuid.uuid4())[:6].upper()
+    return f"APL{year}{random_part}"
+
+def generate_application_number(year: int = None) -> str:
+    """Generate unique application number"""
+    year = year or datetime.now().year
+    random_part = str(uuid.uuid4())[:8].upper()
+    return f"ADM{year}{random_part}"
+
+async def validate_admission_requirements(applicant: Applicant, admission_call: AdmissionCall) -> tuple[bool, List[str]]:
+    """Validate if applicant meets admission requirements"""
+    errors = []
+    
+    # Age validation
+    age = calculate_age(applicant.birth_date)
+    if age < admission_call.minimum_age:
+        errors.append(f"Edad mínima requerida: {admission_call.minimum_age} años")
+    if age > admission_call.maximum_age:
+        errors.append(f"Edad máxima permitida: {admission_call.maximum_age} años")
+    
+    # Document validation
+    required_docs = set(admission_call.required_documents)
+    # This would be checked against submitted documents in a real implementation
+    
+    return len(errors) == 0, errors
+
+async def generate_admission_ranking(admission_call_id: str, career_id: str) -> List[Dict]:
+    """Generate admission ranking for a specific career"""
+    
+    # Get all applications for this admission call and career
+    applications = await db.applications.find({
+        "admission_call_id": admission_call_id,
+        "career_preferences": {"$in": [career_id]},
+        "status": {"$in": ["EVALUATED"]},
+        "final_score": {"$exists": True, "$ne": None}
+    }).to_list(1000)
+    
+    # Sort by final score (descending) and application date (ascending for tie-breaking)
+    ranking = sorted(
+        applications, 
+        key=lambda x: (-x.get('final_score', 0), x.get('submitted_at', datetime.utcnow()))
+    )
+    
+    # Add position numbers
+    for i, app in enumerate(ranking, 1):
+        app['position'] = i
+    
+    return ranking
+
+async def publish_admission_results(admission_call_id: str) -> Dict[str, Any]:
+    """Publish admission results for all careers"""
+    
+    # Get admission call
+    admission_call = await db.admission_calls.find_one({"id": admission_call_id})
+    if not admission_call:
+        raise HTTPException(status_code=404, detail="Admission call not found")
+    
+    results_summary = {
+        "total_careers": 0,
+        "total_applications": 0,
+        "total_admitted": 0,
+        "total_waiting_list": 0,
+        "total_not_admitted": 0,
+        "career_results": {}
+    }
+    
+    # Process each career
+    for career_id in admission_call.get('available_careers', []):
+        career = await db.careers.find_one({"id": career_id})
+        if not career:
+            continue
+            
+        # Get vacancies for this career
+        vacancies = admission_call.get('career_vacancies', {}).get(career_id, 0)
+        
+        # Generate ranking
+        ranking = await generate_admission_ranking(admission_call_id, career_id)
+        
+        # Determine results
+        admitted_count = 0
+        waiting_list_count = 0
+        not_admitted_count = 0
+        
+        for i, application in enumerate(ranking):
+            position = i + 1
+            
+            # Determine result type
+            if position <= vacancies:
+                result_type = "ADMITTED"
+                is_admitted = True
+                admitted_count += 1
+            elif position <= vacancies * 1.5:  # 50% more for waiting list
+                result_type = "WAITING_LIST" 
+                is_admitted = False
+                waiting_list_count += 1
+            else:
+                result_type = "NOT_ADMITTED"
+                is_admitted = False
+                not_admitted_count += 1
+            
+            # Create result record
+            result = AdmissionResult(
+                admission_call_id=admission_call_id,
+                application_id=application['id'],
+                career_id=career_id,
+                is_admitted=is_admitted,
+                position=position,
+                result_type=result_type,
+                final_score=application.get('final_score', 0),
+                created_by="SYSTEM"
+            )
+            
+            # Save result
+            await db.admission_results.insert_one(result.dict())
+            
+            # Update application status
+            new_status = ApplicationStatus.ADMITTED if is_admitted else (
+                ApplicationStatus.WAITING_LIST if result_type == "WAITING_LIST" else ApplicationStatus.NOT_ADMITTED
+            )
+            
+            await db.applications.update_one(
+                {"id": application['id']},
+                {
+                    "$set": {
+                        "status": new_status.value,
+                        "admitted_career": career_id if is_admitted else None,
+                        "admission_position": position,
+                        "result_published_at": datetime.utcnow()
+                    }
+                }
+            )
+        
+        # Update summary
+        results_summary["career_results"][career_id] = {
+            "career_name": career['name'],
+            "vacancies": vacancies,
+            "applications": len(ranking),
+            "admitted": admitted_count,
+            "waiting_list": waiting_list_count,
+            "not_admitted": not_admitted_count
+        }
+        
+        results_summary["total_careers"] += 1
+        results_summary["total_applications"] += len(ranking)
+        results_summary["total_admitted"] += admitted_count
+        results_summary["total_waiting_list"] += waiting_list_count
+        results_summary["total_not_admitted"] += not_admitted_count
+    
+    # Update admission call status
+    await db.admission_calls.update_one(
+        {"id": admission_call_id},
+        {
+            "$set": {
+                "results_published": True,
+                "results_date": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+        }
+    )
+    
+    return results_summary
+
 async def log_procedure_action(
     procedure_id: str, 
     action: str, 
