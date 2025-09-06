@@ -143,15 +143,18 @@ backend:
 
   - task: "Cash & Banks APIs"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Implemented bank accounts, cash sessions, movements, and bank reconciliation APIs"
+      - working: true
+        agent: "testing"
+        comment: "✅ PASSED: Bank account creation/retrieval, cash session workflow (open→movements→close), cash movements (income/expense), bank reconciliation upload endpoint. Minor: Close session expects query parameters instead of request body. Role-based permissions working correctly for FINANCE_ADMIN and CASHIER roles."
 
   - task: "Internal Receipts APIs with QR"
     implemented: true
