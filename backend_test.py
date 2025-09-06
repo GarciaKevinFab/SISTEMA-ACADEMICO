@@ -803,8 +803,9 @@ class AcademicSystemTester:
         """Comprehensive Admission Module testing"""
         print("\n🎓 Testing Admission Module...")
         
-        # 1. Test getting careers (public)
-        self.test_get_careers()
+        # 1. Test getting careers
+        if self.admin_token:
+            self.test_get_careers(self.admin_token)
         
         # 2. Test public admission calls
         self.test_get_public_admission_calls()
@@ -815,12 +816,16 @@ class AcademicSystemTester:
             admission_call_id = self.test_create_admission_call(self.admin_token)
         
         # 4. Test creating applicants with validations
-        applicant_id = self.test_create_applicant()
-        applicant_conadis_id = self.test_create_applicant_with_conadis()
+        applicant_id = None
+        applicant_conadis_id = None
+        if self.admin_token:
+            applicant_id = self.test_create_applicant(self.admin_token)
+            applicant_conadis_id = self.test_create_applicant_with_conadis(self.admin_token)
         
         # 5. Test DNI and age validations
-        self.test_dni_validation()
-        self.test_age_validation()
+        if self.admin_token:
+            self.test_dni_validation(self.admin_token)
+            self.test_age_validation(self.admin_token)
         
         # 6. Test creating applications
         application_id = None
