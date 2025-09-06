@@ -1588,6 +1588,247 @@ async def get_admission_calls(
         "total": len(enriched_calls)
     }
 
+# Admission Module - Applicants Management
+@api_router.post("/applicants")
+async def create_applicant(applicant_data: ApplicantCreate, current_user: User = Depends(get_current_user)):
+    """Create a new applicant (can be self-registration or admin creation)"""
+    
+    # Check if applicant with same document exists
+    existing_applicant = await db.applicants.find_one({"document_number": applicant_data.document_number})
+    if existing_applicant:
+        raise HTTPException(status_code=400, detail="Applicant with this document number already exists")
+    
+    # Check if email is already registered
+    existing_email = await db.applicants.find_one({"email": applicant_data.email})
+    if existing_email:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Validate age
+    age = calculate_age(applicant_data.birth_date)
+    if age < 15:
+        raise HTTPException(status_code=400, detail="Minimum age is 15 years")
+    if age > 50:
+        raise HTTPException(status_code=400, detail="Maximum age is 50 years")
+    
+    applicant = Applicant(**applicant_data.dict())
+    
+    # Link to user if they are registering themselves
+    if current_user.role == UserRole.APPLICANT:
+        applicant.user_id = current_user.id
+    
+    applicant_doc = applicant.dict()
+    # Convert date to ISO format
+    applicant_doc['birth_date'] = applicant_doc['birth_date'].isoformat()
+    
+    await db.applicants.insert_one(applicant_doc)
+    
+    logger.info(f"Applicant {applicant.applicant_code} created")
+    
+    return {
+        "status": "success",
+        "applicant": applicant,
+        "message": "Applicant registered successfully"
+    }
+
+@api_router.get("/applicants", dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.ACADEMIC_STAFF]))])
+async def get_applicants(
+    skip: int = 0,
+    limit: int = 50,
+    search: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """Get applicants list"""
+    
+    filter_query = {}
+    if search:
+        filter_query["$or"] = [
+            {"first_name": {"$regex": search, "$options": "i"}},
+            {"last_name": {"$regex": search, "$options": "i"}},
+            {"applicant_code": {"$regex": search, "$options": "i"}},
+            {"document_number": {"$regex": search, "$options": "i"}},
+            {"email": {"$regex": search, "$options": "i"}}
+        ]
+    
+    applicants = await db.applicants.find(filter_query).skip(skip).limit(limit).sort("created_at", -1).to_list(limit)
+    total = await db.applicants.count_documents(filter_query)
+    
+    return {
+        "applicants": [Applicant(**applicant) for applicant in applicants],
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+@api_router.get("/applicants/me")
+async def get_my_applicant_profile(current_user: User = Depends(get_current_user)):
+    """Get current user's applicant profile"""
+    
+    if current_user.role != UserRole.APPLICANT:
+        raise HTTPException(status_code=403, detail="Only applicants can access this endpoint")
+    
+    applicant = await db.applicants.find_one({"user_id": current_user.id})
+    if not applicant:
+        raise HTTPException(status_code=404, detail="Applicant profile not found")
+    
+    return Applicant(**applicant)
+
+# Admission Module - Applications Management
+@api_router.post("/applications")
+async def create_application(application_data: ApplicationCreate, current_user: User = Depends(get_current_user)):
+    """Create a new application"""
+    
+    # Verify admission call exists and is open
+    admission_call = await db.admission_calls.find_one({"id": application_data.admission_call_id})
+    if not admission_call:
+        raise HTTPException(status_code=404, detail="Admission call not found")
+    
+    # Check if registration is still open
+    current_date = datetime.now()
+    registration_end = datetime.fromisoformat(admission_call['registration_end'])
+    if current_date > registration_end:
+        raise HTTPException(status_code=400, detail="Registration period has ended")
+    
+    # Verify applicant exists
+    applicant = await db.applicants.find_one({"id": application_data.applicant_id})
+    if not applicant:
+        raise HTTPException(status_code=404, detail="Applicant not found")
+    
+    # Check if applicant already applied for this admission call
+    existing_application = await db.applications.find_one({
+        "admission_call_id": application_data.admission_call_id,
+        "applicant_id": application_data.applicant_id
+    })
+    if existing_application:
+        raise HTTPException(status_code=400, detail="Applicant already applied for this admission call")
+    
+    # Validate career preferences
+    available_careers = admission_call.get('available_careers', [])
+    for career_id in application_data.career_preferences:
+        if career_id not in available_careers:
+            raise HTTPException(status_code=400, detail=f"Career {career_id} not available in this admission call")
+    
+    # Validate age requirements
+    age = calculate_age(date.fromisoformat(applicant['birth_date']))
+    if age < admission_call.get('minimum_age', 16) or age > admission_call.get('maximum_age', 35):
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Age must be between {admission_call.get('minimum_age', 16)} and {admission_call.get('maximum_age', 35)} years"
+        )
+    
+    application = Application(**application_data.dict())
+    
+    application_doc = application.dict()
+    await db.applications.insert_one(application_doc)
+    
+    # Update admission call application count
+    await db.admission_calls.update_one(
+        {"id": application_data.admission_call_id},
+        {"$inc": {"total_applications": 1}}
+    )
+    
+    logger.info(f"Application {application.application_number} created for applicant {application_data.applicant_id}")
+    
+    return {
+        "status": "success",
+        "application": application,
+        "message": "Application submitted successfully"
+    }
+
+@api_router.get("/applications", dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.ACADEMIC_STAFF]))])
+async def get_applications(
+    admission_call_id: Optional[str] = None,
+    career_id: Optional[str] = None,
+    status: Optional[ApplicationStatus] = None,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user)
+):
+    """Get applications list"""
+    
+    filter_query = {}
+    if admission_call_id:
+        filter_query["admission_call_id"] = admission_call_id
+    if career_id:
+        filter_query["career_preferences"] = {"$in": [career_id]}
+    if status:
+        filter_query["status"] = status.value
+    
+    applications = await db.applications.find(filter_query).skip(skip).limit(limit).sort("submitted_at", -1).to_list(limit)
+    total = await db.applications.count_documents(filter_query)
+    
+    # Enrich with applicant and admission call data
+    enriched_applications = []
+    for application in applications:
+        # Get applicant
+        applicant = await db.applicants.find_one({"id": application["applicant_id"]})
+        
+        # Get admission call
+        admission_call = await db.admission_calls.find_one({"id": application["admission_call_id"]})
+        
+        # Get career preferences details
+        career_details = []
+        for career_id in application.get("career_preferences", []):
+            career = await db.careers.find_one({"id": career_id})
+            if career:
+                career_details.append(Career(**career))
+        
+        application_obj = Application(**application)
+        enriched_application = {
+            **application_obj.dict(),
+            "applicant": Applicant(**applicant) if applicant else None,
+            "admission_call": AdmissionCall(**admission_call) if admission_call else None,
+            "career_preferences_details": career_details
+        }
+        enriched_applications.append(enriched_application)
+    
+    return {
+        "applications": enriched_applications,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+@api_router.get("/applications/me")
+async def get_my_applications(current_user: User = Depends(get_current_user)):
+    """Get current user's applications"""
+    
+    if current_user.role != UserRole.APPLICANT:
+        raise HTTPException(status_code=403, detail="Only applicants can access this endpoint")
+    
+    # Find applicant profile
+    applicant = await db.applicants.find_one({"user_id": current_user.id})
+    if not applicant:
+        raise HTTPException(status_code=404, detail="Applicant profile not found")
+    
+    # Get applications
+    applications = await db.applications.find({"applicant_id": applicant["id"]}).sort("submitted_at", -1).to_list(50)
+    
+    # Enrich with details
+    enriched_applications = []
+    for application in applications:
+        # Get admission call
+        admission_call = await db.admission_calls.find_one({"id": application["admission_call_id"]})
+        
+        # Get career preferences details
+        career_details = []
+        for career_id in application.get("career_preferences", []):
+            career = await db.careers.find_one({"id": career_id})
+            if career:
+                career_details.append(Career(**career))
+        
+        application_obj = Application(**application)
+        enriched_application = {
+            **application_obj.dict(),
+            "admission_call": AdmissionCall(**admission_call) if admission_call else None,
+            "career_preferences_details": career_details
+        }
+        enriched_applications.append(enriched_application)
+    
+    return {
+        "applications": enriched_applications,
+        "total": len(enriched_applications)
+    }
+
 @api_router.get("/admission-calls/{call_id}")
 async def get_admission_call(call_id: str, current_user: User = Depends(get_current_user)):
     """Get specific admission call details"""
