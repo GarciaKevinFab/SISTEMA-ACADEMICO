@@ -1967,7 +1967,6 @@ function App() {
                 </DashboardLayout>
               </ProtectedRoute>
             } />
-            <Route path="/admision" element={<PublicAdmissionCalls />} />
           </Routes>
         </div>
       </Router>
