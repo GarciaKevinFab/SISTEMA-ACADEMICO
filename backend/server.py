@@ -879,6 +879,342 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_user)):
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow()}
 
+# Mesa de Partes - Procedure Types Management
+@api_router.post("/procedure-types", dependencies=[Depends(require_role([UserRole.ADMIN]))])
+async def create_procedure_type(procedure_type_data: ProcedureTypeCreate, current_user: User = Depends(get_current_user)):
+    """Create a new procedure type"""
+    
+    # Check if procedure type with same name exists
+    existing_type = await db.procedure_types.find_one({"name": procedure_type_data.name})
+    if existing_type:
+        raise HTTPException(status_code=400, detail="Procedure type with this name already exists")
+    
+    procedure_type = ProcedureType(**procedure_type_data.dict())
+    procedure_type_doc = procedure_type.dict()
+    
+    await db.procedure_types.insert_one(procedure_type_doc)
+    
+    logger.info(f"Procedure type {procedure_type.name} created by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "procedure_type": procedure_type,
+        "message": "Procedure type created successfully"
+    }
+
+@api_router.get("/procedure-types")
+async def get_procedure_types(
+    area: Optional[ProcedureArea] = None,
+    is_active: bool = True,
+    current_user: User = Depends(get_current_user)
+):
+    """Get procedure types"""
+    filter_query = {"is_active": is_active}
+    if area:
+        filter_query["area"] = area.value
+    
+    procedure_types = await db.procedure_types.find(filter_query).sort("name", 1).to_list(100)
+    
+    return {
+        "procedure_types": [ProcedureType(**pt) for pt in procedure_types],
+        "total": len(procedure_types)
+    }
+
+# Mesa de Partes - Procedures Management
+@api_router.post("/procedures")
+async def create_procedure(procedure_data: ProcedureCreate, current_user: User = Depends(get_current_user)):
+    """Create a new procedure"""
+    
+    # Verify procedure type exists
+    procedure_type = await db.procedure_types.find_one({"id": procedure_data.procedure_type_id})
+    if not procedure_type:
+        raise HTTPException(status_code=404, detail="Procedure type not found")
+    
+    # Generate unique tracking code
+    tracking_code = generate_tracking_code()
+    
+    # Calculate deadline
+    deadline = calculate_deadline(procedure_type['processing_days'])
+    
+    # Create procedure
+    procedure = Procedure(**procedure_data.dict())
+    procedure.tracking_code = tracking_code
+    procedure.created_by = current_user.id
+    procedure.area = ProcedureArea(procedure_type['area'])
+    procedure.deadline = deadline
+    
+    # For external users, use their provided info
+    if current_user.role == UserRole.EXTERNAL_USER:
+        if not procedure_data.applicant_name or not procedure_data.applicant_email:
+            # Use user data if not provided
+            procedure.applicant_name = procedure.applicant_name or current_user.full_name
+            procedure.applicant_email = procedure.applicant_email or current_user.email
+    
+    procedure_doc = procedure.dict()
+    # Convert datetime objects to ISO format for MongoDB
+    if procedure_doc.get('deadline'):
+        procedure_doc['deadline'] = procedure_doc['deadline'].isoformat()
+    
+    await db.procedures.insert_one(procedure_doc)
+    
+    # Log creation
+    await log_procedure_action(
+        procedure_id=procedure.id,
+        action="CREATED",
+        performed_by=current_user.id,
+        new_status=procedure.status.value,
+        comment=f"Procedure created with tracking code: {tracking_code}"
+    )
+    
+    # Send confirmation notification
+    recipient_email = procedure.applicant_email or current_user.email
+    if recipient_email:
+        await send_procedure_notification(
+            procedure_id=procedure.id,
+            recipient_email=recipient_email,
+            notification_type="PROCEDURE_CREATED",
+            subject=f"Trámite Registrado - {tracking_code}",
+            content=f"Su trámite '{procedure.subject}' ha sido registrado exitosamente. Código de seguimiento: {tracking_code}"
+        )
+    
+    logger.info(f"Procedure {tracking_code} created by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "procedure": procedure,
+        "tracking_code": tracking_code,
+        "message": "Procedure created successfully"
+    }
+
+@api_router.get("/procedures")
+async def get_procedures(
+    status: Optional[ProcedureStatus] = None,
+    area: Optional[ProcedureArea] = None,
+    assigned_to_me: bool = False,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user)
+):
+    """Get procedures based on user role and filters"""
+    
+    filter_query = {}
+    
+    # Role-based filtering
+    if current_user.role == UserRole.EXTERNAL_USER:
+        # External users can only see their own procedures
+        filter_query["created_by"] = current_user.id
+    elif current_user.role == UserRole.ADMIN_WORKER:
+        if assigned_to_me:
+            filter_query["assigned_to"] = current_user.id
+        # Admin workers can see procedures from their area or assigned to them
+        # For now, they can see all procedures
+    # ADMIN can see all procedures
+    
+    # Apply filters
+    if status:
+        filter_query["status"] = status.value
+    if area:
+        filter_query["area"] = area.value
+    
+    procedures = await db.procedures.find(filter_query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.procedures.count_documents(filter_query)
+    
+    # Enrich with procedure type and assignee info
+    enriched_procedures = []
+    for procedure in procedures:
+        # Get procedure type
+        procedure_type = await db.procedure_types.find_one({"id": procedure["procedure_type_id"]})
+        
+        # Get assignee info if assigned
+        assignee = None
+        if procedure.get("assigned_to"):
+            assignee = await db.users.find_one({"id": procedure["assigned_to"]})
+        
+        procedure_obj = Procedure(**procedure)
+        enriched_procedure = {
+            **procedure_obj.dict(),
+            "procedure_type": ProcedureType(**procedure_type) if procedure_type else None,
+            "assignee": User(**assignee) if assignee else None
+        }
+        enriched_procedures.append(enriched_procedure)
+    
+    return {
+        "procedures": enriched_procedures,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+@api_router.get("/procedures/{procedure_id}")
+async def get_procedure(procedure_id: str, current_user: User = Depends(get_current_user)):
+    """Get specific procedure details"""
+    
+    procedure = await db.procedures.find_one({"id": procedure_id})
+    if not procedure:
+        raise HTTPException(status_code=404, detail="Procedure not found")
+    
+    # Check permissions
+    if (current_user.role == UserRole.EXTERNAL_USER and 
+        procedure.get("created_by") != current_user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get related data
+    procedure_type = await db.procedure_types.find_one({"id": procedure["procedure_type_id"]})
+    assignee = None
+    if procedure.get("assigned_to"):
+        assignee = await db.users.find_one({"id": procedure["assigned_to"]})
+    
+    # Get procedure logs
+    logs = await db.procedure_logs.find({"procedure_id": procedure_id}).sort("performed_at", -1).to_list(50)
+    
+    # Get attachments
+    attachments = await db.procedure_attachments.find({"procedure_id": procedure_id}).to_list(20)
+    
+    return {
+        "procedure": Procedure(**procedure),
+        "procedure_type": ProcedureType(**procedure_type) if procedure_type else None,
+        "assignee": User(**assignee) if assignee else None,
+        "logs": [ProcedureLog(**log) for log in logs],
+        "attachments": [ProcedureAttachment(**att) for att in attachments]
+    }
+
+@api_router.get("/procedures/tracking/{tracking_code}")
+async def track_procedure(tracking_code: str):
+    """Track procedure by tracking code (public endpoint)"""
+    
+    procedure = await db.procedures.find_one({"tracking_code": tracking_code})
+    if not procedure:
+        raise HTTPException(status_code=404, detail="Procedure not found")
+    
+    # Get procedure type
+    procedure_type = await db.procedure_types.find_one({"id": procedure["procedure_type_id"]})
+    
+    # Get logs (limited info for public tracking)
+    logs = await db.procedure_logs.find(
+        {"procedure_id": procedure["id"], "action": {"$in": ["CREATED", "STATUS_CHANGED", "COMPLETED"]}}
+    ).sort("performed_at", 1).to_list(20)
+    
+    return {
+        "tracking_code": tracking_code,
+        "subject": procedure["subject"],
+        "status": procedure["status"],
+        "created_at": procedure["created_at"],
+        "deadline": procedure.get("deadline"),
+        "procedure_type": procedure_type["name"] if procedure_type else None,
+        "timeline": [
+            {
+                "action": log["action"],
+                "status": log.get("new_status"),
+                "date": log["performed_at"],
+                "comment": log.get("comment")
+            } for log in logs
+        ]
+    }
+
+@api_router.put("/procedures/{procedure_id}/status", dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.ADMIN_WORKER]))])
+async def update_procedure_status(
+    procedure_id: str, 
+    status_update: ProcedureStatusUpdate, 
+    current_user: User = Depends(get_current_user)
+):
+    """Update procedure status"""
+    
+    procedure = await db.procedures.find_one({"id": procedure_id})
+    if not procedure:
+        raise HTTPException(status_code=404, detail="Procedure not found")
+    
+    previous_status = procedure["status"]
+    new_status = status_update.status.value
+    
+    # Update procedure
+    update_data = {
+        "status": new_status,
+        "updated_at": datetime.utcnow()
+    }
+    
+    if new_status == ProcedureStatus.COMPLETED.value:
+        update_data["completed_at"] = datetime.utcnow()
+    
+    await db.procedures.update_one({"id": procedure_id}, {"$set": update_data})
+    
+    # Log status change
+    await log_procedure_action(
+        procedure_id=procedure_id,
+        action="STATUS_CHANGED",
+        performed_by=current_user.id,
+        previous_status=previous_status,
+        new_status=new_status,
+        comment=status_update.comment
+    )
+    
+    # Send notification if requested
+    if status_update.notify_applicant and procedure.get("applicant_email"):
+        status_names = {
+            "RECEIVED": "Recibido",
+            "IN_PROCESS": "En Proceso", 
+            "COMPLETED": "Finalizado",
+            "REJECTED": "Rechazado",
+            "PENDING_INFO": "Pendiente de Información"
+        }
+        
+        await send_procedure_notification(
+            procedure_id=procedure_id,
+            recipient_email=procedure["applicant_email"],
+            notification_type="STATUS_UPDATE",
+            subject=f"Actualización de Trámite - {procedure['tracking_code']}",
+            content=f"Su trámite '{procedure['subject']}' ahora está en estado: {status_names.get(new_status, new_status)}"
+        )
+    
+    return {
+        "status": "success",
+        "message": "Procedure status updated successfully",
+        "previous_status": previous_status,
+        "new_status": new_status
+    }
+
+@api_router.put("/procedures/{procedure_id}/assign", dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.ADMIN_WORKER]))])
+async def assign_procedure(
+    procedure_id: str, 
+    assign_to_user_id: str, 
+    current_user: User = Depends(get_current_user)
+):
+    """Assign procedure to a user"""
+    
+    procedure = await db.procedures.find_one({"id": procedure_id})
+    if not procedure:
+        raise HTTPException(status_code=404, detail="Procedure not found")
+    
+    # Verify assignee exists and has appropriate role
+    assignee = await db.users.find_one({"id": assign_to_user_id})
+    if not assignee or assignee["role"] not in [UserRole.ADMIN.value, UserRole.ADMIN_WORKER.value]:
+        raise HTTPException(status_code=400, detail="Invalid assignee")
+    
+    # Update procedure
+    await db.procedures.update_one(
+        {"id": procedure_id}, 
+        {
+            "$set": {
+                "assigned_to": assign_to_user_id,
+                "assigned_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+        }
+    )
+    
+    # Log assignment
+    await log_procedure_action(
+        procedure_id=procedure_id,
+        action="ASSIGNED",
+        performed_by=current_user.id,
+        comment=f"Assigned to {assignee['full_name']}"
+    )
+    
+    return {
+        "status": "success",
+        "message": "Procedure assigned successfully",
+        "assigned_to": assignee["full_name"]
+    }
+
 # Include router
 app.include_router(api_router)
 
