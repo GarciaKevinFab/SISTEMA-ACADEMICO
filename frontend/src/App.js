@@ -39,7 +39,8 @@ import {
   CheckCircle,
   AlertCircle,
   XCircle,
-  Loader
+  Loader,
+  DollarSign
 } from 'lucide-react';
 import './App.css';
 
