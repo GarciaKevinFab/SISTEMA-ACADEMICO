@@ -19,6 +19,8 @@ class AcademicSystemTester:
         self.registrar_token = None
         self.admin_worker_token = None
         self.external_user_token = None
+        self.applicant_token = None
+        self.academic_staff_token = None
         self.tests_run = 0
         self.tests_passed = 0
         self.created_resources = {
@@ -27,7 +29,12 @@ class AcademicSystemTester:
             'courses': [],
             'enrollments': [],
             'procedure_types': [],
-            'procedures': []
+            'procedures': [],
+            'careers': [],
+            'admission_calls': [],
+            'applicants': [],
+            'applications': [],
+            'evaluations': []
         }
 
     def log_test(self, name: str, success: bool, details: str = ""):
