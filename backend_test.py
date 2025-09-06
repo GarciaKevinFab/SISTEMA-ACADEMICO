@@ -579,7 +579,7 @@ class AcademicSystemTester:
             self.log_test("Create Admission Call", False, f"- Error: {data}")
             return None
 
-    def test_create_applicant(self, token: str = None) -> Optional[str]:
+    def test_create_applicant(self, token: str) -> Optional[str]:
         """Test creating applicant with Peruvian validations"""
         timestamp = datetime.now().strftime('%H%M%S')
         applicant_data = {
