@@ -502,8 +502,8 @@ class AcademicSystemTester:
             f"- Stats available: {list(data.keys()) if success else 'N/A'}"
         )
 
-    def test_get_careers(self, token: str = None):
-        """Test getting careers (public endpoint)"""
+    def test_get_careers(self, token: str):
+        """Test getting careers"""
         success, data = self.make_request('GET', 'careers', token=token)
         
         careers_count = len(data.get('careers', [])) if success else 0
