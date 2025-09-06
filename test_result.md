@@ -301,20 +301,17 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 1
+  test_sequence: 2
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Cash & Banks APIs"
-    - "Internal Receipts APIs with QR"
-    - "GL Concepts & Cost Centers APIs"
-    - "Inventory Management APIs (FIFO)"
-    - "Logistics APIs"
     - "HR Management APIs"
-  stuck_tasks: []
+    - "Logistics APIs"
+  stuck_tasks:
+    - "Logistics APIs"
   test_all: false
-  test_priority: "high_first"
+  test_priority: "stuck_first"
 
 agent_communication:
   - agent: "main"
