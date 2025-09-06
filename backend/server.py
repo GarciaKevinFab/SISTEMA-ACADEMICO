@@ -2874,6 +2874,352 @@ async def initialize_default_data():
 async def shutdown_db_client():
     client.close()
 
+# ====================================================================================================
+# TESORERÍA Y ADMINISTRACIÓN - CASH & BANKS APIs
+# ====================================================================================================
+
+# Bank Accounts Management
+@api_router.post("/finance/bank-accounts", dependencies=[Depends(require_role([UserRole.FINANCE_ADMIN]))])
+async def create_bank_account(account_data: BankAccountCreate, current_user: User = Depends(get_current_user)):
+    """Create a new bank account"""
+    
+    # Check if account with same number exists
+    existing_account = await db.bank_accounts.find_one({"account_number": account_data.account_number})
+    if existing_account:
+        raise HTTPException(status_code=400, detail="Bank account with this number already exists")
+    
+    account_dict = account_data.dict()
+    account_dict['created_by'] = current_user.id
+    account = BankAccount(**account_dict)
+    
+    account_doc = prepare_for_mongo(account.dict())
+    await db.bank_accounts.insert_one(account_doc)
+    
+    # Log audit trail
+    await log_audit_trail(
+        db, "bank_accounts", account.id, "CREATE", 
+        None, account_doc, current_user.id
+    )
+    
+    logger.info(f"Bank account {account.account_name} created by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "account": account,
+        "message": "Bank account created successfully"
+    }
+
+@api_router.get("/finance/bank-accounts")
+async def get_bank_accounts(
+    is_active: bool = True,
+    current_user: User = Depends(require_role([UserRole.FINANCE_ADMIN, UserRole.CASHIER]))
+):
+    """Get bank accounts"""
+    filter_query = {"is_active": is_active}
+    
+    accounts = await db.bank_accounts.find(filter_query).sort("account_name", 1).to_list(100)
+    
+    return {
+        "accounts": [BankAccount(**account) for account in accounts],
+        "total": len(accounts)
+    }
+
+# Cash Sessions Management
+@api_router.post("/finance/cash-sessions", dependencies=[Depends(require_role([UserRole.CASHIER, UserRole.FINANCE_ADMIN]))])
+async def open_cash_session(session_data: CashSessionCreate, current_user: User = Depends(get_current_user)):
+    """Open a new cash session"""
+    
+    # Check if user already has an open session
+    existing_session = await db.cash_sessions.find_one({
+        "opened_by": current_user.id,
+        "status": CashSessionStatus.OPEN.value
+    })
+    
+    if existing_session:
+        raise HTTPException(status_code=400, detail="You already have an open cash session")
+    
+    session_dict = session_data.dict()
+    session_dict['opened_by'] = current_user.id
+    session_dict['expected_final_amount'] = session_data.initial_amount
+    
+    session = CashSession(**session_dict)
+    session_doc = prepare_for_mongo(session.dict())
+    
+    await db.cash_sessions.insert_one(session_doc)
+    
+    # Log audit trail
+    await log_audit_trail(
+        db, "cash_sessions", session.id, "CREATE",
+        None, session_doc, current_user.id
+    )
+    
+    logger.info(f"Cash session {session.session_number} opened by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "session": session,
+        "message": "Cash session opened successfully"
+    }
+
+@api_router.get("/finance/cash-sessions/current")
+async def get_current_cash_session(current_user: User = Depends(require_role([UserRole.CASHIER, UserRole.FINANCE_ADMIN]))):
+    """Get current open cash session for user"""
+    
+    session = await db.cash_sessions.find_one({
+        "opened_by": current_user.id,
+        "status": CashSessionStatus.OPEN.value
+    })
+    
+    if not session:
+        return {"session": None, "message": "No open cash session found"}
+    
+    # Get movements for this session
+    movements = await db.cash_movements.find({"cash_session_id": session["id"]}).to_list(1000)
+    
+    # Calculate totals
+    total_income = sum(m.get('amount', 0) for m in movements if m.get('movement_type') == MovementType.INCOME.value)
+    total_expense = sum(m.get('amount', 0) for m in movements if m.get('movement_type') == MovementType.EXPENSE.value)
+    expected_final = session.get('initial_amount', 0) + total_income - total_expense
+    
+    # Update session totals
+    await db.cash_sessions.update_one(
+        {"id": session["id"]},
+        {
+            "$set": {
+                "total_income": total_income,
+                "total_expense": total_expense,
+                "expected_final_amount": expected_final
+            }
+        }
+    )
+    
+    session_obj = CashSession(**session)
+    session_obj.total_income = total_income
+    session_obj.total_expense = total_expense
+    session_obj.expected_final_amount = expected_final
+    
+    return {
+        "session": session_obj,
+        "movements": [CashMovement(**m) for m in movements],
+        "totals": {
+            "initial_amount": session.get('initial_amount', 0),
+            "total_income": total_income,
+            "total_expense": total_expense,
+            "expected_final": expected_final
+        }
+    }
+
+@api_router.post("/finance/cash-sessions/{session_id}/close", dependencies=[Depends(require_role([UserRole.CASHIER, UserRole.FINANCE_ADMIN]))])
+async def close_cash_session(
+    session_id: str,
+    final_amount: float,
+    closing_notes: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """Close cash session with final amount"""
+    
+    session = await db.cash_sessions.find_one({"id": session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Cash session not found")
+    
+    if session["status"] != CashSessionStatus.OPEN.value:
+        raise HTTPException(status_code=400, detail="Cash session is not open")
+    
+    if session["opened_by"] != current_user.id and current_user.role != UserRole.FINANCE_ADMIN:
+        raise HTTPException(status_code=403, detail="Can only close your own cash session")
+    
+    # Calculate difference
+    expected_final = session.get('expected_final_amount', 0)
+    difference = final_amount - expected_final
+    
+    # Update session
+    update_data = {
+        "status": CashSessionStatus.CLOSED.value,
+        "final_amount": final_amount,
+        "difference": difference,
+        "closed_at": datetime.now(timezone.utc).isoformat(),
+        "closed_by": current_user.id,
+        "closing_notes": closing_notes
+    }
+    
+    await db.cash_sessions.update_one({"id": session_id}, {"$set": update_data})
+    
+    # Log audit trail
+    await log_audit_trail(
+        db, "cash_sessions", session_id, "UPDATE",
+        {"status": session["status"]}, update_data, current_user.id
+    )
+    
+    logger.info(f"Cash session {session['session_number']} closed by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "message": "Cash session closed successfully",
+        "final_amount": final_amount,
+        "expected_amount": expected_final,
+        "difference": difference
+    }
+
+# Cash Movements Management
+@api_router.post("/finance/cash-movements", dependencies=[Depends(require_role([UserRole.CASHIER, UserRole.FINANCE_ADMIN]))])
+async def create_cash_movement(movement_data: CashMovementCreate, current_user: User = Depends(get_current_user)):
+    """Create a cash movement"""
+    
+    # Verify cash session exists and is open
+    session = await db.cash_sessions.find_one({"id": movement_data.cash_session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Cash session not found")
+    
+    if session["status"] != CashSessionStatus.OPEN.value:
+        raise HTTPException(status_code=400, detail="Cash session is not open")
+    
+    if session["opened_by"] != current_user.id and current_user.role != UserRole.FINANCE_ADMIN:
+        raise HTTPException(status_code=403, detail="Can only add movements to your own cash session")
+    
+    movement_dict = movement_data.dict()
+    movement_dict['created_by'] = current_user.id
+    
+    movement = CashMovement(**movement_dict)
+    movement_doc = prepare_for_mongo(movement.dict())
+    
+    await db.cash_movements.insert_one(movement_doc)
+    
+    # Log audit trail
+    await log_audit_trail(
+        db, "cash_movements", movement.id, "CREATE",
+        None, movement_doc, current_user.id
+    )
+    
+    logger.info(f"Cash movement {movement.movement_number} created by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "movement": movement,
+        "message": "Cash movement created successfully"
+    }
+
+@api_router.get("/finance/cash-movements")
+async def get_cash_movements(
+    cash_session_id: Optional[str] = None,
+    movement_type: Optional[MovementType] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(require_role([UserRole.CASHIER, UserRole.FINANCE_ADMIN]))
+):
+    """Get cash movements"""
+    
+    filter_query = {}
+    
+    if cash_session_id:
+        filter_query["cash_session_id"] = cash_session_id
+    
+    if movement_type:
+        filter_query["movement_type"] = movement_type.value
+    
+    # If not admin, only show movements from own sessions
+    if current_user.role != UserRole.FINANCE_ADMIN:
+        user_sessions = await db.cash_sessions.find({"opened_by": current_user.id}).to_list(100)
+        session_ids = [s["id"] for s in user_sessions]
+        filter_query["cash_session_id"] = {"$in": session_ids}
+    
+    movements = await db.cash_movements.find(filter_query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.cash_movements.count_documents(filter_query)
+    
+    # Enrich with session data
+    enriched_movements = []
+    for movement in movements:
+        session = await db.cash_sessions.find_one({"id": movement["cash_session_id"]})
+        
+        movement_obj = CashMovement(**movement)
+        enriched_movement = {
+            **movement_obj.dict(),
+            "session": CashSession(**session) if session else None
+        }
+        enriched_movements.append(enriched_movement)
+    
+    return {
+        "movements": enriched_movements,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+# Bank Reconciliation
+@api_router.post("/finance/bank-reconciliation/upload")
+async def upload_bank_statement(
+    bank_account_id: str,
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_role([UserRole.FINANCE_ADMIN]))
+):
+    """Upload bank statement file for reconciliation"""
+    
+    # Verify bank account exists
+    bank_account = await db.bank_accounts.find_one({"id": bank_account_id})
+    if not bank_account:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+    
+    # Validate file type
+    if not file.filename.endswith(('.csv', '.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Only CSV and Excel files are supported")
+    
+    try:
+        # Read file content
+        content = await file.read()
+        
+        # Parse based on file type
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(content))
+        else:
+            df = pd.read_excel(io.BytesIO(content))
+        
+        # Expected columns: Date, Description, Debit, Credit, Balance
+        required_columns = ['Date', 'Description', 'Amount', 'Type']  # Simplified format
+        
+        if not all(col in df.columns for col in required_columns):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"File must contain columns: {', '.join(required_columns)}"
+            )
+        
+        # Process bank movements
+        bank_movements = []
+        for _, row in df.iterrows():
+            movement = {
+                "id": str(uuid.uuid4()),
+                "bank_account_id": bank_account_id,
+                "date": pd.to_datetime(row['Date']).date().isoformat(),
+                "description": str(row['Description']),
+                "amount": float(row['Amount']),
+                "movement_type": str(row['Type']).upper(),  # DEBIT or CREDIT
+                "balance": float(row.get('Balance', 0)),
+                "is_reconciled": False,
+                "uploaded_by": current_user.id,
+                "uploaded_at": datetime.now(timezone.utc).isoformat()
+            }
+            bank_movements.append(movement)
+        
+        # Save to database
+        if bank_movements:
+            await db.bank_movements.insert_many(bank_movements)
+        
+        # Log audit trail
+        await log_audit_trail(
+            db, "bank_movements", bank_account_id, "BULK_CREATE",
+            None, {"count": len(bank_movements)}, current_user.id
+        )
+        
+        logger.info(f"Bank statement uploaded: {len(bank_movements)} movements for account {bank_account['account_name']}")
+        
+        return {
+            "status": "success",
+            "message": f"Bank statement uploaded successfully: {len(bank_movements)} movements processed",
+            "movements_count": len(bank_movements)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing bank statement: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
