@@ -1121,6 +1121,32 @@ class AcademicSystemTester:
             self.test_get_inventory_movements(warehouse_token, inventory_item_id)
             self.test_inventory_kardex(warehouse_token, inventory_item_id)
             self.test_inventory_stock_alerts(warehouse_token)
+        
+        # 5. Test HR Management APIs
+        print("\n👥 Testing HR Management APIs...")
+        if not hasattr(self, 'hr_admin_token') or not self.hr_admin_token:
+            self.hr_admin_token = self.test_user_registration("HR_ADMIN")
+        
+        hr_token = self.hr_admin_token or finance_token
+        employee_id = self.test_create_employee(hr_token)
+        if employee_id:
+            self.test_get_employees(hr_token)
+            self.test_update_employee(hr_token, employee_id)
+            self.test_create_attendance(hr_token, employee_id)
+            self.test_get_attendance(hr_token, employee_id)
+        
+        # 6. Test Logistics Management APIs
+        print("\n🚚 Testing Logistics Management APIs...")
+        if not hasattr(self, 'logistics_token') or not self.logistics_token:
+            self.logistics_token = self.test_user_registration("LOGISTICS")
+        
+        logistics_token = self.logistics_token or finance_token
+        supplier_id = self.test_create_supplier(logistics_token)
+        if supplier_id:
+            self.test_get_suppliers(logistics_token)
+            requirement_id = self.test_create_requirement(logistics_token, inventory_item_id)
+            if requirement_id:
+                self.test_get_requirements(logistics_token)
 
     def test_create_bank_account(self, token: str) -> Optional[str]:
         """Test bank account creation"""
