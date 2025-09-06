@@ -355,6 +355,8 @@ const LoginPage = () => {
                           <SelectItem value="TEACHER">Docente</SelectItem>
                           <SelectItem value="ADMIN">Administrador</SelectItem>
                           <SelectItem value="REGISTRAR">Registrador</SelectItem>
+                          <SelectItem value="ADMIN_WORKER">Trabajador Administrativo</SelectItem>
+                          <SelectItem value="EXTERNAL_USER">Usuario Externo</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
