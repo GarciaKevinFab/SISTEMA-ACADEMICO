@@ -1038,7 +1038,14 @@ class AcademicSystemTester:
         print("\n📋 Testing Mesa de Partes Virtual...")
         self.test_mesa_de_partes_comprehensive()
 
-        # 12. Final Results
+        # 13. HR & Logistics Permissions Testing
+        self.test_hr_logistics_permissions()
+
+        # 14. Additional Validations
+        if self.logistics_token or self.admin_token:
+            self.test_ruc_validation(self.logistics_token or self.admin_token)
+
+        # 15. Final Results
         print("\n" + "=" * 60)
         print(f"📊 TEST RESULTS SUMMARY")
         print("=" * 60)
