@@ -965,6 +965,8 @@ class AcademicSystemTester:
         self.registrar_token = self.test_user_registration("REGISTRAR")
         self.admin_worker_token = self.test_user_registration("ADMIN_WORKER")
         self.external_user_token = self.test_user_registration("EXTERNAL_USER")
+        self.applicant_token = self.test_user_registration("APPLICANT")
+        self.academic_staff_token = self.test_user_registration("ACADEMIC_STAFF")
 
         if not self.admin_token:
             print("❌ Admin registration failed. Cannot continue with admin-required tests.")
