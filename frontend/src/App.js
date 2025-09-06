@@ -598,6 +598,8 @@ const Dashboard = () => {
           {user?.role === 'REGISTRAR' && 'Registrador'}
           {user?.role === 'ADMIN_WORKER' && 'Trabajador Administrativo'}
           {user?.role === 'EXTERNAL_USER' && 'Usuario Externo'}
+          {user?.role === 'APPLICANT' && 'Postulante'}
+          {user?.role === 'ACADEMIC_STAFF' && 'Personal Académico'}
         </Badge>
       </div>
 
