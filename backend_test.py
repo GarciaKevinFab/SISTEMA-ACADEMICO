@@ -1422,7 +1422,7 @@ class AcademicSystemTester:
         )
 
     def test_inventory_movement_entry(self, token: str, item_id: str) -> Optional[str]:
-        """Test inventory entry movement (FIFO)"""
+        """Test inventory entry movement (FIFO) - endpoint may not exist yet"""
         movement_data = {
             "item_id": item_id,
             "movement_type": "ENTRY",
@@ -1441,11 +1441,16 @@ class AcademicSystemTester:
             self.log_test("Inventory Entry Movement", True, f"- ID: {movement_id}, Qty: {movement_data['quantity']}")
             return movement_id
         else:
-            self.log_test("Inventory Entry Movement", False, f"- Error: {data}")
+            # Check if endpoint exists (404 vs other errors)
+            endpoint_missing = "404" in str(data) or "not found" in str(data).lower()
+            if endpoint_missing:
+                self.log_test("Inventory Entry Movement", False, "- Endpoint not implemented yet")
+            else:
+                self.log_test("Inventory Entry Movement", False, f"- Error: {data}")
             return None
 
     def test_inventory_movement_exit(self, token: str, item_id: str) -> Optional[str]:
-        """Test inventory exit movement (FIFO calculation)"""
+        """Test inventory exit movement (FIFO calculation) - endpoint may not exist yet"""
         movement_data = {
             "item_id": item_id,
             "movement_type": "EXIT",
@@ -1463,30 +1468,39 @@ class AcademicSystemTester:
             self.log_test("Inventory Exit Movement (FIFO)", True, f"- ID: {movement_id}, FIFO Cost: {fifo_cost}")
             return movement_id
         else:
-            self.log_test("Inventory Exit Movement (FIFO)", False, f"- Error: {data}")
+            endpoint_missing = "404" in str(data) or "not found" in str(data).lower()
+            if endpoint_missing:
+                self.log_test("Inventory Exit Movement (FIFO)", False, "- Endpoint not implemented yet")
+            else:
+                self.log_test("Inventory Exit Movement (FIFO)", False, f"- Error: {data}")
             return None
 
     def test_get_inventory_movements(self, token: str, item_id: str):
-        """Test getting inventory movements"""
+        """Test getting inventory movements - endpoint may not exist yet"""
         success, data = self.make_request('GET', f'inventory/movements?item_id={item_id}', token=token)
         
-        movements_count = len(data.get('movements', [])) if success else 0
-        return self.log_test(
-            "Get Inventory Movements", 
-            success,
-            f"- Found {movements_count} movements"
-        )
+        if success:
+            movements_count = len(data.get('movements', []))
+            return self.log_test("Get Inventory Movements", True, f"- Found {movements_count} movements")
+        else:
+            endpoint_missing = "404" in str(data) or "not found" in str(data).lower()
+            if endpoint_missing:
+                return self.log_test("Get Inventory Movements", False, "- Endpoint not implemented yet")
+            else:
+                return self.log_test("Get Inventory Movements", False, f"- Error: {data}")
 
     def test_inventory_kardex(self, token: str, item_id: str):
-        """Test inventory kardex generation"""
+        """Test inventory kardex generation - endpoint may not exist yet"""
         success, data = self.make_request('GET', f'inventory/items/{item_id}/kardex', token=token)
         
-        has_kardex = success and 'kardex' in data
-        return self.log_test(
-            "Generate Inventory Kardex", 
-            has_kardex,
-            f"- Kardex entries: {len(data.get('kardex', []))}" if success else f"- Error: {data}"
-        )
+        if success and 'kardex' in data:
+            return self.log_test("Generate Inventory Kardex", True, f"- Kardex entries: {len(data.get('kardex', []))}")
+        else:
+            endpoint_missing = "404" in str(data) or "not found" in str(data).lower()
+            if endpoint_missing:
+                return self.log_test("Generate Inventory Kardex", False, "- Endpoint not implemented yet")
+            else:
+                return self.log_test("Generate Inventory Kardex", False, f"- Error: {data}")
 
     def test_inventory_stock_alerts(self, token: str):
         """Test inventory stock alerts"""
