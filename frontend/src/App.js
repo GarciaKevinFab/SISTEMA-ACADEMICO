@@ -1970,6 +1970,13 @@ function App() {
                 </DashboardLayout>
               </ProtectedRoute>
             } />
+            <Route path="/dashboard/finance" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <FinanceModule />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
           </Routes>
         </div>
       </Router>
