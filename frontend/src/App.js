@@ -30,7 +30,16 @@ import {
   BarChart3,
   Home,
   Menu,
-  X
+  X,
+  FileCheck,
+  Clock,
+  Send,
+  Filter,
+  Download,
+  CheckCircle,
+  AlertCircle,
+  XCircle,
+  Loader
 } from 'lucide-react';
 import './App.css';
 
