@@ -1536,6 +1536,257 @@ class AcademicSystemTester:
             f"- Low stock items: {low_stock_count}"
         )
 
+    # ====================================================================================================
+    # HR MANAGEMENT TESTING
+    # ====================================================================================================
+    
+    def test_create_employee(self, token: str) -> Optional[str]:
+        """Test creating employee record"""
+        timestamp = datetime.now().strftime('%H%M%S')
+        employee_data = {
+            "first_name": "María Elena",
+            "last_name": "Rodríguez",
+            "document_number": f"4567890{timestamp[-1]}",
+            "birth_date": "1985-03-15",
+            "email": f"maria.rodriguez{timestamp}@iespp.edu.pe",
+            "phone": "987654321",
+            "address": "Av. Los Maestros 456, Urbanización Magisterial",
+            "position": "Docente de Educación Inicial",
+            "department": "Educación Inicial",
+            "hire_date": "2024-01-15",
+            "contract_type": "PERMANENT",
+            "is_active": True
+        }
+
+        success, data = self.make_request('POST', 'hr/employees', employee_data, token=token, expected_status=200)
+        
+        if success and 'employee' in data:
+            employee_id = data['employee']['id']
+            employee_code = data['employee']['employee_code']
+            self.created_resources.setdefault('employees', []).append(employee_id)
+            self.log_test("Create Employee", True, f"- ID: {employee_id}, Code: {employee_code}")
+            return employee_id
+        else:
+            self.log_test("Create Employee", False, f"- Error: {data}")
+            return None
+
+    def test_get_employees(self, token: str):
+        """Test getting employees list"""
+        success, data = self.make_request('GET', 'hr/employees', token=token)
+        
+        employees_count = len(data.get('employees', [])) if success else 0
+        return self.log_test(
+            "Get Employees", 
+            success,
+            f"- Found {employees_count} employees"
+        )
+
+    def test_update_employee(self, token: str, employee_id: str):
+        """Test updating employee record"""
+        update_data = {
+            "first_name": "María Elena",
+            "last_name": "Rodríguez",
+            "document_number": "45678901",
+            "birth_date": "1985-03-15",
+            "email": "maria.rodriguez.updated@iespp.edu.pe",
+            "phone": "987654322",
+            "address": "Av. Los Maestros 456, Urbanización Magisterial - Actualizada",
+            "position": "Coordinadora de Educación Inicial",
+            "department": "Educación Inicial",
+            "hire_date": "2024-01-15",
+            "contract_type": "PERMANENT",
+            "is_active": True
+        }
+
+        success, data = self.make_request('PUT', f'hr/employees/{employee_id}', update_data, token=token, expected_status=200)
+        
+        return self.log_test(
+            "Update Employee", 
+            success,
+            f"- Position updated to Coordinadora" if success else f"- Error: {data}"
+        )
+
+    def test_create_attendance(self, token: str, employee_id: str) -> Optional[str]:
+        """Test creating attendance record"""
+        attendance_data = {
+            "employee_id": employee_id,
+            "date": "2024-12-20",
+            "check_in": "2024-12-20T08:00:00",
+            "check_out": "2024-12-20T17:00:00",
+            "break_minutes": 60,
+            "overtime_hours": 0,
+            "notes": "Asistencia normal"
+        }
+
+        success, data = self.make_request('POST', 'hr/attendance', attendance_data, token=token, expected_status=200)
+        
+        if success and 'attendance' in data:
+            attendance_id = data['attendance']['id']
+            worked_hours = data['attendance'].get('worked_hours', 0)
+            self.created_resources.setdefault('attendance', []).append(attendance_id)
+            self.log_test("Create Attendance", True, f"- ID: {attendance_id}, Worked: {worked_hours}h")
+            return attendance_id
+        else:
+            self.log_test("Create Attendance", False, f"- Error: {data}")
+            return None
+
+    def test_get_attendance(self, token: str, employee_id: str):
+        """Test getting attendance records"""
+        success, data = self.make_request('GET', f'hr/attendance?employee_id={employee_id}', token=token)
+        
+        attendance_count = len(data.get('attendance', [])) if success else 0
+        return self.log_test(
+            "Get Attendance Records", 
+            success,
+            f"- Found {attendance_count} attendance records"
+        )
+
+    # ====================================================================================================
+    # LOGISTICS MANAGEMENT TESTING
+    # ====================================================================================================
+    
+    def test_create_supplier(self, token: str) -> Optional[str]:
+        """Test creating supplier record with RUC validation"""
+        timestamp = datetime.now().strftime('%H%M%S')
+        supplier_data = {
+            "ruc": f"2055678901{timestamp[-1]}",  # Valid 11-digit RUC format
+            "company_name": f"Distribuidora Educativa Test {timestamp} S.A.C.",
+            "trade_name": f"EduTest {timestamp}",
+            "contact_person": "Carlos Mendoza",
+            "email": f"contacto{timestamp}@edutest.com",
+            "phone": "987654321",
+            "address": "Av. Industrial 123, Ate Vitarte, Lima",
+            "bank_account": "00123456789012345678",
+            "bank_name": "Banco de Crédito del Perú",
+            "is_active": True
+        }
+
+        success, data = self.make_request('POST', 'logistics/suppliers', supplier_data, token=token, expected_status=200)
+        
+        if success and 'supplier' in data:
+            supplier_id = data['supplier']['id']
+            supplier_code = data['supplier']['supplier_code']
+            self.created_resources.setdefault('suppliers', []).append(supplier_id)
+            self.log_test("Create Supplier", True, f"- ID: {supplier_id}, Code: {supplier_code}, RUC: {supplier_data['ruc']}")
+            return supplier_id
+        else:
+            self.log_test("Create Supplier", False, f"- Error: {data}")
+            return None
+
+    def test_get_suppliers(self, token: str):
+        """Test getting suppliers list"""
+        success, data = self.make_request('GET', 'logistics/suppliers', token=token)
+        
+        suppliers_count = len(data.get('suppliers', [])) if success else 0
+        return self.log_test(
+            "Get Suppliers", 
+            success,
+            f"- Found {suppliers_count} suppliers"
+        )
+
+    def test_create_requirement(self, token: str, inventory_item_id: Optional[str] = None) -> Optional[str]:
+        """Test creating purchase requirement"""
+        timestamp = datetime.now().strftime('%H%M%S')
+        
+        # Create requirement items
+        items = [
+            {
+                "item_id": inventory_item_id,
+                "description": f"Papel Bond A4 - Test {timestamp}",
+                "quantity": 50,
+                "unit_of_measure": "PACK",
+                "estimated_unit_price": 12.50,
+                "technical_specifications": "Papel bond blanco 75gr, tamaño A4"
+            },
+            {
+                "description": f"Marcadores de Pizarra - Test {timestamp}",
+                "quantity": 20,
+                "unit_of_measure": "UNIT",
+                "estimated_unit_price": 3.50,
+                "technical_specifications": "Marcadores de colores variados para pizarra acrílica"
+            }
+        ]
+        
+        requirement_data = {
+            "title": f"Requerimiento de Útiles de Oficina {timestamp}",
+            "description": "Solicitud de materiales de oficina para el área administrativa",
+            "justification": "Los materiales actuales están agotándose y son necesarios para el funcionamiento normal de las actividades administrativas y académicas",
+            "required_date": "2025-01-15",
+            "items": items
+        }
+
+        success, data = self.make_request('POST', 'logistics/requirements', requirement_data, token=token, expected_status=200)
+        
+        if success and 'requirement' in data:
+            requirement_id = data['requirement']['id']
+            requirement_number = data['requirement']['requirement_number']
+            estimated_total = data['requirement'].get('estimated_total', 0)
+            self.created_resources.setdefault('requirements', []).append(requirement_id)
+            self.log_test("Create Requirement", True, f"- ID: {requirement_id}, Number: {requirement_number}, Total: S/{estimated_total}")
+            return requirement_id
+        else:
+            self.log_test("Create Requirement", False, f"- Error: {data}")
+            return None
+
+    def test_get_requirements(self, token: str):
+        """Test getting requirements list"""
+        success, data = self.make_request('GET', 'logistics/requirements', token=token)
+        
+        requirements_count = len(data.get('requirements', [])) if success else 0
+        return self.log_test(
+            "Get Requirements", 
+            success,
+            f"- Found {requirements_count} requirements"
+        )
+
+    def test_ruc_validation(self, token: str):
+        """Test RUC validation (must be exactly 11 digits)"""
+        print("\n🔍 Testing RUC Validation...")
+        
+        # Test invalid RUC (10 digits)
+        invalid_supplier_data = {
+            "ruc": "2055678901",  # 10 digits
+            "company_name": "Test Invalid RUC",
+            "contact_person": "Test Contact",
+            "email": "test@invalid.com",
+            "phone": "987654321",
+            "address": "Test Address"
+        }
+        
+        success, data = self.make_request('POST', 'logistics/suppliers', invalid_supplier_data, token=token, expected_status=400)
+        self.log_test("RUC Validation (10 digits)", success, "- Properly rejected invalid RUC")
+        
+        # Test invalid RUC (12 digits)
+        invalid_supplier_data["ruc"] = "205567890123"  # 12 digits
+        success, data = self.make_request('POST', 'logistics/suppliers', invalid_supplier_data, token=token, expected_status=400)
+        self.log_test("RUC Validation (12 digits)", success, "- Properly rejected invalid RUC")
+
+    def test_hr_logistics_permissions(self):
+        """Test HR and Logistics role-based permissions"""
+        print("\n🔐 Testing HR & Logistics Permissions...")
+        
+        # Test STUDENT cannot create employees
+        if self.student_token:
+            success, data = self.make_request('POST', 'hr/employees', {
+                "first_name": "Test", "last_name": "Unauthorized", "document_number": "12345678",
+                "birth_date": "1990-01-01", "position": "Test", "hire_date": "2024-01-01",
+                "contract_type": "PERMANENT"
+            }, token=self.student_token, expected_status=403)
+            self.log_test("Student Cannot Create Employee", success, "- Access properly denied")
+
+        # Test TEACHER cannot create suppliers
+        if self.teacher_token:
+            success, data = self.make_request('POST', 'logistics/suppliers', {
+                "ruc": "20556789012", "company_name": "Unauthorized Supplier",
+                "contact_person": "Test", "email": "test@test.com"
+            }, token=self.teacher_token, expected_status=403)
+            self.log_test("Teacher Cannot Create Supplier", success, "- Access properly denied")
+
+        # Test WAREHOUSE cannot access HR endpoints
+        if self.warehouse_token:
+            success, data = self.make_request('GET', 'hr/employees', token=self.warehouse_token, expected_status=403)
+            self.log_test("Warehouse Cannot Access HR", success, "- Access properly denied")
+
 def main():
     """Main test execution"""
     print("🎯 IESPP Gustavo Allende Llavería - Academic System API Testing")
