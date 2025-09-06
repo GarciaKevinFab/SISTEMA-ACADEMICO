@@ -270,21 +270,21 @@ const LoginPage = () => {
               <CardHeader className="text-center pb-4">
                 <img 
                   src="https://images.pexels.com/photos/33755567/pexels-photo-33755567.jpeg?w=400&h=200&fit=crop" 
-                  alt="Certificados Digitales"
+                  alt="Proceso de Admisión"
                   className="w-full h-48 object-cover rounded-lg mb-4"
                 />
                 <CardTitle className="flex items-center justify-center gap-2 text-purple-700">
                   <Award className="h-6 w-6" />
-                  Certificados Digitales
+                  Proceso de Admisión
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2 text-sm text-gray-600">
-                  <li>• Generación automática</li>
-                  <li>• Firma digital MINEDU</li>
-                  <li>• Verificación online</li>
-                  <li>• Interoperabilidad SIA</li>
-                  <li>• Seguridad avanzada</li>
+                  <li>• Convocatorias de admisión</li>
+                  <li>• Registro de postulantes</li>
+                  <li>• Evaluación y resultados</li>
+                  <li>• Constancias digitales</li>
+                  <li>• Integración MINEDU</li>
                 </ul>
               </CardContent>
             </Card>
