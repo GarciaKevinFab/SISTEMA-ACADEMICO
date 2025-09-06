@@ -215,7 +215,7 @@ class Enrollment(BaseModel):
     
     # Grades
     numerical_grade: Optional[float] = Field(None, ge=0, le=20)
-    literal_grade: Optional[str] = Field(None, regex="^(AD|A|B|C)$")
+    literal_grade: Optional[str] = Field(None, pattern="^(AD|A|B|C)$")
     grade_status: GradeStatus = GradeStatus.INCOMPLETE
     
     # Attendance
