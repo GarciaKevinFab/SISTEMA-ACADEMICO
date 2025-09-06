@@ -293,7 +293,21 @@ class FocusedFinanceTester:
         """Test cash session close parameter format issues"""
         print("\n💰 Testing Cash Session Close Parameter Issues...")
         
-        token = self.admin_token
+        # Register cashier user for cash session operations
+        timestamp = datetime.now().strftime('%H%M%S')
+        cashier_data = {
+            "username": f"test_cashier2_{timestamp}",
+            "email": f"test_cashier2_{timestamp}@iespp.edu.pe",
+            "password": "TestPass123!",
+            "full_name": f"Test Cashier2 {timestamp}",
+            "role": "CASHIER"
+        }
+        
+        success, data = self.make_request('POST', 'auth/register', cashier_data)
+        if success and 'access_token' in data:
+            token = data['access_token']
+        else:
+            token = self.admin_token
         if not token:
             print("❌ No token available for cash session testing")
             return
