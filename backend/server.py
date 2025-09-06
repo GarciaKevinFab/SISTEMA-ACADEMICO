@@ -127,6 +127,54 @@ class ApplicantDocumentType(str, Enum):
     CONADIS_COPY = "CONADIS_COPY"           # Copia carné CONADIS
     OTHER = "OTHER"                         # Otro documento
 
+# Finance and Administration Enums
+class CashSessionStatus(str, Enum):
+    OPEN = "OPEN"                           # Abierta
+    CLOSED = "CLOSED"                       # Cerrada
+    RECONCILED = "RECONCILED"               # Conciliada
+
+class MovementType(str, Enum):
+    INCOME = "INCOME"                       # Ingreso
+    EXPENSE = "EXPENSE"                     # Egreso
+    TRANSFER = "TRANSFER"                   # Transferencia
+
+class PaymentMethod(str, Enum):
+    CASH = "CASH"                          # Efectivo
+    BANK_DEPOSIT = "BANK_DEPOSIT"          # Depósito bancario
+    BANK_TRANSFER = "BANK_TRANSFER"        # Transferencia bancaria
+    CHECK = "CHECK"                        # Cheque
+
+class ReceiptStatus(str, Enum):
+    PENDING = "PENDING"                    # Pendiente
+    PAID = "PAID"                         # Pagado  
+    CANCELLED = "CANCELLED"               # Anulado
+    REFUNDED = "REFUNDED"                 # Devuelto
+
+class ReceiptConcept(str, Enum):
+    ENROLLMENT = "ENROLLMENT"              # Matrícula
+    TUITION = "TUITION"                   # Pensión
+    CERTIFICATE = "CERTIFICATE"           # Constancia
+    PROCEDURE = "PROCEDURE"               # Trámite
+    OTHER = "OTHER"                       # Otro
+
+class InventoryMovementType(str, Enum):
+    ENTRY = "ENTRY"                       # Entrada
+    EXIT = "EXIT"                         # Salida
+    TRANSFER = "TRANSFER"                 # Transferencia
+    ADJUSTMENT = "ADJUSTMENT"             # Ajuste
+
+class ContractType(str, Enum):
+    PERMANENT = "PERMANENT"               # Nombrado
+    TEMPORARY = "TEMPORARY"               # Contratado
+    CAS = "CAS"                          # CAS
+    LOCACION = "LOCACION"                # Locación
+
+class EmployeeStatus(str, Enum):
+    ACTIVE = "ACTIVE"                     # Activo
+    INACTIVE = "INACTIVE"                 # Inactivo
+    SUSPENDED = "SUSPENDED"               # Suspendido
+    RETIRED = "RETIRED"                   # Cesante
+
 # Pydantic Models
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
