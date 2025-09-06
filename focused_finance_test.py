@@ -125,7 +125,7 @@ class FocusedFinanceTester:
         
         # Test 1: Valid RUC (should work)
         valid_ruc_data = {
-            "ruc": "20100070970",  # Valid RUC format
+            "ruc": "20123456786",  # Valid RUC format
             "company_name": "Empresa Test Válida SAC",
             "trade_name": "Test Company",
             "contact_person": "Juan Pérez",
