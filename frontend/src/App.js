@@ -798,6 +798,24 @@ const Dashboard = () => {
                 </Link>
               </>
             )}
+            {(user?.role === 'ADMIN' || user?.role === 'ADMIN_WORKER' || user?.role === 'EXTERNAL_USER') && (
+              <>
+                <Link to="/dashboard/procedures">
+                  <Button variant="outline" className="w-full h-20 flex flex-col gap-2">
+                    <FileCheck className="h-6 w-6" />
+                    <span className="text-sm">Mesa de Partes</span>
+                  </Button>
+                </Link>
+                {user?.role === 'EXTERNAL_USER' && (
+                  <Link to="/dashboard/procedures/new">
+                    <Button variant="outline" className="w-full h-20 flex flex-col gap-2">
+                      <Plus className="h-6 w-6" />
+                      <span className="text-sm">Nuevo Trámite</span>
+                    </Button>
+                  </Link>
+                )}
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
