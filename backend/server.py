@@ -1,11 +1,12 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Request, File, UploadFile
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, validator
 from typing import List, Dict, Any, Optional
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import os
@@ -13,6 +14,16 @@ import logging
 import uuid
 from pathlib import Path
 import hashlib
+import asyncio
+import pandas as pd
+import qrcode
+import io
+import base64
+
+# Import finance modules
+from finance_models import *
+from finance_enums import *
+from finance_utils import *
 
 # Configuration and setup
 ROOT_DIR = Path(__file__).parent
