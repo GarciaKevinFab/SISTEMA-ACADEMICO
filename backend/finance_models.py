@@ -436,7 +436,7 @@ class Attendance(BaseModel):
     is_absent: bool = False
     
     # Audit
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     created_by: str
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
