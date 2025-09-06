@@ -1311,7 +1311,7 @@ class AcademicSystemTester:
         return self.log_test(
             "Pay Receipt (Idempotent)", 
             success,
-            f"- Payment method: {payment_data['payment_method']}" if success else f"- Error: {data}"
+            f"- Payment method: CASH" if success else f"- Error: {data}"
         )
 
     def test_verify_receipt_public(self, receipt_id: str):
