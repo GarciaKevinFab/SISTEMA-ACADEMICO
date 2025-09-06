@@ -21,7 +21,7 @@ async def create_seed_data():
     """Create seed data for the finance module"""
     
     client = AsyncIOMotorClient(MONGO_URL)
-    db = client.get_default_database()
+    db = client.iespp_system  # Use specific database name
     
     print("🌱 Creating Finance Module Seed Data...")
     
