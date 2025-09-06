@@ -1947,6 +1947,14 @@ function App() {
                 </DashboardLayout>
               </ProtectedRoute>
             } />
+            <Route path="/dashboard/admission" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <AdmissionPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/admision" element={<PublicAdmissionCalls />} />
           </Routes>
         </div>
       </Router>
