@@ -3857,6 +3857,323 @@ async def get_inventory_alerts(
         }
     }
 
+# ====================================================================================================
+# HR MANAGEMENT APIs
+# ====================================================================================================
+
+@api_router.post("/hr/employees", dependencies=[Depends(require_role([UserRole.HR_ADMIN, UserRole.FINANCE_ADMIN]))])
+async def create_employee(employee_data: EmployeeCreate, current_user: User = Depends(get_current_user)):
+    """Create employee record"""
+    
+    # Check if employee with same document exists
+    existing_employee = await db.employees.find_one({"document_number": employee_data.document_number})
+    if existing_employee:
+        raise HTTPException(status_code=400, detail="Employee with this document number already exists")
+    
+    employee_dict = employee_data.dict()
+    employee_dict['created_by'] = current_user.id
+    
+    # Auto-generate employee code if not provided
+    if not employee_data.employee_code:
+        employee_dict['employee_code'] = f"EMP{datetime.now().year}{str(uuid.uuid4())[:6].upper()}"
+    
+    employee = Employee(**employee_dict)
+    employee_doc = prepare_for_mongo(employee.dict())
+    
+    await db.employees.insert_one(employee_doc)
+    
+    await log_audit_trail(db, "employees", employee.id, "CREATE", None, employee_doc, current_user.id)
+    
+    logger.info(f"Employee {employee.employee_code} created by {current_user.username}")
+    
+    return {"status": "success", "employee": employee}
+
+@api_router.get("/hr/employees")
+async def get_employees(
+    status: Optional[str] = None,
+    department: Optional[str] = None,
+    contract_type: Optional[str] = None,
+    is_active: bool = True,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(require_role([UserRole.HR_ADMIN, UserRole.FINANCE_ADMIN]))
+):
+    """Get employees with filters"""
+    
+    filter_query = {"is_active": is_active}
+    
+    if status:
+        filter_query["status"] = status
+    if department:
+        filter_query["department"] = department
+    if contract_type:
+        filter_query["contract_type"] = contract_type
+    
+    employees = await db.employees.find(filter_query).sort("employee_code", 1).skip(skip).limit(limit).to_list(limit)
+    total = await db.employees.count_documents(filter_query)
+    
+    return {
+        "employees": [Employee(**emp) for emp in employees],
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+@api_router.put("/hr/employees/{employee_id}", dependencies=[Depends(require_role([UserRole.HR_ADMIN]))])
+async def update_employee(
+    employee_id: str,
+    employee_data: EmployeeCreate,
+    current_user: User = Depends(get_current_user)
+):
+    """Update employee record"""
+    
+    employee = await db.employees.find_one({"id": employee_id})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    update_data = employee_data.dict()
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    # Store old values for audit
+    old_values = {k: employee.get(k) for k in update_data.keys() if k in employee}
+    
+    await db.employees.update_one({"id": employee_id}, {"$set": update_data})
+    
+    await log_audit_trail(
+        db, "employees", employee_id, "UPDATE", 
+        old_values, update_data, current_user.id
+    )
+    
+    return {"status": "success", "message": "Employee updated successfully"}
+
+@api_router.post("/hr/attendance", dependencies=[Depends(require_role([UserRole.HR_ADMIN]))])
+async def create_attendance(attendance_data: AttendanceCreate, current_user: User = Depends(get_current_user)):
+    """Create attendance record"""
+    
+    # Check if employee exists
+    employee = await db.employees.find_one({"id": attendance_data.employee_id})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    # Check if attendance already exists for this date
+    existing_attendance = await db.attendance.find_one({
+        "employee_id": attendance_data.employee_id,
+        "date": attendance_data.date.isoformat()
+    })
+    
+    if existing_attendance:
+        raise HTTPException(status_code=400, detail="Attendance already exists for this date")
+    
+    attendance_dict = attendance_data.dict()
+    attendance_dict['created_by'] = current_user.id
+    
+    # Calculate worked hours if check_in and check_out provided
+    if attendance_data.check_in and attendance_data.check_out:
+        time_diff = attendance_data.check_out - attendance_data.check_in
+        worked_minutes = time_diff.total_seconds() / 60 - attendance_data.break_minutes
+        attendance_dict['worked_hours'] = max(0, worked_minutes / 60)
+        
+        # Check if late (assuming 8:00 AM start time)
+        expected_start = attendance_data.check_in.replace(hour=8, minute=0, second=0, microsecond=0)
+        attendance_dict['is_late'] = attendance_data.check_in > expected_start
+    
+    # Check if absent
+    attendance_dict['is_absent'] = not attendance_data.check_in
+    
+    attendance = Attendance(**attendance_dict)
+    attendance_doc = prepare_for_mongo(attendance.dict())
+    
+    await db.attendance.insert_one(attendance_doc)
+    
+    await log_audit_trail(db, "attendance", attendance.id, "CREATE", None, attendance_doc, current_user.id)
+    
+    return {"status": "success", "attendance": attendance}
+
+@api_router.get("/hr/attendance")
+async def get_attendance(
+    employee_id: Optional[str] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    is_absent: Optional[bool] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(require_role([UserRole.HR_ADMIN, UserRole.FINANCE_ADMIN]))
+):
+    """Get attendance records with filters"""
+    
+    filter_query = {}
+    
+    if employee_id:
+        filter_query["employee_id"] = employee_id
+    if date_from:
+        filter_query["date"] = {"$gte": date_from.isoformat()}
+    if date_to:
+        if "date" in filter_query:
+            filter_query["date"]["$lte"] = date_to.isoformat()
+        else:
+            filter_query["date"] = {"$lte": date_to.isoformat()}
+    if is_absent is not None:
+        filter_query["is_absent"] = is_absent
+    
+    attendance_records = await db.attendance.find(filter_query).sort("date", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.attendance.count_documents(filter_query)
+    
+    # Enrich with employee data
+    enriched_records = []
+    for record in attendance_records:
+        employee = await db.employees.find_one({"id": record["employee_id"]})
+        
+        attendance_obj = Attendance(**record)
+        enriched_record = {
+            **attendance_obj.dict(),
+            "employee": Employee(**employee) if employee else None
+        }
+        enriched_records.append(enriched_record)
+    
+    return {
+        "attendance": enriched_records,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+# ====================================================================================================
+# LOGISTICS MANAGEMENT APIs
+# ====================================================================================================
+
+@api_router.post("/logistics/suppliers", dependencies=[Depends(require_role([UserRole.LOGISTICS, UserRole.FINANCE_ADMIN]))])
+async def create_supplier(supplier_data: SupplierCreate, current_user: User = Depends(get_current_user)):
+    """Create supplier record"""
+    
+    # Validate RUC
+    if not validate_ruc(supplier_data.ruc):
+        raise HTTPException(status_code=400, detail="Invalid RUC number")
+    
+    # Check if supplier with same RUC exists
+    existing_supplier = await db.suppliers.find_one({"ruc": supplier_data.ruc})
+    if existing_supplier:
+        raise HTTPException(status_code=400, detail="Supplier with this RUC already exists")
+    
+    supplier_dict = supplier_data.dict()
+    supplier_dict['created_by'] = current_user.id
+    
+    supplier = Supplier(**supplier_dict)
+    supplier_doc = prepare_for_mongo(supplier.dict())
+    
+    await db.suppliers.insert_one(supplier_doc)
+    
+    await log_audit_trail(db, "suppliers", supplier.id, "CREATE", None, supplier_doc, current_user.id)
+    
+    logger.info(f"Supplier {supplier.supplier_code} created by {current_user.username}")
+    
+    return {"status": "success", "supplier": supplier}
+
+@api_router.get("/logistics/suppliers")
+async def get_suppliers(
+    status: Optional[str] = None,
+    is_active: bool = True,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(require_role([UserRole.LOGISTICS, UserRole.FINANCE_ADMIN]))
+):
+    """Get suppliers with filters"""
+    
+    filter_query = {"is_active": is_active}
+    
+    if status:
+        filter_query["status"] = status
+    
+    suppliers = await db.suppliers.find(filter_query).sort("company_name", 1).skip(skip).limit(limit).to_list(limit)
+    total = await db.suppliers.count_documents(filter_query)
+    
+    return {
+        "suppliers": [Supplier(**sup) for sup in suppliers],
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+@api_router.post("/logistics/requirements", dependencies=[Depends(require_role([UserRole.LOGISTICS, UserRole.FINANCE_ADMIN]))])
+async def create_requirement(requirement_data: RequirementCreate, current_user: User = Depends(get_current_user)):
+    """Create purchase requirement"""
+    
+    requirement_dict = requirement_data.dict()
+    requirement_dict['requested_by'] = current_user.id
+    
+    # Calculate estimated total
+    estimated_total = sum(
+        item.get('estimated_unit_price', 0) * item['quantity'] 
+        for item in requirement_data.items
+    )
+    requirement_dict['estimated_total'] = estimated_total
+    
+    # Remove items from requirement dict as they'll be stored separately
+    items_data = requirement_dict.pop('items')
+    
+    requirement = Requirement(**requirement_dict)
+    requirement_doc = prepare_for_mongo(requirement.dict())
+    
+    await db.requirements.insert_one(requirement_doc)
+    
+    # Create requirement items
+    for item_data in items_data:
+        item_dict = item_data.copy()
+        item_dict['requirement_id'] = requirement.id
+        
+        req_item = RequirementItem(**item_dict)
+        req_item_doc = prepare_for_mongo(req_item.dict())
+        await db.requirement_items.insert_one(req_item_doc)
+    
+    await log_audit_trail(db, "requirements", requirement.id, "CREATE", None, requirement_doc, current_user.id)
+    
+    logger.info(f"Requirement {requirement.requirement_number} created by {current_user.username}")
+    
+    return {"status": "success", "requirement": requirement}
+
+@api_router.get("/logistics/requirements")
+async def get_requirements(
+    status: Optional[str] = None,
+    requested_by: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: User = Depends(require_role([UserRole.LOGISTICS, UserRole.FINANCE_ADMIN]))
+):
+    """Get requirements with filters"""
+    
+    filter_query = {}
+    
+    if status:
+        filter_query["status"] = status
+    if requested_by:
+        filter_query["requested_by"] = requested_by
+    
+    requirements = await db.requirements.find(filter_query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.requirements.count_documents(filter_query)
+    
+    # Enrich with items and user data
+    enriched_requirements = []
+    for req in requirements:
+        # Get requirement items
+        items = await db.requirement_items.find({"requirement_id": req["id"]}).to_list(100)
+        
+        # Get requester info
+        requester = await db.users.find_one({"id": req["requested_by"]})
+        
+        requirement_obj = Requirement(**req)
+        enriched_req = {
+            **requirement_obj.dict(),
+            "items": [RequirementItem(**item) for item in items],
+            "requester": User(**requester) if requester else None
+        }
+        enriched_requirements.append(enriched_req)
+    
+    return {
+        "requirements": enriched_requirements,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
 # Include API router
 app.include_router(api_router)
 
