@@ -418,11 +418,12 @@ const DashboardLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: Home, roles: ['ADMIN', 'TEACHER', 'STUDENT', 'REGISTRAR'] },
+    { name: 'Dashboard', href: '/dashboard', icon: Home, roles: ['ADMIN', 'TEACHER', 'STUDENT', 'REGISTRAR', 'ADMIN_WORKER', 'EXTERNAL_USER'] },
     { name: 'Estudiantes', href: '/dashboard/students', icon: Users, roles: ['ADMIN', 'REGISTRAR', 'TEACHER'] },
     { name: 'Cursos', href: '/dashboard/courses', icon: BookOpen, roles: ['ADMIN', 'TEACHER'] },
     { name: 'Matrículas', href: '/dashboard/enrollments', icon: UserPlus, roles: ['ADMIN', 'REGISTRAR', 'TEACHER'] },
     { name: 'Calificaciones', href: '/dashboard/grades', icon: Award, roles: ['ADMIN', 'TEACHER'] },
+    { name: 'Mesa de Partes', href: '/dashboard/procedures', icon: FileCheck, roles: ['ADMIN', 'ADMIN_WORKER', 'EXTERNAL_USER'] },
     { name: 'Reportes', href: '/dashboard/reports', icon: BarChart3, roles: ['ADMIN', 'REGISTRAR'] },
   ];
 
