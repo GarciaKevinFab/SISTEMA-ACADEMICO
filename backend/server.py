@@ -252,6 +252,123 @@ class AttendanceUpdate(BaseModel):
     total_classes: int = Field(..., ge=1)
     attended_classes: int = Field(..., ge=0)
 
+# Mesa de Partes Models
+class ProcedureTypeCreate(BaseModel):
+    name: str = Field(..., min_length=3, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    area: ProcedureArea
+    required_documents: Optional[List[str]] = []
+    processing_days: int = Field(..., ge=1, le=365)
+    is_active: bool = True
+
+class ProcedureType(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: Optional[str] = None
+    area: ProcedureArea
+    required_documents: Optional[List[str]] = []
+    processing_days: int
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class ProcedureCreate(BaseModel):
+    procedure_type_id: str
+    subject: str = Field(..., min_length=5, max_length=200)
+    description: str = Field(..., min_length=10, max_length=1000)
+    
+    # Datos del solicitante (para usuarios externos)
+    applicant_name: Optional[str] = Field(None, max_length=100)
+    applicant_email: Optional[str] = Field(None, pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$')
+    applicant_phone: Optional[str] = Field(None, max_length=15)
+    applicant_document: Optional[str] = Field(None, max_length=20)
+    
+    # Prioridad y observaciones
+    priority: str = Field(default="NORMAL", pattern="^(LOW|NORMAL|HIGH|URGENT)$")
+    observations: Optional[str] = Field(None, max_length=500)
+
+class ProcedureAttachment(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    procedure_id: str
+    file_name: str
+    file_path: str
+    file_size: int
+    file_type: str
+    uploaded_by: str
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+
+class ProcedureLog(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    procedure_id: str
+    action: str  # CREATED, STATUS_CHANGED, ASSIGNED, COMMENT_ADDED, etc.
+    previous_status: Optional[str] = None
+    new_status: Optional[str] = None
+    comment: Optional[str] = None
+    performed_by: str
+    performed_at: datetime = Field(default_factory=datetime.utcnow)
+    ip_address: Optional[str] = None
+
+class Procedure(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    tracking_code: str  # Código único de seguimiento
+    procedure_type_id: str
+    subject: str
+    description: str
+    
+    # Estado y seguimiento
+    status: ProcedureStatus = ProcedureStatus.RECEIVED
+    priority: str = "NORMAL"
+    
+    # Datos del solicitante
+    created_by: str  # ID del usuario que creó
+    applicant_name: Optional[str] = None
+    applicant_email: Optional[str] = None
+    applicant_phone: Optional[str] = None
+    applicant_document: Optional[str] = None
+    
+    # Asignación y procesamiento
+    assigned_to: Optional[str] = None  # ID del trabajador asignado
+    assigned_at: Optional[datetime] = None
+    area: ProcedureArea
+    
+    # Fechas importantes
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    deadline: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    
+    # Observaciones y comentarios
+    observations: Optional[str] = None
+    resolution: Optional[str] = None
+    
+    # Archivos adjuntos (IDs)
+    attachment_ids: Optional[List[str]] = []
+    
+    # Notificaciones
+    email_notifications_sent: int = 0
+    last_notification_sent: Optional[datetime] = None
+
+class ProcedureUpdate(BaseModel):
+    status: Optional[ProcedureStatus] = None
+    assigned_to: Optional[str] = None
+    priority: Optional[str] = None
+    observations: Optional[str] = None
+    resolution: Optional[str] = None
+
+class ProcedureStatusUpdate(BaseModel):
+    status: ProcedureStatus
+    comment: Optional[str] = None
+    notify_applicant: bool = True
+
+class NotificationLog(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    procedure_id: str
+    recipient_email: str
+    notification_type: str  # STATUS_CHANGE, DEADLINE_REMINDER, etc.
+    subject: str
+    content: str
+    sent_at: datetime = Field(default_factory=datetime.utcnow)
+    delivery_status: str = "PENDING"  # PENDING, SENT, FAILED
+
 # Utility functions
 def hash_password(password: str):
     return pwd_context.hash(password)
