@@ -3220,6 +3220,319 @@ async def upload_bank_statement(
         logger.error(f"Error processing bank statement: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
+# ====================================================================================================
+# RECEIPTS (BOLETAS INTERNAS) APIs
+# ====================================================================================================
+
+@api_router.post("/finance/receipts", dependencies=[Depends(require_role([UserRole.CASHIER, UserRole.FINANCE_ADMIN]))])
+async def create_receipt(
+    receipt_data: ReceiptCreate, 
+    request: Request,
+    current_user: User = Depends(get_current_user)
+):
+    """Create internal receipt with QR code"""
+    
+    # Get series based on concept
+    series = RECEIPT_SERIES_MAPPING.get(receipt_data.concept, "999")
+    
+    # Generate receipt number and correlative
+    receipt_number, correlative = generate_receipt_number(series)
+    
+    # Create receipt
+    receipt_dict = receipt_data.dict()
+    receipt_dict.update({
+        'receipt_number': receipt_number,
+        'series': series,
+        'correlative': correlative,
+        'created_by': current_user.id
+    })
+    
+    receipt = Receipt(**receipt_dict)
+    
+    # Generate QR code for verification
+    base_url = str(request.base_url).rstrip('/')
+    verification_url = f"{base_url}/verificar/{receipt.id}"
+    qr_code_data = generate_qr_code(verification_url)
+    receipt.qr_code = qr_code_data
+    
+    # Save to database
+    receipt_doc = prepare_for_mongo(receipt.dict())
+    await db.receipts.insert_one(receipt_doc)
+    
+    # Generate PDF
+    pdf_generator = PDFGenerator()
+    pdf_path = f"/tmp/receipt_{receipt.id}.pdf"
+    
+    try:
+        pdf_generator.create_receipt_pdf(receipt_doc, qr_code_data, pdf_path)
+        receipt.pdf_path = pdf_path
+        await db.receipts.update_one({"id": receipt.id}, {"$set": {"pdf_path": pdf_path}})
+    except Exception as e:
+        logger.warning(f"Error generating PDF for receipt {receipt.id}: {str(e)}")
+    
+    # Log audit trail
+    await log_audit_trail(
+        db, "receipts", receipt.id, "CREATE",
+        None, receipt_doc, current_user.id, request.client.host
+    )
+    
+    logger.info(f"Receipt {receipt.receipt_number} created by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "receipt": receipt,
+        "verification_url": verification_url,
+        "message": "Receipt created successfully"
+    }
+
+@api_router.get("/finance/receipts")
+async def get_receipts(
+    status: Optional[ReceiptStatus] = None,
+    concept: Optional[ReceiptConcept] = None,
+    customer_document: Optional[str] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: User = Depends(require_role([UserRole.CASHIER, UserRole.FINANCE_ADMIN]))
+):
+    """Get receipts with filters"""
+    
+    filter_query = {}
+    
+    if status:
+        filter_query["status"] = status.value
+    if concept:
+        filter_query["concept"] = concept.value
+    if customer_document:
+        filter_query["customer_document"] = customer_document
+    if date_from:
+        filter_query["issued_at"] = {"$gte": date_from.isoformat()}
+    if date_to:
+        if "issued_at" in filter_query:
+            filter_query["issued_at"]["$lte"] = date_to.isoformat()
+        else:
+            filter_query["issued_at"] = {"$lte": date_to.isoformat()}
+    
+    receipts = await db.receipts.find(filter_query).sort("issued_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.receipts.count_documents(filter_query)
+    
+    return {
+        "receipts": [Receipt(**receipt) for receipt in receipts],
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+@api_router.post("/finance/receipts/{receipt_id}/pay")
+async def pay_receipt(
+    receipt_id: str,
+    payment_method: PaymentMethod,
+    payment_reference: Optional[str] = None,
+    idempotency_key: Optional[str] = None,
+    current_user: User = Depends(require_role([UserRole.CASHIER, UserRole.FINANCE_ADMIN]))
+):
+    """Mark receipt as paid with idempotency support"""
+    
+    # Check idempotency
+    if idempotency_key:
+        existing_payment = await db.receipt_payments.find_one({
+            "receipt_id": receipt_id,
+            "idempotency_key": idempotency_key
+        })
+        if existing_payment:
+            return {
+                "status": "success",
+                "message": "Payment already processed",
+                "payment_id": existing_payment["id"]
+            }
+    
+    # Get receipt
+    receipt = await db.receipts.find_one({"id": receipt_id})
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    
+    if receipt["status"] == ReceiptStatus.PAID.value:
+        raise HTTPException(status_code=400, detail="Receipt is already paid")
+    
+    if receipt["status"] == ReceiptStatus.CANCELLED.value:
+        raise HTTPException(status_code=400, detail="Cannot pay cancelled receipt")
+    
+    # Update receipt
+    payment_time = datetime.now(timezone.utc)
+    update_data = {
+        "status": ReceiptStatus.PAID.value,
+        "paid_at": payment_time.isoformat(),
+        "payment_method": payment_method.value,
+        "payment_reference": payment_reference,
+        "updated_at": payment_time.isoformat(),
+        "updated_by": current_user.id
+    }
+    
+    await db.receipts.update_one({"id": receipt_id}, {"$set": update_data})
+    
+    # Create payment record for idempotency
+    payment_record = {
+        "id": str(uuid.uuid4()),
+        "receipt_id": receipt_id,
+        "amount": receipt["amount"],
+        "payment_method": payment_method.value,
+        "payment_reference": payment_reference,
+        "paid_by": current_user.id,
+        "paid_at": payment_time.isoformat(),
+        "idempotency_key": idempotency_key
+    }
+    
+    await db.receipt_payments.insert_one(payment_record)
+    
+    # Create cash movement if payment is in cash
+    if payment_method == PaymentMethod.CASH:
+        # Get current open cash session
+        cash_session = await db.cash_sessions.find_one({
+            "opened_by": current_user.id,
+            "status": CashSessionStatus.OPEN.value
+        })
+        
+        if cash_session:
+            cash_movement = CashMovement(
+                cash_session_id=cash_session["id"],
+                movement_type=MovementType.INCOME.value,
+                amount=receipt["amount"],
+                concept="RECEIPT_PAYMENT",
+                description=f"Pago de boleta {receipt['receipt_number']} - {receipt['description']}",
+                reference_id=receipt_id,
+                created_by=current_user.id
+            )
+            
+            cash_movement_doc = prepare_for_mongo(cash_movement.dict())
+            await db.cash_movements.insert_one(cash_movement_doc)
+    
+    # Log audit trail
+    await log_audit_trail(
+        db, "receipts", receipt_id, "UPDATE",
+        {"status": receipt["status"]}, update_data, current_user.id
+    )
+    
+    logger.info(f"Receipt {receipt['receipt_number']} marked as paid by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "message": "Receipt marked as paid successfully",
+        "payment_id": payment_record["id"]
+    }
+
+@api_router.post("/finance/receipts/{receipt_id}/cancel")
+async def cancel_receipt(
+    receipt_id: str,
+    reason: str,
+    current_user: User = Depends(require_role([UserRole.FINANCE_ADMIN]))
+):
+    """Cancel a receipt (FINANCE_ADMIN only)"""
+    
+    receipt = await db.receipts.find_one({"id": receipt_id})
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    
+    if receipt["status"] == ReceiptStatus.CANCELLED.value:
+        raise HTTPException(status_code=400, detail="Receipt is already cancelled")
+    
+    # Update receipt
+    update_data = {
+        "status": ReceiptStatus.CANCELLED.value,
+        "cancelled_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_by": current_user.id,
+        "cancellation_reason": reason
+    }
+    
+    await db.receipts.update_one({"id": receipt_id}, {"$set": update_data})
+    
+    # If receipt was paid, create refund cash movement
+    if receipt["status"] == ReceiptStatus.PAID.value:
+        cash_session = await db.cash_sessions.find_one({
+            "opened_by": current_user.id,
+            "status": CashSessionStatus.OPEN.value
+        })
+        
+        if cash_session:
+            refund_movement = CashMovement(
+                cash_session_id=cash_session["id"],
+                movement_type=MovementType.EXPENSE.value,
+                amount=receipt["amount"],
+                concept="RECEIPT_REFUND",
+                description=f"Reembolso por anulación de boleta {receipt['receipt_number']} - {reason}",
+                reference_id=receipt_id,
+                created_by=current_user.id
+            )
+            
+            refund_movement_doc = prepare_for_mongo(refund_movement.dict())
+            await db.cash_movements.insert_one(refund_movement_doc)
+    
+    # Log audit trail
+    await log_audit_trail(
+        db, "receipts", receipt_id, "UPDATE",
+        {"status": receipt["status"]}, update_data, current_user.id
+    )
+    
+    logger.info(f"Receipt {receipt['receipt_number']} cancelled by {current_user.username}: {reason}")
+    
+    return {
+        "status": "success",
+        "message": "Receipt cancelled successfully"
+    }
+
+# Public receipt verification endpoint
+@api_router.get("/verificar/{receipt_id}")
+async def verify_receipt(receipt_id: str):
+    """Public endpoint to verify receipt (no authentication required)"""
+    
+    receipt = await db.receipts.find_one({"id": receipt_id})
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    
+    # Return only public information
+    return {
+        "receipt_number": receipt["receipt_number"],
+        "series": receipt["series"],
+        "issued_at": receipt["issued_at"],
+        "concept": receipt["concept"],
+        "description": receipt["description"],
+        "amount": receipt["amount"],
+        "status": receipt["status"],
+        "customer_name": receipt["customer_name"],
+        "customer_document": receipt["customer_document"][:4] + "****",  # Masked document
+        "is_valid": receipt["status"] != ReceiptStatus.CANCELLED.value
+    }
+
+@api_router.get("/finance/receipts/{receipt_id}/pdf")
+async def download_receipt_pdf(
+    receipt_id: str,
+    current_user: User = Depends(require_role([UserRole.CASHIER, UserRole.FINANCE_ADMIN]))
+):
+    """Download receipt PDF"""
+    
+    receipt = await db.receipts.find_one({"id": receipt_id})
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    
+    if not receipt.get("pdf_path") or not os.path.exists(receipt["pdf_path"]):
+        # Regenerate PDF if not exists
+        pdf_generator = PDFGenerator()
+        pdf_path = f"/tmp/receipt_{receipt_id}.pdf"
+        
+        try:
+            pdf_generator.create_receipt_pdf(receipt, receipt.get("qr_code"), pdf_path)
+            await db.receipts.update_one({"id": receipt_id}, {"$set": {"pdf_path": pdf_path}})
+        except Exception as e:
+            logger.error(f"Error generating PDF for receipt {receipt_id}: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error generating PDF")
+    
+    return FileResponse(
+        receipt["pdf_path"],
+        media_type="application/pdf",
+        filename=f"boleta_{receipt['receipt_number']}.pdf"
+    )
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
