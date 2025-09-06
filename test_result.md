@@ -203,15 +203,18 @@ backend:
 
   - task: "Logistics APIs"
     implemented: true
-    working: "NA"
+    working: false
     file: "server.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Implemented suppliers, requirements management APIs with comprehensive workflows"
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL: Supplier creation failing due to RUC validation function not working correctly. RUC validation tests failing for both 10-digit and 12-digit invalid RUCs. Supplier retrieval endpoint accessible but no suppliers can be created. Requirements endpoints not tested due to supplier dependency. Role-based permissions working correctly for LOGISTICS role. RUC validation function needs implementation or fixing."
 
   - task: "HR Management APIs"
     implemented: true
