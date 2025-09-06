@@ -165,7 +165,7 @@ class GLConcept(BaseModel):
     concept_type: str
     category: Optional[str] = None
     is_active: bool = True
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     created_by: str
 
 class CostCenterCreate(BaseModel):
