@@ -1760,12 +1760,12 @@ class AcademicSystemTester:
             "address": "Test Address"
         }
         
-        success, data = self.make_request('POST', 'logistics/suppliers', invalid_supplier_data, token=token, expected_status=400)
+        success, data = self.make_request('POST', 'logistics/suppliers', invalid_supplier_data, token=token, expected_status=422)
         self.log_test("RUC Validation (10 digits)", success, "- Properly rejected invalid RUC")
         
         # Test invalid RUC (12 digits)
         invalid_supplier_data["ruc"] = "205567890123"  # 12 digits
-        success, data = self.make_request('POST', 'logistics/suppliers', invalid_supplier_data, token=token, expected_status=400)
+        success, data = self.make_request('POST', 'logistics/suppliers', invalid_supplier_data, token=token, expected_status=422)
         self.log_test("RUC Validation (12 digits)", success, "- Properly rejected invalid RUC")
 
     def test_hr_logistics_permissions(self):
