@@ -445,6 +445,7 @@ const DashboardLayout = ({ children }) => {
     { name: 'Calificaciones', href: '/dashboard/grades', icon: Award, roles: ['ADMIN', 'TEACHER'] },
     { name: 'Mesa de Partes', href: '/dashboard/procedures', icon: FileCheck, roles: ['ADMIN', 'ADMIN_WORKER', 'EXTERNAL_USER'] },
     { name: 'Admisión', href: '/dashboard/admission', icon: GraduationCap, roles: ['ADMIN', 'ACADEMIC_STAFF', 'APPLICANT'] },
+    { name: 'Finanzas', href: '/dashboard/finance', icon: DollarSign, roles: ['ADMIN', 'REGISTRAR'] },
     { name: 'Reportes', href: '/dashboard/reports', icon: BarChart3, roles: ['ADMIN', 'REGISTRAR'] },
   ];
 
