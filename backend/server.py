@@ -2697,6 +2697,114 @@ async def create_default_procedure_types():
     except Exception as e:
         logger.error(f"Error creating default procedure types: {str(e)}")
 
+# Initialize default careers for admission
+async def create_default_careers():
+    """Create default careers if they don't exist"""
+    default_careers = [
+        {
+            "code": "EINICIAL",
+            "name": "Educación Inicial",
+            "description": "Formación docente para educación inicial (0-5 años)",
+            "duration_years": 5
+        },
+        {
+            "code": "EPRIMARIA", 
+            "name": "Educación Primaria",
+            "description": "Formación docente para educación primaria (6-11 años)",
+            "duration_years": 5
+        },
+        {
+            "code": "EFISICA",
+            "name": "Educación Física",
+            "description": "Formación docente en educación física y deportes",
+            "duration_years": 5
+        },
+        {
+            "code": "EARTISTICA",
+            "name": "Educación Artística",
+            "description": "Formación docente en artes visuales y música",
+            "duration_years": 5
+        },
+        {
+            "code": "ECOMUNICACION",
+            "name": "Comunicación",
+            "description": "Formación docente en lenguaje y comunicación",
+            "duration_years": 5
+        },
+        {
+            "code": "EMATEMATICA",
+            "name": "Matemática",
+            "description": "Formación docente en matemática",
+            "duration_years": 5
+        }
+    ]
+    
+    try:
+        existing_count = await db.careers.count_documents({})
+        if existing_count == 0:
+            for career_data in default_careers:
+                career = Career(**career_data)
+                await db.careers.insert_one(career.dict())
+            logger.info(f"Created {len(default_careers)} default careers")
+    except Exception as e:
+        logger.error(f"Error creating default careers: {str(e)}")
+
+# Initialize default admission call
+async def create_default_admission_call():
+    """Create a sample admission call if none exist"""
+    try:
+        existing_count = await db.admission_calls.count_documents({})
+        if existing_count == 0:
+            # Get all careers
+            careers = await db.careers.find({}).to_list(100)
+            if not careers:
+                return
+            
+            # Create admission call for 2025
+            career_ids = [career["id"] for career in careers]
+            career_vacancies = {career["id"]: 30 for career in careers}  # 30 vacancies per career
+            
+            admission_call_data = {
+                "name": "Proceso de Admisión 2025-I",
+                "description": "Proceso de admisión para el periodo académico 2025-I del IESPP Gustavo Allende Llavería",
+                "academic_year": 2025,
+                "academic_period": "I",
+                "registration_start": datetime(2024, 11, 1),
+                "registration_end": datetime(2024, 12, 15),
+                "exam_date": datetime(2024, 12, 20),
+                "results_date": datetime(2024, 12, 25),
+                "application_fee": 50.0,
+                "max_applications_per_career": 2,
+                "available_careers": career_ids,
+                "career_vacancies": career_vacancies,
+                "minimum_age": 16,
+                "maximum_age": 35,
+                "required_documents": ["BIRTH_CERTIFICATE", "STUDY_CERTIFICATE", "PHOTO", "DNI_COPY"],
+                "created_by": "SYSTEM"
+            }
+            
+            admission_call = AdmissionCall(**admission_call_data)
+            admission_call_doc = admission_call.dict()
+            
+            # Convert datetime objects for MongoDB
+            for field in ['registration_start', 'registration_end', 'exam_date', 'results_date']:
+                if admission_call_doc.get(field):
+                    admission_call_doc[field] = admission_call_doc[field].isoformat()
+            
+            await db.admission_calls.insert_one(admission_call_doc)
+            logger.info("Created default admission call for 2025-I")
+            
+    except Exception as e:
+        logger.error(f"Error creating default admission call: {str(e)}")
+
+# Update startup event to include admission data
+@app.on_event("startup") 
+async def initialize_default_data():
+    """Initialize all default data"""
+    await create_default_procedure_types()
+    await create_default_careers()
+    await create_default_admission_call()
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
