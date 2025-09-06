@@ -810,7 +810,7 @@ const StudentsPage = () => {
       student.document_number.includes(searchTerm) ||
       student.student_code.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesProgram = !selectedProgram || student.program === selectedProgram;
+    const matchesProgram = !selectedProgram || selectedProgram === 'ALL' || student.program === selectedProgram;
     
     return matchesSearch && matchesProgram;
   });
