@@ -414,6 +414,10 @@ async def update_student(student_id: str, student_data: StudentCreate, current_u
     update_data = student_data.dict()
     update_data["updated_at"] = datetime.utcnow()
     
+    # Convert date objects to ISO format strings for MongoDB
+    if 'birth_date' in update_data and hasattr(update_data['birth_date'], 'isoformat'):
+        update_data['birth_date'] = update_data['birth_date'].isoformat()
+    
     await db.students.update_one({"id": student_id}, {"$set": update_data})
     
     updated_student = await db.students.find_one({"id": student_id})
