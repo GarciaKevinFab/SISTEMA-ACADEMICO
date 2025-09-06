@@ -339,7 +339,21 @@ class FocusedFinanceTester:
         """Test receipt verification endpoint specifically"""
         print("\n🔍 Testing Receipt Verification Endpoint...")
         
-        token = self.admin_token
+        # Register finance admin for receipt operations
+        timestamp = datetime.now().strftime('%H%M%S')
+        finance_data = {
+            "username": f"test_finance_{timestamp}",
+            "email": f"test_finance_{timestamp}@iespp.edu.pe",
+            "password": "TestPass123!",
+            "full_name": f"Test Finance {timestamp}",
+            "role": "FINANCE_ADMIN"
+        }
+        
+        success, data = self.make_request('POST', 'auth/register', finance_data)
+        if success and 'access_token' in data:
+            token = data['access_token']
+        else:
+            token = self.admin_token
         if not token:
             print("❌ No token available for verification testing")
             return
