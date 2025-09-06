@@ -3934,6 +3934,9 @@ async def update_employee(
     update_data = employee_data.dict()
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     
+    # Convert dates to ISO strings for MongoDB
+    update_data = prepare_for_mongo(update_data)
+    
     # Store old values for audit
     old_values = {k: employee.get(k) for k in update_data.keys() if k in employee}
     
