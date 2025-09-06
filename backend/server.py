@@ -1689,8 +1689,9 @@ async def create_admission_call(admission_call_data: AdmissionCallCreate, curren
     if admission_call_data.registration_end <= admission_call_data.registration_start:
         raise HTTPException(status_code=400, detail="Registration end date must be after start date")
     
-    admission_call = AdmissionCall(**admission_call_data.dict())
-    admission_call.created_by = current_user.id
+    admission_call_dict = admission_call_data.dict()
+    admission_call_dict['created_by'] = current_user.id
+    admission_call = AdmissionCall(**admission_call_dict)
     
     admission_call_doc = admission_call.dict()
     # Convert datetime objects for MongoDB
