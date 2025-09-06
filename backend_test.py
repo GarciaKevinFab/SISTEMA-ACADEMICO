@@ -17,13 +17,17 @@ class AcademicSystemTester:
         self.teacher_token = None
         self.student_token = None
         self.registrar_token = None
+        self.admin_worker_token = None
+        self.external_user_token = None
         self.tests_run = 0
         self.tests_passed = 0
         self.created_resources = {
             'users': [],
             'students': [],
             'courses': [],
-            'enrollments': []
+            'enrollments': [],
+            'procedure_types': [],
+            'procedures': []
         }
 
     def log_test(self, name: str, success: bool, details: str = ""):
