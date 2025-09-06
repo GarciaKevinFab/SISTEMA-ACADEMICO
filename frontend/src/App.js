@@ -46,6 +46,7 @@ import './App.css';
 // Import Admission Components
 import { PublicAdmissionCalls, ApplicantProfile } from './components/AdmissionModule';
 import { AdmissionDashboard, AdmissionCallsManagement } from './components/AdmissionAdmin';
+import FinanceModule from './components/FinanceModule';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
