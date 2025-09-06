@@ -1023,11 +1023,15 @@ class AcademicSystemTester:
         # 9. Role-based Permissions
         self.test_role_permissions()
 
-        # 10. Admission Module Testing
+        # 10. Finance Module Testing
+        print("\n💰 Testing Finance & Administration Module...")
+        self.test_finance_comprehensive()
+
+        # 11. Admission Module Testing
         print("\n🎓 Testing Admission Module...")
         self.test_admission_comprehensive()
 
-        # 11. Mesa de Partes Testing
+        # 12. Mesa de Partes Testing
         print("\n📋 Testing Mesa de Partes Virtual...")
         self.test_mesa_de_partes_comprehensive()
 
