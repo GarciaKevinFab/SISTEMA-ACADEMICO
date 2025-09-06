@@ -337,7 +337,7 @@ const LoginPage = () => {
                     </div>
                     <div>
                       <Label htmlFor="role">Rol</Label>
-                      <Select name="role" value={formData.role} onValueChange={(value) => setFormData({...formData, role: value})}>
+                      <Select value={formData.role} onValueChange={(value) => setFormData({...formData, role: value})}>
                         <SelectTrigger>
                           <SelectValue placeholder="Seleccione un rol" />
                         </SelectTrigger>
