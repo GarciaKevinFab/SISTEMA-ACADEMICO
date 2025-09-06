@@ -1798,6 +1798,13 @@ function App() {
                 </DashboardLayout>
               </ProtectedRoute>
             } />
+            <Route path="/dashboard/procedures" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <ProceduresPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
           </Routes>
         </div>
       </Router>
