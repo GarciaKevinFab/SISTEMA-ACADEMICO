@@ -724,7 +724,7 @@ class AcademicSystemTester:
             f"- Stats available: {list(data.keys()) if success else 'N/A'}"
         )
 
-    def test_dni_validation(self, token: str = None):
+    def test_dni_validation(self, token: str):
         """Test DNI validation (must be exactly 8 digits)"""
         print("\n🔍 Testing DNI Validation...")
         
