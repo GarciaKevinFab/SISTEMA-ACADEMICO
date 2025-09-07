@@ -47,6 +47,13 @@ from finance_utils import *
 from academic_models import *
 
 # Import performance optimizations - FIXED VERSION
+# Move MINEDU, Security, and Reports routes to root level
+import sys
+sys.path.append('/app')
+from minedu_integration_routes import router as minedu_integration_router
+from security_compliance_routes import router as security_compliance_router  
+from academic_reports_routes import router as academic_reports_router
+
 from fixed_optimizations import (
     FixedMongoOptimizer, OptimizedQueries, PerformanceTracker,
     performance_monitor, simple_cache, memory_cache
