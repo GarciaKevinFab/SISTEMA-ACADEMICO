@@ -161,9 +161,9 @@ backend:
 
   - task: "Internal Receipts APIs with QR"
     implemented: true
-    working: true
+    working: false
     file: "server.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
@@ -173,6 +173,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ PASSED: Receipt creation with QR codes working, public verification endpoint accessible, receipt cancellation (admin-only) working, idempotency support implemented. Minor: Payment endpoint expects query parameters, PDF generation has errors but core functionality works. QR codes generated successfully for verification."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL ISSUES: 1) Payment endpoint expects query parameters (payment_method, payment_reference, idempotency_key) instead of request body - prevents idempotent payments, 2) QR verification endpoint not returning expected safe data format (missing receipt_number, date, total, status), 3) PDF generation failing with errors. Receipt creation and cancellation work but payment workflow broken."
 
   - task: "GL Concepts & Cost Centers APIs"
     implemented: true
