@@ -5116,9 +5116,10 @@ async def get_receptions(
 
 # Include routers
 app.include_router(api_router)
-app.include_router(academic_router)
-app.include_router(minedu_router)
-app.include_router(mesa_partes_router)
+# Temporarily comment out problematic routers
+# app.include_router(academic_router)
+# app.include_router(minedu_router)
+# app.include_router(mesa_partes_router)
 
 if __name__ == "__main__":
     import uvicorn
