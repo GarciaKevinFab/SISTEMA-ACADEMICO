@@ -3362,8 +3362,8 @@ async def pay_receipt(
     update_data = {
         "status": ReceiptStatus.PAID.value,
         "paid_at": payment_time.isoformat(),
-        "payment_method": payment_method.value,
-        "payment_reference": payment_reference,
+        "payment_method": payment_data.payment_method.value,
+        "payment_reference": payment_data.payment_reference,
         "updated_at": payment_time.isoformat(),
         "updated_by": current_user.id
     }
