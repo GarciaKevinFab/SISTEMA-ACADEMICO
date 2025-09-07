@@ -3860,8 +3860,11 @@ async def get_inventory_items(
         "limit": limit
     }
 
-@api_router.post("/inventory/movements", dependencies=[Depends(require_role([UserRole.WAREHOUSE, UserRole.FINANCE_ADMIN]))])
-async def create_inventory_movement(movement_data: InventoryMovementCreate, current_user: User = Depends(get_current_user)):
+@api_router.post("/inventory/movements")
+async def create_inventory_movement(
+    movement_data: InventoryMovementCreate, 
+    current_user: User = Depends(require_role([UserRole.WAREHOUSE, UserRole.FINANCE_ADMIN]))
+):
     """Create inventory movement with FIFO cost calculation"""
     
     # Get inventory item
