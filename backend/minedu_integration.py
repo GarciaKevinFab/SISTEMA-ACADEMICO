@@ -6,6 +6,7 @@ import json
 
 from shared_deps import get_current_user, db, logger
 from logging_middleware import get_correlation_id, log_with_correlation, ErrorResponse, ErrorCodes
+from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_one_and_update, MongoUpdateError
 
 minedu_router = APIRouter(prefix="/minedu", tags=["MINEDU Integration"])
 
