@@ -515,7 +515,7 @@ async def lock_section_grades(
         # Bloquear todas las matrículas de la sección
         current_time = datetime.now(timezone.utc)
         
-        result = await db.await safe_update_many(enrollments, 
+        result = await safe_update_many(db.enrollments, 
             {"section_id": section_id, "status": "ACTIVE"},
             {
                 "$set": {
