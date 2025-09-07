@@ -46,12 +46,11 @@ from finance_enums import *
 from finance_utils import *
 from academic_models import *
 
-# Import performance optimizations
-from fastapi_optimizations import OptimizedFastAPI, OptimizedMongoClient, AsyncOptimizer, performance_monitor
-from query_optimizer import QueryOptimizer
-from redis_cache import cache_manager, DashboardCache, StaticDataCache
-from background_tasks import task_manager, BackgroundTask
-from rbac_security import rbac_manager, require_permission, require_role, ResourceType, Permission, UserRole as RBACUserRole
+# Import performance optimizations - FIXED VERSION
+from fixed_optimizations import (
+    FixedMongoOptimizer, OptimizedQueries, PerformanceTracker,
+    performance_monitor, simple_cache, memory_cache
+)
 
 # Import routes after fixing circular dependencies
 try:
