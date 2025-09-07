@@ -153,10 +153,10 @@ class FIFOTester:
 
         # Step 4: Create Exit - 60 units (should use FIFO: 50@15 + 10@18 = 930)
         exit_data = {
-            "inventory_item_id": item_id,
+            "item_id": item_id,
             "movement_type": "EXIT",
             "quantity": 60,
-            "reference": f"EXIT_{timestamp}",
+            "reason": "FIFO Test Exit",
             "notes": "FIFO exit - 60 units (50@15 + 10@18 = 930)"
         }
 
