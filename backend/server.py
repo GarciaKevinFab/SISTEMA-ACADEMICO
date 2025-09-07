@@ -1041,12 +1041,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 def require_role(allowed_roles: List[UserRole]):
     def role_checker(current_user: User = Depends(get_current_user)):
-        if current_user.role not in allowed_roles:
-            raise HTTPException(
-                status_code=403, 
-                detail=f"Access denied. Required roles: {[role.value for role in allowed_roles]}"
-            )
-        return current_user
+        # ADMIN role has access to all endpoints
+        if current_user.role == UserRole.ADMIN or current_user.role in allowed_roles:
+            return current_user
+        raise HTTPException(
+            status_code=403, 
+            detail=f"Access denied. Required roles: {[role.value for role in allowed_roles]} or ADMIN"
+        )
     return role_checker
 
 # API Routes
