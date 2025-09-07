@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 const FinanceModule = () => {
-  const { user } = useAuth();
+  const { user } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [dashboardStats, setDashboardStats] = useState({});
   const [loading, setLoading] = useState(true);
