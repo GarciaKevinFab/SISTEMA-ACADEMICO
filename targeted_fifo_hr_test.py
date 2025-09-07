@@ -170,12 +170,12 @@ class TargetedTester:
         print("\n👥 Testing HR Employee Endpoint Fix...")
         
         # 1. Create employee
-        timestamp = datetime.now().strftime('%H%M%S')
+        timestamp = datetime.now().strftime('%H%M%S%f')  # Include microseconds for uniqueness
         employee_data = {
             "employee_code": f"EMP{timestamp}",
             "first_name": "Juan Carlos",
             "last_name": "Pérez",
-            "document_number": f"1234567{timestamp[-1]}",
+            "document_number": f"{timestamp[:8]}",  # Use timestamp as unique document
             "birth_date": "1985-05-15",
             "email": f"juan.perez{timestamp}@universidad.edu",
             "phone": "987654321",
