@@ -1271,29 +1271,60 @@ async def create_student(student_data: StudentCreate, current_user: User = Depen
         "message": "Student created successfully"
     }
 
-@api_router.get("/students", dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.REGISTRAR, UserRole.TEACHER]))])
+@api_router.get("/students", response_model=List[Student])
+@performance_monitor
 async def get_students(
-    skip: int = 0, 
-    limit: int = 50,
-    program: Optional[str] = None,
-    status: Optional[StudentStatus] = None,
+    request: Request,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     current_user: User = Depends(get_current_user)
 ):
-    filter_query = {}
-    if program:
-        filter_query["program"] = program
-    if status:
-        filter_query["status"] = status.value
+    """FIXED optimized students list with projection and caching"""
+    start_time = time.time()
+    correlation_id = get_correlation_id(request)
     
-    students = await db.students.find(filter_query).skip(skip).limit(limit).to_list(limit)
-    total = await db.students.count_documents(filter_query)
-    
-    return {
-        "students": [Student(**student) for student in students],
-        "total": total,
-        "skip": skip,
-        "limit": limit
-    }
+    try:
+        # Use optimized query with projection
+        result = await OptimizedQueries.get_students_optimized(db, skip, limit)
+        
+        execution_time = time.time() - start_time
+        
+        # Build response with performance metadata
+        response_data = {
+            **result,
+            "correlation_id": correlation_id,
+            "_performance": {
+                "execution_time_ms": round(execution_time * 1000, 2),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        }
+        
+        log_with_correlation(
+            logger, "info",
+            f"Students list retrieved in {execution_time:.3f}s",
+            request,
+            user_data={"id": current_user.id, "role": current_user.role},
+            extra_data={"execution_time": execution_time, "count": len(result.get("students", []))}
+        )
+        
+        return response_data
+        
+    except Exception as e:
+        execution_time = time.time() - start_time
+        
+        log_with_correlation(
+            logger, "error",
+            f"Error getting students: {str(e)}",
+            request,
+            user_data={"id": current_user.id, "role": current_user.role}
+        )
+        
+        return ErrorResponse.create(
+            code=ErrorCodes.INTERNAL_SERVER_ERROR,
+            message="Error al obtener lista de estudiantes",
+            correlation_id=correlation_id,
+            status_code=500
+        )
 
 @api_router.get("/students/{student_id}")
 async def get_student(student_id: str, current_user: User = Depends(get_current_user)):
