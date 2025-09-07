@@ -2809,6 +2809,13 @@ async def assign_procedure(
         "assigned_to": assignee["full_name"]
     }
 
+# Include routers
+if ROUTES_AVAILABLE:
+    app.include_router(academic_router, prefix="/api")
+    app.include_router(minedu_router, prefix="/api")
+    app.include_router(mesa_partes_router, prefix="/api")
+    logger.info("All routers included successfully")
+
 # Include router
 app.include_router(api_router)
 
