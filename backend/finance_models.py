@@ -696,3 +696,37 @@ class ReceptionItem(BaseModel):
     
     # Notes
     notes: Optional[str] = None
+
+
+# Payment Request Models
+class PaymentRequest(BaseModel):
+    payment_method: PaymentMethod
+    payment_reference: Optional[str] = None
+    idempotency_key: Optional[str] = None
+
+class CashSessionCloseRequest(BaseModel):
+    final_amount: float = Field(..., ge=0)
+    closing_notes: Optional[str] = Field(None, max_length=500)
+
+class ReceiptVoidRequest(BaseModel):
+    reason: str = Field(..., min_length=10, max_length=500)
+    refund_method: Optional[PaymentMethod] = None
+    supervisor_approval: Optional[str] = None
+
+class BankReconciliationUpload(BaseModel):
+    bank_account_id: str
+    reconciliation_date: date
+    file_format: str = Field(..., pattern="^(CSV|EXCEL)$")
+    has_header: bool = True
+    date_column: str = Field(default="date")
+    description_column: str = Field(default="description")  
+    amount_column: str = Field(default="amount")
+    reference_column: str = Field(default="reference")
+
+class AttendanceBulkImport(BaseModel):
+    employee_id: Optional[str] = None
+    attendance_date: date
+    check_in_time: Optional[str] = None  # HH:MM format
+    check_out_time: Optional[str] = None  # HH:MM format
+    break_minutes: int = Field(default=60)
+    notes: Optional[str] = Field(None, max_length=200)
