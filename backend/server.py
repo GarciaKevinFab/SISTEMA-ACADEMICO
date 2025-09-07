@@ -4255,7 +4255,7 @@ async def get_audit_logs(
         enriched_logs.append(enriched_log)
     
     return {
-        "audit_logs": enriched_logs,
+        "logs": enriched_logs,
         "total": total,
         "skip": skip,
         "limit": limit
