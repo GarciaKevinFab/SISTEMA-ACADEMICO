@@ -433,6 +433,7 @@ function App() {
             {/* Public Routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/portal" element={<InstitutionalPortal />} />
             <Route path="/public/admission" element={<PublicAdmissionCalls />} />
             
             {/* Protected Routes */}
