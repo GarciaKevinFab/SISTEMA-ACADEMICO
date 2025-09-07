@@ -501,7 +501,7 @@ class ComprehensiveBackendTester:
             "is_active": True
         }
         
-        success, data = self.make_request('POST', 'finance/employees', employee_data, token=token)
+        success, data = self.make_request('POST', 'hr/employees', employee_data, token=token)
         
         if success and 'employee' in data:
             employee_id = data['employee']['id']
