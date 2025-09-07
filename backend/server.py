@@ -4635,6 +4635,392 @@ async def get_requirements(
         "limit": limit
     }
 
+# ====================================================================================================
+# PURCHASE ORDER LIFECYCLE APIs
+# ====================================================================================================
+
+@api_router.post("/logistics/purchase-orders")
+async def create_purchase_order(
+    po_data: PurchaseOrderCreate,
+    current_user: User = Depends(require_role([UserRole.LOGISTICS, UserRole.FINANCE_ADMIN]))
+):
+    """Create purchase order from requirement"""
+    
+    # Validate supplier exists
+    supplier = await db.suppliers.find_one({"id": po_data.supplier_id})
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    
+    # Validate requirement if provided
+    requirement = None
+    if po_data.requirement_id:
+        requirement = await db.requirements.find_one({"id": po_data.requirement_id})
+        if not requirement:
+            raise HTTPException(status_code=404, detail="Requirement not found")
+    
+    # Create PO
+    po = PurchaseOrder(
+        supplier_id=po_data.supplier_id,
+        requirement_id=po_data.requirement_id,
+        delivery_date=po_data.delivery_date,
+        delivery_address=po_data.delivery_address,
+        payment_terms=po_data.payment_terms,
+        notes=po_data.notes,
+        created_by=current_user.id
+    )
+    
+    # Create PO items and calculate totals
+    total_items = []
+    subtotal = 0.0
+    
+    for item_data in po_data.items:
+        po_item = PurchaseOrderItem(
+            purchase_order_id=po.id,
+            requirement_item_id=item_data.requirement_item_id,
+            item_id=item_data.item_id,
+            description=item_data.description,
+            quantity=item_data.quantity,
+            unit_of_measure=item_data.unit_of_measure,
+            unit_price=item_data.unit_price,
+            discount_percentage=item_data.discount_percentage,
+            subtotal=item_data.quantity * item_data.unit_price * (1 - item_data.discount_percentage / 100),
+            pending_quantity=item_data.quantity
+        )
+        total_items.append(po_item)
+        subtotal += po_item.subtotal
+    
+    # Calculate totals
+    po.subtotal = subtotal
+    po.discount_amount = sum(item.quantity * item.unit_price * (item.discount_percentage / 100) for item in total_items)
+    po.tax_amount = po.subtotal * 0.18  # 18% IGV
+    po.total_amount = po.subtotal + po.tax_amount
+    
+    # Save PO
+    po_doc = prepare_for_mongo(po.dict())
+    await db.purchase_orders.insert_one(po_doc)
+    
+    # Save PO items
+    items_docs = [prepare_for_mongo(item.dict()) for item in total_items]
+    await db.purchase_order_items.insert_many(items_docs)
+    
+    # Update requirement if linked
+    if requirement:
+        await db.requirements.update_one(
+            {"id": po_data.requirement_id},
+            {"$set": {
+                "purchase_order_id": po.id,
+                "status": "ORDERED",
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+    
+    # Log audit trail
+    await log_audit_trail(
+        db, "purchase_orders", po.id, "CREATE",
+        None, po_doc, current_user.id
+    )
+    
+    logger.info(f"Purchase order {po.po_number} created by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "purchase_order": po,
+        "items": total_items
+    }
+
+@api_router.get("/logistics/purchase-orders")
+async def get_purchase_orders(
+    status: Optional[str] = None,
+    supplier_id: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(require_role([UserRole.LOGISTICS, UserRole.FINANCE_ADMIN]))
+):
+    """Get purchase orders with filters"""
+    
+    filter_query = {}
+    if status:
+        filter_query["status"] = status
+    if supplier_id:
+        filter_query["supplier_id"] = supplier_id
+    
+    pos = await db.purchase_orders.find(filter_query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.purchase_orders.count_documents(filter_query)
+    
+    # Enrich with supplier and items
+    enriched_pos = []
+    for po in pos:
+        supplier = await db.suppliers.find_one({"id": po["supplier_id"]})
+        items = await db.purchase_order_items.find({"purchase_order_id": po["id"]}).to_list(100)
+        
+        po_obj = PurchaseOrder(**po)
+        enriched_po = {
+            **po_obj.dict(),
+            "supplier": Supplier(**supplier) if supplier else None,
+            "items": [PurchaseOrderItem(**item) for item in items]
+        }
+        enriched_pos.append(enriched_po)
+    
+    return {
+        "purchase_orders": enriched_pos,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+@api_router.post("/logistics/purchase-orders/{po_id}/issue")
+async def issue_purchase_order(
+    po_id: str,
+    current_user: User = Depends(require_role([UserRole.LOGISTICS, UserRole.FINANCE_ADMIN]))
+):
+    """Issue purchase order (send to supplier)"""
+    
+    po = await db.purchase_orders.find_one({"id": po_id})
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    
+    if po["status"] != "DRAFT":
+        raise HTTPException(status_code=400, detail="Can only issue draft purchase orders")
+    
+    issue_time = datetime.now(timezone.utc)
+    update_data = {
+        "status": "ISSUED",
+        "issued_at": issue_time.isoformat(),
+        "updated_at": issue_time.isoformat()
+    }
+    
+    await db.purchase_orders.update_one({"id": po_id}, {"$set": update_data})
+    
+    # Log audit trail
+    await log_audit_trail(
+        db, "purchase_orders", po_id, "ISSUE",
+        {"status": po["status"]}, update_data, current_user.id
+    )
+    
+    logger.info(f"Purchase order {po['po_number']} issued by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "message": "Purchase order issued successfully",
+        "issued_at": issue_time.isoformat()
+    }
+
+# ====================================================================================================
+# RECEPTION WORKFLOW APIs  
+# ====================================================================================================
+
+@api_router.post("/logistics/receptions")
+async def create_reception(
+    reception_data: ReceptionCreate,
+    current_user: User = Depends(require_role([UserRole.WAREHOUSE, UserRole.LOGISTICS]))
+):
+    """Create reception for purchase order (partial or complete)"""
+    
+    # Get purchase order
+    po = await db.purchase_orders.find_one({"id": reception_data.purchase_order_id})
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    
+    if po["status"] not in ["ISSUED", "PARTIALLY_RECEIVED"]:
+        raise HTTPException(status_code=400, detail="Purchase order is not available for reception")
+    
+    # Get PO items
+    po_items = await db.purchase_order_items.find({"purchase_order_id": reception_data.purchase_order_id}).to_list(100)
+    po_items_dict = {item["id"]: item for item in po_items}
+    
+    # Create reception
+    reception = Reception(
+        purchase_order_id=reception_data.purchase_order_id,
+        supplier_id=po["supplier_id"],
+        reception_date=reception_data.reception_date,
+        received_by=reception_data.received_by,
+        notes=reception_data.notes
+    )
+    
+    # Process reception items
+    reception_items = []
+    has_discrepancies = False
+    
+    for item_data in reception_data.items:
+        po_item_id = item_data["item_id"]
+        received_qty = item_data["received_quantity"]
+        condition = item_data.get("condition", "GOOD")
+        item_notes = item_data.get("notes")
+        
+        if po_item_id not in po_items_dict:
+            raise HTTPException(status_code=400, detail=f"PO item {po_item_id} not found")
+        
+        po_item = po_items_dict[po_item_id]
+        
+        # Check for over-receipts
+        if received_qty > po_item["pending_quantity"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot receive {received_qty} of item {po_item['description']}. Only {po_item['pending_quantity']} pending."
+            )
+        
+        # Check for discrepancies
+        if received_qty != po_item["pending_quantity"] or condition != "GOOD":
+            has_discrepancies = True
+        
+        reception_item = ReceptionItem(
+            reception_id=reception.id,
+            purchase_order_item_id=po_item_id,
+            item_id=po_item.get("item_id"),
+            ordered_quantity=po_item["quantity"],
+            received_quantity=received_qty,
+            condition=condition,
+            quality_notes=item_notes
+        )
+        reception_items.append(reception_item)
+        
+        # Update PO item received quantities
+        new_received = po_item["received_quantity"] + received_qty
+        new_pending = po_item["quantity"] - new_received
+        is_fully_received = new_pending == 0
+        
+        await db.purchase_order_items.update_one(
+            {"id": po_item_id},
+            {"$set": {
+                "received_quantity": new_received,
+                "pending_quantity": new_pending,
+                "is_fully_received": is_fully_received
+            }}
+        )
+    
+    reception.has_discrepancies = has_discrepancies
+    
+    # Save reception and items
+    reception_doc = prepare_for_mongo(reception.dict())
+    await db.receptions.insert_one(reception_doc)
+    
+    reception_items_docs = [prepare_for_mongo(item.dict()) for item in reception_items]
+    await db.reception_items.insert_many(reception_items_docs)
+    
+    # Check if PO is fully received
+    remaining_po_items = await db.purchase_order_items.find({
+        "purchase_order_id": reception_data.purchase_order_id,
+        "is_fully_received": False
+    }).to_list(100)
+    
+    if not remaining_po_items:
+        # PO is fully received
+        await db.purchase_orders.update_one(
+            {"id": reception_data.purchase_order_id},
+            {"$set": {
+                "status": "FULLY_RECEIVED",
+                "fully_received_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+    else:
+        # PO is partially received
+        await db.purchase_orders.update_one(
+            {"id": reception_data.purchase_order_id},
+            {"$set": {
+                "status": "PARTIALLY_RECEIVED",
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+    
+    # Create inventory movements for received items in good condition
+    for item in reception_items:
+        if item.condition == "GOOD" and item.item_id and item.received_quantity > 0:
+            po_item = po_items_dict[item.purchase_order_item_id]
+            
+            # Create inventory entry movement
+            inventory_movement = InventoryMovement(
+                item_id=item.item_id,
+                movement_type=InventoryMovementType.ENTRY.value,
+                quantity=item.received_quantity,
+                unit_cost=po_item["unit_price"],
+                reference_id=reception.id,
+                notes=f"Recepción PO {po['po_number']} - {item.notes or ''}",
+                created_by=current_user.id
+            )
+            
+            movement_doc = prepare_for_mongo(inventory_movement.dict())
+            await db.inventory_movements.insert_one(movement_doc)
+            
+            # Update inventory item stock
+            inventory_item = await db.inventory_items.find_one({"id": item.item_id})
+            if inventory_item:
+                new_stock = inventory_item.get("current_stock", 0) + item.received_quantity
+                await db.inventory_items.update_one(
+                    {"id": item.item_id},
+                    {"$set": {
+                        "current_stock": new_stock,
+                        "available_stock": new_stock - inventory_item.get("reserved_stock", 0),
+                        "updated_at": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+            
+            # Mark reception item as processed
+            await db.reception_items.update_one(
+                {"id": item.id},
+                {"$set": {
+                    "processed_to_inventory": True,
+                    "inventory_movement_id": inventory_movement.id
+                }}
+            )
+    
+    # Log audit trail
+    await log_audit_trail(
+        db, "receptions", reception.id, "CREATE",
+        None, reception_doc, current_user.id
+    )
+    
+    logger.info(f"Reception {reception.reception_number} created for PO {po['po_number']} by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "reception": reception,
+        "items": reception_items,
+        "has_discrepancies": has_discrepancies
+    }
+
+@api_router.get("/logistics/receptions")
+async def get_receptions(
+    po_id: Optional[str] = None,
+    supplier_id: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(require_role([UserRole.WAREHOUSE, UserRole.LOGISTICS]))
+):
+    """Get receptions with filters"""
+    
+    filter_query = {}
+    if po_id:
+        filter_query["purchase_order_id"] = po_id
+    if supplier_id:
+        filter_query["supplier_id"] = supplier_id
+    
+    receptions = await db.receptions.find(filter_query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.receptions.count_documents(filter_query)
+    
+    # Enrich with items and related data
+    enriched_receptions = []
+    for reception in receptions:
+        items = await db.reception_items.find({"reception_id": reception["id"]}).to_list(100)
+        po = await db.purchase_orders.find_one({"id": reception["purchase_order_id"]})
+        supplier = await db.suppliers.find_one({"id": reception["supplier_id"]})
+        
+        reception_obj = Reception(**reception)
+        enriched_reception = {
+            **reception_obj.dict(),
+            "items": [ReceptionItem(**item) for item in items],
+            "purchase_order": PurchaseOrder(**po) if po else None,
+            "supplier": Supplier(**supplier) if supplier else None
+        }
+        enriched_receptions.append(enriched_reception)
+    
+    return {
+        "receptions": enriched_receptions,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
 # Include API router
 app.include_router(api_router)
 
