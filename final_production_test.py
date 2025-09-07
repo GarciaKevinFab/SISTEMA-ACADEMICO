@@ -60,13 +60,13 @@ class ProductionReadinessTest:
             return False, {"error": str(e)}
 
     def setup_authentication(self):
-        """Setup authentication with admin credentials"""
-        login_data = {"username": "admin", "password": "admin123"}
+        """Setup authentication with finance admin credentials"""
+        login_data = {"username": "finance_admin", "password": "admin123"}
         success, data = self.make_request('POST', 'auth/login', login_data)
         
         if success and 'access_token' in data:
             self.admin_token = data['access_token']
-            print(f"✅ Authentication Setup - Admin logged in successfully")
+            print(f"✅ Authentication Setup - Finance Admin logged in successfully")
             return True
         else:
             print(f"❌ Authentication Setup - Failed: {data}")
