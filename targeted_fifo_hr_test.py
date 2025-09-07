@@ -199,17 +199,14 @@ class TargetedTester:
         update_data = {
             "first_name": "Juan Carlos",
             "last_name": "Pérez",
-            "second_last_name": "García",
-            "document_type": "DNI",
             "document_number": employee_data["document_number"],
+            "birth_date": "1985-05-15",
             "email": f"juan.perez.updated{timestamp}@universidad.edu",
             "phone": "987654322",  # Updated phone
             "position": "Docente Senior",  # Updated position
             "department": "Educación Inicial",
             "contract_type": "PERMANENT",
-            "hire_date": "2024-01-15",
-            "salary": 3800.00,  # Updated salary
-            "status": "ACTIVE"
+            "hire_date": "2024-01-15"
         }
 
         success, data = self.make_request('PUT', f'hr/employees/{employee_id}', update_data, token=self.admin_token)
