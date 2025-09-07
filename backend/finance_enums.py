@@ -23,7 +23,8 @@ class PaymentMethod(str, Enum):
 class ReceiptStatus(str, Enum):
     PENDING = "PENDING"                    # Pendiente de pago
     PAID = "PAID"                         # Pagado
-    CANCELLED = "CANCELLED"               # Cancelado/Anulado
+    VOID = "VOID"                         # Anulado (después de pagado)
+    CANCELLED = "CANCELLED"               # Cancelado (antes de pagar)
     REFUNDED = "REFUNDED"                 # Reembolsado
 
 class ReceiptConcept(str, Enum):
