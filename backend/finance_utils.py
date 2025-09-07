@@ -177,21 +177,67 @@ def validate_ruc(ruc: str) -> bool:
 
 async def log_audit_trail(db, table_name: str, record_id: str, action: str, 
                          old_values: Optional[Dict] = None, new_values: Optional[Dict] = None,
-                         user_id: str = None, ip_address: str = None):
-    """Log audit trail for any database change"""
+                         user_id: str = None, ip_address: str = None, correlation_id: str = None):
+    """Log immutable audit trail for any database change with data masking"""
+    
+    # Generate correlation ID if not provided
+    if not correlation_id:
+        correlation_id = str(uuid.uuid4())
+    
+    # Mask sensitive fields in old and new values
+    sensitive_fields = [
+        'password', 'token', 'secret', 'customer_document', 'document_number',
+        'phone', 'email', 'address', 'bank_account', 'ruc'
+    ]
+    
+    def mask_sensitive_data(data: Dict) -> Dict:
+        if not data:
+            return data
+        
+        masked_data = data.copy()
+        for key, value in masked_data.items():
+            if any(sensitive_field in key.lower() for sensitive_field in sensitive_fields):
+                if isinstance(value, str) and len(value) > 4:
+                    masked_data[key] = value[:2] + "*" * (len(value) - 4) + value[-2:]
+                else:
+                    masked_data[key] = "****"
+        return masked_data
+    
+    # Create immutable audit log entry
     audit_log = {
         "id": str(uuid.uuid4()),
+        "correlation_id": correlation_id,
+        "table_name": table_name,
+        "record_id": record_id,
+        "action": action.upper(),
+        "old_values": mask_sensitive_data(old_values) if old_values else None,
+        "new_values": mask_sensitive_data(new_values) if new_values else None,
+        "user_id": user_id,
+        "ip_address": ip_address,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "is_immutable": True,  # Mark as immutable (append-only)
+        "hash": None  # For integrity verification
+    }
+    
+    # Generate hash for integrity verification
+    import hashlib
+    import json
+    
+    hashable_data = {
         "table_name": table_name,
         "record_id": record_id,
         "action": action,
-        "old_values": old_values,
-        "new_values": new_values,
         "user_id": user_id,
-        "ip_address": ip_address,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": audit_log["timestamp"]
     }
     
+    hash_string = json.dumps(hashable_data, sort_keys=True)
+    audit_log["hash"] = hashlib.sha256(hash_string.encode()).hexdigest()
+    
+    # Insert to audit logs (append-only, never update or delete)
     await db.audit_logs.insert_one(audit_log)
+    
+    return correlation_id
 
 class PDFGenerator:
     """PDF generation utilities for financial documents"""
