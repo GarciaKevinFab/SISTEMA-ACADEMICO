@@ -1499,114 +1499,154 @@ async def update_attendance(enrollment_id: str, attendance_data: AttendanceUpdat
 
 # Dashboard and Reports
 @api_router.get("/dashboard/stats")
-async def get_dashboard_stats(current_user: User = Depends(get_current_user)):
-    stats = {}
+async def get_dashboard_stats(request: Request, current_user: User = Depends(get_current_user)):
+    """Optimized dashboard stats with parallel queries and correlation ID"""
+    start_time = time.time()
+    correlation_id = get_correlation_id(request)
+    dashboard_logger = logging.getLogger("api.dashboard")
     
-    if current_user.role in [UserRole.ADMIN, UserRole.REGISTRAR]:
-        # Admin dashboard
-        total_students = await db.students.count_documents({"status": "ENROLLED"})
-        total_courses = await db.courses.count_documents({"is_active": True})
-        total_enrollments = await db.enrollments.count_documents({"status": "ACTIVE"})
+    try:
+        stats = {}
         
-        # Recent enrollments
-        recent_enrollments = await db.enrollments.find().sort("created_at", -1).limit(5).to_list(5)
-        
-        stats = {
-            "total_students": total_students,
-            "total_courses": total_courses,
-            "total_enrollments": total_enrollments,
-            "recent_enrollments": len(recent_enrollments)
-        }
-    
-    elif current_user.role == UserRole.TEACHER:
-        # Teacher dashboard
-        my_courses = await db.enrollments.count_documents({"teacher_id": current_user.id})
-        pending_grades = await db.enrollments.count_documents({
-            "teacher_id": current_user.id,
-            "grade_status": "INCOMPLETE"
-        })
-        
-        stats = {
-            "my_courses": my_courses,
-            "pending_grades": pending_grades
-        }
-    
-    elif current_user.role == UserRole.STUDENT:
-        # Student dashboard
-        my_enrollments = await db.enrollments.count_documents({"student_id": current_user.id})
-        approved_courses = await db.enrollments.count_documents({
-            "student_id": current_user.id,
-            "grade_status": "APPROVED"
-        })
-        
-        stats = {
-            "my_enrollments": my_enrollments,
-            "approved_courses": approved_courses
-        }
-    
-    # Add Mesa de Partes stats for all roles
-    if current_user.role in [UserRole.ADMIN, UserRole.ADMIN_WORKER]:
-        # Admin/Worker stats
-        total_procedures = await db.procedures.count_documents({})
-        pending_procedures = await db.procedures.count_documents({"status": {"$in": ["RECEIVED", "IN_PROCESS"]}})
-        my_assigned = await db.procedures.count_documents({"assigned_to": current_user.id})
-        
-        stats.update({
-            "total_procedures": total_procedures,
-            "pending_procedures": pending_procedures,
-            "my_assigned_procedures": my_assigned
-        })
-    
-    elif current_user.role == UserRole.EXTERNAL_USER:
-        # External user stats
-        my_procedures = await db.procedures.count_documents({"created_by": current_user.id})
-        my_pending = await db.procedures.count_documents({
-            "created_by": current_user.id, 
-            "status": {"$in": ["RECEIVED", "IN_PROCESS"]}
-        })
-        
-        stats.update({
-            "my_procedures": my_procedures,
-            "my_pending_procedures": my_pending
-        })
-    
-    # Add Admission stats
-    if current_user.role in [UserRole.ADMIN, UserRole.ACADEMIC_STAFF]:
-        # Admin/Academic staff stats
-        total_applicants = await db.applicants.count_documents({})
-        total_applications = await db.applications.count_documents({})
-        active_admission_calls = await db.admission_calls.count_documents({"is_active": True, "status": "OPEN"})
-        pending_evaluations = await db.applications.count_documents({"status": "DOCUMENTS_COMPLETE"})
-        
-        stats.update({
-            "total_applicants": total_applicants,
-            "total_applications": total_applications,
-            "active_admission_calls": active_admission_calls,
-            "pending_evaluations": pending_evaluations
-        })
-    
-    elif current_user.role == UserRole.APPLICANT:
-        # Applicant stats
-        # Find applicant profile
-        applicant = await db.applicants.find_one({"user_id": current_user.id})
-        if applicant:
-            my_applications = await db.applications.count_documents({"applicant_id": applicant["id"]})
-            pending_applications = await db.applications.count_documents({
-                "applicant_id": applicant["id"],
-                "status": {"$in": ["REGISTERED", "DOCUMENTS_PENDING", "DOCUMENTS_COMPLETE"]}
-            })
+        if current_user.role in [UserRole.ADMIN, UserRole.REGISTRAR]:
+            # Execute all admin queries in parallel
+            tasks = [
+                db.students.count_documents({"status": "ENROLLED"}),
+                db.courses.count_documents({"is_active": True}),
+                db.enrollments.count_documents({"status": "ACTIVE"}),
+                db.enrollments.find().sort("created_at", -1).limit(5).to_list(5),
+                db.procedures.count_documents({}),
+                db.procedures.count_documents({"status": {"$in": ["RECEIVED", "IN_PROCESS"]}}),
+                db.procedures.count_documents({"assigned_to": current_user.id}),
+                db.applicants.count_documents({}),
+                db.applications.count_documents({}),
+                db.admission_calls.count_documents({"is_active": True, "status": "OPEN"}),
+                db.applications.count_documents({"status": "DOCUMENTS_COMPLETE"})
+            ]
             
-            stats.update({
-                "my_applications": my_applications,
-                "pending_applications": pending_applications
-            })
-        else:
-            stats.update({
-                "my_applications": 0,
-                "pending_applications": 0
-            })
-    
-    return stats
+            results = await asyncio.gather(*tasks)
+            
+            stats = {
+                "total_students": results[0],
+                "total_courses": results[1], 
+                "total_enrollments": results[2],
+                "recent_enrollments": len(results[3]),
+                "total_procedures": results[4],
+                "pending_procedures": results[5],
+                "my_assigned_procedures": results[6],
+                "total_applicants": results[7],
+                "total_applications": results[8], 
+                "active_admission_calls": results[9],
+                "pending_evaluations": results[10]
+            }
+        
+        elif current_user.role == UserRole.TEACHER:
+            # Execute teacher queries in parallel
+            tasks = [
+                db.enrollments.count_documents({"teacher_id": current_user.id}),
+                db.enrollments.count_documents({
+                    "teacher_id": current_user.id,
+                    "grade_status": "INCOMPLETE"
+                })
+            ]
+            
+            results = await asyncio.gather(*tasks)
+            
+            stats = {
+                "my_courses": results[0],
+                "pending_grades": results[1]
+            }
+        
+        elif current_user.role == UserRole.STUDENT:
+            # Execute student queries in parallel
+            tasks = [
+                db.enrollments.count_documents({"student_id": current_user.id}),
+                db.enrollments.count_documents({
+                    "student_id": current_user.id,
+                    "grade_status": "APPROVED"
+                })
+            ]
+            
+            results = await asyncio.gather(*tasks)
+            
+            stats = {
+                "my_enrollments": results[0],
+                "approved_courses": results[1]
+            }
+        
+        elif current_user.role == UserRole.EXTERNAL_USER:
+            # Execute external user queries in parallel
+            tasks = [
+                db.procedures.count_documents({"created_by": current_user.id}),
+                db.procedures.count_documents({
+                    "created_by": current_user.id, 
+                    "status": {"$in": ["RECEIVED", "IN_PROCESS"]}
+                })
+            ]
+            
+            results = await asyncio.gather(*tasks)
+            
+            stats = {
+                "my_procedures": results[0],
+                "my_pending_procedures": results[1]
+            }
+        
+        elif current_user.role == UserRole.APPLICANT:
+            # Handle applicant stats with parallel queries
+            applicant = await db.applicants.find_one({"user_id": current_user.id})
+            if applicant:
+                tasks = [
+                    db.applications.count_documents({"applicant_id": applicant["id"]}),
+                    db.applications.count_documents({
+                        "applicant_id": applicant["id"],
+                        "status": {"$in": ["REGISTERED", "DOCUMENTS_PENDING", "DOCUMENTS_COMPLETE"]}
+                    })
+                ]
+                
+                results = await asyncio.gather(*tasks)
+                
+                stats = {
+                    "my_applications": results[0],
+                    "pending_applications": results[1]
+                }
+        
+        # Add performance metadata
+        execution_time = time.time() - start_time
+        response_data = {
+            "stats": stats,
+            "correlation_id": correlation_id,
+            "_performance": {
+                "execution_time_ms": round(execution_time * 1000, 2),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        }
+        
+        log_with_correlation(
+            dashboard_logger, "info",
+            f"Dashboard stats retrieved for {current_user.role} in {execution_time:.3f}s",
+            request,
+            user_data=current_user.__dict__ if hasattr(current_user, '__dict__') else {"role": current_user.role},
+            extra_data={"execution_time": execution_time, "stats_count": len(stats)}
+        )
+        
+        return response_data
+        
+    except Exception as e:
+        execution_time = time.time() - start_time
+        log_with_correlation(
+            dashboard_logger, "error",
+            f"Error getting dashboard stats: {str(e)}",
+            request,
+            user_data=current_user.__dict__ if hasattr(current_user, '__dict__') else {"role": current_user.role},
+            extra_data={"execution_time": execution_time}
+        )
+        
+        return ErrorResponse.create(
+            code=ErrorCodes.INTERNAL_SERVER_ERROR,
+            message="Error al obtener estadísticas del dashboard",
+            correlation_id=correlation_id,
+            status_code=500
+        )
 
 @api_router.get("/dashboard/admission-stats", dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.ACADEMIC_STAFF]))])
 async def get_admission_stats(current_user: User = Depends(get_current_user)):
