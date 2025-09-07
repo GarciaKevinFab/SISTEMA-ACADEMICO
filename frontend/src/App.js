@@ -6,6 +6,8 @@ import AcademicModule from './components/AcademicModule';
 import CompleteAdmissionModule from './components/CompleteAdmissionModule';
 import MesaDePartesModule from './components/MesaDePartesModule';
 import FinanceModule from './components/FinanceModule';
+import MineduIntegrationModule from './components/MineduIntegrationModule';
+import InstitutionalPortal from './components/InstitutionalPortal';
 import PublicAdmissionCalls from './components/PublicAdmissionCalls';
 import './App.css';
 
