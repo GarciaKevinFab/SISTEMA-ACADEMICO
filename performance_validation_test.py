@@ -20,8 +20,6 @@ OPTIMIZATIONS IMPLEMENTED:
 """
 
 import requests
-import asyncio
-import aiohttp
 import time
 import statistics
 import json
