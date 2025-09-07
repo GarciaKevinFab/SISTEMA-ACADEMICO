@@ -1,7 +1,7 @@
 """
 Optimized endpoints with caching and performance improvements
 """
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
 from typing import Dict, Any, List
 import time
 import asyncio
