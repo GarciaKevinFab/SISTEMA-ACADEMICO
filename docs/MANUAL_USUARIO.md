@@ -1,534 +1,615 @@
-# MANUAL DE USUARIO - MÓDULO TESORERÍA Y ADMINISTRACIÓN
-## Sistema Integral Académico IESPP "Gustavo Allende Llavería"
+# Manual de Usuario - Sistema Académico Integral IESPP "Gustavo Allende Llavería"
 
-### VERSIÓN: 1.0 - GUÍA COMPLETA DEL USUARIO
-### FECHA: Septiembre 2024
+## Tabla de Contenidos
 
----
+1. [Introducción](#introducción)
+2. [Acceso al Sistema](#acceso-al-sistema)
+3. [Roles de Usuario](#roles-de-usuario)
+4. [Módulos del Sistema](#módulos-del-sistema)
+5. [Guías por Rol](#guías-por-rol)
+6. [Procedimientos Comunes](#procedimientos-comunes)
+7. [Resolución de Problemas](#resolución-de-problemas)
+8. [Soporte Técnico](#soporte-técnico)
 
-## ÍNDICE
-1. [Introducción](#1-introducción)
-2. [Acceso al Sistema](#2-acceso-al-sistema)
-3. [Dashboard Principal](#3-dashboard-principal)
-4. [Caja y Bancos](#4-caja-y-bancos)
-5. [Boletas Internas](#5-boletas-internas)
-6. [Inventario](#6-inventario)
-7. [Logística](#7-logística)
-8. [Recursos Humanos](#8-recursos-humanos)
-9. [Reportes](#9-reportes)
-10. [Preguntas Frecuentes](#10-preguntas-frecuentes)
+## Introducción
 
----
+El Sistema Académico Integral es una plataforma web diseñada para gestionar todos los procesos académicos y administrativos del IESPP "Gustavo Allende Llavería". El sistema integra módulos de admisión, académico, tesorería, trámites digitales, portal web e integración con MINEDU.
 
-## 1. INTRODUCCIÓN
+### Características Principales
+- ✅ **Gestión completa de estudiantes** - Desde postulación hasta egreso
+- ✅ **Sistema académico robusto** - Matrículas, calificaciones, asistencia
+- ✅ **Tesorería integrada** - Pagos, boletas, inventario, logística
+- ✅ **Trámites digitales** - Mesa de partes con seguimiento QR
+- ✅ **Integración MINEDU** - Envío automático a SIA/SIAGIE
+- ✅ **Reportes avanzados** - Analytics y exportación PDF/Excel
 
-### 1.1 ¿Qué es el Módulo de Tesorería y Administración?
-El Módulo de Tesorería y Administración es una herramienta integral que permite gestionar todas las operaciones financieras y administrativas del Instituto de Educación Superior Pedagógico Público "Gustavo Allende Llavería".
+## Acceso al Sistema
 
-### 1.2 Funcionalidades Principales
-- **Gestión de Caja**: Control de ingresos y egresos diarios
-- **Boletas Internas**: Emisión de comprobantes no tributarios con QR
-- **Control de Inventario**: Seguimiento de materiales con sistema FIFO
-- **Gestión de Proveedores**: Registro y control de proveedores
-- **Recursos Humanos**: Control de personal y asistencia
-- **Reportes**: Generación de informes financieros y administrativos
+### URL del Sistema
+```
+https://universidad.emergent.do
+```
 
-### 1.3 Roles de Usuario
-- **Administrador Financiero**: Acceso completo al módulo
-- **Cajero/a**: Manejo de caja y emisión de boletas
-- **Almacenero/a**: Control de inventarios
-- **Logística**: Gestión de compras y proveedores
-- **RRHH**: Administración de personal
+### Requisitos del Navegador
+- Google Chrome (recomendado)
+- Firefox
+- Microsoft Edge
+- Safari (macOS/iOS)
 
----
+### Credenciales por Defecto
+El administrador del sistema proporcionará las credenciales de acceso según tu rol.
 
-## 2. ACCESO AL SISTEMA
+### Proceso de Login
+1. Ingresa a la URL del sistema
+2. Introduce tu **email** y **contraseña**
+3. Haz clic en **"Iniciar Sesión"**
+4. Serás redirigido al dashboard principal
 
-### 2.1 Ingreso al Sistema
-1. Abrir el navegador web (Chrome, Firefox, Edge)
-2. Ingresar a la dirección: `https://sistema.iesppgal.edu.pe`
-3. Introducir usuario y contraseña
-4. Hacer clic en "Iniciar Sesión"
+## Roles de Usuario
 
-### 2.2 Navegación al Módulo
-1. Una vez dentro del sistema, localizar el menú lateral
-2. Hacer clic en "Tesorería y Administración" (ícono de calculadora)
-3. El sistema cargará el dashboard principal del módulo
+### 1. **ADMIN** - Administrador del Sistema
+- **Permisos**: Acceso completo a todos los módulos
+- **Responsabilidades**: Configuración, usuarios, respaldos, auditoría
 
-### 2.3 Permisos por Rol
-El sistema mostrará únicamente las opciones disponibles según su rol asignado.
+### 2. **STUDENT** - Estudiante
+- **Permisos**: Ver sus datos académicos, realizar trámites
+- **Limitaciones**: Solo acceso a información propia
 
----
+### 3. **TEACHER** - Docente
+- **Permisos**: Gestión de calificaciones y asistencia de sus cursos
+- **Limitaciones**: Solo cursos asignados
 
-## 3. DASHBOARD PRINCIPAL
+### 4. **ADMIN_ACADEMIC** - Administrador Académico
+- **Permisos**: Gestión completa del módulo académico
+- **Responsabilidades**: Matrículas, secciones, horarios, actas
 
-### 3.1 Vista General
-Al ingresar al módulo, verá el dashboard principal con:
+### 5. **REGISTRAR** - Registrador
+- **Permisos**: Gestión de calificaciones, actas, certificados
+- **Responsabilidades**: Procesos de registro oficial
 
-#### Cards de Resumen (varía según rol)
-- **Caja del Día**: Monto actual en caja (solo Cajeros)
-- **Ingresos del Mes**: Total de ingresos mensuales
-- **Alertas de Stock**: Items con stock bajo (solo Almacén)
-- **Personal Activo**: Empleados registrados (solo RRHH)
+### 6. **FINANCE_ADMIN** - Administrador de Finanzas
+- **Permisos**: Gestión completa del módulo de tesorería
+- **Responsabilidades**: Cuentas, presupuestos, reportes financieros
 
-#### Acciones Rápidas
-Botones de acceso directo a funciones principales:
-- **Caja y Bancos**: Gestión de dinero en efectivo y cuentas bancarias
-- **Boletas**: Emisión de comprobantes internos
-- **Inventario**: Control de materiales y suministros
-- **Logística**: Compras y proveedores
-- **Recursos Humanos**: Personal y asistencia
+### 7. **CASHIER** - Cajero
+- **Permisos**: Manejo de caja, emisión de boletas
+- **Limitaciones**: Solo operaciones de caja
 
-#### Actividades Recientes
-Lista de las últimas operaciones realizadas en el sistema.
+### 8. **APPLICANT** - Postulante
+- **Permisos**: Proceso de admisión, seguimiento de postulación
+- **Limitaciones**: Solo proceso admisión
 
-#### Próximas Tareas
-Recordatorios de tareas pendientes como arqueos de caja o conciliaciones.
+## Módulos del Sistema
 
----
+### 🎓 **Módulo Académico**
+Gestión completa del proceso académico:
+- **Estudiantes**: CRUD, historiales, estadísticas
+- **Cursos**: Catalogación, prerequisitos, créditos
+- **Matrículas**: Proceso con validaciones y reglas
+- **Calificaciones**: Sistema 0-20 con conversión AD/A/B/C
+- **Asistencia**: Registro por sesión con porcentajes
+- **Reportes**: Historiales, actas, certificados
 
-## 4. CAJA Y BANCOS
+### 💰 **Módulo de Tesorería**
+Sistema financiero integral:
+- **Caja y Bancos**: Sesiones de caja, conciliación
+- **Boletas**: Emisión con QR, verificación pública
+- **Inventario**: FIFO, kardex, alertas de stock
+- **Logística**: Proveedores, órdenes de compra
+- **RRHH**: Personal, asistencia, nómina
 
-### 4.1 Gestión de Sesiones de Caja
+### 📋 **Mesa de Partes Digital**
+Trámites digitales con seguimiento:
+- **Procedimientos**: Constancias, certificados, traslados
+- **Seguimiento**: Código de tracking con QR
+- **Estados**: Pendiente, En proceso, Listo, Entregado
+- **Notificaciones**: Alertas por email/SMS
 
-#### Abrir Sesión de Caja
-1. En el dashboard, hacer clic en "Caja y Bancos"
-2. Si no hay sesión abierta, aparecerá el botón "Abrir Caja"
-3. Hacer clic en "Abrir Caja"
-4. Ingresar el monto inicial (dinero físico en caja)
-5. Confirmar la apertura
+### 🌐 **Portal Web Institucional**
+Presencia web oficial:
+- **Landing page**: Información institucional
+- **Noticias**: Comunicados y eventos
+- **SSO**: Inicio de sesión único
+- **Recursos**: Documentos públicos
 
-**💡 Importante**: Solo puede haber una sesión abierta por cajero.
+### 🔗 **Integración MINEDU**
+Conectividad con sistemas oficiales:
+- **SIA**: Sistema de Información Académica
+- **SIAGIE**: Sistema de apoyo a la gestión
+- **Envío automático**: Matrículas, calificaciones, certificados
+- **Conciliación**: Verificación de discrepancias
 
-#### Registrar Movimientos
-Con la sesión abierta, puede registrar ingresos y egresos:
+## Guías por Rol
 
-1. Hacer clic en "Nuevo Movimiento"
-2. Seleccionar tipo: **Ingreso** o **Egreso**
-3. Completar los campos:
-   - **Monto**: Cantidad en soles
-   - **Concepto**: Motivo del movimiento
-   - **Descripción**: Detalle adicional
-   - **Centro de Costo**: Si aplica
-4. Hacer clic en "Registrar Movimiento"
+### 👨‍🎓 **Guía para Estudiantes**
 
-#### Cerrar Sesión de Caja
-1. Hacer clic en "Cerrar Caja"
-2. Contar físicamente el dinero en caja
-3. Ingresar el **Monto Físico Contado**
-4. El sistema calculará automáticamente la diferencia
-5. Agregar observaciones si hay diferencias
-6. Confirmar el cierre
+#### Dashboard del Estudiante
+Al iniciar sesión verás:
+- **Mis Datos**: Información personal y académica
+- **Mis Cursos**: Cursos matriculados en período actual
+- **Calificaciones**: Notas por curso y período
+- **Asistencia**: Porcentaje de asistencia por curso
+- **Trámites**: Solicitudes pendientes y completadas
 
-**⚠️ Atención**: Las diferencias deben ser justificadas.
+#### Consultar Calificaciones
+1. Ve a **"Académico"** → **"Calificaciones"**
+2. Selecciona el **período académico**
+3. Visualiza notas numéricas (0-20) y literales (AD/A/B/C)
+4. Descarga **certificado de notas** si es necesario
 
-### 4.2 Cuentas Bancarias
+#### Solicitar Trámites
+1. Ve a **"Mesa de Partes"** → **"Nuevo Trámite"**
+2. Selecciona el **tipo de procedimiento**:
+   - Constancia de estudios
+   - Certificado de notas
+   - Constancia de egresado
+3. Completa los **datos requeridos**
+4. Adjunta **documentos** si es necesario
+5. **Paga** la tasa correspondiente
+6. Recibirás un **código de seguimiento**
 
-#### Registrar Nueva Cuenta
-1. Ir a la pestaña "Cuentas Bancarias"
-2. Hacer clic en "Nueva Cuenta"
-3. Completar información:
-   - **Nombre de Cuenta**: Ej. "Cuenta Corriente Principal"
-   - **Banco**: Nombre del banco
-   - **Número de Cuenta**: Número completo
-   - **Tipo**: Corriente, Ahorros, CTS
-   - **Moneda**: Soles o Dólares
-4. Guardar la información
+#### Seguimiento de Trámites
+1. Ve a **"Mesa de Partes"** → **"Seguimiento"**
+2. Ingresa tu **código de tracking**
+3. Verifica el **estado actual**:
+   - 🟡 **Pendiente**: En cola de procesamiento
+   - 🔵 **En proceso**: Siendo revisado
+   - 🟢 **Listo**: Disponible para entrega
+   - ✅ **Entregado**: Proceso completado
 
-#### Conciliación Bancaria
-1. Ir a la pestaña "Conciliación"
-2. Hacer clic en "Seleccionar Archivo"
-3. Subir archivo CSV o Excel del banco
-4. El sistema procesará automáticamente los movimientos
+### 👨‍🏫 **Guía para Docentes**
 
-**📋 Formato requerido del archivo**:
-- Columnas: Date, Description, Amount, Type
-- Formato de fecha: DD/MM/AAAA
-- Tipo: DEBIT o CREDIT
+#### Dashboard del Docente
+Información disponible:
+- **Mis Cursos**: Cursos asignados en período actual
+- **Estudiantes**: Lista de matriculados por curso
+- **Calificaciones Pendientes**: Actas por cerrar
+- **Horarios**: Cronograma de clases
 
----
+#### Registrar Calificaciones
+1. Ve a **"Académico"** → **"Calificaciones"**
+2. Selecciona tu **curso** y **sección**
+3. Para cada estudiante:
+   - Ingresa **nota numérica** (0-20)
+   - El sistema calcula automáticamente la **nota literal**
+   - Verifica el **estado** (APROBADO/DESAPROBADO)
+4. **Guarda** los cambios
+5. **Cierra el acta** cuando esté completa
 
-## 5. BOLETAS INTERNAS
+#### Registrar Asistencia
+1. Ve a **"Académico"** → **"Asistencia"**
+2. Selecciona **curso**, **sección** y **fecha**
+3. Para cada estudiante marca:
+   - ✅ **Presente**
+   - ❌ **Ausente**
+   - 🕐 **Tardanza**
+   - 📋 **Justificado**
+4. **Guarda** la asistencia
+5. El sistema calcula automáticamente los **porcentajes**
 
-### 5.1 Crear Nueva Boleta
+#### Importar Asistencia (CSV)
+1. Descarga la **plantilla Excel**
+2. Completa los datos:
+   ```
+   DNI,Apellidos,Nombres,Status
+   12345678,García López,Juan Carlos,PRESENT
+   87654321,Mendoza Silva,María Elena,ABSENT
+   ```
+3. **Sube el archivo** CSV
+4. **Revisa** la previsualización
+5. **Confirma** la importación
 
-#### Paso a Paso
-1. En el módulo principal, hacer clic en "Boletas"
-2. Hacer clic en "Nueva Boleta"
-3. Completar el formulario:
+### 👨‍💼 **Guía para Administrador Académico**
 
-**Información del Servicio**:
-- **Concepto**: Matrícula, Pensión, Certificado, Trámite, etc.
-- **Descripción**: Detalle del servicio
-- **Monto**: Cantidad a cobrar
+#### Gestión de Matrículas
 
-**Información del Cliente**:
-- **Nombre**: Nombre completo del cliente
-- **Documento**: DNI o RUC (8 u 11 dígitos)
-- **Email**: Correo electrónico (opcional)
+##### Proceso de Matrícula Individual
+1. Ve a **"Académico"** → **"Matrículas"**
+2. Clic en **"Nueva Matrícula"**
+3. Selecciona el **estudiante**
+4. Elige **cursos disponibles**
+5. El sistema valida automáticamente:
+   - ✅ **Prerequisitos** cumplidos
+   - ✅ **Conflictos de horario**
+   - ✅ **Límite de créditos** (12-24)
+   - ✅ **Capacidad de sección**
+   - ✅ **Estado de pagos**
+6. **Confirma** la matrícula
 
-**Información Adicional**:
-- **Fecha de Vencimiento**: Si el pago tiene plazo
+##### Matrícula Masiva
+1. Ve a **"Académico"** → **"Matrícula Masiva"**
+2. Descarga **plantilla Excel**
+3. Completa datos:
+   ```
+   StudentID,CourseID,SectionID,Period
+   STU001,MAT101,SEC001,2024-02
+   STU002,FIS201,SEC002,2024-02
+   ```
+4. **Sube el archivo**
+5. **Revisa errores** de validación
+6. **Procesa** matrículas válidas
 
-4. Hacer clic en "Crear Boleta"
+#### Gestión de Secciones y Horarios
+1. Ve a **"Académico"** → **"Secciones"**
+2. **Crear nueva sección**:
+   - Curso asociado
+   - Docente asignado
+   - Capacidad máxima
+   - Horario de clases
+3. **Verificar conflictos**:
+   - Horarios de docente
+   - Disponibilidad de aula
+   - Solapamientos
+4. **Generar horarios** en PDF
 
-El sistema generará automáticamente:
-- **Número de boleta** correlativo
-- **Código QR** para verificación
-- **PDF** descargable
+#### Cierre de Período Académico
+1. **Verificar** que todas las actas estén cerradas
+2. **Ejecutar** verificación de consistencia
+3. **Resolver** anomalías encontradas
+4. **Generar** reportes finales del período
+5. **Enviar datos** a MINEDU
+6. **Marcar período** como cerrado
 
-### 5.2 Procesar Pagos
+### 👨‍💻 **Guía para Registrador**
 
-#### Registrar Pago de Boleta
-1. Localizar la boleta en estado "Pendiente"
-2. Hacer clic en el ícono de tarjeta (💳)
-3. Seleccionar método de pago:
-   - Efectivo
-   - Depósito Bancario
-   - Transferencia Bancaria
-   - Cheque
-   - Tarjeta de Débito/Crédito
-4. Ingresar referencia del pago (opcional)
-5. Confirmar el pago
+#### Gestión de Actas
+1. Ve a **"Académico"** → **"Actas"**
+2. **Revisar actas pendientes**:
+   - Verificar completitud de notas
+   - Validar cálculos
+   - Confirmar asistencias mínimas
+3. **Cerrar actas**:
+   - Solo REGISTRAR puede cerrar definitivamente
+   - Acta cerrada se vuelve **inmutable**
+   - Se genera **PDF oficial** con QR
+4. **Reabrir actas** (excepcional):
+   - Requiere justificación
+   - Genera log de auditoría
+   - Notifica a involucrados
 
-**✅ Idempotencia**: El sistema evita pagos duplicados automáticamente.
+#### Generación de Certificados
+1. Ve a **"Mesa de Partes"** → **"Certificados"**
+2. **Procesar solicitudes**:
+   - Verificar requisitos del estudiante
+   - Validar pagos realizados
+   - Generar certificado con QR
+3. **Tipos de certificados**:
+   - Constancia de estudios
+   - Certificado de notas
+   - Constancia de egresado
+   - Certificado de título
 
-### 5.3 Verificación de Boletas
+#### Verificación Pública
+Los certificados incluyen **código QR** para verificación:
+```
+https://universidad.edu/verificar/CERT-2024-001234
+```
 
-#### Verificación Pública (Sin Login)
-1. Escanear el código QR de la boleta
-2. O ingresar a: `sistema.iesppgal.edu.pe/verificar/[ID_BOLETA]`
-3. El sistema mostrará:
-   - Número de boleta
+La página pública muestra **solo datos seguros**:
+- Número de certificado
+- Fecha de emisión
+- Tipo de documento
+- Estado de validez
+- **NO muestra** datos personales (DNI, teléfono, dirección)
+
+### 💰 **Guía para Personal de Finanzas**
+
+#### Manejo de Caja (Cajero)
+
+##### Apertura de Sesión
+1. Ve a **"Finanzas"** → **"Caja"**
+2. **Abrir sesión** de caja:
+   - Monto inicial de fondo fijo
+   - Denominaciones de billetes/monedas
+   - Verificar arqueo inicial
+3. **Estado**: Sesión ABIERTA
+
+##### Registro de Movimientos
+Para cada transacción:
+1. **Ingresos**:
+   - Pagos de pensiones
+   - Tasas administrativas
+   - Otros ingresos
+2. **Egresos**:
+   - Gastos menores
+   - Reembolsos
+   - Otros egresos
+3. **Emitir boleta** con QR automáticamente
+
+##### Cierre de Sesión
+1. **Arqueo de caja**:
+   - Contar efectivo físico
+   - Comparar con sistema
+   - Reportar diferencias
+2. **Cerrar sesión**:
+   - Monto final calculado
+   - Diferencias justificadas
+   - Generar reporte de caja
+
+#### Emisión de Boletas (con QR)
+1. **Crear nueva boleta**:
+   - Cliente/estudiante
+   - Concepto de pago
+   - Monto e IGV
+2. **Generar QR** automáticamente
+3. **Imprimir** boleta
+4. **URL verificación**:
+   ```
+   https://universidad.edu/verificar/boleta/B001-00001234
+   ```
+
+#### Gestión de Inventario
+
+##### Ingreso de Mercancía (FIFO)
+1. Ve a **"Finanzas"** → **"Inventario"**
+2. **Registrar entrada**:
+   - Artículo y cantidad
+   - Precio unitario
+   - Proveedor
+   - Fecha de vencimiento
+3. El sistema aplica **método FIFO** automáticamente
+
+##### Salida de Mercancía
+1. **Registrar salida**:
+   - Artículo y cantidad
+   - Motivo (venta, consumo, merma)
+   - Centro de costo
+2. **Cálculo automático**:
+   - Costo FIFO (primero en entrar, primero en salir)
+   - Actualización de stock
+   - Generación de kardex
+
+##### Alertas de Stock
+El sistema genera **alertas automáticas**:
+- 🔴 **Stock mínimo** alcanzado
+- 🟡 **Próximo a vencer** (30 días)
+- 📋 **Reporte** de artículos críticos
+
+## Procedimientos Comunes
+
+### 🔍 Verificación de Documentos QR
+
+Todos los documentos oficiales incluyen **código QR** para verificación pública:
+
+#### Documentos con QR:
+- ✅ Boletas de pago
+- ✅ Certificados académicos
+- ✅ Constancias oficiales
+- ✅ Actas de notas
+
+#### Verificar documento:
+1. **Escanea el código QR** con cualquier aplicación
+2. **Abre el enlace** generado
+3. **Verifica información**:
+   - Validez del documento
    - Fecha de emisión
-   - Concepto y descripción
-   - Monto
-   - Estado (válida/anulada)
-   - Cliente (datos no sensibles)
+   - Estado actual
+   - **Datos seguros** (sin información personal sensible)
 
-### 5.4 Anular Boletas (Solo Administradores)
-1. Localizar la boleta a anular
-2. Hacer clic en el ícono X (❌)
-3. Ingresar motivo de anulación
-4. Confirmar la anulación
+### 📊 Generación de Reportes
 
-**⚠️ Nota**: Si la boleta estaba pagada, se generará automáticamente un egreso de caja por reembolso.
+#### Tipos de Reportes Disponibles:
 
-### 5.5 Descargar PDFs
-1. Hacer clic en el ícono de descarga (📥) en cualquier boleta
-2. El sistema generará y descargará el PDF automáticamente
-3. El PDF incluye código QR para verificación
+##### Reportes Académicos:
+- **Historial del estudiante** (PDF/Excel)
+- **Resultados por curso** (distribución de notas)
+- **Reporte de asistencia** por período
+- **Verificación de consistencia** (anomalías)
 
----
+##### Reportes Financieros:
+- **Flujo de caja** diario/mensual
+- **Inventario valorizado** (método FIFO)
+- **Conciliación bancaria**
+- **Estados financieros**
 
-## 6. INVENTARIO
+#### Generar Reporte:
+1. Ve al **módulo correspondiente**
+2. Selecciona **"Reportes"**
+3. Elige **tipo de reporte**
+4. Configura **filtros**:
+   - Período
+   - Estudiante/curso específico
+   - Formato (PDF/Excel)
+5. **Generar** y **descargar**
 
-### 6.1 Gestión de Items
+### 🔄 Integración MINEDU
 
-#### Registrar Nuevo Item
-1. Ir a "Inventario" → pestaña "Items"
-2. Hacer clic en "Nuevo Item"
-3. Completar información:
-   - **Código**: Código único del item
-   - **Nombre**: Nombre descriptivo
-   - **Descripción**: Detalle del producto
-   - **Categoría**: Clasificación (Oficina, Educativo, Tecnología, etc.)
-   - **Unidad de Medida**: Unidad, Docena, Kilogramo, etc.
-   - **Stock Mínimo/Máximo**: Para alertas automáticas
-   - **Costo Unitario**: Precio de referencia
-4. Guardar el item
+#### Envío Automático
+El sistema envía automáticamente a MINEDU:
+- ✅ **Matrículas** (al confirmar)
+- ✅ **Calificaciones** (al cerrar acta)
+- ✅ **Certificados** (al emitir)
 
-### 6.2 Movimientos de Inventario (Sistema FIFO)
+#### Monitoreo de Integración
+1. Ve a **"MINEDU"** → **"Monitor"**
+2. **Estados posibles**:
+   - 🟡 **PENDIENTE**: En cola de envío
+   - 🔵 **ENVIANDO**: En proceso
+   - ✅ **ENVIADO**: Recibido por MINEDU
+   - 🟢 **CONFIRMADO**: Procesado exitosamente
+   - 🔄 **REINTENTO**: Error temporal, reintentando
+   - ❌ **FALLIDO**: Error permanente
 
-#### Registrar Entrada (Compra)
-1. Ir a pestaña "Movimientos"
-2. Hacer clic en "Nuevo Movimiento"
-3. Configurar:
-   - **Item**: Seleccionar del catálogo
-   - **Tipo**: "Entrada"
-   - **Cantidad**: Unidades recibidas
-   - **Costo Unitario**: Precio de compra
-   - **Motivo**: "Compra", "Donación", etc.
-   - **Número de Lote**: Si aplica
-   - **Fecha de Vencimiento**: Para productos perecederos
+#### Conciliación Periódica
+**Proceso automático mensual**:
+1. **Comparar** datos locales vs. MINEDU
+2. **Identificar discrepancias**
+3. **Generar reporte** CSV con diferencias
+4. **Reprocesar** eventos faltantes
+5. **Objetivo**: 0 discrepancias
 
-#### Registrar Salida (Consumo)
-1. Seguir los mismos pasos pero seleccionar "Salida"
-2. **No ingresar costo unitario** (se calcula automáticamente con FIFO)
-3. El sistema:
-   - Verificará stock disponible
-   - Calculará costo usando el método FIFO
-   - Actualizará el stock automáticamente
+## Resolución de Problemas
 
-#### Transferencias entre Almacenes
-1. Seleccionar tipo "Transferencia"
-2. Especificar almacén origen y destino
-3. El sistema manejará los movimientos en ambos almacenes
+### ❌ **Problemas de Login**
 
-### 6.3 Consultar Kardex
-1. En la lista de items, hacer clic en el ícono de ojo (👁️)
-2. El sistema mostrará:
-   - Historial completo de movimientos
-   - Stock acumulado por fecha
-   - Valor total del inventario
-   - Costo promedio unitario
-3. Opción de exportar a Excel
+#### No puedo iniciar sesión
+**Posibles causas**:
+- Credenciales incorrectas
+- Usuario desactivado
+- Problemas de conectividad
 
-### 6.4 Alertas de Stock
-El sistema genera alertas automáticas cuando:
-- **Stock bajo**: Cantidad menor al mínimo establecido
-- **Stock agotado**: Cantidad igual a cero
-- **Productos vencidos**: Items con fecha de vencimiento pasada
+**Soluciones**:
+1. Verificar **email** y **contraseña**
+2. Usar **"Recuperar contraseña"** si es necesario
+3. Contactar **administrador** si persiste
+4. Verificar **conexión a internet**
 
-Las alertas aparecen en:
-- Dashboard principal
-- Sección "Alertas" del módulo inventario
-- Notificaciones del sistema
+#### La página no carga
+**Soluciones**:
+1. **Refrescar** la página (Ctrl+F5)
+2. **Limpiar caché** del navegador
+3. **Probar** en navegador diferente
+4. **Verificar** URL correcta
 
----
+### 📝 **Problemas Académicos**
 
-## 7. LOGÍSTICA
+#### No puedo matricular un estudiante
+**Validaciones del sistema**:
+- ❌ **Prerequisitos** no cumplidos
+- ❌ **Conflicto de horarios**
+- ❌ **Excede límite** de créditos (24)
+- ❌ **Sección llena**
+- ❌ **Deudas pendientes**
 
-### 7.1 Gestión de Proveedores
+**Solución**: Resolver cada validación mostrada
 
-#### Registrar Nuevo Proveedor
-1. Ir a "Logística" → pestaña "Proveedores"
-2. Hacer clic en "Nuevo Proveedor"
-3. Completar datos obligatorios:
-   - **RUC**: 11 dígitos (validación automática)
-   - **Razón Social**: Nombre legal de la empresa
-   - **Nombre Comercial**: Si difiere de la razón social
-4. Información de contacto:
-   - **Persona de Contacto**
-   - **Email y Teléfono**
-   - **Dirección**
-5. Datos bancarios (opcional):
-   - **Banco y Número de Cuenta**
+#### Error al registrar calificaciones
+**Verificar**:
+- ✅ Nota en rango **0-20**
+- ✅ Acta **no cerrada**
+- ✅ **Permisos** de docente para el curso
+- ✅ **Estudiante matriculado**
 
-**✅ Validación RUC**: El sistema valida automáticamente que el RUC sea correcto según SUNAT.
+#### MINEDU no recibe datos
+1. **Verificar estado** en monitor MINEDU
+2. **Reenviar manualmente** si es necesario
+3. **Contactar soporte** si hay errores persistentes
+4. **Verificar conectividad** con MINEDU API
 
-### 7.2 Gestión de Requerimientos
+### 💰 **Problemas Financieros**
 
-#### Crear Requerimiento de Compra
-1. Ir a pestaña "Requerimientos"
-2. Hacer clic en "Nuevo Requerimiento"
-3. Información general:
-   - **Título**: Nombre del requerimiento
-   - **Descripción**: Detalle de la necesidad
-   - **Justificación**: Motivo de la compra
-   - **Fecha Requerida**: Cuándo se necesita
+#### Error en cálculo FIFO
+**Verificar**:
+- ✅ **Ingresos registrados** correctamente
+- ✅ **Fechas de entrada** válidas
+- ✅ **Precios unitarios** correctos
+- ✅ **Stock disponible** para salida
 
-#### Agregar Items al Requerimiento
-1. En la sección "Items":
-   - **Descripción**: Qué se necesita comprar
-   - **Cantidad**: Cuántas unidades
-   - **Unidad de Medida**: Unidad, Caja, Kilogramo, etc.
-   - **Precio Estimado**: Precio aproximado por unidad
-   - **Especificaciones Técnicas**: Detalles técnicos si aplica
-2. Hacer clic en "Agregar Item"
-3. Repetir para todos los items necesarios
-4. El sistema calculará automáticamente el **Total Estimado**
+#### Boleta sin código QR
+**Posibles causas**:
+- Error en generación PDF
+- Problema de conectividad
+- Configuración QR incorrecta
 
-#### Enviar Requerimiento
-1. Revisar todos los items agregados
-2. Hacer clic en "Crear Requerimiento"
-3. El sistema asignará un número correlativo
-4. El requerimiento queda en estado "Borrador"
+**Solución**:
+1. **Regenerar** la boleta
+2. **Verificar** configuración QR
+3. **Contactar soporte** técnico
 
-### 7.3 Flujo de Aprobación
-Los requerimientos siguen este flujo:
-1. **Borrador**: Recién creado
-2. **Enviado**: Sometido a aprobación
-3. **Aprobado**: Listo para convertir en orden de compra
-4. **Rechazado**: No aprobado
-5. **Convertido a OC**: Ya tiene orden de compra asociada
+### 📱 **Problemas con QR**
 
----
+#### QR no se puede escanear
+**Verificar**:
+- ✅ **Calidad** de impresión
+- ✅ **Iluminación** adecuada
+- ✅ **Aplicación QR** funcionando
+- ✅ **Conectividad** a internet
 
-## 8. RECURSOS HUMANOS
+#### Página de verificación no carga
+**Posibles causas**:
+- Documento **no válido**
+- Problema de **conectividad**
+- **URL malformada**
 
-### 8.1 Gestión de Personal
+**Solución**:
+1. **Verificar** URL completa
+2. **Probar** desde navegador web
+3. **Contactar** emisor del documento
 
-#### Registrar Nuevo Empleado
-1. Ir a "RRHH" → pestaña "Empleados"
-2. Hacer clic en "Nuevo Empleado"
-3. **Datos Personales**:
-   - **Nombres y Apellidos**
-   - **DNI**: 8 dígitos (validación automática)
-   - **Fecha de Nacimiento**
-   - **Email y Teléfono**
-   - **Dirección**
+## Soporte Técnico
 
-4. **Información Laboral**:
-   - **Cargo**: Posición en la institución
-   - **Departamento**: Educación Inicial, Primaria, Administración, etc.
-   - **Fecha de Ingreso**
-   - **Tipo de Contrato**: Nombrado, Contratado, CAS, Locación
-   - **Salario**: Remuneración mensual
+### 📞 **Canales de Soporte**
 
-5. **Contacto de Emergencia**:
-   - **Nombre y Teléfono** de familiar o contacto
+#### Soporte Nivel 1 - Usuario Final
+- **Email**: soporte@universidad.edu
+- **Teléfono**: +51-XXX-XXXXXX
+- **Horario**: Lunes a Viernes 8:00-18:00
+- **Tiempo respuesta**: 2 horas
 
-6. Guardar la información
+#### Soporte Nivel 2 - Técnico
+- **Email**: tecnico@universidad.edu
+- **Disponibilidad**: 24/7 para problemas críticos
+- **Tiempo respuesta**: 30 minutos
 
-### 8.2 Control de Asistencia
+#### Soporte Nivel 3 - Desarrollo
+- **Para**: Errores del sistema, nuevas funcionalidades
+- **Canal**: A través de Nivel 2
+- **SLA**: 4 horas para críticos
 
-#### Registrar Asistencia Manual
-1. Ir a pestaña "Asistencia"
-2. Hacer clic en "Registrar Asistencia"
-3. Seleccionar:
-   - **Empleado**: De la lista de personal activo
-   - **Fecha**: Día de la asistencia
-   - **Hora de Entrada**: Formato 24 horas
-   - **Hora de Salida**: Si ya salió
-   - **Minutos de Descanso**: Por defecto 60 minutos
-   - **Horas Extra**: Si trabajó tiempo adicional
+### 🆘 **Escalamiento de Problemas**
 
-4. Agregar **Observaciones** si es necesario
-5. Confirmar el registro
+#### Severidad CRÍTICA (P1)
+- **Definición**: Sistema no disponible
+- **Respuesta**: Inmediata (< 15 min)
+- **Escalamiento**: Automático a Nivel 3
 
-#### Cálculos Automáticos
-El sistema calcula automáticamente:
-- **Horas Trabajadas**: Tiempo total menos descanso
-- **Tardanzas**: Si ingresó después de las 8:00 AM
-- **Ausencias**: Si no registró entrada
+#### Severidad ALTA (P2)
+- **Definición**: Funcionalidad crítica no disponible
+- **Respuesta**: 1 hora
+- **Escalamiento**: Manual si no se resuelve en 2h
 
-### 8.3 Consultar Información de Personal
-1. En la lista de empleados, hacer clic en el ícono de ojo (👁️)
-2. Ver información completa:
-   - Datos personales y laborales
-   - Historial de contratos
-   - Registro de asistencia
-   - Contactos de emergencia
+#### Severidad MEDIA (P3)
+- **Definición**: Problemas menores de funcionalidad
+- **Respuesta**: 4 horas
+- **Escalamiento**: Siguiendo día hábil
 
----
+#### Severidad BAJA (P4)
+- **Definición**: Consultas, mejoras, capacitación
+- **Respuesta**: 24 horas
+- **Escalamiento**: No aplica
 
-## 9. REPORTES
+### 📚 **Recursos Adicionales**
 
-### 9.1 Tipos de Reportes Disponibles
+#### Documentación Técnica
+- **Manual Técnico**: `/docs/MANUAL_TECNICO.md`
+- **Guía de Procesos**: `/docs/GUIA_PROCESOS.md`
+- **API Documentation**: `/docs/api`
 
-#### Reportes de Caja
-- **Flujo de Caja Diario**: Ingresos y egresos del día
-- **Arqueo de Caja**: Resumen de cierre de sesión
-- **Flujo por Período**: Movimientos entre fechas específicas
+#### Videos Tutoriales
+- **YouTube**: Canal Institucional Universidad
+- **Playlist**: "Sistema Académico - Tutoriales"
+- **Duración**: 5-10 minutos por video
 
-#### Reportes de Boletas
-- **Boletas Emitidas**: Por período y estado
-- **Ingresos por Concepto**: Matrícula, pensiones, certificados
-- **Boletas Pendientes**: Sin pagar
+#### Base de Conocimiento
+- **FAQ**: Preguntas frecuentes
+- **Troubleshooting**: Problemas comunes
+- **Updates**: Notas de versión
 
-#### Reportes de Inventario
-- **Valorización**: Valor total del inventario
-- **Movimientos**: Entradas y salidas por período
-- **Stock Actual**: Items disponibles con alertas
-- **Kardex por Item**: Historial detallado FIFO
+### 📝 **Reportar Problemas**
 
-#### Reportes de RRHH
-- **Asistencia Mensual**: Por empleado o general
-- **Personal Activo**: Lista de empleados
-- **Planilla**: Para cálculo de sueldos
+Al contactar soporte, incluir:
+1. **Usuario** y **rol**
+2. **Navegador** y versión
+3. **Pasos** para reproducir el problema
+4. **Mensaje de error** (captura de pantalla)
+5. **Urgencia** del problema
 
-### 9.2 Generar Reportes
+### 🔄 **Actualizaciones del Sistema**
 
-#### Proceso General
-1. Ir a la pestaña "Reportes" del módulo correspondiente
-2. Seleccionar el tipo de reporte deseado
-3. Configurar filtros (si aplica):
-   - **Fechas**: Desde y hasta
-   - **Conceptos**: Tipo de operación
-   - **Estados**: Pendiente, pagado, etc.
-   - **Centros de Costo**: Si aplica
-4. Elegir formato:
-   - **PDF**: Para impresión y archivo
-   - **CSV**: Para análisis en Excel
-5. Hacer clic en "Generar Reporte" o "Descargar"
+#### Notificaciones
+- **Email**: Avisos de mantenimiento
+- **Banner**: Notificaciones en el sistema
+- **Tiempo**: 48h de anticipación mínimo
 
-### 9.3 Filtros Avanzados
-Todos los reportes permiten filtrar por:
-- **Rango de Fechas**: Período específico
-- **Usuario**: Quién realizó la operación
-- **Estado**: Activo, inactivo, pendiente, etc.
-- **Categoría**: Tipo de item o concepto
-- **Centro de Costo**: Departamento o área
+#### Mantenimiento Programado
+- **Horario**: Domingos 2:00-6:00 AM
+- **Duración**: Máximo 4 horas
+- **Backup**: Automático antes de actualizar
 
 ---
 
-## 10. PREGUNTAS FRECUENTES
+**© 2024 IESPP "Gustavo Allende Llavería". Todos los derechos reservados.**
 
-### 10.1 Caja y Bancos
-
-**P: ¿Qué hago si hay diferencia en el arqueo de caja?**
-R: Verificar físicamente el dinero, revisar todos los movimientos del día, y documentar la diferencia con observaciones detalladas. Diferencias mayores a S/10 deben ser reportadas al supervisor.
-
-**P: ¿Puedo abrir una nueva sesión si olvidé cerrar la anterior?**
-R: No. Solo puede haber una sesión abierta por cajero. Contacte al administrador para que cierre la sesión anterior.
-
-**P: ¿Cómo subo el extracto bancario?**
-R: En "Conciliación", suba archivo CSV o Excel con columnas: Date, Description, Amount, Type. El formato de fecha debe ser DD/MM/AAAA.
-
-### 10.2 Boletas Internas
-
-**P: ¿Puedo modificar una boleta ya emitida?**
-R: No. Las boletas son inmutables por seguridad. Si hay error, debe anularse (solo administradores) y crear una nueva.
-
-**P: ¿Cómo funciona el código QR?**
-R: El QR contiene un enlace de verificación pública. Cualquier persona puede escanearlo para verificar la autenticidad de la boleta sin acceder al sistema.
-
-**P: ¿Qué pasa si pago una boleta dos veces?**
-R: El sistema tiene protección de idempotencia. Si usa la misma referencia, no se procesará el pago duplicado.
-
-### 10.3 Inventario
-
-**P: ¿Cómo funciona el sistema FIFO?**
-R: FIFO (First In, First Out) significa que las salidas usan el costo de los items más antiguos primero. El sistema calcula automáticamente el costo correcto para cada salida.
-
-**P: ¿Puedo corregir un movimiento de inventario?**
-R: No se pueden modificar movimientos. Para corregir, haga un movimiento de "Ajuste" con la cantidad correcta.
-
-**P: ¿Cuándo aparecen las alertas de stock?**
-R: Cuando el stock actual es menor o igual al stock mínimo configurado para cada item.
-
-### 10.4 Logística
-
-**P: ¿Por qué me rechaza el RUC del proveedor?**
-R: El sistema valida el RUC según el algoritmo oficial de SUNAT. Verifique que tenga 11 dígitos y que el dígito verificador sea correcto.
-
-**P: ¿Puedo modificar un requerimiento ya enviado?**
-R: Los requerimientos enviados no se pueden modificar. Si necesita cambios, debe crear uno nuevo.
-
-### 10.5 Recursos Humanos
-
-**P: ¿Cómo registro ausencias?**
-R: No registre entrada ni salida para ese empleado en esa fecha. El sistema lo marcará automáticamente como ausente.
-
-**P: ¿El sistema calcula horas extra automáticamente?**
-R: Debe registrar manualmente las horas extra en el campo correspondiente. El sistema las sumará al total de horas trabajadas.
-
-### 10.6 General
-
-**P: ¿Por qué no veo todas las opciones del menú?**
-R: El sistema muestra solo las funciones disponibles para su rol. Contacte al administrador si necesita permisos adicionales.
-
-**P: ¿Cómo recupero mi contraseña?**
-R: Contacte al administrador del sistema. No hay opción de recuperación automática por seguridad.
-
-**P: ¿El sistema guarda un historial de cambios?**
-R: Sí. Todas las operaciones quedan registradas en el sistema de auditoría con fecha, hora, usuario e IP.
-
----
-
-## CONTACTO Y SOPORTE
-
-**Mesa de Ayuda**: soporte@iesppgal.edu.pe  
-**Teléfono**: (01) 123-4567  
-**Horario de Atención**: Lunes a Viernes, 8:00 AM - 5:00 PM
-
-**Para Emergencias Fuera de Horario**:  
-Contactar al Administrador del Sistema: admin@iesppgal.edu.pe
-
----
-
-**MANUAL DE USUARIO OFICIAL**  
-**Módulo Tesorería y Administración**  
-**Sistema Integral Académico IESPP "Gustavo Allende Llavería"**  
-**Versión 1.0 - Septiembre 2024**
+**Versión del Manual**: 1.0  
+**Última actualización**: Septiembre 2024  
+**Sistema versión**: 2.0.0
