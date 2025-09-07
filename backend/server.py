@@ -66,7 +66,8 @@ except ImportError as e:
     ROUTES_AVAILABLE = False
 
 # Database connection - Optimized with connection pooling
-mongo_client = OptimizedMongoClient(mongo_url, os.environ['DB_NAME'])
+mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+mongo_client = OptimizedMongoClient(mongo_url, os.environ.get('DB_NAME', 'test_database'))
 db = mongo_client.get_database()
 
 # Security setup
