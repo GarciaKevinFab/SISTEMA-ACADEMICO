@@ -1,7 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Request, File, UploadFile
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, validator
@@ -19,6 +19,17 @@ import pandas as pd
 import qrcode
 import io
 import base64
+
+# Import structured logging
+from logging_middleware import (
+    setup_logging, 
+    CorrelationIdMiddleware, 
+    get_correlation_id,
+    log_with_correlation,
+    ErrorResponse,
+    ErrorCodes,
+    create_standardized_exception_handler
+)
 
 # Import all modules
 from finance_models import *
