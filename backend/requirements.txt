@@ -27,3 +27,6 @@ qrcode>=7.4.2
 Pillow>=10.0.0
 openpyxl>=3.1.0
 reportlab>=4.0.0
+orjson>=3.9.0
+redis>=5.0.0
+aioredis>=2.0.0
