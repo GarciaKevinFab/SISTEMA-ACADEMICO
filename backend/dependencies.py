@@ -100,7 +100,6 @@ async def send_procedure_notification(
 ):
     """Send email notification and log it"""
     from server import NotificationLog  # Lazy import to avoid circular dependency
-from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_one_and_update, MongoUpdateError
     
     # En un entorno real, aquí se integraría con un servicio de email como SendGrid
     # Por ahora, solo registramos la notificación
