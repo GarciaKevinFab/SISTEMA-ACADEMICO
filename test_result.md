@@ -202,7 +202,7 @@ backend:
     implemented: true
     working: false
     file: "server.py"
-    stuck_count: 1
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
@@ -218,6 +218,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ CRITICAL ISSUES: 1) FIFO cost calculations incorrect - expected 930.0 but got 955.0 for test scenario (50@15 + 30@18, exit 60), 2) Negative stock prevention not working - system allows exits exceeding available stock, 3) Concurrent operations working but race conditions may affect data integrity. Basic FIFO operations work but cost accuracy and stock validation need fixes."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL FAILURE: FIFO inventory system completely broken. 1) Inventory movement endpoints failing - entry/exit movements not working, 2) FIFO cost calculations returning S/0.00 instead of expected S/930.00 for critical test scenario (50@15 + 30@18, exit 60), 3) Negative stock prevention not working, 4) Concurrent operations failing (0/5 successful). Only inventory item creation works. REQUIRES IMMEDIATE FIX - core inventory functionality non-operational."
 
   - task: "Logistics APIs"
     implemented: true
