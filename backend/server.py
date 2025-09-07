@@ -20,10 +20,13 @@ import qrcode
 import io
 import base64
 
-# Import finance modules
+# Import all modules
 from finance_models import *
 from finance_enums import *
 from finance_utils import *
+from academic_models import *
+from academic_routes import academic_router
+from minedu_integration import minedu_router
 
 # Configuration and setup
 ROOT_DIR = Path(__file__).parent
