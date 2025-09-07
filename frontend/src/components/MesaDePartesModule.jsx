@@ -11,28 +11,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from './ui/textarea';
 import { 
   FileText, 
-  Plus, 
-  Search, 
-  Eye, 
-  Edit, 
-  Upload,
-  Download,
-  Clock,
-  CheckCircle,
-  XCircle,
+  Clock, 
+  CheckCircle, 
   AlertCircle,
-  Users,
+  Plus,
+  Search,
+  Eye,
+  Download,
+  Upload,
+  QrCode,
   BarChart3,
+  Users,
   Calendar,
-  Filter
+  TrendingUp
 } from 'lucide-react';
 import axios from 'axios';
-import { toast } from '../hooks/use-toast';
+import { toast } from 'sonner';
 
-const API = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001/api';
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 // Mesa de Partes Dashboard Component
-const MesaPartesDashboard = () => {
+const MesaDePartesDashboard = () => {
   const { user } = useContext(AuthContext);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
@@ -43,7 +42,7 @@ const MesaPartesDashboard = () => {
 
   const fetchDashboardStats = async () => {
     try {
-      const response = await axios.get(`${API}/mesa-partes/dashboard/stats`);
+      const response = await axios.get(`${API}/dashboard/stats`);
       setStats(response.data.stats);
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
@@ -65,82 +64,58 @@ const MesaPartesDashboard = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Mesa de Partes Virtual</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Mesa de Partes Digital</h2>
           <p className="text-muted-foreground">
-            Sistema digital de gestión de trámites y procedimientos
+            Sistema de gestión de trámites documentarios
           </p>
         </div>
       </div>
 
       {/* Quick Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {user?.role === 'ADMIN' || user?.role === 'ADMIN_WORKER' ? (
-          <>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Trámites</CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.total_procedures || 0}</div>
-                <p className="text-xs text-muted-foreground">Todos los trámites</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.pending_procedures || 0}</div>
-                <p className="text-xs text-muted-foreground">Por atender</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">En Proceso</CardTitle>
-                <AlertCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.in_process_procedures || 0}</div>
-                <p className="text-xs text-muted-foreground">En revisión</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Vencidos</CardTitle>
-                <XCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">{stats.overdue_procedures || 0}</div>
-                <p className="text-xs text-muted-foreground">Fuera de plazo</p>
-              </CardContent>
-            </Card>
-          </>
-        ) : (
-          <>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Mis Trámites</CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.my_procedures || 0}</div>
-                <p className="text-xs text-muted-foreground">Total presentados</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.my_pending || 0}</div>
-                <p className="text-xs text-muted-foreground">En proceso</p>
-              </CardContent>
-            </Card>
-          </>
-        )}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Trámites Pendientes</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.pending_procedures || 0}</div>
+            <p className="text-xs text-muted-foreground">Requieren atención</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Completados Hoy</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.completed_today || 0}</div>
+            <p className="text-xs text-muted-foreground">Trámites finalizados</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Tiempo Promedio</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.avg_processing_time || '0'} días</div>
+            <p className="text-xs text-muted-foreground">Tiempo de procesamiento</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Tipos de Trámite</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.procedure_types || 0}</div>
+            <p className="text-xs text-muted-foreground">Tipos disponibles</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Quick Actions */}
@@ -148,7 +123,7 @@ const MesaPartesDashboard = () => {
         <CardHeader>
           <CardTitle>Acciones Rápidas</CardTitle>
           <CardDescription>
-            Acceso directo a las funciones principales del módulo de trámites
+            Acceso directo a las funciones principales de Mesa de Partes
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -157,24 +132,18 @@ const MesaPartesDashboard = () => {
               <Plus className="h-6 w-6" />
               <span className="text-sm">Nuevo Trámite</span>
             </Button>
-            
             <Button variant="outline" className="h-20 flex flex-col gap-2">
               <Search className="h-6 w-6" />
-              <span className="text-sm">Seguimiento</span>
+              <span className="text-sm">Consultar Estado</span>
             </Button>
-            
-            {(user?.role === 'ADMIN' || user?.role === 'ADMIN_WORKER') && (
-              <>
-                <Button variant="outline" className="h-20 flex flex-col gap-2">
-                  <Users className="h-6 w-6" />
-                  <span className="text-sm">Gestionar Trámites</span>
-                </Button>
-                <Button variant="outline" className="h-20 flex flex-col gap-2">
-                  <BarChart3 className="h-6 w-6" />
-                  <span className="text-sm">Reportes</span>
-                </Button>
-              </>
-            )}
+            <Button variant="outline" className="h-20 flex flex-col gap-2">
+              <QrCode className="h-6 w-6" />
+              <span className="text-sm">Generar QR</span>
+            </Button>
+            <Button variant="outline" className="h-20 flex flex-col gap-2">
+              <BarChart3 className="h-6 w-6" />
+              <span className="text-sm">Reportes</span>
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -184,16 +153,15 @@ const MesaPartesDashboard = () => {
 
 // Procedure Types Management Component
 const ProcedureTypesManagement = () => {
-  const { user } = useContext(AuthContext);
   const [procedureTypes, setProcedureTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    area: 'ACADEMIC',
-    required_documents: [],
+    required_documents: '',
     processing_days: 5,
+    cost: 0,
     is_active: true
   });
 
@@ -203,7 +171,7 @@ const ProcedureTypesManagement = () => {
 
   const fetchProcedureTypes = async () => {
     try {
-      const response = await axios.get(`${API}/mesa-partes/procedure-types`);
+      const response = await axios.get(`${API}/procedure-types`);
       setProcedureTypes(response.data.procedure_types);
     } catch (error) {
       console.error('Error fetching procedure types:', error);
@@ -216,7 +184,7 @@ const ProcedureTypesManagement = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/mesa-partes/procedure-types`, formData);
+      await axios.post(`${API}/procedure-types`, formData);
       toast.success('Tipo de trámite creado exitosamente');
       setIsCreateModalOpen(false);
       resetForm();
@@ -230,9 +198,9 @@ const ProcedureTypesManagement = () => {
     setFormData({
       name: '',
       description: '',
-      area: 'ACADEMIC',
-      required_documents: [],
+      required_documents: '',
       processing_days: 5,
+      cost: 0,
       is_active: true
     });
   };
@@ -249,84 +217,87 @@ const ProcedureTypesManagement = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Tipos de Trámite</h2>
-        {user?.role === 'ADMIN' && (
-          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="h-4 w-4 mr-2" />
-                Nuevo Tipo
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Crear Tipo de Trámite</DialogTitle>
-                <DialogDescription>
-                  Configure un nuevo tipo de trámite para el sistema
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Nombre del Trámite *</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    required
-                    placeholder="Ej: Constancia de Estudios"
-                  />
-                </div>
-                
-                <div>
-                  <Label htmlFor="description">Descripción</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    placeholder="Descripción del trámite"
-                  />
-                </div>
+        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="h-4 w-4 mr-2" />
+              Nuevo Tipo de Trámite
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Crear Nuevo Tipo de Trámite</DialogTitle>
+              <DialogDescription>
+                Configure un nuevo tipo de trámite documentario
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="name">Nombre del Trámite *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  required
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="description">Descripción</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                />
+              </div>
 
-                <div>
-                  <Label htmlFor="area">Área Responsable *</Label>
-                  <Select value={formData.area} onValueChange={(value) => setFormData({...formData, area: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ACADEMIC">Académica</SelectItem>
-                      <SelectItem value="ADMINISTRATIVE">Administrativa</SelectItem>
-                      <SelectItem value="FINANCIAL">Financiera</SelectItem>
-                      <SelectItem value="HR">Recursos Humanos</SelectItem>
-                      <SelectItem value="GENERAL">General</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div>
+                <Label htmlFor="required_documents">Documentos Requeridos</Label>
+                <Textarea
+                  id="required_documents"
+                  value={formData.required_documents}
+                  onChange={(e) => setFormData({...formData, required_documents: e.target.value})}
+                  placeholder="Liste los documentos necesarios para este trámite"
+                />
+              </div>
 
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="processing_days">Días de Procesamiento *</Label>
                   <Input
                     id="processing_days"
                     type="number"
                     min="1"
-                    max="365"
                     value={formData.processing_days}
                     onChange={(e) => setFormData({...formData, processing_days: parseInt(e.target.value)})}
                     required
                   />
                 </div>
-
-                <div className="flex justify-end space-x-2">
-                  <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                    Crear Tipo
-                  </Button>
+                <div>
+                  <Label htmlFor="cost">Costo (S/.) *</Label>
+                  <Input
+                    id="cost"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.cost}
+                    onChange={(e) => setFormData({...formData, cost: parseFloat(e.target.value)})}
+                    required
+                  />
                 </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        )}
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                  Crear Tipo de Trámite
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Procedure Types List */}
@@ -336,9 +307,9 @@ const ProcedureTypesManagement = () => {
             <table className="w-full">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Área</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Días Proc.</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo de Trámite</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Días</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Costo</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                 </tr>
@@ -353,10 +324,10 @@ const ProcedureTypesManagement = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {type.area}
+                      {type.processing_days} días
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {type.processing_days} días
+                      S/. {type.cost.toFixed(2)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <Badge variant={type.is_active ? 'default' : 'secondary'}>
@@ -368,11 +339,6 @@ const ProcedureTypesManagement = () => {
                         <Button variant="ghost" size="sm">
                           <Eye className="h-4 w-4" />
                         </Button>
-                        {user?.role === 'ADMIN' && (
-                          <Button variant="ghost" size="sm">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -388,24 +354,20 @@ const ProcedureTypesManagement = () => {
 
 // Procedures Management Component
 const ProceduresManagement = () => {
-  const { user } = useContext(AuthContext);
   const [procedures, setProcedures] = useState([]);
   const [procedureTypes, setProcedureTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [areaFilter, setAreaFilter] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     procedure_type_id: '',
-    subject: '',
-    description: '',
     applicant_name: '',
     applicant_email: '',
     applicant_phone: '',
     applicant_document: '',
-    priority: 'NORMAL',
-    observations: ''
+    description: '',
+    urgency_level: 'NORMAL'
   });
 
   useEffect(() => {
@@ -415,7 +377,7 @@ const ProceduresManagement = () => {
 
   const fetchProcedures = async () => {
     try {
-      const response = await axios.get(`${API}/mesa-partes/procedures`);
+      const response = await axios.get(`${API}/procedures`);
       setProcedures(response.data.procedures);
     } catch (error) {
       console.error('Error fetching procedures:', error);
@@ -427,8 +389,8 @@ const ProceduresManagement = () => {
 
   const fetchProcedureTypes = async () => {
     try {
-      const response = await axios.get(`${API}/mesa-partes/procedure-types`);
-      setProcedureTypes(response.data.procedure_types.filter(type => type.is_active));
+      const response = await axios.get(`${API}/procedure-types`);
+      setProcedureTypes(response.data.procedure_types);
     } catch (error) {
       console.error('Error fetching procedure types:', error);
     }
@@ -437,7 +399,7 @@ const ProceduresManagement = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/mesa-partes/procedures`, formData);
+      await axios.post(`${API}/procedures`, formData);
       toast.success('Trámite creado exitosamente');
       setIsCreateModalOpen(false);
       resetForm();
@@ -450,40 +412,38 @@ const ProceduresManagement = () => {
   const resetForm = () => {
     setFormData({
       procedure_type_id: '',
-      subject: '',
-      description: '',
       applicant_name: '',
       applicant_email: '',
       applicant_phone: '',
       applicant_document: '',
-      priority: 'NORMAL',
-      observations: ''
+      description: '',
+      urgency_level: 'NORMAL'
     });
-  };
-
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      'RECEIVED': { variant: 'secondary', label: 'Recibido' },
-      'IN_PROCESS': { variant: 'default', label: 'En Proceso' },
-      'COMPLETED': { variant: 'success', label: 'Completado' },
-      'REJECTED': { variant: 'destructive', label: 'Rechazado' }
-    };
-    
-    const config = statusConfig[status] || { variant: 'secondary', label: status };
-    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
   const filteredProcedures = procedures.filter(procedure => {
     const matchesSearch = 
       procedure.tracking_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      procedure.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (procedure.applicant_name && procedure.applicant_name.toLowerCase().includes(searchTerm.toLowerCase()));
+      procedure.applicant_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      procedure.procedure_type_name.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStatus = !statusFilter || statusFilter === 'ALL' || procedure.status === statusFilter;
-    const matchesArea = !areaFilter || areaFilter === 'ALL' || procedure.area === areaFilter;
+    const matchesStatus = !statusFilter || procedure.status === statusFilter;
     
-    return matchesSearch && matchesStatus && matchesArea;
+    return matchesSearch && matchesStatus;
   });
+
+  const getStatusBadge = (status) => {
+    const statusConfig = {
+      'RECEIVED': { variant: 'secondary', label: 'Recibido' },
+      'IN_REVIEW': { variant: 'default', label: 'En Revisión' },
+      'APPROVED': { variant: 'default', label: 'Aprobado' },
+      'REJECTED': { variant: 'destructive', label: 'Rechazado' },
+      'COMPLETED': { variant: 'default', label: 'Completado' }
+    };
+    
+    const config = statusConfig[status] || { variant: 'secondary', label: status };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
 
   if (loading) {
     return (
@@ -506,66 +466,43 @@ const ProceduresManagement = () => {
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Crear Nuevo Trámite</DialogTitle>
+              <DialogTitle>Registrar Nuevo Trámite</DialogTitle>
               <DialogDescription>
-                Complete los datos del trámite para iniciarlo en el sistema
+                Complete los datos del trámite documentario
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label htmlFor="procedure-type">Tipo de Trámite *</Label>
+                <Label htmlFor="procedure_type_id">Tipo de Trámite *</Label>
                 <Select value={formData.procedure_type_id} onValueChange={(value) => setFormData({...formData, procedure_type_id: value})}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccione el tipo de trámite" />
+                    <SelectValue placeholder="Seleccionar tipo de trámite" />
                   </SelectTrigger>
                   <SelectContent>
                     {procedureTypes.map(type => (
-                      <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
+                      <SelectItem key={type.id} value={type.id.toString()}>{type.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              
-              <div>
-                <Label htmlFor="subject">Asunto *</Label>
-                <Input
-                  id="subject"
-                  value={formData.subject}
-                  onChange={(e) => setFormData({...formData, subject: e.target.value})}
-                  required
-                  placeholder="Ingrese el asunto del trámite"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="description">Descripción *</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  required
-                  placeholder="Describa detalladamente el trámite solicitado"
-                  rows={3}
-                />
-              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="applicant_name">Nombre del Solicitante</Label>
+                  <Label htmlFor="applicant_name">Nombre del Solicitante *</Label>
                   <Input
                     id="applicant_name"
                     value={formData.applicant_name}
                     onChange={(e) => setFormData({...formData, applicant_name: e.target.value})}
-                    placeholder="Nombre completo"
+                    required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="applicant_document">Documento</Label>
+                  <Label htmlFor="applicant_document">Documento de Identidad *</Label>
                   <Input
                     id="applicant_document"
                     value={formData.applicant_document}
                     onChange={(e) => setFormData({...formData, applicant_document: e.target.value})}
-                    placeholder="DNI o documento"
+                    required
                   />
                 </div>
               </div>
@@ -578,7 +515,6 @@ const ProceduresManagement = () => {
                     type="email"
                     value={formData.applicant_email}
                     onChange={(e) => setFormData({...formData, applicant_email: e.target.value})}
-                    placeholder="correo@ejemplo.com"
                   />
                 </div>
                 <div>
@@ -587,14 +523,23 @@ const ProceduresManagement = () => {
                     id="applicant_phone"
                     value={formData.applicant_phone}
                     onChange={(e) => setFormData({...formData, applicant_phone: e.target.value})}
-                    placeholder="999-999-999"
                   />
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="priority">Prioridad</Label>
-                <Select value={formData.priority} onValueChange={(value) => setFormData({...formData, priority: value})}>
+                <Label htmlFor="description">Descripción del Trámite</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  placeholder="Describa los detalles específicos del trámite"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="urgency_level">Nivel de Urgencia</Label>
+                <Select value={formData.urgency_level} onValueChange={(value) => setFormData({...formData, urgency_level: value})}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -605,16 +550,6 @@ const ProceduresManagement = () => {
                     <SelectItem value="URGENT">Urgente</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="observations">Observaciones</Label>
-                <Textarea
-                  id="observations"
-                  value={formData.observations}
-                  onChange={(e) => setFormData({...formData, observations: e.target.value})}
-                  placeholder="Observaciones adicionales"
-                />
               </div>
 
               <div className="flex justify-end space-x-2">
@@ -636,7 +571,7 @@ const ProceduresManagement = () => {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
-              placeholder="Buscar por código, asunto o solicitante..."
+              placeholder="Buscar por código, nombre o tipo..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -648,23 +583,12 @@ const ProceduresManagement = () => {
             <SelectValue placeholder="Filtrar por estado" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">Todos los estados</SelectItem>
+            <SelectItem value="">Todos los estados</SelectItem>
             <SelectItem value="RECEIVED">Recibido</SelectItem>
-            <SelectItem value="IN_PROCESS">En Proceso</SelectItem>
-            <SelectItem value="COMPLETED">Completado</SelectItem>
+            <SelectItem value="IN_REVIEW">En Revisión</SelectItem>
+            <SelectItem value="APPROVED">Aprobado</SelectItem>
             <SelectItem value="REJECTED">Rechazado</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={areaFilter} onValueChange={setAreaFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filtrar por área" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Todas las áreas</SelectItem>
-            <SelectItem value="ACADEMIC">Académica</SelectItem>
-            <SelectItem value="ADMINISTRATIVE">Administrativa</SelectItem>
-            <SelectItem value="FINANCIAL">Financiera</SelectItem>
-            <SelectItem value="HR">Recursos Humanos</SelectItem>
+            <SelectItem value="COMPLETED">Completado</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -677,10 +601,9 @@ const ProceduresManagement = () => {
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asunto</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Solicitante</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Área</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                 </tr>
@@ -693,25 +616,15 @@ const ProceduresManagement = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{procedure.subject}</div>
-                        <div className="text-sm text-gray-500">
-                          {procedure.procedure_type_info?.[0]?.name || 'N/A'}
-                        </div>
+                        <div className="text-sm font-medium text-gray-900">{procedure.applicant_name}</div>
+                        <div className="text-sm text-gray-500">{procedure.applicant_document}</div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {procedure.applicant_name || 'N/A'}
-                        </div>
-                        <div className="text-sm text-gray-500">{procedure.applicant_email}</div>
-                      </div>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {procedure.procedure_type_name}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {getStatusBadge(procedure.status)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {procedure.area}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {new Date(procedure.created_at).toLocaleDateString()}
@@ -721,11 +634,9 @@ const ProceduresManagement = () => {
                         <Button variant="ghost" size="sm">
                           <Eye className="h-4 w-4" />
                         </Button>
-                        {(user?.role === 'ADMIN' || user?.role === 'ADMIN_WORKER') && (
-                          <Button variant="ghost" size="sm">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        )}
+                        <Button variant="ghost" size="sm">
+                          <QrCode className="h-4 w-4" />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -735,185 +646,6 @@ const ProceduresManagement = () => {
           </div>
         </CardContent>
       </Card>
-
-      {filteredProcedures.length === 0 && (
-        <div className="text-center py-12">
-          <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No se encontraron trámites</h3>
-          <p className="text-gray-500 mb-4">
-            {searchTerm || statusFilter || areaFilter 
-              ? 'No hay trámites que coincidan con los filtros aplicados.' 
-              : 'Aún no hay trámites registrados en el sistema.'
-            }
-          </p>
-          {!searchTerm && !statusFilter && !areaFilter && (
-            <Button onClick={() => setIsCreateModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="h-4 w-4 mr-2" />
-              Crear Primer Trámite
-            </Button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Public Tracking Component
-const PublicTracking = () => {
-  const [trackingCode, setTrackingCode] = useState('');
-  const [procedure, setProcedure] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleTracking = async (e) => {
-    e.preventDefault();
-    if (!trackingCode.trim()) return;
-
-    setLoading(true);
-    setError(null);
-    setProcedure(null);
-
-    try {
-      const response = await axios.get(`${API}/mesa-partes/procedures/${trackingCode}`);
-      setProcedure(response.data.procedure);
-    } catch (error) {
-      if (error.response?.status === 404) {
-        setError('Trámite no encontrado. Verifique el código ingresado.');
-      } else {
-        setError('Error al consultar el trámite. Intente nuevamente.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Seguimiento de Trámite</h2>
-        <p className="text-gray-600">Consulte el estado de su trámite ingresando el código de seguimiento</p>
-      </div>
-
-      {/* Tracking Form */}
-      <Card>
-        <CardContent className="p-6">
-          <form onSubmit={handleTracking} className="space-y-4">
-            <div>
-              <Label htmlFor="tracking-code">Código de Seguimiento</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="tracking-code"
-                  value={trackingCode}
-                  onChange={(e) => setTrackingCode(e.target.value)}
-                  placeholder="Ej: IESPP-20241201-ABC123"
-                  className="flex-1"
-                />
-                <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700">
-                  {loading ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  ) : (
-                    <>
-                      <Search className="h-4 w-4 mr-2" />
-                      Consultar
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-
-      {/* Error Message */}
-      {error && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-red-700">
-              <XCircle className="h-5 w-5" />
-              <span>{error}</span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Procedure Details */}
-      {procedure && (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Información del Trámite
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Código de Seguimiento</Label>
-                  <div className="font-mono font-bold text-lg">{procedure.tracking_code}</div>
-                </div>
-                <div>
-                  <Label>Estado Actual</Label>
-                  <div className="mt-1">
-                    {procedure.status === 'RECEIVED' && <Badge variant="secondary">Recibido</Badge>}
-                    {procedure.status === 'IN_PROCESS' && <Badge variant="default">En Proceso</Badge>}
-                    {procedure.status === 'COMPLETED' && <Badge variant="success">Completado</Badge>}
-                    {procedure.status === 'REJECTED' && <Badge variant="destructive">Rechazado</Badge>}
-                  </div>
-                </div>
-                <div>
-                  <Label>Asunto</Label>
-                  <div>{procedure.subject}</div>
-                </div>
-                <div>
-                  <Label>Tipo de Trámite</Label>
-                  <div>{procedure.procedure_type || 'N/A'}</div>
-                </div>
-                <div>
-                  <Label>Fecha de Presentación</Label>
-                  <div>{new Date(procedure.created_at).toLocaleDateString()}</div>
-                </div>
-                <div>
-                  <Label>Fecha Límite</Label>
-                  <div>{new Date(procedure.deadline).toLocaleDateString()}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Timeline */}
-          {procedure.timeline && procedure.timeline.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Historial del Trámite
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {procedure.timeline.map((event, index) => (
-                    <div key={index} className="flex items-start gap-4">
-                      <div className="flex-shrink-0">
-                        <div className="w-3 h-3 bg-blue-600 rounded-full mt-2"></div>
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium">{event.action}</div>
-                        {event.comment && (
-                          <div className="text-sm text-gray-600">{event.comment}</div>
-                        )}
-                        <div className="text-xs text-gray-500 mt-1">
-                          {new Date(event.performed_at).toLocaleString()}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
     </div>
   );
 };
@@ -922,41 +654,36 @@ const PublicTracking = () => {
 const MesaDePartesModule = () => {
   const { user } = useContext(AuthContext);
 
+  if (!user) {
+    return <div>Acceso no autorizado</div>;
+  }
+
   return (
     <div className="p-6">
       <Tabs defaultValue="dashboard" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          <TabsTrigger value="types">Tipos de Trámite</TabsTrigger>
           <TabsTrigger value="procedures">Trámites</TabsTrigger>
-          <TabsTrigger value="tracking">Seguimiento</TabsTrigger>
-          {user?.role === 'ADMIN' && (
-            <TabsTrigger value="procedure-types">Tipos</TabsTrigger>
-          )}
           <TabsTrigger value="reports">Reportes</TabsTrigger>
         </TabsList>
         
         <TabsContent value="dashboard">
-          <MesaPartesDashboard />
+          <MesaDePartesDashboard />
+        </TabsContent>
+        
+        <TabsContent value="types">
+          <ProcedureTypesManagement />
         </TabsContent>
         
         <TabsContent value="procedures">
           <ProceduresManagement />
         </TabsContent>
-
-        <TabsContent value="tracking">
-          <PublicTracking />
-        </TabsContent>
-        
-        {user?.role === 'ADMIN' && (
-          <TabsContent value="procedure-types">
-            <ProcedureTypesManagement />
-          </TabsContent>
-        )}
         
         <TabsContent value="reports">
           <div className="space-y-4">
             <h2 className="text-2xl font-bold">Reportes de Mesa de Partes</h2>
-            <p className="text-gray-600">Sistema de reportes y estadísticas de trámites.</p>
+            <p className="text-gray-600">Reportes estadísticos y de seguimiento de trámites.</p>
             <Card className="p-6">
               <CardContent>
                 <p className="text-center text-gray-500">Módulo de reportes completamente implementado.</p>
