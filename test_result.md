@@ -318,11 +318,14 @@ backend:
     file: "server.py"
     stuck_count: 1
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: false
         agent: "testing"
         comment: "❌ CRITICAL: Advanced inventory testing revealed issues. 1) FIFO cost calculations incorrect (got 955.0 vs expected 930.0), 2) Negative stock prevention not working - allows over-exits, 3) Concurrent operations work but may have race conditions. Kardex generation works and is chronological. Basic FIFO works but accuracy and validation need fixes."
+      - working: false
+        agent: "testing"
+        comment: "❌ PARTIAL: Inventory item creation working correctly (✅), but FIFO cost calculations still incorrect - returning 0 instead of expected 930.0 for test scenario (50@15 + 30@18, exit 60). The calculate_inventory_fifo function exists but may not be properly calculating or returning costs. Negative stock prevention logic exists in code but needs validation. Core inventory operations work but cost accuracy critical for production."
 
   - task: "Complete Logistics Workflow (PO Lifecycle, Receptions, Validations)"
     implemented: false
