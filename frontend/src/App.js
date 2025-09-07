@@ -427,6 +427,13 @@ const ProtectedRoute = ({ children }) => {
 
 // Main App Component
 function App() {
+  // Add TEST_MODE support for disabling animations
+  useEffect(() => {
+    if (process.env.REACT_APP_TEST_MODE === 'true' || window.location.search.includes('test=true')) {
+      document.body.classList.add('reduce-motion');
+    }
+  }, []);
+
   return (
     <AuthProvider>
       <Router>
