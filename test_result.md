@@ -483,20 +483,19 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Academic Routes Module (Circular Import Resolution)"
-    - "Mesa de Partes Module (Circular Import Resolution)"
-    - "MINEDU Integration Module (Circular Import Resolution)"
-    - "Admission Module Advanced Features"
     - "RUC Validation Logic (Regression - All Tests Failing)"
     - "Performance Optimization (P95 Latency Too High)"
+    - "Complete Logistics Workflow (PO Lifecycle, Receptions, Validations)"
+    - "Advanced HR Features (Bulk Import, Contracts, Timezone Handling)"
+    - "Audit & Security Features (Immutable Logs, Data Masking, Correlation-ID)"
   stuck_tasks:
-    - "Academic Routes Module"
-    - "Mesa de Partes Module"
-    - "MINEDU Integration Module"
     - "RUC Validation Logic"
     - "Performance Optimization"
+    - "Complete Logistics Workflow"
+    - "Advanced HR Features"
+    - "Audit & Security Features"
   test_all: false
-  test_priority: "circular_imports_first_then_academic_modules"
+  test_priority: "academic_complete_focus_remaining_modules"
 
 agent_communication:
   - agent: "main"
