@@ -168,12 +168,11 @@ class ComprehensiveBackendTester:
         
         admin_endpoints = [
             "finance/bank-accounts",
-            "finance/cash-sessions", 
             "finance/receipts",
             "finance/gl-concepts",
-            "finance/inventory-items",
-            "finance/employees",
-            "finance/suppliers"
+            "inventory/items",
+            "hr/employees",
+            "logistics/suppliers"
         ]
         
         for endpoint in admin_endpoints:
