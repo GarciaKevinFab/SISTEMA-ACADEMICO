@@ -480,16 +480,19 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Advanced Receipts Module (Void/Refund/Idempotency)"
-    - "Enhanced Cash & Banks (Reconciliation/Mandatory Count)"
+    - "FIFO Inventory Cost Calculation (CRITICAL - Completely Broken)"
+    - "Inventory Movement Endpoints (Entry/Exit Not Working)"
+    - "RUC Validation Logic (Regression - All Tests Failing)"
+    - "Bank Account Creation (Endpoint Issues)"
+    - "Performance Optimization (P95 Latency Too High)"
+    - "Receipt Void Functionality"
+    - "HR Attendance Auto-Calculation"
+  stuck_tasks:
     - "FIFO Inventory Cost Calculation"
-    - "Role-based Permissions (ADMIN Access)"
-    - "Purchase Order Lifecycle"
-    - "HR Bulk Import"
-    - "Audit & Security Features"
-  stuck_tasks: []
+    - "RUC Validation Logic"
+    - "Performance Optimization"
   test_all: true
-  test_priority: "comprehensive_validation"
+  test_priority: "critical_fixes_required"
 
 agent_communication:
   - agent: "main"
