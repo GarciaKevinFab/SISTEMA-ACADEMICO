@@ -438,7 +438,7 @@ async def update_grade(
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
         
-        await db.await safe_update_one(enrollments, 
+        await safe_update_one(db.enrollments, 
             {"id": enrollment_id},
             {"$set": update_data}
         )
@@ -488,7 +488,7 @@ async def update_attendance(
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
         
-        await db.await safe_update_one(enrollments, 
+        await safe_update_one(db.enrollments, 
             {"id": enrollment_id},
             {"$set": update_data}
         )
