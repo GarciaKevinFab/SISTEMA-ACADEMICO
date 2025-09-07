@@ -1109,10 +1109,31 @@ async def register_user(user_data: UserCreate):
     }
 
 @api_router.post("/auth/login")
-async def login_user(user_credentials: UserLogin):
+async def login_user(user_credentials: UserLogin, request: Request):
+    correlation_id = get_correlation_id(request)
+    auth_logger = logging.getLogger("api.auth")
+    
+    log_with_correlation(
+        auth_logger, "info", 
+        f"Login attempt for username: {user_credentials.username}",
+        request,
+        extra_data={"username": user_credentials.username}
+    )
+    
     user = await db.users.find_one({"username": user_credentials.username})
     if not user or not verify_password(user_credentials.password, user['password']):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        log_with_correlation(
+            auth_logger, "warning", 
+            f"Failed login attempt for username: {user_credentials.username}",
+            request,
+            extra_data={"username": user_credentials.username, "reason": "invalid_credentials"}
+        )
+        return ErrorResponse.create(
+            code=ErrorCodes.AUTHENTICATION_ERROR,
+            message="Credenciales inválidas",
+            correlation_id=correlation_id,
+            status_code=401
+        )
     
     # Update last login
     await db.users.update_one(
@@ -1128,11 +1149,20 @@ async def login_user(user_credentials: UserLogin):
     
     user_obj = User(**user)
     
+    log_with_correlation(
+        auth_logger, "info", 
+        f"Successful login for user: {user_credentials.username}",
+        request,
+        user_data=user,
+        extra_data={"role": user['role']}
+    )
+    
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "user": user_obj,
-        "message": "Login successful"
+        "message": "Login successful",
+        "correlation_id": correlation_id
     }
 
 @api_router.get("/auth/me")
