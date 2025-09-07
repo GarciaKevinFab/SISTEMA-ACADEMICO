@@ -1,18 +1,17 @@
 """
 Shared dependencies to avoid circular imports
 """
-from fastapi import HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from motor.motor_asyncio import AsyncIOMotorClient
-from dotenv import load_dotenv
-from jose import JWTError, jwt
-from datetime import datetime, timedelta, date
 import os
 import logging
-import uuid
+from motor.motor_asyncio import AsyncIOMotorClient
+from fastapi import HTTPException, Depends, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import JWTError, jwt
+from dotenv import load_dotenv
 from pathlib import Path
+from logging_middleware import get_correlation_id, log_with_correlation
 
-# Configuration and setup
+# Load environment
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -21,106 +20,84 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Security setup
+# Security
 SECRET_KEY = os.environ.get("SECRET_KEY", "your-secret-key-here")
 ALGORITHM = "HS256"
 security = HTTPBearer()
 
 # Logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request = None
+):
+    """Get current authenticated user with correlation logging"""
+    correlation_id = get_correlation_id(request) if request else None
+    
     try:
         token = credentials.credentials
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
+            if request:
+                log_with_correlation(
+                    logger, "warning", 
+                    "Invalid token - no username in payload", 
+                    request,
+                    extra_data={"correlation_id": correlation_id}
+                )
+            raise HTTPException(status_code=401, detail="Token inválido")
         
         user = await db.users.find_one({"username": username})
         if user is None:
-            raise HTTPException(status_code=401, detail="User not found")
+            if request:
+                log_with_correlation(
+                    logger, "warning", 
+                    f"User not found for username: {username}", 
+                    request,
+                    extra_data={"correlation_id": correlation_id}
+                )
+            raise HTTPException(status_code=401, detail="Usuario no encontrado")
+        
+        if request:
+            log_with_correlation(
+                logger, "debug", 
+                f"User authenticated successfully: {username}", 
+                request,
+                user_data=user,
+                extra_data={"correlation_id": correlation_id}
+            )
         
         return user
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        
+    except JWTError as e:
+        if request:
+            log_with_correlation(
+                logger, "warning", 
+                f"JWT error during authentication: {str(e)}", 
+                request,
+                extra_data={"correlation_id": correlation_id}
+            )
+        raise HTTPException(status_code=401, detail="Token inválido")
+    except HTTPException:
+        raise
+    except Exception as e:
+        if request:
+            log_with_correlation(
+                logger, "error", 
+                f"Unexpected error during authentication: {str(e)}", 
+                request,
+                extra_data={"correlation_id": correlation_id}
+            )
+        raise HTTPException(status_code=500, detail="Error de autenticación")
 
-def generate_tracking_code() -> str:
-    """Generate unique tracking code for procedures"""
-    timestamp = datetime.now().strftime('%Y%m%d')
-    random_part = str(uuid.uuid4())[:8].upper()
-    return f"IESPP-{timestamp}-{random_part}"
-
-def calculate_deadline(processing_days: int) -> datetime:
-    """Calculate deadline based on processing days (excluding weekends)"""
-    current_date = datetime.now()
-    days_added = 0
-    while days_added < processing_days:
-        current_date += timedelta(days=1)
-        # Skip weekends (Saturday=5, Sunday=6)
-        if current_date.weekday() < 5:
-            days_added += 1
-    return current_date
-
-async def log_procedure_action(
-    procedure_id: str, 
-    action: str, 
-    performed_by: str, 
-    previous_status: str = None, 
-    new_status: str = None, 
-    comment: str = None,
-    ip_address: str = None
+async def get_optional_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-    """Log procedure actions for audit trail"""
-    from server import ProcedureLog  # Import here to avoid circular import
-    
-    log_entry = ProcedureLog(
-        procedure_id=procedure_id,
-        action=action,
-        previous_status=previous_status,
-        new_status=new_status,
-        comment=comment,
-        performed_by=performed_by,
-        ip_address=ip_address
-    )
-    
-    log_doc = log_entry.dict()
-    await db.procedure_logs.insert_one(log_doc)
-    return log_entry
-
-async def send_procedure_notification(
-    procedure_id: str,
-    recipient_email: str,
-    notification_type: str,
-    subject: str,
-    content: str
-):
-    """Send email notification and log it"""
-    from server import NotificationLog  # Import here to avoid circular import
-    
-    # En un entorno real, aquí se integraría con un servicio de email como SendGrid
-    # Por ahora, solo registramos la notificación
-    notification = NotificationLog(
-        procedure_id=procedure_id,
-        recipient_email=recipient_email,
-        notification_type=notification_type,
-        subject=subject,
-        content=content,
-        delivery_status="SENT"  # Simulamos envío exitoso
-    )
-    
-    notification_doc = notification.dict()
-    await db.notification_logs.insert_one(notification_doc)
-    
-    # Actualizar contador de notificaciones en el trámite
-    await db.procedures.update_one(
-        {"id": procedure_id},
-        {
-            "$inc": {"email_notifications_sent": 1},
-            "$set": {"last_notification_sent": datetime.utcnow()}
-        }
-    )
-    
-    logger.info(f"Notification sent to {recipient_email} for procedure {procedure_id}")
-    return notification
+    """Get current user but don't fail if not authenticated"""
+    try:
+        return await get_current_user(credentials, request)
+    except HTTPException:
+        return None
