@@ -109,12 +109,11 @@ class TargetedTester:
 
         # 2. Add entry: 50 units @ S/15.00 cost
         entry1_data = {
-            "inventory_item_id": item_id,
+            "item_id": item_id,
             "movement_type": "ENTRY",
             "quantity": 50,
             "unit_cost": 15.00,
-            "total_cost": 750.00,  # 50 * 15.00
-            "reference": "FIFO Test Entry 1",
+            "reason": "FIFO Test Entry 1",
             "notes": "First FIFO entry - 50 units at 15.00"
         }
 
