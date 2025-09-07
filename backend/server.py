@@ -25,7 +25,7 @@ from finance_models import *
 from finance_enums import *
 from finance_utils import *
 from academic_models import *
-# Temporarily comment out problematic imports
+# Removed problematic imports to fix circular dependencies
 # from academic_routes import academic_router
 # from minedu_integration import minedu_router
 # from mesa_partes_routes import mesa_partes_router
