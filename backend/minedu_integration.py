@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import uuid
 import json
 
-from server import get_current_user, db, logger
+from shared_deps import get_current_user, db, logger
 
 minedu_router = APIRouter(prefix="/minedu", tags=["MINEDU Integration"])
 
