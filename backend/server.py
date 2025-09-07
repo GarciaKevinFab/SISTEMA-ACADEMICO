@@ -64,10 +64,13 @@ except ImportError as e:
     logger.warning(f"Could not import route modules: {e}")
     ROUTES_AVAILABLE = False
 
-# Database connection - Optimized with connection pooling
+# Database connection - FIXED with proper connection pooling
 mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-mongo_client = OptimizedMongoClient(mongo_url, os.environ.get('DB_NAME', 'test_database'))
+mongo_client = FixedMongoOptimizer(mongo_url, os.environ.get('DB_NAME', 'sistemaacademico'))
 db = mongo_client.get_database()
+
+# Performance tracker
+perf_tracker = PerformanceTracker()
 
 # Security setup
 SECRET_KEY = os.environ.get("SECRET_KEY", "your-secret-key-here")
