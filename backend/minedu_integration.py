@@ -516,7 +516,8 @@ async def process_single_minedu_export(export_id: str):
         logger.error(f"Error processing single MINEDU export {export_id}: {str(e)}")
         
         # Update status to failed
-        await db.await safe_update_one(minedu_exports, 
+        await safe_update_one(
+            db.minedu_exports,
             {"id": export_id},
             {
                 "$set": {
