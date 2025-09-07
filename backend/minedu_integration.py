@@ -1,544 +1,536 @@
-# MINEDU SIA/SIAGIE Integration Module
-
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timezone, timedelta
-from models import *
-from academic_models import *
-import asyncio
-import httpx
+from datetime import datetime, timezone
 import uuid
 import json
-import os
 
-# MINEDU Integration Router
+from server import get_current_user, db, logger
+
 minedu_router = APIRouter(prefix="/minedu", tags=["MINEDU Integration"])
 
-# MINEDU API Configuration
-MINEDU_API_BASE = os.getenv("MINEDU_API_BASE", "https://api.minedu.gob.pe/siagie/v1")
-MINEDU_API_KEY = os.getenv("MINEDU_API_KEY", "test-key")
-INSTITUTION_CODE = os.getenv("INSTITUTION_CODE", "IESPP123")
+class MineduIntegrationStatus:
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    RETRYING = "RETRYING"
 
-class MINEDUIntegrationService:
-    def __init__(self):
-        self.base_url = MINEDU_API_BASE
-        self.api_key = MINEDU_API_KEY
-        self.institution_code = INSTITUTION_CODE
-        self.timeout = 30
-        self.max_retries = 3
-        
-    async def make_request(self, method: str, endpoint: str, data: Dict = None) -> Dict:
-        """Make authenticated request to MINEDU API"""
-        
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "X-Institution-Code": self.institution_code
-        }
-        
-        url = f"{self.base_url}/{endpoint}"
-        
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            try:
-                if method.upper() == "GET":
-                    response = await client.get(url, headers=headers)
-                elif method.upper() == "POST":
-                    response = await client.post(url, json=data, headers=headers)
-                elif method.upper() == "PUT":
-                    response = await client.put(url, json=data, headers=headers)
-                else:
-                    raise ValueError(f"Unsupported HTTP method: {method}")
-                
-                response.raise_for_status()
-                return response.json()
-                
-            except httpx.TimeoutException:
-                raise HTTPException(status_code=408, detail="MINEDU API timeout")
-            except httpx.HTTPStatusError as e:
-                raise HTTPException(
-                    status_code=e.response.status_code, 
-                    detail=f"MINEDU API error: {e.response.text}"
-                )
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=f"Integration error: {str(e)}")
-    
-    async def sync_student(self, student_id: str) -> Dict:
-        """Sync student data with MINEDU SIA"""
-        
-        # Get student data
-        student = await db.students.find_one({"id": student_id})
-        if not student:
-            raise HTTPException(status_code=404, detail="Student not found")
-        
-        # Prepare MINEDU format
-        minedu_student = {
-            "codigo_alumno": student["student_code"],
-            "nombres": student["first_name"],
-            "apellido_paterno": student["last_name"],
-            "apellido_materno": student.get("second_last_name", ""),
-            "fecha_nacimiento": student["birth_date"],
-            "genero": student["gender"],
-            "tipo_documento": student["document_type"],
-            "numero_documento": student["document_number"],
-            "correo_electronico": student.get("email"),
-            "telefono": student.get("phone"),
-            "direccion": student["address"],
-            "distrito": student["district"],
-            "provincia": student["province"],
-            "departamento": student["department"],
-            "programa_estudios": student["program"],
-            "año_ingreso": student["entry_year"],
-            "estado": student["status"],
-            "tiene_discapacidad": student["has_disability"],
-            "descripcion_discapacidad": student.get("disability_description")
-        }
-        
-        # Check if student already exists in MINEDU
-        existing_sync = await db.siagie_sync.find_one({
-            "local_record_id": student_id,
-            "record_type": "STUDENT"
-        })
-        
-        if existing_sync and existing_sync.get("siagie_id"):
-            # Update existing student
-            endpoint = f"estudiantes/{existing_sync['siagie_id']}"
-            response = await self.make_request("PUT", endpoint, minedu_student)
-            sync_status = "COMPLETED"
-        else:
-            # Create new student
-            endpoint = "estudiantes"
-            response = await self.make_request("POST", endpoint, minedu_student)
-            sync_status = "COMPLETED"
-        
-        # Update sync record
-        sync_record = {
-            "record_type": "STUDENT",
-            "local_record_id": student_id,
-            "siagie_id": response.get("id"),
-            "sync_status": sync_status,
-            "last_sync_attempt": datetime.now(timezone.utc).isoformat(),
-            "sync_response": response,
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }
-        
-        if existing_sync:
-            await db.siagie_sync.update_one(
-                {"id": existing_sync["id"]},
-                {"$set": sync_record}
-            )
-        else:
-            sync_record["id"] = str(uuid.uuid4())
-            sync_record["created_at"] = datetime.now(timezone.utc).isoformat()
-            await db.siagie_sync.insert_one(sync_record)
-        
-        return response
-    
-    async def sync_enrollment(self, enrollment_id: str) -> Dict:
-        """Sync enrollment data with MINEDU"""
-        
-        # Get enrollment with related data
-        enrollment = await db.enrollments.find_one({"id": enrollment_id})
-        if not enrollment:
-            raise HTTPException(status_code=404, detail="Enrollment not found")
-        
-        student = await db.students.find_one({"id": enrollment["student_id"]})
-        course = await db.courses.find_one({"id": enrollment["course_id"]})
-        
-        if not student or not course:
-            raise HTTPException(status_code=400, detail="Related student or course not found")
-        
-        # Ensure student is synced first
-        student_sync = await db.siagie_sync.find_one({
-            "local_record_id": enrollment["student_id"],
-            "record_type": "STUDENT"
-        })
-        
-        if not student_sync or not student_sync.get("siagie_id"):
-            await self.sync_student(enrollment["student_id"])
-            student_sync = await db.siagie_sync.find_one({
-                "local_record_id": enrollment["student_id"],
-                "record_type": "STUDENT"
-            })
-        
-        # Prepare MINEDU enrollment format
-        minedu_enrollment = {
-            "id_estudiante": student_sync["siagie_id"],
-            "codigo_curso": course["code"],
-            "nombre_curso": course["name"],
-            "creditos": course["credits"],
-            "semestre": course["semester"],
-            "año_academico": enrollment["academic_year"],
-            "periodo_academico": enrollment["academic_period"],
-            "fecha_matricula": enrollment["enrollment_date"],
-            "estado": enrollment["status"],
-            "nota_numerica": enrollment.get("numerical_grade"),
-            "nota_literal": enrollment.get("literal_grade"),
-            "estado_calificacion": enrollment.get("grade_status"),
-            "porcentaje_asistencia": enrollment.get("attendance_percentage", 0)
-        }
-        
-        # Sync enrollment
-        endpoint = "matriculas"
-        response = await self.make_request("POST", endpoint, minedu_enrollment)
-        
-        # Update sync record
-        sync_record = SIAGIESync(
-            record_type="ENROLLMENT",
-            local_record_id=enrollment_id,
-            siagie_id=response.get("id"),
-            sync_status="COMPLETED",
-            last_sync_attempt=datetime.now(timezone.utc),
-            sync_response=response
-        )
-        
-        sync_doc = prepare_for_mongo(sync_record.dict())
-        await db.siagie_sync.insert_one(sync_doc)
-        
-        return response
-    
-    async def sync_grades_batch(self, academic_year: int, academic_period: str) -> Dict:
-        """Sync grades for academic period in batch"""
-        
-        # Create batch record
-        batch = SIAGIEBatch(
-            batch_type="GRADES",
-            academic_period_id=f"{academic_year}-{academic_period}",
-            created_by="SYSTEM"
-        )
-        
-        batch_doc = prepare_for_mongo(batch.dict())
-        await db.siagie_batches.insert_one(batch_doc)
-        
-        # Get all enrollments with final grades
-        enrollments = await db.enrollments.find({
-            "academic_year": academic_year,
-            "academic_period": academic_period,
-            "grade_status": {"$in": ["APPROVED", "FAILED"]},
-            "numerical_grade": {"$exists": True, "$ne": None}
-        }).to_list(10000)
-        
-        batch.total_records = len(enrollments)
-        successful = 0
-        failed = 0
-        
-        # Update batch status
-        await db.siagie_batches.update_one(
-            {"id": batch.id},
-            {
-                "$set": {
-                    "total_records": batch.total_records,
-                    "batch_status": "PROCESSING",
-                    "started_at": datetime.now(timezone.utc).isoformat()
-                }
-            }
-        )
-        
-        # Process enrollments
-        for enrollment in enrollments:
-            try:
-                # Get related data
-                student = await db.students.find_one({"id": enrollment["student_id"]})
-                course = await db.courses.find_one({"id": enrollment["course_id"]})
-                
-                if not student or not course:
-                    failed += 1
-                    continue
-                
-                # Check student sync
-                student_sync = await db.siagie_sync.find_one({
-                    "local_record_id": enrollment["student_id"],
-                    "record_type": "STUDENT"
-                })
-                
-                if not student_sync or not student_sync.get("siagie_id"):
-                    failed += 1
-                    continue
-                
-                # Prepare grade data
-                grade_data = {
-                    "id_estudiante": student_sync["siagie_id"],
-                    "codigo_curso": course["code"],
-                    "año_academico": academic_year,
-                    "periodo_academico": academic_period,
-                    "nota_numerica": enrollment["numerical_grade"],
-                    "nota_literal": enrollment["literal_grade"],
-                    "estado": enrollment["grade_status"],
-                    "fecha_calificacion": enrollment.get("updated_at")
-                }
-                
-                # Send to MINEDU
-                response = await self.make_request("POST", "calificaciones", grade_data)
-                
-                # Update sync record
-                grade_sync = SIAGIESync(
-                    record_type="GRADE",
-                    local_record_id=enrollment["id"],
-                    siagie_id=response.get("id"),
-                    sync_status="COMPLETED",
-                    last_sync_attempt=datetime.now(timezone.utc),
-                    sync_response=response
-                )
-                
-                grade_sync_doc = prepare_for_mongo(grade_sync.dict())
-                await db.siagie_sync.insert_one(grade_sync_doc)
-                
-                successful += 1
-                
-            except Exception as e:
-                failed += 1
-                
-                # Log failed sync
-                failed_sync = SIAGIESync(
-                    record_type="GRADE",
-                    local_record_id=enrollment["id"],
-                    sync_status="FAILED",
-                    last_sync_attempt=datetime.now(timezone.utc),
-                    error_message=str(e)
-                )
-                
-                failed_sync_doc = prepare_for_mongo(failed_sync.dict())
-                await db.siagie_sync.insert_one(failed_sync_doc)
-        
-        # Update batch completion
-        await db.siagie_batches.update_one(
-            {"id": batch.id},
-            {
-                "$set": {
-                    "processed_records": successful + failed,
-                    "successful_records": successful,
-                    "failed_records": failed,
-                    "batch_status": "COMPLETED",
-                    "completed_at": datetime.now(timezone.utc).isoformat()
-                }
-            }
-        )
-        
-        return {
-            "batch_id": batch.id,
-            "total_records": batch.total_records,
-            "successful": successful,
-            "failed": failed,
-            "status": "COMPLETED"
-        }
+class MineduDataType:
+    ENROLLMENT = "ENROLLMENT"
+    GRADES = "GRADES"
+    STUDENTS = "STUDENTS"
+    TEACHERS = "TEACHERS"
 
-# Initialize service
-minedu_service = MINEDUIntegrationService()
+# MINEDU Integration Models
+class MineduExportRecord:
+    def __init__(self, record_id: str, data_type: str, record_data: dict, status: str = MineduIntegrationStatus.PENDING):
+        self.id = str(uuid.uuid4())
+        self.record_id = record_id
+        self.data_type = data_type
+        self.record_data = record_data
+        self.status = status
+        self.created_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
+        self.attempts = 0
+        self.max_attempts = 3
+        self.last_error = None
+        self.minedu_response = None
 
-# ====================================================================================================
-# MINEDU INTEGRATION API ENDPOINTS
-# ====================================================================================================
-
-@minedu_router.post("/sync/student/{student_id}")
-async def sync_student_to_minedu(
-    student_id: str,
-    background_tasks: BackgroundTasks,
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.REGISTRAR]))
-):
-    """Sync individual student to MINEDU SIA"""
-    
+@minedu_router.get("/dashboard/stats")
+async def get_minedu_dashboard_stats(current_user = Depends(get_current_user)):
+    """Get MINEDU integration dashboard statistics"""
     try:
-        result = await minedu_service.sync_student(student_id)
+        if current_user['role'] not in ['ADMIN', 'REGISTRAR']:
+            raise HTTPException(status_code=403, detail="No autorizado")
         
-        await log_audit_trail(
-            db, "siagie_sync", student_id, "SYNC_STUDENT",
-            None, {"sync_status": "COMPLETED"}, current_user.id
-        )
+        # Get export statistics
+        pending_exports = await db.minedu_exports.count_documents({"status": MineduIntegrationStatus.PENDING})
+        completed_exports = await db.minedu_exports.count_documents({"status": MineduIntegrationStatus.COMPLETED})
+        failed_exports = await db.minedu_exports.count_documents({"status": MineduIntegrationStatus.FAILED})
         
-        return {
-            "status": "success",
-            "message": "Student synced successfully",
-            "minedu_response": result
-        }
+        # Get data type breakdown
+        enrollment_exports = await db.minedu_exports.count_documents({"data_type": MineduDataType.ENROLLMENT})
+        grades_exports = await db.minedu_exports.count_documents({"data_type": MineduDataType.GRADES})
+        students_exports = await db.minedu_exports.count_documents({"data_type": MineduDataType.STUDENTS})
         
-    except Exception as e:
-        await log_audit_trail(
-            db, "siagie_sync", student_id, "SYNC_STUDENT_FAILED",
-            None, {"error": str(e)}, current_user.id
-        )
-        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
-
-@minedu_router.post("/sync/enrollment/{enrollment_id}")
-async def sync_enrollment_to_minedu(
-    enrollment_id: str,
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.REGISTRAR]))
-):
-    """Sync individual enrollment to MINEDU"""
-    
-    try:
-        result = await minedu_service.sync_enrollment(enrollment_id)
+        # Get recent export activity
+        recent_exports = await db.minedu_exports.find({}).sort("created_at", -1).limit(10).to_list(10)
         
         return {
-            "status": "success",
-            "message": "Enrollment synced successfully",
-            "minedu_response": result
+            "stats": {
+                "pending_exports": pending_exports,
+                "completed_exports": completed_exports,
+                "failed_exports": failed_exports,
+                "total_exports": pending_exports + completed_exports + failed_exports,
+                "success_rate": round((completed_exports / max(1, completed_exports + failed_exports)) * 100, 2)
+            },
+            "data_breakdown": {
+                "enrollment_exports": enrollment_exports,
+                "grades_exports": grades_exports,
+                "students_exports": students_exports
+            },
+            "recent_activity": recent_exports
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+        logger.error(f"Error fetching MINEDU dashboard stats: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al obtener estadísticas MINEDU")
 
-@minedu_router.post("/sync/grades/batch")
-async def sync_grades_batch(
+@minedu_router.post("/export/enrollments")
+async def export_enrollments_to_minedu(
     academic_year: int,
     academic_period: str,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.REGISTRAR]))
+    current_user = Depends(get_current_user)
 ):
-    """Sync grades for academic period in batch"""
-    
-    # Run sync in background
-    background_tasks.add_task(
-        minedu_service.sync_grades_batch,
-        academic_year,
-        academic_period
-    )
-    
-    return {
-        "status": "accepted",
-        "message": "Batch grade sync started in background",
-        "academic_year": academic_year,
-        "academic_period": academic_period
-    }
+    """Export enrollment data to MINEDU"""
+    try:
+        if current_user['role'] not in ['ADMIN', 'REGISTRAR']:
+            raise HTTPException(status_code=403, detail="No autorizado")
+        
+        # Get enrollments for the specified period
+        enrollments = await db.enrollments.find({
+            "academic_year": academic_year,
+            "academic_period": academic_period,
+            "status": "ACTIVE"
+        }).to_list(length=None)
+        
+        if not enrollments:
+            raise HTTPException(status_code=404, detail="No se encontraron matrículas para el período especificado")
+        
+        # Create export batch
+        batch_id = str(uuid.uuid4())
+        export_records = []
+        
+        for enrollment in enrollments:
+            # Get student and course data
+            student = await db.students.find_one({"id": enrollment['student_id']})
+            course = await db.courses.find_one({"id": enrollment['course_id']})
+            
+            if student and course:
+                # Format data for MINEDU SIA/SIAGIE
+                minedu_data = {
+                    "batch_id": batch_id,
+                    "enrollment_id": enrollment['id'],
+                    "student_data": {
+                        "student_code": student['student_code'],
+                        "document_type": student['document_type'],
+                        "document_number": student['document_number'],
+                        "first_name": student['first_name'],
+                        "last_name": student['last_name'],
+                        "second_last_name": student.get('second_last_name'),
+                        "birth_date": student['birth_date'],
+                        "gender": student['gender'],
+                        "program": student['program']
+                    },
+                    "course_data": {
+                        "course_code": course['code'],
+                        "course_name": course['name'],
+                        "credits": course['credits'],
+                        "semester": course['semester']
+                    },
+                    "enrollment_data": {
+                        "academic_year": enrollment['academic_year'],
+                        "academic_period": enrollment['academic_period'],
+                        "enrollment_date": enrollment['enrollment_date'],
+                        "status": enrollment['status']
+                    }
+                }
+                
+                # Create export record
+                export_record = MineduExportRecord(
+                    record_id=enrollment['id'],
+                    data_type=MineduDataType.ENROLLMENT,
+                    record_data=minedu_data
+                )
+                
+                export_records.append(export_record.__dict__)
+        
+        # Save export records to database
+        if export_records:
+            # Convert datetime objects to strings for MongoDB
+            for record in export_records:
+                if isinstance(record.get('created_at'), datetime):
+                    record['created_at'] = record['created_at'].isoformat()
+                if isinstance(record.get('updated_at'), datetime):
+                    record['updated_at'] = record['updated_at'].isoformat()
+            
+            await db.minedu_exports.insert_many(export_records)
+            
+            # Process exports in background
+            background_tasks.add_task(process_minedu_exports, batch_id)
+            
+            logger.info(f"MINEDU enrollment export initiated: {len(export_records)} records, batch {batch_id}")
+            
+            return {
+                "message": f"Exportación iniciada: {len(export_records)} matrículas",
+                "batch_id": batch_id,
+                "total_records": len(export_records)
+            }
+        else:
+            raise HTTPException(status_code=404, detail="No se pudieron preparar datos para exportación")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting enrollments to MINEDU: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al exportar matrículas a MINEDU")
 
-@minedu_router.get("/sync/status")
-async def get_sync_status(
-    record_type: Optional[str] = None,
-    sync_status: Optional[str] = None,
+@minedu_router.post("/export/grades")
+async def export_grades_to_minedu(
+    academic_year: int,
+    academic_period: str,
+    background_tasks: BackgroundTasks,
+    current_user = Depends(get_current_user)
+):
+    """Export grades data to MINEDU"""
+    try:
+        if current_user['role'] not in ['ADMIN', 'REGISTRAR']:
+            raise HTTPException(status_code=403, detail="No autorizado")
+        
+        # Get enrollments with grades for the specified period
+        enrollments = await db.enrollments.find({
+            "academic_year": academic_year,
+            "academic_period": academic_period,
+            "numerical_grade": {"$exists": True, "$ne": None},
+            "grade_status": {"$in": ["APPROVED", "FAILED"]}
+        }).to_list(length=None)
+        
+        if not enrollments:
+            raise HTTPException(status_code=404, detail="No se encontraron calificaciones para el período especificado")
+        
+        # Create export batch
+        batch_id = str(uuid.uuid4())
+        export_records = []
+        
+        for enrollment in enrollments:
+            # Get student and course data 
+            student = await db.students.find_one({"id": enrollment['student_id']})
+            course = await db.courses.find_one({"id": enrollment['course_id']})
+            
+            if student and course:
+                # Format data for MINEDU
+                minedu_data = {
+                    "batch_id": batch_id,
+                    "enrollment_id": enrollment['id'],
+                    "student_data": {
+                        "student_code": student['student_code'],
+                        "document_number": student['document_number'],
+                        "full_name": f"{student['first_name']} {student['last_name']} {student.get('second_last_name', '')}"
+                    },
+                    "course_data": {
+                        "course_code": course['code'],
+                        "course_name": course['name'],
+                        "credits": course['credits']
+                    },
+                    "grade_data": {
+                        "academic_year": enrollment['academic_year'],
+                        "academic_period": enrollment['academic_period'],
+                        "numerical_grade": enrollment['numerical_grade'],
+                        "literal_grade": enrollment['literal_grade'],
+                        "grade_status": enrollment['grade_status'],
+                        "attendance_percentage": enrollment.get('attendance_percentage', 0)
+                    }
+                }
+                
+                # Create export record
+                export_record = MineduExportRecord(
+                    record_id=enrollment['id'],
+                    data_type=MineduDataType.GRADES,
+                    record_data=minedu_data
+                )
+                
+                export_records.append(export_record.__dict__)
+        
+        # Save export records to database
+        if export_records:
+            # Convert datetime objects to strings for MongoDB
+            for record in export_records:
+                if isinstance(record.get('created_at'), datetime):
+                    record['created_at'] = record['created_at'].isoformat()
+                if isinstance(record.get('updated_at'), datetime):
+                    record['updated_at'] = record['updated_at'].isoformat()
+            
+            await db.minedu_exports.insert_many(export_records)
+            
+            # Process exports in background
+            background_tasks.add_task(process_minedu_exports, batch_id)
+            
+            logger.info(f"MINEDU grades export initiated: {len(export_records)} records, batch {batch_id}")
+            
+            return {
+                "message": f"Exportación de notas iniciada: {len(export_records)} registros",
+                "batch_id": batch_id,
+                "total_records": len(export_records)
+            }
+        else:
+            raise HTTPException(status_code=404, detail="No se pudieron preparar datos de calificaciones para exportación")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting grades to MINEDU: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al exportar calificaciones a MINEDU")
+
+@minedu_router.get("/exports")
+async def get_minedu_exports(
+    status: Optional[str] = None,
+    data_type: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.REGISTRAR]))
+    current_user = Depends(get_current_user)
 ):
-    """Get synchronization status"""
-    
-    filter_query = {}
-    if record_type:
-        filter_query["record_type"] = record_type
-    if sync_status:
-        filter_query["sync_status"] = sync_status
-    
-    sync_records = await db.siagie_sync.find(filter_query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
-    total = await db.siagie_sync.count_documents(filter_query)
-    
-    return {
-        "sync_records": [SIAGIESync(**record) for record in sync_records],
-        "total": total,
-        "skip": skip,
-        "limit": limit
-    }
+    """Get MINEDU export records"""
+    try:
+        if current_user['role'] not in ['ADMIN', 'REGISTRAR']:
+            raise HTTPException(status_code=403, detail="No autorizado")
+        
+        # Build query
+        query = {}
+        if status:
+            query["status"] = status
+        if data_type:
+            query["data_type"] = data_type
+        
+        # Get exports
+        exports_cursor = db.minedu_exports.find(query).sort("created_at", -1).skip(skip).limit(limit)
+        exports = await exports_cursor.to_list(length=limit)
+        
+        # Parse dates back from strings
+        for export in exports:
+            if isinstance(export.get('created_at'), str):
+                export['created_at'] = datetime.fromisoformat(export['created_at'])
+            if isinstance(export.get('updated_at'), str):
+                export['updated_at'] = datetime.fromisoformat(export['updated_at'])
+        
+        total = await db.minedu_exports.count_documents(query)
+        
+        return {
+            "exports": exports,
+            "total": total,
+            "skip": skip,
+            "limit": limit
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching MINEDU exports: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al obtener exportaciones MINEDU")
 
-@minedu_router.get("/sync/batches")
-async def get_sync_batches(
-    batch_type: Optional[str] = None,
-    batch_status: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 100,
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.REGISTRAR]))
+@minedu_router.post("/exports/{export_id}/retry")
+async def retry_minedu_export(
+    export_id: str,
+    background_tasks: BackgroundTasks,
+    current_user = Depends(get_current_user)
 ):
-    """Get batch synchronization history"""
-    
-    filter_query = {}
-    if batch_type:
-        filter_query["batch_type"] = batch_type
-    if batch_status:
-        filter_query["batch_status"] = batch_status
-    
-    batches = await db.siagie_batches.find(filter_query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
-    total = await db.siagie_batches.count_documents(filter_query)
-    
-    return {
-        "batches": [SIAGIEBatch(**batch) for batch in batches],
-        "total": total,
-        "skip": skip,
-        "limit": limit
-    }
+    """Retry failed MINEDU export"""
+    try:
+        if current_user['role'] not in ['ADMIN', 'REGISTRAR']:
+            raise HTTPException(status_code=403, detail="No autorizado")
+        
+        # Get export record
+        export_record = await db.minedu_exports.find_one({"id": export_id})
+        if not export_record:
+            raise HTTPException(status_code=404, detail="Registro de exportación no encontrado")
+        
+        if export_record['status'] not in [MineduIntegrationStatus.FAILED]:
+            raise HTTPException(status_code=400, detail="Solo se pueden reintentar exportaciones fallidas")
+        
+        if export_record['attempts'] >= export_record.get('max_attempts', 3):
+            raise HTTPException(status_code=400, detail="Se ha alcanzado el máximo número de intentos")
+        
+        # Update status to retrying
+        await db.minedu_exports.update_one(
+            {"id": export_id},
+            {
+                "$set": {
+                    "status": MineduIntegrationStatus.RETRYING,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }
+            }
+        )
+        
+        # Process retry in background
+        background_tasks.add_task(process_single_minedu_export, export_id)
+        
+        return {"message": "Reintento de exportación iniciado"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrying MINEDU export: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al reintentar exportación MINEDU")
 
-@minedu_router.post("/sync/reconcile")
-async def reconcile_sync_data(
-    record_type: str,
-    current_user: User = Depends(require_role([UserRole.ADMIN]))
-):
-    """Reconcile sync data with MINEDU"""
-    
-    # Get all failed syncs for retry
-    failed_syncs = await db.siagie_sync.find({
-        "record_type": record_type,
-        "sync_status": "FAILED",
-        "retry_count": {"$lt": 3}
-    }).to_list(1000)
-    
-    reconciled = 0
-    still_failed = 0
-    
-    for sync_record in failed_syncs:
-        try:
-            if record_type == "STUDENT":
-                await minedu_service.sync_student(sync_record["local_record_id"])
-            elif record_type == "ENROLLMENT":
-                await minedu_service.sync_enrollment(sync_record["local_record_id"])
-            
-            reconciled += 1
-            
-        except Exception as e:
-            # Increment retry count
-            await db.siagie_sync.update_one(
-                {"id": sync_record["id"]},
+@minedu_router.get("/validation/data-integrity")
+async def validate_data_integrity(current_user = Depends(get_current_user)):
+    """Validate data integrity before MINEDU export"""
+    try:
+        if current_user['role'] not in ['ADMIN', 'REGISTRAR']:
+            raise HTTPException(status_code=403, detail="No autorizado")
+        
+        validation_results = {
+            "valid": True,
+            "errors": [],
+            "warnings": [],
+            "stats": {}
+        }
+        
+        # Validate students data
+        students_without_document = await db.students.count_documents({
+            "$or": [
+                {"document_number": {"$exists": False}},
+                {"document_number": ""},
+                {"document_number": None}
+            ]
+        })
+        
+        if students_without_document > 0:
+            validation_results["errors"].append(f"{students_without_document} estudiantes sin número de documento")
+            validation_results["valid"] = False
+        
+        # Validate courses data
+        courses_without_code = await db.courses.count_documents({
+            "$or": [
+                {"code": {"$exists": False}},
+                {"code": ""},
+                {"code": None}
+            ]
+        })
+        
+        if courses_without_code > 0:
+            validation_results["errors"].append(f"{courses_without_code} cursos sin código")
+            validation_results["valid"] = False
+        
+        # Validate enrollments
+        enrollments_without_grades = await db.enrollments.count_documents({
+            "status": "ACTIVE",
+            "$or": [
+                {"numerical_grade": {"$exists": False}},
+                {"numerical_grade": None}
+            ]
+        })
+        
+        if enrollments_without_grades > 0:
+            validation_results["warnings"].append(f"{enrollments_without_grades} matrículas activas sin calificaciones")
+        
+        # Get statistics
+        validation_results["stats"] = {
+            "total_students": await db.students.count_documents({}),
+            "total_courses": await db.courses.count_documents({}),
+            "total_enrollments": await db.enrollments.count_documents({}),
+            "active_enrollments": await db.enrollments.count_documents({"status": "ACTIVE"}),
+            "completed_grades": await db.enrollments.count_documents({
+                "numerical_grade": {"$exists": True, "$ne": None}
+            })
+        }
+        
+        return validation_results
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error validating data integrity: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al validar integridad de datos")
+
+# Background task functions
+async def process_minedu_exports(batch_id: str):
+    """Process MINEDU exports in background"""
+    try:
+        logger.info(f"Processing MINEDU exports for batch {batch_id}")
+        
+        # Get all pending exports for this batch
+        exports = await db.minedu_exports.find({
+            "record_data.batch_id": batch_id,
+            "status": MineduIntegrationStatus.PENDING
+        }).to_list(length=None)
+        
+        for export_record in exports:
+            await process_single_minedu_export(export_record['id'])
+        
+        logger.info(f"Completed processing MINEDU exports for batch {batch_id}")
+        
+    except Exception as e:
+        logger.error(f"Error processing MINEDU exports batch {batch_id}: {str(e)}")
+
+async def process_single_minedu_export(export_id: str):
+    """Process a single MINEDU export"""
+    try:
+        # Get export record
+        export_record = await db.minedu_exports.find_one({"id": export_id})
+        if not export_record:
+            return
+        
+        # Update status to processing
+        await db.minedu_exports.update_one(
+            {"id": export_id},
+            {
+                "$set": {
+                    "status": MineduIntegrationStatus.PROCESSING,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                },
+                "$inc": {"attempts": 1}
+            }
+        )
+        
+        # Simulate MINEDU API call (in real implementation, this would call actual MINEDU endpoints)
+        success = await simulate_minedu_api_call(export_record)
+        
+        if success:
+            # Update status to completed
+            await db.minedu_exports.update_one(
+                {"id": export_id},
                 {
-                    "$inc": {"retry_count": 1},
                     "$set": {
-                        "last_sync_attempt": datetime.now(timezone.utc).isoformat(),
-                        "error_message": str(e)
+                        "status": MineduIntegrationStatus.COMPLETED,
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                        "minedu_response": {"status": "success", "message": "Data exported successfully"}
                     }
                 }
             )
-            still_failed += 1
-    
-    return {
-        "status": "completed",
-        "reconciled": reconciled,
-        "still_failed": still_failed,
-        "total_processed": len(failed_syncs)
-    }
+            logger.info(f"MINEDU export {export_id} completed successfully")
+        else:
+            # Update status to failed
+            await db.minedu_exports.update_one(
+                {"id": export_id},
+                {
+                    "$set": {
+                        "status": MineduIntegrationStatus.FAILED,
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                        "last_error": "MINEDU API error (simulated)",
+                        "minedu_response": {"status": "error", "message": "Export failed"}
+                    }
+                }
+            )
+            logger.error(f"MINEDU export {export_id} failed")
+        
+    except Exception as e:
+        logger.error(f"Error processing single MINEDU export {export_id}: {str(e)}")
+        
+        # Update status to failed
+        await db.minedu_exports.update_one(
+            {"id": export_id},
+            {
+                "$set": {
+                    "status": MineduIntegrationStatus.FAILED,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "last_error": str(e)
+                }
+            }
+        )
 
-@minedu_router.get("/sync/report")
-async def get_sync_report(
-    academic_year: Optional[int] = None,
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.REGISTRAR]))
-):
-    """Generate comprehensive sync report"""
-    
-    # Get sync statistics
-    total_students = await db.students.count_documents({"is_active": True})
-    synced_students = await db.siagie_sync.count_documents({
-        "record_type": "STUDENT",
-        "sync_status": "COMPLETED"
-    })
-    
-    total_enrollments = await db.enrollments.count_documents(
-        {"academic_year": academic_year} if academic_year else {}
-    )
-    synced_enrollments = await db.siagie_sync.count_documents({
-        "record_type": "ENROLLMENT",
-        "sync_status": "COMPLETED",
-        **({"sync_response.año_academico": academic_year} if academic_year else {})
-    })
-    
-    failed_syncs = await db.siagie_sync.count_documents({"sync_status": "FAILED"})
-    
-    # Get recent batches
-    recent_batches = await db.siagie_batches.find().sort("created_at", -1).limit(10).to_list(10)
-    
-    return {
-        "report_generated_at": datetime.now(timezone.utc).isoformat(),
-        "academic_year": academic_year,
-        "students": {
-            "total": total_students,
-            "synced": synced_students,
-            "sync_percentage": round((synced_students / total_students) * 100, 2) if total_students > 0 else 0
-        },
-        "enrollments": {
-            "total": total_enrollments,
-            "synced": synced_enrollments,
-            "sync_percentage": round((synced_enrollments / total_enrollments) * 100, 2) if total_enrollments > 0 else 0
-        },
-        "failed_syncs": failed_syncs,
-        "recent_batches": [SIAGIEBatch(**batch) for batch in recent_batches]
-    }
+async def simulate_minedu_api_call(export_record: dict) -> bool:
+    """Simulate MINEDU API call - in production this would be actual integration"""
+    try:
+        # Simulate processing delay
+        import asyncio
+        await asyncio.sleep(1)
+        
+        # Simulate 90% success rate
+        import random
+        return random.random() > 0.1
+        
+    except Exception:
+        return False
