@@ -343,7 +343,7 @@ class ComprehensiveBackendTester:
             "is_active": True
         }
 
-        success, data = self.make_request('POST', 'finance/inventory-items', item_data, token=token, expected_status=200)
+        success, data = self.make_request('POST', 'inventory/items', item_data, token=token, expected_status=200)
         
         if success and 'item' in data:
             item_id = data['item']['id']
