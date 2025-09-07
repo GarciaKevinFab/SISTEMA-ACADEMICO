@@ -534,7 +534,8 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Authentication System (COMPLETED - All users can login)"
+    - "Frontend Login Auto-Redirect Enhancement (Minor)"
+    - "Logout Functionality Implementation (Minor)"
     - "RUC Validation Logic (Regression - All Tests Failing)"
     - "Performance Optimization (P95 Latency Too High)"
     - "Complete Logistics Workflow (PO Lifecycle, Receptions, Validations)"
@@ -547,7 +548,7 @@ test_plan:
     - "Advanced HR Features"
     - "Audit & Security Features"
   test_all: false
-  test_priority: "authentication_resolved_focus_remaining_modules"
+  test_priority: "login_resolved_focus_remaining_modules"
 
 agent_communication:
   - agent: "main"
