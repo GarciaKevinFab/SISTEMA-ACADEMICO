@@ -286,7 +286,7 @@ async def get_procedures(
 @mesa_partes_router.get("/procedures/{tracking_code}", response_model=Dict[str, Any])
 async def get_procedure_by_tracking_code(
     tracking_code: str,
-    current_user = Depends(get_current_user) = None
+    current_user = Depends(get_current_user)
 ):
     """Get procedure by tracking code - public endpoint"""
     try:
