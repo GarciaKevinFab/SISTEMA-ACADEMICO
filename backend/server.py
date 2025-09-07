@@ -4295,6 +4295,209 @@ async def get_attendance(
         "limit": limit
     }
 
+@api_router.post("/hr/attendance/bulk-import")
+async def bulk_import_attendance(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_role([UserRole.HR_ADMIN]))
+):
+    """Bulk import attendance data from CSV with strict validation"""
+    
+    # Validate file type
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Only CSV files are supported")
+    
+    try:
+        # Read CSV content
+        content = await file.read()
+        df = pd.read_csv(io.BytesIO(content))
+        
+        # Validate required columns
+        required_columns = ['employee_id', 'attendance_date', 'check_in_time', 'check_out_time']
+        missing_cols = [col for col in required_columns if col not in df.columns]
+        if missing_cols:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required columns: {missing_cols}"
+            )
+        
+        # Process import with validation
+        successful_imports = []
+        errors = []
+        duplicates = []
+        
+        # Get all employees for validation
+        employees = await db.employees.find({"is_active": True}).to_list(1000)
+        employee_ids = {emp["id"]: emp for emp in employees}
+        
+        for index, row in df.iterrows():
+            try:
+                # Validate employee exists
+                employee_id = str(row['employee_id']).strip()
+                if employee_id not in employee_ids:
+                    errors.append({
+                        "row": index + 1,
+                        "error": f"Employee ID {employee_id} not found",
+                        "data": row.to_dict()
+                    })
+                    continue
+                
+                # Parse and validate date
+                try:
+                    attendance_date = pd.to_datetime(row['attendance_date']).date()
+                except:
+                    errors.append({
+                        "row": index + 1,
+                        "error": f"Invalid date format: {row['attendance_date']}",
+                        "data": row.to_dict()
+                    })
+                    continue
+                
+                # Check for duplicates
+                existing_attendance = await db.attendance.find_one({
+                    "employee_id": employee_id,
+                    "date": attendance_date.isoformat()
+                })
+                
+                if existing_attendance:
+                    duplicates.append({
+                        "row": index + 1,
+                        "employee_id": employee_id,
+                        "date": attendance_date.isoformat(),
+                        "existing_id": existing_attendance["id"]
+                    })
+                    continue
+                
+                # Parse times with timezone safety
+                check_in_time = None
+                check_out_time = None
+                
+                try:
+                    if pd.notna(row['check_in_time']):
+                        check_in_str = str(row['check_in_time']).strip()
+                        if check_in_str and check_in_str != '':
+                            # Parse HH:MM format
+                            time_parts = check_in_str.split(':')
+                            if len(time_parts) == 2:
+                                check_in_time = f"{time_parts[0].zfill(2)}:{time_parts[1].zfill(2)}:00"
+                    
+                    if pd.notna(row['check_out_time']):
+                        check_out_str = str(row['check_out_time']).strip()
+                        if check_out_str and check_out_str != '':
+                            # Parse HH:MM format
+                            time_parts = check_out_str.split(':')
+                            if len(time_parts) == 2:
+                                check_out_time = f"{time_parts[0].zfill(2)}:{time_parts[1].zfill(2)}:00"
+                
+                except Exception as e:
+                    errors.append({
+                        "row": index + 1,
+                        "error": f"Invalid time format: {str(e)}",
+                        "data": row.to_dict()
+                    })
+                    continue
+                
+                # Create attendance record
+                break_minutes = int(row.get('break_minutes', 60))
+                notes = str(row.get('notes', '')).strip() if pd.notna(row.get('notes')) else None
+                
+                # Calculate hours worked (timezone-safe)
+                hours_worked = 0.0
+                if check_in_time and check_out_time:
+                    # Create datetime objects for calculation (use UTC)
+                    check_in_dt = datetime.combine(attendance_date, datetime.strptime(check_in_time, "%H:%M:%S").time())
+                    check_out_dt = datetime.combine(attendance_date, datetime.strptime(check_out_time, "%H:%M:%S").time())
+                    
+                    # Handle overnight shifts
+                    if check_out_dt < check_in_dt:
+                        check_out_dt += timedelta(days=1)
+                    
+                    # Calculate total time and subtract break
+                    total_minutes = (check_out_dt - check_in_dt).total_seconds() / 60
+                    work_minutes = total_minutes - break_minutes
+                    hours_worked = max(0, work_minutes / 60)
+                
+                attendance_data = AttendanceBulkImport(
+                    employee_id=employee_id,
+                    attendance_date=attendance_date,
+                    check_in_time=check_in_time,
+                    check_out_time=check_out_time,
+                    break_minutes=break_minutes,
+                    notes=notes
+                )
+                
+                # Create attendance record
+                attendance = Attendance(
+                    employee_id=employee_id,
+                    date=attendance_date,
+                    check_in_time=check_in_time,
+                    check_out_time=check_out_time,
+                    break_minutes=break_minutes,
+                    hours_worked=hours_worked,
+                    is_absent=not (check_in_time or check_out_time),
+                    notes=notes,
+                    created_by=current_user.id
+                )
+                
+                # Save to database
+                attendance_doc = prepare_for_mongo(attendance.dict())
+                await db.attendance.insert_one(attendance_doc)
+                
+                successful_imports.append({
+                    "row": index + 1,
+                    "employee_id": employee_id,
+                    "employee_name": f"{employee_ids[employee_id]['first_name']} {employee_ids[employee_id]['last_name']}",
+                    "date": attendance_date.isoformat(),
+                    "hours_worked": hours_worked
+                })
+                
+            except Exception as e:
+                errors.append({
+                    "row": index + 1,
+                    "error": f"Processing error: {str(e)}",
+                    "data": row.to_dict()
+                })
+        
+        # Create import summary
+        import_summary = {
+            "id": str(uuid.uuid4()),
+            "filename": file.filename,
+            "total_rows": len(df),
+            "successful_imports": len(successful_imports),
+            "duplicates_found": len(duplicates),
+            "errors_found": len(errors),
+            "imported_by": current_user.id,
+            "imported_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.attendance_imports.insert_one(import_summary)
+        
+        # Log audit trail
+        await log_audit_trail(
+            db, "attendance_imports", import_summary["id"], "CREATE",
+            None, import_summary, current_user.id
+        )
+        
+        logger.info(f"Bulk attendance import completed: {len(successful_imports)} records by {current_user.username}")
+        
+        return {
+            "status": "success",
+            "message": f"Bulk import completed: {len(successful_imports)} records imported",
+            "summary": {
+                "total_rows": len(df),
+                "successful_imports": len(successful_imports),
+                "duplicates_found": len(duplicates),
+                "errors_found": len(errors)
+            },
+            "successful_imports": successful_imports,
+            "duplicates": duplicates,
+            "errors": errors,
+            "import_id": import_summary["id"]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in bulk attendance import: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+
 # ====================================================================================================
 # LOGISTICS MANAGEMENT APIs
 # ====================================================================================================
