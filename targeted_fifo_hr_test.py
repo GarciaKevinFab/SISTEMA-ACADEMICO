@@ -175,17 +175,14 @@ class TargetedTester:
             "employee_code": f"EMP{timestamp}",
             "first_name": "Juan Carlos",
             "last_name": "Pérez",
-            "second_last_name": "García",
-            "document_type": "DNI",
             "document_number": f"1234567{timestamp[-1]}",
+            "birth_date": "1985-05-15",
             "email": f"juan.perez{timestamp}@universidad.edu",
             "phone": "987654321",
             "position": "Docente",
             "department": "Educación Inicial",
             "contract_type": "PERMANENT",
-            "hire_date": "2024-01-15",
-            "salary": 3500.00,
-            "status": "ACTIVE"
+            "hire_date": "2024-01-15"
         }
 
         success, data = self.make_request('POST', 'hr/employees', employee_data, token=self.admin_token)
