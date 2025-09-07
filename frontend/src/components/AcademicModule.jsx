@@ -356,7 +356,7 @@ const StudentsManagement = () => {
         <h2 className="text-2xl font-bold text-gray-900">Gestión de Estudiantes</h2>
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700">
+            <Button data-testid="student-create-button" className="bg-blue-600 hover:bg-blue-700">
               <Plus className="h-4 w-4 mr-2" />
               Nuevo Estudiante
             </Button>
