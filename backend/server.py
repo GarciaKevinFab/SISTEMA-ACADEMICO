@@ -5112,7 +5112,11 @@ async def get_receptions(
         "limit": limit
     }
 
-# Include API router
+# Include module routers
+api_router.include_router(academic_router)
+api_router.include_router(minedu_router)
+
+# Include API router  
 app.include_router(api_router)
 
 if __name__ == "__main__":
