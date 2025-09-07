@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 const InventoryDashboard = () => {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [movements, setMovements] = useState([]);
   const [alerts, setAlerts] = useState([]);
