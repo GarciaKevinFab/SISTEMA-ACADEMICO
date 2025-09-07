@@ -76,8 +76,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
-# FastAPI app
-app = FastAPI(title="Sistema Académico IESPP Gustavo Allende Llavería")
+# FastAPI app - Optimized with orjson and compression
+app = OptimizedFastAPI.create_app("Sistema Académico IESPP Gustavo Allende Llavería")
 api_router = APIRouter(prefix="/api")
 
 # Add structured logging middleware
