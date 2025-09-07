@@ -13,9 +13,9 @@ const SideNav = ({ activeModule, setActiveModule }) => {
   const { user } = useContext(AuthContext);
 
   // Check user permissions
-  const hasAcademicAccess = ['ADMIN', 'ACADEMIC_STAFF'].includes(user?.role);
-  const hasAdmissionAccess = ['ADMIN', 'ACADEMIC_STAFF', 'APPLICANT_USER'].includes(user?.role);
-  const hasMesaDePartesAccess = ['ADMIN', 'ADMINISTRATIVE_WORKER', 'EXTERNAL_USER'].includes(user?.role);
+  const hasAcademicAccess = ['ADMIN', 'TEACHER', 'STUDENT', 'REGISTRAR'].includes(user?.role);
+  const hasAdmissionAccess = ['ADMIN', 'REGISTRAR', 'APPLICANT'].includes(user?.role);
+  const hasMesaDePartesAccess = ['ADMIN', 'STUDENT', 'TEACHER', 'ADMIN_WORKER', 'APPLICANT'].includes(user?.role);
   const hasFinanceAccess = [
     'ADMIN', 
     'FINANCE_ADMIN', 
