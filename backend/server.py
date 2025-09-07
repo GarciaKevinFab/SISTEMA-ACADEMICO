@@ -3054,7 +3054,7 @@ async def close_cash_session(
     return {
         "status": "success",
         "message": "Cash session closed successfully",
-        "final_amount": final_amount,
+        "final_amount": close_data.final_amount,
         "expected_amount": expected_final,
         "difference": difference
     }
