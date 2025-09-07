@@ -2830,6 +2830,7 @@ if ROUTES_AVAILABLE:
     app.include_router(optimized_router, prefix="/api")
     app.include_router(enrollment_router, prefix="/api")
     app.include_router(grades_router, prefix="/api")
+    app.include_router(attendance_router, prefix="/api")
     logger.info("All routers included successfully")
 
 # Include router
