@@ -62,6 +62,7 @@ from fixed_optimizations import (
 
 # Import routes after fixing circular dependencies
 try:
+    # Import route modules
     from academic_routes import academic_router
     from minedu_integration import minedu_router  
     from mesa_partes_routes import mesa_partes_router
@@ -72,6 +73,7 @@ try:
     from grades_system import grades_system
     from attendance_system import attendance_system
     from attendance_routes import attendance_router
+    # NOTE: New route modules imported separately to avoid circular imports
     ROUTES_AVAILABLE = True
     logger.info("All route modules imported successfully")
 except ImportError as e:
