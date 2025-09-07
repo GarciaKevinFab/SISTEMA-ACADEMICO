@@ -36,10 +36,16 @@ from finance_models import *
 from finance_enums import *
 from finance_utils import *
 from academic_models import *
-# Removed problematic imports to fix circular dependencies
-# from academic_routes import academic_router
-# from minedu_integration import minedu_router
-# from mesa_partes_routes import mesa_partes_router
+# Import routes after fixing circular dependencies
+try:
+    from academic_routes import academic_router
+    from minedu_integration import minedu_router  
+    from mesa_partes_routes import mesa_partes_router
+    ROUTES_AVAILABLE = True
+    logger.info("All route modules imported successfully")
+except ImportError as e:
+    logger.warning(f"Could not import route modules: {e}")
+    ROUTES_AVAILABLE = False
 
 # Configuration and setup
 ROOT_DIR = Path(__file__).parent
