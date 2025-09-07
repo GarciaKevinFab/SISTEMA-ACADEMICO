@@ -5119,6 +5119,9 @@ app.include_router(api_router)
 # Import and include fixed academic router
 from academic_routes_fixed import academic_router
 app.include_router(academic_router)
+# Import and include portal router
+from portal_routes import portal_router
+app.include_router(portal_router)
 
 if __name__ == "__main__":
     import uvicorn
