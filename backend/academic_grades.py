@@ -358,7 +358,7 @@ async def record_grade(
                 update_data["final_literal_grade"] = GradeCalculator.convert_to_literal(final_grade)
         
         # Actualizar matrícula
-        await db.await safe_update_one(enrollments, 
+        await safe_update_one(db.enrollments, 
             {"id": grade_entry.enrollment_id},
             {"$set": update_data}
         )
@@ -681,7 +681,7 @@ async def generate_acta_pdf_background(acta_id: str):
         )
         
         # Actualizar acta con ruta del PDF
-        await db.await safe_update_one(actas_oficiales, 
+        await safe_update_one(db.actas_oficiales, 
             {"id": acta_id},
             {"$set": {"pdf_path": pdf_path}}
         )

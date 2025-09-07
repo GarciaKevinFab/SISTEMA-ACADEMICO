@@ -358,7 +358,7 @@ async def process_enrollment(
             
             # Actualizar contador de estudiantes en secciones
             for section_id in section_ids:
-                await db.await safe_update_one(sections, 
+                await safe_update_one(db.sections, 
                     {"id": section_id},
                     {"$inc": {"current_students": 1}}
                 )

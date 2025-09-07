@@ -117,7 +117,7 @@ from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_o
     await db.notification_logs.insert_one(notification_doc)
     
     # Actualizar contador de notificaciones en el trámite
-    await db.await safe_update_one(procedures, 
+    await safe_update_one(db.procedures, 
         {"id": procedure_id},
         {
             "$inc": {"email_notifications_sent": 1},

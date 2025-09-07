@@ -171,7 +171,7 @@ async def login_user(user_credentials: UserLogin):
         raise HTTPException(status_code=401, detail="Account is deactivated")
     
     # Update last login
-    await db.await safe_update_one(users, 
+    await safe_update_one(db.users, 
         {"username": user_credentials.username},
         {"$set": {"last_login": datetime.utcnow().isoformat()}}
     )

@@ -96,7 +96,7 @@ class AttendanceCalculator:
         attendance_stats = await AttendanceCalculator.calculate_student_attendance(student_id, section_id)
         
         # Actualizar matrícula
-        await db.await safe_update_one(enrollments, 
+        await safe_update_one(db.enrollments, 
             {"student_id": student_id, "section_id": section_id},
             {
                 "$set": {
@@ -241,7 +241,7 @@ async def record_attendance(
         
         if existing_record:
             # Actualizar registro existente
-            await db.await safe_update_one(attendance_records, 
+            await safe_update_one(db.attendance_records, 
                 {"id": existing_record["id"]},
                 {
                     "$set": {
@@ -374,7 +374,7 @@ async def record_bulk_attendance(
                 
                 if existing_record:
                     # Actualizar
-                    await db.await safe_update_one(attendance_records, 
+                    await safe_update_one(db.attendance_records, 
                         {"id": existing_record["id"]},
                         {
                             "$set": {

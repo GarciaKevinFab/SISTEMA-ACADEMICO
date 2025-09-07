@@ -392,7 +392,7 @@ async def update_procedure_status(
             if status_data.get('resolution'):
                 update_data["resolution"] = status_data['resolution']
         
-        await db.await safe_update_one(procedures, 
+        await safe_update_one(db.procedures, 
             {"id": procedure_id},
             {"$set": update_data}
         )
@@ -478,7 +478,7 @@ async def upload_procedure_document(
         await db.procedure_attachments.insert_one(attachment)
         
         # Update procedure with attachment ID
-        await db.await safe_update_one(procedures, 
+        await safe_update_one(db.procedures, 
             {"id": procedure_id},
             {
                 "$push": {"attachment_ids": attachment['id']},

@@ -302,7 +302,7 @@ class MINEDUIntegrationCycle:
                 for student in failed_students:
                     result = await self.simulate_minedu_api_call("STUDENT", student)
                     if result["success"]:
-                        await db.await safe_update_one(students, 
+                        await safe_update_one(db.students, 
                             {"id": student["id"]},
                             {"$set": {"minedu_sync_status": "SENT", "minedu_id": result["minedu_id"]}}
                         )
@@ -317,7 +317,7 @@ class MINEDUIntegrationCycle:
                         for record in duplicate_records:
                             if record["id"] != latest_record["id"]:
                                 new_minedu_id = f"MINEDU_STUDENT_{record['id'][:8]}_FIXED"
-                                await db.await safe_update_one(students, 
+                                await safe_update_one(db.students, 
                                     {"id": record["id"]},
                                     {"$set": {"minedu_id": new_minedu_id}}
                                 )
