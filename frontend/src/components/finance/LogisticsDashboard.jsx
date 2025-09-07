@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 const LogisticsDashboard = () => {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
   const [suppliers, setSuppliers] = useState([]);
   const [requirements, setRequirements] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
