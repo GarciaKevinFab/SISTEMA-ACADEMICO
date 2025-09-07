@@ -224,9 +224,9 @@ backend:
 
   - task: "Logistics APIs"
     implemented: true
-    working: true
+    working: false
     file: "server.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
@@ -239,6 +239,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ PASSED: RUC validation working correctly with proper check digit calculation. Supplier creation successful with valid RUC (20100070971), properly rejects invalid RUCs (10-digit, 12-digit, with letters). Purchase requirements creation working. Role-based permissions enforced correctly for LOGISTICS role. All logistics workflows operational."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL REGRESSION: RUC validation completely broken - all validation tests failing (10-digit, 12-digit, letters not being rejected). Supplier creation failing due to RUC validation issues. Purchase requirements creation also failing. Previous working RUC validation has regressed. REQUIRES IMMEDIATE FIX to RUC validation logic."
 
   - task: "Seed Data Creation"
     implemented: true
