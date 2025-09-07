@@ -3889,10 +3889,9 @@ async def create_inventory_movement(movement_data: InventoryMovementCreate, curr
                 f"({current_stock - movement_data.quantity}) after this movement"
             )
         
-        # Get previous entries for FIFO calculation
-        previous_movements = await db.inventory_movements.find({
-            "item_id": movement_data.item_id,
-            "movement_type": InventoryMovementType.ENTRY.value
+        # Get ALL movements for FIFO calculation (entries and exits)
+        all_movements = await db.inventory_movements.find({
+            "item_id": movement_data.item_id
         }).sort("created_at", 1).to_list(1000)
         
         total_cost, cost_breakdown = calculate_inventory_fifo(
