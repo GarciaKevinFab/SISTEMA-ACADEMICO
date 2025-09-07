@@ -4,6 +4,11 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, date, timezone
 import uuid
 
+# Import models from server.py to avoid circular imports
+from server import (
+    Student, StudentCreate, Course, CourseCreate, Enrollment, EnrollmentCreate,
+    GradeUpdate, AttendanceUpdate, User, UserRole, StudentStatus, GradeStatus
+)
 from academic_models import *
 from academic_enums import *
 from shared_deps import get_current_user, db, logger
