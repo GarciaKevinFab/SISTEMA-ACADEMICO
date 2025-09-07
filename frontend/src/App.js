@@ -114,6 +114,7 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading}
+              data-testid="login-submit"
               className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white ${
                 loading 
                   ? 'bg-gray-400 cursor-not-allowed' 
