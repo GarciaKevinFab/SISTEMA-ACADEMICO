@@ -244,9 +244,10 @@ class Fase1HardeningTester:
         
         # Test Courses CRUD operations
         if admin_token:
-            # Create course
+            # Create course with unique code
+            timestamp = datetime.now().strftime('%H%M%S')
             course_data = {
-                "code": "EDI001",
+                "code": f"EDI{timestamp}",
                 "name": "Fundamentos de Educación Inicial",
                 "credits": 4,
                 "semester": 1,
