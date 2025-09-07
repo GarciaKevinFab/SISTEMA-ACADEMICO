@@ -52,6 +52,11 @@ export const AuthProvider = ({ children }) => {
       axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
       
       toast.success('¡Inicio de sesión exitoso!');
+      
+      // Programmatic redirect to dashboard after successful login
+      setTimeout(() => {
+        window.location.href = '/dashboard';
+      }, 1000);
       return true;
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Error al iniciar sesión');
