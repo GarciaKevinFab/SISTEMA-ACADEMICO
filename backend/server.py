@@ -63,6 +63,7 @@ try:
     from grades_routes import grades_router
     from grades_system import grades_system
     from attendance_system import attendance_system
+    from attendance_routes import attendance_router
     ROUTES_AVAILABLE = True
     logger.info("All route modules imported successfully")
 except ImportError as e:
