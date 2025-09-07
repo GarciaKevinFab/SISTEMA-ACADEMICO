@@ -3565,18 +3565,15 @@ async def verify_receipt(receipt_id: str):
     if not receipt:
         raise HTTPException(status_code=404, detail="Receipt not found")
     
-    # Return only public information
+    # Return only public, non-sensitive information
     return {
         "receipt_number": receipt["receipt_number"],
         "series": receipt["series"],
-        "issued_at": receipt["issued_at"],
-        "concept": receipt["concept"],
-        "description": receipt["description"],
+        "issued_date": receipt.get("issued_at", "")[:10],  # Only date, not time
         "amount": receipt["amount"],
         "status": receipt["status"],
-        "customer_name": receipt["customer_name"],
-        "customer_document": receipt["customer_document"][:4] + "****",  # Masked document
-        "is_valid": receipt["status"] != ReceiptStatus.CANCELLED.value
+        "is_valid": receipt["status"] in [ReceiptStatus.PAID.value, ReceiptStatus.PENDING.value],
+        "verification_time": datetime.now(timezone.utc).isoformat()
     }
 
 @api_router.get("/finance/receipts/{receipt_id}/pdf")
