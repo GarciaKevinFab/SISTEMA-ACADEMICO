@@ -4166,8 +4166,28 @@ async def get_employees(
     employees = await db.employees.find(filter_query).sort("employee_code", 1).skip(skip).limit(limit).to_list(limit)
     total = await db.employees.count_documents(filter_query)
     
+    # Handle employees with proper error handling
+    employee_list = []
+    for emp in employees:
+        try:
+            # Ensure employee_code is not None
+            if not emp.get("employee_code"):
+                emp["employee_code"] = f"EMP{datetime.now().year}{str(uuid.uuid4())[:6].upper()}"
+            employee_list.append(Employee(**emp))
+        except Exception as e:
+            logger.warning(f"Error processing employee {emp.get('id', 'unknown')}: {str(e)}")
+            # Create a minimal employee object
+            employee_list.append({
+                "id": emp.get("id", str(uuid.uuid4())),
+                "employee_code": emp.get("employee_code") or f"EMP{datetime.now().year}{str(uuid.uuid4())[:6].upper()}",
+                "first_name": emp.get("first_name", "Unknown"),
+                "last_name": emp.get("last_name", "Employee"),
+                "position": emp.get("position", "Unknown Position"),
+                "is_active": emp.get("is_active", True)
+            })
+    
     return {
-        "employees": [Employee(**emp) for emp in employees],
+        "employees": employee_list,
         "total": total,
         "skip": skip,
         "limit": limit
