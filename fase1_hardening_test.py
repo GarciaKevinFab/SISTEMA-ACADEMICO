@@ -204,7 +204,8 @@ class Fase1HardeningTester:
         
         # Test Students CRUD operations
         if admin_token:
-            # Create student
+            # Create student with unique document number
+            timestamp = datetime.now().strftime('%H%M%S%f')[:10]  # Include microseconds for uniqueness
             student_data = {
                 "first_name": "María Elena",
                 "last_name": "García",
@@ -212,8 +213,8 @@ class Fase1HardeningTester:
                 "birth_date": "1995-08-15",
                 "gender": "F",
                 "document_type": "DNI",
-                "document_number": "12345678",
-                "email": "maria.garcia@test.com",
+                "document_number": f"1234{timestamp[-4:]}",  # Use last 4 digits of timestamp
+                "email": f"maria.garcia{timestamp}@test.com",
                 "phone": "987654321",
                 "address": "Av. Los Héroes 123",
                 "district": "Lima",
