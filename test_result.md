@@ -194,9 +194,9 @@ backend:
 
   - task: "Inventory Management APIs (FIFO)"
     implemented: true
-    working: true
+    working: false
     file: "server.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
@@ -209,6 +209,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ PASSED: All inventory management APIs now working correctly. Item creation/retrieval (✅), FIFO entry movements (✅), FIFO exit movements with proper cost calculations (✅), movement history (✅), kardex generation (✅), and stock alerts (✅) all functional. FIFO calculations working properly with weighted average costs. Role-based permissions working for WAREHOUSE role."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL ISSUES: 1) FIFO cost calculations incorrect - expected 930.0 but got 955.0 for test scenario (50@15 + 30@18, exit 60), 2) Negative stock prevention not working - system allows exits exceeding available stock, 3) Concurrent operations working but race conditions may affect data integrity. Basic FIFO operations work but cost accuracy and stock validation need fixes."
 
   - task: "Logistics APIs"
     implemented: true
