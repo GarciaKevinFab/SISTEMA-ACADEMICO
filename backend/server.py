@@ -80,9 +80,7 @@ app.add_middleware(
 # Add exception handler
 app.add_exception_handler(Exception, create_standardized_exception_handler())
 
-# Logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+
 
 # Enums and Types
 from enum import Enum
