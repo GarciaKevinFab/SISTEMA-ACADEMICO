@@ -441,6 +441,9 @@ frontend:
       - working: true
         agent: "testing"
         comment: "🎉 CRITICAL URL FIX VERIFIED - LOGIN SYSTEM 100% OPERATIONAL: ✅ URL Configuration Fix Confirmed: Single /api in requests (no double /api issue) ✅ Auto-redirect to dashboard working perfectly after 1-second delay ✅ All user credentials working: admin/password123, teacher1/password123, student1/password123 ✅ JWT token storage and retrieval working correctly ✅ Dashboard access and user info display working ✅ Module navigation functional (Finance module tested) ✅ Login page loads with all form elements and demo credentials. Minor: Academic module navigation link issue, invalid credentials error handling needs improvement. CORE LOGIN FUNCTIONALITY IS PRODUCTION READY."
+      - working: true
+        agent: "testing"
+        comment: "🎯 CONTENT-TYPE HEADER FIX VERIFICATION COMPLETE - 401 UNAUTHORIZED ISSUE RESOLVED: ✅ CRITICAL FIX CONFIRMED: Content-Type: application/json header successfully added to login requests (lines 49-51 in AuthContext.jsx) ✅ ZERO 401 UNAUTHORIZED ERRORS: Comprehensive testing across all demo credentials (admin, teacher1, student1) shows NO 401 errors ✅ LOGIN FUNCTIONALITY: All users login successfully with proper JWT token generation and storage ✅ AUTO-REDIRECT: Programmatic redirect to dashboard working correctly with 1-second delay ✅ DASHBOARD ACCESS: User info display (Administrador Sistema - ADMIN), module navigation (Academic, Finance) all functional ✅ ERROR HANDLING: Invalid credentials properly rejected with 401 response but no console errors ✅ UI ELEMENTS: Login page loads with all form fields and demo credentials section. Minor: Success toast timing issue, dashboard stats API errors (unrelated to login). PRODUCTION READY: Content-Type header fix has completely resolved the reported 401 Unauthorized login issues."
 
   - task: "Dashboard Access & Navigation"
     implemented: true
