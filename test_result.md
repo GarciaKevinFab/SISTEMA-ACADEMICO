@@ -345,12 +345,10 @@ metadata:
 
 test_plan:
   current_focus:
-    - "HR Management APIs"
-    - "Logistics APIs"
-  stuck_tasks:
-    - "Logistics APIs"
+    - "Finance Module Frontend Integration"
+  stuck_tasks: []
   test_all: false
-  test_priority: "stuck_first"
+  test_priority: "high_first"
 
 agent_communication:
   - agent: "main"
