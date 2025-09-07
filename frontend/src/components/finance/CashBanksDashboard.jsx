@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 const CashBanksDashboard = () => {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
   const [currentSession, setCurrentSession] = useState(null);
   const [cashMovements, setCashMovements] = useState([]);
   const [bankAccounts, setBankAccounts] = useState([]);
