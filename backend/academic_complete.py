@@ -122,7 +122,7 @@ class EnrollmentComplete(BaseModel):
     partial_grade_3: Optional[float] = Field(None, ge=0, le=20)
     final_grade: Optional[float] = Field(None, ge=0, le=20)
     final_numerical_grade: Optional[float] = Field(None, ge=0, le=20)
-    final_literal_grade: Optional[str] = Field(None, regex="^(AD|A|B|C)$")
+    final_literal_grade: Optional[str] = Field(None, pattern="^(AD|A|B|C)$")
     grade_locked: bool = False
     grade_locked_at: Optional[datetime] = None
     grade_locked_by: Optional[str] = None
