@@ -559,10 +559,10 @@ const StudentsManagement = () => {
               </div>
 
               <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>
+                <Button data-testid="dialog-cancel" type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                <Button data-testid="student-create-submit" type="submit" className="bg-blue-600 hover:bg-blue-700">
                   Crear Estudiante
                 </Button>
               </div>
