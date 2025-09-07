@@ -17,6 +17,60 @@ body {
   line-height: 1.6;
 }
 
+/* Animation disabling for test mode */
+.reduce-motion *, 
+.reduce-motion *::before, 
+.reduce-motion *::after {
+  transition: none !important;
+  animation: none !important;
+  scroll-behavior: auto !important;
+  transform: none !important;
+}
+
+/* Deterministic toast styles */
+[data-testid="toast-success"] {
+  background-color: #10b981;
+  color: white;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+}
+
+[data-testid="toast-error"] {
+  background-color: #ef4444;
+  color: white;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+}
+
+[data-testid="dialog-confirm"] {
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+[data-testid="dialog-cancel"] {
+  background-color: #6b7280;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
 .font-crimson {
   font-family: 'Crimson Text', serif;
 }
