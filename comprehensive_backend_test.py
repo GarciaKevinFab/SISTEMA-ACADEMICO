@@ -366,7 +366,7 @@ class ComprehensiveBackendTester:
             "reason": "FIFO Test Entry 1"
         }
         
-        success1, data1 = self.make_request('POST', 'finance/inventory-movements', 
+        success1, data1 = self.make_request('POST', 'inventory/movements', 
                                           entry1_data, token=token)
         
         # Entry 2: 30 units at S/18 each  
@@ -378,7 +378,7 @@ class ComprehensiveBackendTester:
             "reason": "FIFO Test Entry 2"
         }
         
-        success2, data2 = self.make_request('POST', 'finance/inventory-movements', 
+        success2, data2 = self.make_request('POST', 'inventory/movements', 
                                           entry2_data, token=token)
         
         # Exit: 60 units (should cost S/930.00, not S/955.00)
@@ -389,7 +389,7 @@ class ComprehensiveBackendTester:
             "reason": "FIFO Test Exit - Expected cost S/930.00"
         }
         
-        success3, data3 = self.make_request('POST', 'finance/inventory-movements', 
+        success3, data3 = self.make_request('POST', 'inventory/movements', 
                                           exit_data, token=token)
         
         # Calculate expected cost: (50 * 15) + (10 * 18) = 750 + 180 = 930
