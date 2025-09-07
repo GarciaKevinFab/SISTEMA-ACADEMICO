@@ -464,7 +464,7 @@ class ComprehensiveBackendTester:
             ]
         }
         
-        success, data = self.make_request('POST', 'finance/requirements', requirement_data, token=token)
+        success, data = self.make_request('POST', 'logistics/requirements', requirement_data, token=token)
         
         self.log_test("Requirements Creation", success,
                     f"- Requirement created: {success}")
