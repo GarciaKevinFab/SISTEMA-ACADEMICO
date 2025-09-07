@@ -3,7 +3,7 @@ MINEDU Outbox Repository
 Repository pattern for outbox operations with safe MongoDB updates
 """
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
 from safe_mongo_operations import safe_update_one
 import logging
