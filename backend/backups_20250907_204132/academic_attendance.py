@@ -15,7 +15,6 @@ from shared_deps import get_current_user, db, logger
 from logging_middleware import get_correlation_id, log_with_correlation, ErrorResponse, ErrorCodes
 from fixed_optimizations import performance_monitor
 from academic_complete import AttendanceRecord, AttendanceStatus, AttendanceUpdate
-from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_one_and_update, MongoUpdateError
 
 attendance_router = APIRouter(prefix="/attendance", tags=["Attendance Management"])
 
@@ -96,7 +95,7 @@ class AttendanceCalculator:
         attendance_stats = await AttendanceCalculator.calculate_student_attendance(student_id, section_id)
         
         # Actualizar matrícula
-        await db.await safe_update_one(enrollments, 
+        await db.enrollments.update_one(
             {"student_id": student_id, "section_id": section_id},
             {
                 "$set": {
@@ -241,7 +240,7 @@ async def record_attendance(
         
         if existing_record:
             # Actualizar registro existente
-            await db.await safe_update_one(attendance_records, 
+            await db.attendance_records.update_one(
                 {"id": existing_record["id"]},
                 {
                     "$set": {
@@ -374,7 +373,7 @@ async def record_bulk_attendance(
                 
                 if existing_record:
                     # Actualizar
-                    await db.await safe_update_one(attendance_records, 
+                    await db.attendance_records.update_one(
                         {"id": existing_record["id"]},
                         {
                             "$set": {

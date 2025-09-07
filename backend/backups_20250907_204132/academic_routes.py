@@ -1,16 +1,20 @@
-from fastapi import APIRouter, HTTPException, Depends, Query, status
+from fastapi import APIRouter, HTTPException, Depends, Query, status, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from typing import List, Dict, Any, Optional
 from datetime import datetime, date, timezone
 import uuid
 
-# Import from dependencies instead of server to avoid circular imports
-from dependencies import get_current_user, db, logger
+# Import models from server.py to avoid circular imports
+from server import (
+    Student, StudentCreate, Course, CourseCreate, Enrollment, EnrollmentCreate,
+    GradeUpdate, AttendanceUpdate, User, UserRole, StudentStatus, GradeStatus
+)
 from academic_models import *
 from academic_enums import *
-from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_one_and_update, MongoUpdateError
+from shared_deps import get_current_user, db, logger
+from logging_middleware import get_correlation_id, log_with_correlation, ErrorResponse, ErrorCodes
 
-academic_router = APIRouter(prefix="/api/academic", tags=["Academic"])
+academic_router = APIRouter(prefix="/academic", tags=["Academic"])
 
 # Dashboard and Statistics
 @academic_router.get("/dashboard/stats")
@@ -66,8 +70,8 @@ async def get_dashboard_stats(current_user = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Error al obtener estadísticas")
 
 # Students Management
-@academic_router.post("/students", response_model=Dict[str, Any])
-async def create_student(student_data: dict, current_user = Depends(get_current_user)):
+@academic_router.post("/students", response_model=Student)
+async def create_student(student_data: StudentCreate, current_user = Depends(get_current_user)):
     """Create a new student"""
     try:
         # Check permissions
@@ -76,26 +80,27 @@ async def create_student(student_data: dict, current_user = Depends(get_current_
         
         # Check if student already exists
         existing_student = await db.students.find_one({
-            "document_number": student_data.get('document_number')
+            "document_number": student_data.document_number
         })
         
         if existing_student:
             raise HTTPException(status_code=400, detail="Ya existe un estudiante con este documento")
         
         # Create student
-        student = {
-            "id": str(uuid.uuid4()),
-            "student_code": f"EST{datetime.now().year}{str(uuid.uuid4())[:6].upper()}",
-            **student_data,
-            "status": "ENROLLED",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-            "created_by": current_user['id']
-        }
+        student = Student(**student_data.dict(), created_by=current_user['id'])
+        student_dict = student.dict()
         
-        await db.students.insert_one(student)
+        # Convert date objects to strings for MongoDB
+        if isinstance(student_dict.get('birth_date'), date):
+            student_dict['birth_date'] = student_dict['birth_date'].isoformat()
+        if isinstance(student_dict.get('created_at'), datetime):
+            student_dict['created_at'] = student_dict['created_at'].isoformat()
+        if isinstance(student_dict.get('updated_at'), datetime):
+            student_dict['updated_at'] = student_dict['updated_at'].isoformat()
         
-        logger.info(f"Student created: {student['student_code']} by {current_user['username']}")
+        await db.students.insert_one(student_dict)
+        
+        logger.info(f"Student created: {student.student_code} by {current_user['username']}")
         return student
         
     except HTTPException:
@@ -136,6 +141,15 @@ async def get_students(
         students_cursor = db.students.find(query).skip(skip).limit(limit)
         students = await students_cursor.to_list(length=limit)
         
+        # Parse dates back from strings
+        for student in students:
+            if isinstance(student.get('birth_date'), str):
+                student['birth_date'] = datetime.fromisoformat(student['birth_date']).date()
+            if isinstance(student.get('created_at'), str):
+                student['created_at'] = datetime.fromisoformat(student['created_at'])
+            if isinstance(student.get('updated_at'), str):
+                student['updated_at'] = datetime.fromisoformat(student['updated_at'])
+        
         total = await db.students.count_documents(query)
         
         return {
@@ -149,7 +163,7 @@ async def get_students(
         logger.error(f"Error fetching students: {str(e)}")
         raise HTTPException(status_code=500, detail="Error al obtener estudiantes")
 
-@academic_router.get("/students/{student_id}")
+@academic_router.get("/students/{student_id}", response_model=Student)
 async def get_student(student_id: str, current_user = Depends(get_current_user)):
     """Get student by ID"""
     try:
@@ -158,7 +172,15 @@ async def get_student(student_id: str, current_user = Depends(get_current_user))
         if not student:
             raise HTTPException(status_code=404, detail="Estudiante no encontrado")
         
-        return student
+        # Parse dates back from strings
+        if isinstance(student.get('birth_date'), str):
+            student['birth_date'] = datetime.fromisoformat(student['birth_date']).date()
+        if isinstance(student.get('created_at'), str):
+            student['created_at'] = datetime.fromisoformat(student['created_at'])
+        if isinstance(student.get('updated_at'), str):
+            student['updated_at'] = datetime.fromisoformat(student['updated_at'])
+        
+        return Student(**student)
         
     except HTTPException:
         raise
@@ -167,8 +189,8 @@ async def get_student(student_id: str, current_user = Depends(get_current_user))
         raise HTTPException(status_code=500, detail="Error al obtener estudiante")
 
 # Courses Management
-@academic_router.post("/courses", response_model=Dict[str, Any])
-async def create_course(course_data: dict, current_user = Depends(get_current_user)):
+@academic_router.post("/courses", response_model=Course)
+async def create_course(course_data: CourseCreate, current_user = Depends(get_current_user)):
     """Create a new course"""
     try:
         # Check permissions
@@ -176,22 +198,22 @@ async def create_course(course_data: dict, current_user = Depends(get_current_us
             raise HTTPException(status_code=403, detail="No autorizado para crear cursos")
         
         # Check if course code already exists
-        existing_course = await db.courses.find_one({"code": course_data.get('code')})
+        existing_course = await db.courses.find_one({"code": course_data.code})
         
         if existing_course:
             raise HTTPException(status_code=400, detail="Ya existe un curso con este código")
         
         # Create course
-        course = {
-            "id": str(uuid.uuid4()),
-            **course_data,
-            "is_active": True,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
+        course = Course(**course_data.dict())
+        course_dict = course.dict()
         
-        await db.courses.insert_one(course)
+        # Convert datetime to string for MongoDB
+        if isinstance(course_dict.get('created_at'), datetime):
+            course_dict['created_at'] = course_dict['created_at'].isoformat()
         
-        logger.info(f"Course created: {course['code']} by {current_user['username']}")
+        await db.courses.insert_one(course_dict)
+        
+        logger.info(f"Course created: {course.code} by {current_user['username']}")
         return course
         
     except HTTPException:
@@ -227,6 +249,11 @@ async def get_courses(
         courses_cursor = db.courses.find(query).skip(skip).limit(limit)
         courses = await courses_cursor.to_list(length=limit)
         
+        # Parse dates back from strings
+        for course in courses:
+            if isinstance(course.get('created_at'), str):
+                course['created_at'] = datetime.fromisoformat(course['created_at'])
+        
         total = await db.courses.count_documents(query)
         
         return {
@@ -241,8 +268,8 @@ async def get_courses(
         raise HTTPException(status_code=500, detail="Error al obtener cursos")
 
 # Enrollments Management
-@academic_router.post("/enrollments", response_model=Dict[str, Any])
-async def create_enrollment(enrollment_data: dict, current_user = Depends(get_current_user)):
+@academic_router.post("/enrollments", response_model=Enrollment)
+async def create_enrollment(enrollment_data: EnrollmentCreate, current_user = Depends(get_current_user)):
     """Create a new enrollment"""
     try:
         # Check permissions
@@ -250,43 +277,41 @@ async def create_enrollment(enrollment_data: dict, current_user = Depends(get_cu
             raise HTTPException(status_code=403, detail="No autorizado para crear matrículas")
         
         # Validate student exists
-        student = await db.students.find_one({"id": enrollment_data.get('student_id')})
+        student = await db.students.find_one({"id": enrollment_data.student_id})
         if not student:
             raise HTTPException(status_code=404, detail="Estudiante no encontrado")
         
         # Validate course exists
-        course = await db.courses.find_one({"id": enrollment_data.get('course_id')})
+        course = await db.courses.find_one({"id": enrollment_data.course_id})
         if not course:
             raise HTTPException(status_code=404, detail="Curso no encontrado")
         
         # Check if enrollment already exists
         existing_enrollment = await db.enrollments.find_one({
-            "student_id": enrollment_data.get('student_id'),
-            "course_id": enrollment_data.get('course_id'),
-            "academic_year": enrollment_data.get('academic_year'),
-            "academic_period": enrollment_data.get('academic_period')
+            "student_id": enrollment_data.student_id,
+            "course_id": enrollment_data.course_id,
+            "academic_year": enrollment_data.academic_year,
+            "academic_period": enrollment_data.academic_period
         })
         
         if existing_enrollment:
             raise HTTPException(status_code=400, detail="El estudiante ya está matriculado en este curso")
         
         # Create enrollment
-        enrollment = {
-            "id": str(uuid.uuid4()),
-            **enrollment_data,
-            "enrollment_date": datetime.now(timezone.utc).isoformat(),
-            "status": "ACTIVE",
-            "grade_status": "INCOMPLETE",
-            "total_classes": 0,
-            "attended_classes": 0,
-            "attendance_percentage": 0.0,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }
+        enrollment = Enrollment(**enrollment_data.dict())
+        enrollment_dict = enrollment.dict()
         
-        await db.enrollments.insert_one(enrollment)
+        # Convert datetime to string for MongoDB
+        if isinstance(enrollment_dict.get('enrollment_date'), datetime):
+            enrollment_dict['enrollment_date'] = enrollment_dict['enrollment_date'].isoformat()
+        if isinstance(enrollment_dict.get('created_at'), datetime):
+            enrollment_dict['created_at'] = enrollment_dict['created_at'].isoformat()
+        if isinstance(enrollment_dict.get('updated_at'), datetime):
+            enrollment_dict['updated_at'] = enrollment_dict['updated_at'].isoformat()
         
-        logger.info(f"Enrollment created: {enrollment['id']} by {current_user['username']}")
+        await db.enrollments.insert_one(enrollment_dict)
+        
+        logger.info(f"Enrollment created: {enrollment.id} by {current_user['username']}")
         return enrollment
         
     except HTTPException:
@@ -351,6 +376,15 @@ async def get_enrollments(
         
         enrollments = await db.enrollments.aggregate(pipeline).to_list(length=limit)
         
+        # Parse dates back from strings
+        for enrollment in enrollments:
+            if isinstance(enrollment.get('enrollment_date'), str):
+                enrollment['enrollment_date'] = datetime.fromisoformat(enrollment['enrollment_date'])
+            if isinstance(enrollment.get('created_at'), str):
+                enrollment['created_at'] = datetime.fromisoformat(enrollment['created_at'])
+            if isinstance(enrollment.get('updated_at'), str):
+                enrollment['updated_at'] = datetime.fromisoformat(enrollment['updated_at'])
+        
         total = await db.enrollments.count_documents(query)
         
         return {
@@ -368,7 +402,7 @@ async def get_enrollments(
 @academic_router.put("/enrollments/{enrollment_id}/grade")
 async def update_grade(
     enrollment_id: str, 
-    grade_data: dict, 
+    grade_data: GradeUpdate, 
     current_user = Depends(get_current_user)
 ):
     """Update enrollment grades"""
@@ -386,31 +420,24 @@ async def update_grade(
         if current_user['role'] == 'TEACHER' and enrollment.get('teacher_id') != current_user['id']:
             raise HTTPException(status_code=403, detail="No autorizado para calificar este curso")
         
-        numerical_grade = grade_data.get('numerical_grade')
-        
         # Convert numerical grade to literal grade
         literal_grade = "C"
-        grade_status = "FAILED"
-        
-        if numerical_grade >= 18:
+        if grade_data.numerical_grade >= 18:
             literal_grade = "AD"
-            grade_status = "APPROVED"
-        elif numerical_grade >= 14:
+        elif grade_data.numerical_grade >= 14:
             literal_grade = "A"
-            grade_status = "APPROVED"
-        elif numerical_grade >= 11:
+        elif grade_data.numerical_grade >= 11:
             literal_grade = "B"
-            grade_status = "APPROVED"
         
         # Update enrollment
         update_data = {
-            "numerical_grade": numerical_grade,
+            "numerical_grade": grade_data.numerical_grade,
             "literal_grade": literal_grade,
-            "grade_status": grade_status,
+            "grade_status": grade_data.grade_status.value,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
         
-        await db.await safe_update_one(enrollments, 
+        await db.enrollments.update_one(
             {"id": enrollment_id},
             {"$set": update_data}
         )
@@ -429,7 +456,7 @@ async def update_grade(
 @academic_router.put("/enrollments/{enrollment_id}/attendance")
 async def update_attendance(
     enrollment_id: str,
-    attendance_data: dict,
+    attendance_data: AttendanceUpdate,
     current_user = Depends(get_current_user)
 ):
     """Update enrollment attendance"""
@@ -447,23 +474,20 @@ async def update_attendance(
         if current_user['role'] == 'TEACHER' and enrollment.get('teacher_id') != current_user['id']:
             raise HTTPException(status_code=403, detail="No autorizado para registrar asistencia de este curso")
         
-        total_classes = attendance_data.get('total_classes', 0)
-        attended_classes = attendance_data.get('attended_classes', 0)
-        
         # Calculate attendance percentage
         attendance_percentage = 0.0
-        if total_classes > 0:
-            attendance_percentage = (attended_classes / total_classes) * 100
+        if attendance_data.total_classes > 0:
+            attendance_percentage = (attendance_data.attended_classes / attendance_data.total_classes) * 100
         
         # Update enrollment
         update_data = {
-            "total_classes": total_classes,
-            "attended_classes": attended_classes,
+            "total_classes": attendance_data.total_classes,
+            "attended_classes": attendance_data.attended_classes,
             "attendance_percentage": round(attendance_percentage, 2),
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
         
-        await db.await safe_update_one(enrollments, 
+        await db.enrollments.update_one(
             {"id": enrollment_id},
             {"$set": update_data}
         )
@@ -484,6 +508,15 @@ async def get_academic_periods(current_user = Depends(get_current_user)):
     """Get academic periods"""
     try:
         periods = await db.academic_periods.find({}).to_list(length=None)
+        
+        # Parse dates back from strings
+        for period in periods:
+            if isinstance(period.get('start_date'), str):
+                period['start_date'] = datetime.fromisoformat(period['start_date']).date()
+            if isinstance(period.get('end_date'), str):
+                period['end_date'] = datetime.fromisoformat(period['end_date']).date()
+            if isinstance(period.get('created_at'), str):
+                period['created_at'] = datetime.fromisoformat(period['created_at'])
         
         return {"periods": periods}
         
@@ -536,7 +569,7 @@ async def get_student_grades_report(student_id: str, current_user = Depends(get_
         logger.error(f"Error generating student grades report: {str(e)}")
         raise HTTPException(status_code=500, detail="Error al generar reporte de notas")
 
-@academic_router.get("/reports/course-enrollment/{course_id}")  
+@academic_router.get("/reports/course-enrollment/{course_id}")
 async def get_course_enrollment_report(course_id: str, current_user = Depends(get_current_user)):
     """Get course enrollment report"""
     try:

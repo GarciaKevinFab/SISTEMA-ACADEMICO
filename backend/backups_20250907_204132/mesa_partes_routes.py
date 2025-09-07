@@ -14,7 +14,6 @@ from reportlab.lib.units import cm
 
 from shared_deps import get_current_user, db, logger
 from logging_middleware import get_correlation_id, log_with_correlation, ErrorResponse, ErrorCodes, generate_tracking_code, calculate_deadline, log_procedure_action, send_procedure_notification
-from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_one_and_update, MongoUpdateError
 
 mesa_partes_router = APIRouter(prefix="/mesa-partes", tags=["Mesa de Partes"])
 
@@ -392,7 +391,7 @@ async def update_procedure_status(
             if status_data.get('resolution'):
                 update_data["resolution"] = status_data['resolution']
         
-        await db.await safe_update_one(procedures, 
+        await db.procedures.update_one(
             {"id": procedure_id},
             {"$set": update_data}
         )
@@ -478,7 +477,7 @@ async def upload_procedure_document(
         await db.procedure_attachments.insert_one(attachment)
         
         # Update procedure with attachment ID
-        await db.await safe_update_one(procedures, 
+        await db.procedures.update_one(
             {"id": procedure_id},
             {
                 "$push": {"attachment_ids": attachment['id']},

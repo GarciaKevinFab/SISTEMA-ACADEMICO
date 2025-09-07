@@ -13,6 +13,7 @@ from academic_models import *
 from academic_enums import *
 from shared_deps import get_current_user, db, logger
 from logging_middleware import get_correlation_id, log_with_correlation, ErrorResponse, ErrorCodes
+from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_one_and_update, MongoUpdateError
 
 academic_router = APIRouter(prefix="/academic", tags=["Academic"])
 
@@ -437,7 +438,7 @@ async def update_grade(
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
         
-        await db.enrollments.update_one(
+        await db.await safe_update_one(enrollments, 
             {"id": enrollment_id},
             {"$set": update_data}
         )
@@ -487,7 +488,7 @@ async def update_attendance(
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
         
-        await db.enrollments.update_one(
+        await db.await safe_update_one(enrollments, 
             {"id": enrollment_id},
             {"$set": update_data}
         )

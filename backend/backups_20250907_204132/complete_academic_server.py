@@ -171,7 +171,7 @@ async def login_user(user_credentials: UserLogin):
         raise HTTPException(status_code=401, detail="Account is deactivated")
     
     # Update last login
-    await db.await safe_update_one(users, 
+    await db.users.update_one(
         {"username": user_credentials.username},
         {"$set": {"last_login": datetime.utcnow().isoformat()}}
     )
@@ -413,5 +413,4 @@ app.include_router(api_router)
 
 if __name__ == "__main__":
     import uvicorn
-from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_one_and_update, MongoUpdateError
     uvicorn.run(app, host="0.0.0.0", port=8001)

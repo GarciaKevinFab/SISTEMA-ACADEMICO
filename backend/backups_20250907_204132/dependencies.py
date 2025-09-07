@@ -100,7 +100,6 @@ async def send_procedure_notification(
 ):
     """Send email notification and log it"""
     from server import NotificationLog  # Lazy import to avoid circular dependency
-from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_one_and_update, MongoUpdateError
     
     # En un entorno real, aquí se integraría con un servicio de email como SendGrid
     # Por ahora, solo registramos la notificación
@@ -117,7 +116,7 @@ from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_o
     await db.notification_logs.insert_one(notification_doc)
     
     # Actualizar contador de notificaciones en el trámite
-    await db.await safe_update_one(procedures, 
+    await db.procedures.update_one(
         {"id": procedure_id},
         {
             "$inc": {"email_notifications_sent": 1},

@@ -22,7 +22,6 @@ from shared_deps import get_current_user, db, logger
 from logging_middleware import get_correlation_id, log_with_correlation, ErrorResponse, ErrorCodes
 from fixed_optimizations import performance_monitor
 from academic_complete import GradeUpdate, EnrollmentComplete
-from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_one_and_update, MongoUpdateError
 
 grades_router = APIRouter(prefix="/grades", tags=["Grades Management"])
 
@@ -358,7 +357,7 @@ async def record_grade(
                 update_data["final_literal_grade"] = GradeCalculator.convert_to_literal(final_grade)
         
         # Actualizar matrícula
-        await db.await safe_update_one(enrollments, 
+        await db.enrollments.update_one(
             {"id": grade_entry.enrollment_id},
             {"$set": update_data}
         )
@@ -515,7 +514,7 @@ async def lock_section_grades(
         # Bloquear todas las matrículas de la sección
         current_time = datetime.now(timezone.utc)
         
-        result = await db.await safe_update_many(enrollments, 
+        result = await db.enrollments.update_many(
             {"section_id": section_id, "status": "ACTIVE"},
             {
                 "$set": {
@@ -681,7 +680,7 @@ async def generate_acta_pdf_background(acta_id: str):
         )
         
         # Actualizar acta con ruta del PDF
-        await db.await safe_update_one(actas_oficiales, 
+        await db.actas_oficiales.update_one(
             {"id": acta_id},
             {"$set": {"pdf_path": pdf_path}}
         )

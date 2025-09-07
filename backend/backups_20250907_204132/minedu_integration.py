@@ -344,7 +344,7 @@ async def retry_minedu_export(
             raise HTTPException(status_code=400, detail="Se ha alcanzado el máximo número de intentos")
         
         # Update status to retrying
-        await db.await safe_update_one(minedu_exports, 
+        await db.minedu_exports.update_one(
             {"id": export_id},
             {
                 "$set": {
@@ -465,7 +465,7 @@ async def process_single_minedu_export(export_id: str):
             return
         
         # Update status to processing
-        await db.await safe_update_one(minedu_exports, 
+        await db.minedu_exports.update_one(
             {"id": export_id},
             {
                 "$set": {
@@ -481,7 +481,7 @@ async def process_single_minedu_export(export_id: str):
         
         if success:
             # Update status to completed
-            await db.await safe_update_one(minedu_exports, 
+            await db.minedu_exports.update_one(
                 {"id": export_id},
                 {
                     "$set": {
@@ -494,7 +494,7 @@ async def process_single_minedu_export(export_id: str):
             logger.info(f"MINEDU export {export_id} completed successfully")
         else:
             # Update status to failed
-            await db.await safe_update_one(minedu_exports, 
+            await db.minedu_exports.update_one(
                 {"id": export_id},
                 {
                     "$set": {
@@ -511,7 +511,7 @@ async def process_single_minedu_export(export_id: str):
         logger.error(f"Error processing single MINEDU export {export_id}: {str(e)}")
         
         # Update status to failed
-        await db.await safe_update_one(minedu_exports, 
+        await db.minedu_exports.update_one(
             {"id": export_id},
             {
                 "$set": {
@@ -531,7 +531,6 @@ async def simulate_minedu_api_call(export_record: dict) -> bool:
         
         # Simulate 90% success rate
         import random
-from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_one_and_update, MongoUpdateError
         return random.random() > 0.1
         
     except Exception:

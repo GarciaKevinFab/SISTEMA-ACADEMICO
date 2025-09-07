@@ -11,7 +11,6 @@ from shared_deps import get_current_user, db, logger
 from logging_middleware import get_correlation_id, log_with_correlation, ErrorResponse, ErrorCodes
 from fixed_optimizations import performance_monitor
 from academic_complete import EnrollmentRequest, EnrollmentComplete, EnrollmentStatus
-from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_one_and_update, MongoUpdateError
 
 enrollment_router = APIRouter(prefix="/enrollment", tags=["Student Enrollment"])
 
@@ -358,7 +357,7 @@ async def process_enrollment(
             
             # Actualizar contador de estudiantes en secciones
             for section_id in section_ids:
-                await db.await safe_update_one(sections, 
+                await db.sections.update_one(
                     {"id": section_id},
                     {"$inc": {"current_students": 1}}
                 )

@@ -975,7 +975,7 @@ async def publish_admission_results(admission_call_id: str) -> Dict[str, Any]:
                 ApplicationStatus.WAITING_LIST if result_type == "WAITING_LIST" else ApplicationStatus.NOT_ADMITTED
             )
             
-            await db.await safe_update_one(applications, 
+            await db.applications.update_one(
                 {"id": application['id']},
                 {
                     "$set": {
@@ -1004,7 +1004,7 @@ async def publish_admission_results(admission_call_id: str) -> Dict[str, Any]:
         results_summary["total_not_admitted"] += not_admitted_count
     
     # Update admission call status
-    await db.await safe_update_one(admission_calls, 
+    await db.admission_calls.update_one(
         {"id": admission_call_id},
         {
             "$set": {
@@ -1064,7 +1064,7 @@ async def send_procedure_notification(
     await db.notification_logs.insert_one(notification_doc)
     
     # Actualizar contador de notificaciones en el trámite
-    await db.await safe_update_one(procedures, 
+    await db.procedures.update_one(
         {"id": procedure_id},
         {
             "$inc": {"email_notifications_sent": 1},
@@ -1212,7 +1212,7 @@ async def login_user(user_credentials: UserLogin, request: Request):
         )
     
     # Update last login
-    await db.await safe_update_one(users, 
+    await db.users.update_one(
         {"_id": user["_id"]}, 
         {"$set": {"last_login": datetime.utcnow()}}
     )
@@ -1351,7 +1351,7 @@ async def update_student(student_id: str, student_data: StudentCreate, current_u
     if 'birth_date' in update_data and hasattr(update_data['birth_date'], 'isoformat'):
         update_data['birth_date'] = update_data['birth_date'].isoformat()
     
-    await db.await safe_update_one(students, {"id": student_id}, {"$set": update_data})
+    await db.students.update_one({"id": student_id}, {"$set": update_data})
     
     updated_student = await db.students.find_one({"id": student_id})
     return Student(**updated_student)
@@ -1514,7 +1514,7 @@ async def update_grade(enrollment_id: str, grade_data: GradeUpdate, current_user
         "updated_at": datetime.utcnow()
     }
     
-    await db.await safe_update_one(enrollments, {"id": enrollment_id}, {"$set": update_data})
+    await db.enrollments.update_one({"id": enrollment_id}, {"$set": update_data})
     
     # TODO: Send to MINEDU SIAGIE
     logger.info(f"Grade updated for enrollment {enrollment_id} by {current_user.username}")
@@ -1541,7 +1541,7 @@ async def update_attendance(enrollment_id: str, attendance_data: AttendanceUpdat
         "updated_at": datetime.utcnow()
     }
     
-    await db.await safe_update_one(enrollments, {"id": enrollment_id}, {"$set": update_data})
+    await db.enrollments.update_one({"id": enrollment_id}, {"$set": update_data})
     
     return {
         "status": "success",
@@ -2061,7 +2061,7 @@ async def create_application(application_data: ApplicationCreate, current_user: 
     await db.applications.insert_one(application_doc)
     
     # Update admission call application count
-    await db.await safe_update_one(admission_calls, 
+    await db.admission_calls.update_one(
         {"id": application_data.admission_call_id},
         {"$inc": {"total_applications": 1}}
     )
@@ -2194,13 +2194,13 @@ async def create_evaluation(evaluation_data: AdmissionEvaluationCreate, current_
         final_score = calculate_final_score(exam_score, interview_score)
         update_data["final_score"] = final_score
         
-        await db.await safe_update_one(admission_evaluations, 
+        await db.admission_evaluations.update_one(
             {"application_id": evaluation_data.application_id},
             {"$set": update_data}
         )
         
         # Update application with scores
-        await db.await safe_update_one(applications, 
+        await db.applications.update_one(
             {"id": evaluation_data.application_id},
             {
                 "$set": {
@@ -2229,7 +2229,7 @@ async def create_evaluation(evaluation_data: AdmissionEvaluationCreate, current_
         await db.admission_evaluations.insert_one(evaluation_doc)
         
         # Update application with scores
-        await db.await safe_update_one(applications, 
+        await db.applications.update_one(
             {"id": evaluation_data.application_id},
             {
                 "$set": {
@@ -2736,7 +2736,7 @@ async def update_procedure_status(
     if new_status == ProcedureStatus.COMPLETED.value:
         update_data["completed_at"] = datetime.utcnow()
     
-    await db.await safe_update_one(procedures, {"id": procedure_id}, {"$set": update_data})
+    await db.procedures.update_one({"id": procedure_id}, {"$set": update_data})
     
     # Log status change
     await log_procedure_action(
@@ -2791,7 +2791,7 @@ async def assign_procedure(
         raise HTTPException(status_code=400, detail="Invalid assignee")
     
     # Update procedure
-    await db.await safe_update_one(procedures, 
+    await db.procedures.update_one(
         {"id": procedure_id}, 
         {
             "$set": {
@@ -3106,7 +3106,7 @@ async def get_current_cash_session(current_user: User = Depends(require_role([Us
     expected_final = session.get('initial_amount', 0) + total_income - total_expense
     
     # Update session totals
-    await db.await safe_update_one(cash_sessions, 
+    await db.cash_sessions.update_one(
         {"id": session["id"]},
         {
             "$set": {
@@ -3165,7 +3165,7 @@ async def close_cash_session(
         "closing_notes": close_data.closing_notes
     }
     
-    await db.await safe_update_one(cash_sessions, {"id": session_id}, {"$set": update_data})
+    await db.cash_sessions.update_one({"id": session_id}, {"$set": update_data})
     
     # Log audit trail
     await log_audit_trail(
@@ -3559,7 +3559,7 @@ async def create_receipt(
     try:
         pdf_generator.create_receipt_pdf(receipt_doc, qr_code_data, pdf_path)
         receipt.pdf_path = pdf_path
-        await db.await safe_update_one(receipts, {"id": receipt.id}, {"$set": {"pdf_path": pdf_path}})
+        await db.receipts.update_one({"id": receipt.id}, {"$set": {"pdf_path": pdf_path}})
     except Exception as e:
         logger.warning(f"Error generating PDF for receipt {receipt.id}: {str(e)}")
     
@@ -3661,7 +3661,7 @@ async def pay_receipt(
         "updated_by": current_user.id
     }
     
-    await db.await safe_update_one(receipts, {"id": receipt_id}, {"$set": update_data})
+    await db.receipts.update_one({"id": receipt_id}, {"$set": update_data})
     
     # Create payment record for idempotency
     payment_record = {
@@ -3751,7 +3751,7 @@ async def void_receipt(
         "updated_by": current_user.id
     }
     
-    await db.await safe_update_one(receipts, {"id": receipt_id}, {"$set": update_data})
+    await db.receipts.update_one({"id": receipt_id}, {"$set": update_data})
     
     # Create refund cash movement if refund method is cash
     if void_data.refund_method == PaymentMethod.CASH:
@@ -3813,7 +3813,7 @@ async def cancel_receipt(
         "cancellation_reason": reason
     }
     
-    await db.await safe_update_one(receipts, {"id": receipt_id}, {"$set": update_data})
+    await db.receipts.update_one({"id": receipt_id}, {"$set": update_data})
     
     # If receipt was paid, create refund cash movement
     if receipt["status"] == ReceiptStatus.PAID.value:
@@ -3887,7 +3887,7 @@ async def download_receipt_pdf(
         
         try:
             pdf_generator.create_receipt_pdf(receipt, receipt.get("qr_code"), pdf_path)
-            await db.await safe_update_one(receipts, {"id": receipt_id}, {"$set": {"pdf_path": pdf_path}})
+            await db.receipts.update_one({"id": receipt_id}, {"$set": {"pdf_path": pdf_path}})
         except Exception as e:
             logger.error(f"Error generating PDF for receipt {receipt_id}: {str(e)}")
             raise HTTPException(status_code=500, detail="Error generating PDF")
@@ -4079,7 +4079,7 @@ async def create_inventory_movement(
     update_data["available_stock"] = max(0, new_stock - item.get("reserved_stock", 0))
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     
-    await db.await safe_update_one(inventory_items, {"id": movement_data.item_id}, {"$set": update_data})
+    await db.inventory_items.update_one({"id": movement_data.item_id}, {"$set": update_data})
     
     await log_audit_trail(
         db, "inventory_movements", movement.id, "CREATE", 
@@ -4348,7 +4348,7 @@ async def update_employee(
     # Store old values for audit
     old_values = {k: employee.get(k) for k in update_data.keys() if k in employee}
     
-    await db.await safe_update_one(employees, {"id": employee_id}, {"$set": update_data})
+    await db.employees.update_one({"id": employee_id}, {"$set": update_data})
     
     await log_audit_trail(
         db, "employees", employee_id, "UPDATE", 
@@ -4916,7 +4916,7 @@ async def create_purchase_order(
     
     # Update requirement if linked
     if requirement:
-        await db.await safe_update_one(requirements, 
+        await db.requirements.update_one(
             {"id": po_data.requirement_id},
             {"$set": {
                 "purchase_order_id": po.id,
@@ -5000,7 +5000,7 @@ async def issue_purchase_order(
         "updated_at": issue_time.isoformat()
     }
     
-    await db.await safe_update_one(purchase_orders, {"id": po_id}, {"$set": update_data})
+    await db.purchase_orders.update_one({"id": po_id}, {"$set": update_data})
     
     # Log audit trail
     await log_audit_trail(
@@ -5090,7 +5090,7 @@ async def create_reception(
         new_pending = po_item["quantity"] - new_received
         is_fully_received = new_pending == 0
         
-        await db.await safe_update_one(purchase_order_items, 
+        await db.purchase_order_items.update_one(
             {"id": po_item_id},
             {"$set": {
                 "received_quantity": new_received,
@@ -5116,7 +5116,7 @@ async def create_reception(
     
     if not remaining_po_items:
         # PO is fully received
-        await db.await safe_update_one(purchase_orders, 
+        await db.purchase_orders.update_one(
             {"id": reception_data.purchase_order_id},
             {"$set": {
                 "status": "FULLY_RECEIVED",
@@ -5126,7 +5126,7 @@ async def create_reception(
         )
     else:
         # PO is partially received
-        await db.await safe_update_one(purchase_orders, 
+        await db.purchase_orders.update_one(
             {"id": reception_data.purchase_order_id},
             {"$set": {
                 "status": "PARTIALLY_RECEIVED",
@@ -5157,7 +5157,7 @@ async def create_reception(
             inventory_item = await db.inventory_items.find_one({"id": item.item_id})
             if inventory_item:
                 new_stock = inventory_item.get("current_stock", 0) + item.received_quantity
-                await db.await safe_update_one(inventory_items, 
+                await db.inventory_items.update_one(
                     {"id": item.item_id},
                     {"$set": {
                         "current_stock": new_stock,
@@ -5167,7 +5167,7 @@ async def create_reception(
                 )
             
             # Mark reception item as processed
-            await db.await safe_update_one(reception_items, 
+            await db.reception_items.update_one(
                 {"id": item.id},
                 {"$set": {
                     "processed_to_inventory": True,
@@ -5243,5 +5243,4 @@ app.include_router(portal_router)
 
 if __name__ == "__main__":
     import uvicorn
-from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_one_and_update, MongoUpdateError
     uvicorn.run(app, host="0.0.0.0", port=8001)
