@@ -287,9 +287,9 @@ backend:
 
   - task: "Role-based Permissions"
     implemented: true
-    working: true
+    working: false
     file: "server.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
@@ -299,6 +299,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ PASSED: Role-based permissions working correctly for finance module. FINANCE_ADMIN can create bank accounts and GL concepts, CASHIER can manage cash sessions and receipts, WAREHOUSE can manage inventory items. Access control properly enforced across all tested endpoints."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL ISSUES: Role permissions inconsistent - ADMIN and role-specific users (FINANCE_ADMIN, WAREHOUSE, LOGISTICS, HR_ADMIN) cannot access their own endpoints, getting 403 errors. Only denials working correctly. This suggests role checking logic has issues or roles not properly assigned to endpoints. Core security framework exists but role mappings broken."
 
 frontend:
   - task: "Finance Module Dashboard"
