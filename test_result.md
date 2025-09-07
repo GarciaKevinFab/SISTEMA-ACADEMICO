@@ -444,16 +444,16 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Advanced Receipts Features (Idempotency, State Transitions, QR)"
-    - "Advanced Cash & Banks Features (Mandatory Count, Reconciliation, Arqueo)"
-    - "Advanced Inventory Features (Concurrency, Negative Stock, FIFO Accuracy)"
-    - "Role-based Permissions"
-  stuck_tasks:
-    - "Complete Logistics Workflow (PO Lifecycle, Receptions, Validations)"
-    - "Advanced HR Features (Bulk Import, Contracts, Timezone Handling)"
-    - "Audit & Security Features (Immutable Logs, Data Masking, Correlation-ID)"
-  test_all: false
-  test_priority: "high_first"
+    - "Advanced Receipts Module (Void/Refund/Idempotency)"
+    - "Enhanced Cash & Banks (Reconciliation/Mandatory Count)"
+    - "FIFO Inventory Cost Calculation"
+    - "Role-based Permissions (ADMIN Access)"
+    - "Purchase Order Lifecycle"
+    - "HR Bulk Import"
+    - "Audit & Security Features"
+  stuck_tasks: []
+  test_all: true
+  test_priority: "comprehensive_validation"
 
 agent_communication:
   - agent: "main"
