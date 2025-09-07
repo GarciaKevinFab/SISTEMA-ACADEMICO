@@ -79,8 +79,18 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
-# FastAPI app - Optimized with orjson and compression
-app = OptimizedFastAPI.create_app("Sistema Académico IESPP Gustavo Allende Llavería")
+# FastAPI app - Using standard FastAPI with orjson response class
+try:
+    from fastapi.responses import ORJSONResponse
+    app = FastAPI(
+        title="Sistema Académico IESPP Gustavo Allende Llavería",
+        default_response_class=ORJSONResponse
+    )
+    logger.info("FastAPI app created with ORJSONResponse")
+except ImportError:
+    app = FastAPI(title="Sistema Académico IESPP Gustavo Allende Llavería")
+    logger.warning("orjson not available, using standard JSON responses")
+
 api_router = APIRouter(prefix="/api")
 
 # Add structured logging middleware
