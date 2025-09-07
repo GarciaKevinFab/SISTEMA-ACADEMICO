@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 const HRDashboard = () => {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
   const [employees, setEmployees] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
