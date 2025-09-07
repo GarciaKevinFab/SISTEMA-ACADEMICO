@@ -50,6 +50,7 @@ try:
     from academic_routes import academic_router
     from minedu_integration import minedu_router  
     from mesa_partes_routes import mesa_partes_router
+    from optimized_endpoints import optimized_router
     ROUTES_AVAILABLE = True
     logger.info("All route modules imported successfully")
 except ImportError as e:
