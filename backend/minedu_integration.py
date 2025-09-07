@@ -345,7 +345,8 @@ async def retry_minedu_export(
             raise HTTPException(status_code=400, detail="Se ha alcanzado el máximo número de intentos")
         
         # Update status to retrying
-        await db.await safe_update_one(minedu_exports, 
+        await safe_update_one(
+            db.minedu_exports,
             {"id": export_id},
             {
                 "$set": {
