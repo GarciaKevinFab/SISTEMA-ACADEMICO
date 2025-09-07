@@ -660,6 +660,7 @@ const ReceiptsDashboard = () => {
                           )}
                           
                           <Button 
+                            data-testid="receipt-view"
                             size="sm" 
                             variant="outline"
                             onClick={() => downloadReceiptPDF(receipt.id, receipt.receipt_number)}
@@ -668,6 +669,7 @@ const ReceiptsDashboard = () => {
                           </Button>
                           
                           <Button 
+                            data-testid="receipt-verify-qr"
                             size="sm" 
                             variant="outline"
                             onClick={() => openVerificationUrl(receipt.id)}
