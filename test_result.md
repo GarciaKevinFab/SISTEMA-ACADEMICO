@@ -443,8 +443,15 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
-  stuck_tasks: []
+  current_focus:
+    - "Advanced Receipts Features (Idempotency, State Transitions, QR)"
+    - "Advanced Cash & Banks Features (Mandatory Count, Reconciliation, Arqueo)"
+    - "Advanced Inventory Features (Concurrency, Negative Stock, FIFO Accuracy)"
+    - "Role-based Permissions"
+  stuck_tasks:
+    - "Complete Logistics Workflow (PO Lifecycle, Receptions, Validations)"
+    - "Advanced HR Features (Bulk Import, Contracts, Timezone Handling)"
+    - "Audit & Security Features (Immutable Logs, Data Masking, Correlation-ID)"
   test_all: false
   test_priority: "high_first"
 
