@@ -1,588 +1,1316 @@
-# MANUAL TÉCNICO - MÓDULO TESORERÍA Y ADMINISTRACIÓN
-## Sistema Integral Académico IESPP "Gustavo Allende Llavería"
+# Manual Técnico - Sistema Académico Integral
 
-### VERSIÓN: 1.0 - PRODUCCIÓN
-### FECHA: Septiembre 2024
+## Tabla de Contenidos
 
----
-
-## 1. ARQUITECTURA DEL SISTEMA
-
-### 1.1 Arquitectura General
-- **Frontend**: React 18 con TypeScript
-- **Backend**: FastAPI (Python 3.11)
-- **Base de Datos**: MongoDB 6.0
-- **Autenticación**: JWT con roles
-- **Deployment**: Kubernetes + Docker
-
-### 1.2 Estructura de Directorios
-```
-/app/
-├── backend/
-│   ├── server.py                 # Servidor principal FastAPI
-│   ├── models.py                # Modelos Pydantic generales
-│   ├── finance_models.py        # Modelos específicos del módulo finanzas
-│   ├── finance_enums.py         # Enumeraciones del módulo finanzas
-│   ├── finance_utils.py         # Utilidades (QR, PDF, FIFO, auditoría)
-│   ├── auth_utils.py            # Utilidades de autenticación
-│   ├── crud.py                  # Operaciones CRUD generales
-│   ├── seed_data.py             # Script de datos iniciales
-│   └── requirements.txt         # Dependencias Python
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── FinanceModule.jsx         # Módulo principal de finanzas
-│   │   │   ├── finance/
-│   │   │   │   ├── CashBanksDashboard.jsx    # Dashboard Caja y Bancos
-│   │   │   │   ├── ReceiptsDashboard.jsx     # Dashboard Boletas
-│   │   │   │   ├── InventoryDashboard.jsx    # Dashboard Inventario
-│   │   │   │   ├── LogisticsDashboard.jsx    # Dashboard Logística
-│   │   │   │   └── HRDashboard.jsx           # Dashboard RRHH
-│   │   │   └── ui/                       # Componentes UI (Shadcn)
-│   │   └── App.js                        # Aplicación principal
-└── scripts/
-    └── finance_reports.py        # Generador de reportes
-```
+1. [Arquitectura del Sistema](#arquitectura-del-sistema)
+2. [Stack Tecnológico](#stack-tecnológico)
+3. [Base de Datos](#base-de-datos)
+4. [APIs y Endpoints](#apis-y-endpoints)
+5. [Autenticación y Seguridad](#autenticación-y-seguridad)
+6. [Integración MINEDU](#integración-minedu)
+7. [Performance y Monitoreo](#performance-y-monitoreo)
+8. [Despliegue](#despliegue)
+9. [Mantenimiento](#mantenimiento)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
-## 2. BASE DE DATOS
+## Arquitectura del Sistema
 
-### 2.1 Colecciones MongoDB
+### 🏗️ **Arquitectura General**
 
-#### Colecciones Principales
-- **bank_accounts**: Cuentas bancarias de la institución
-- **cash_sessions**: Sesiones de caja (apertura/cierre)
-- **cash_movements**: Movimientos de caja (ingresos/egresos)
-- **receipts**: Boletas internas no tributarias
-- **receipt_payments**: Registros de pagos de boletas (idempotencia)
-- **gl_concepts**: Conceptos contables (ingresos/egresos)
-- **cost_centers**: Centros de costo
-- **income_expenses**: Asientos de ingresos y egresos
-- **inventory_items**: Items de inventario
-- **inventory_movements**: Movimientos de inventario (FIFO)
-- **suppliers**: Proveedores con validación RUC
-- **requirements**: Requerimientos de compra
-- **requirement_items**: Items de requerimientos
-- **purchase_orders**: Órdenes de compra
-- **purchase_order_items**: Items de órdenes de compra
-- **receptions**: Recepciones de mercadería
-- **employees**: Personal de la institución
-- **attendance**: Registro de asistencia
-- **audit_logs**: Logs de auditoría completos
+```mermaid
+graph TB
+    subgraph "Frontend Layer"
+        A[React SPA] --> B[React Router]
+        B --> C[Context API]
+        C --> D[Axios HTTP Client]
+    end
+    
+    subgraph "API Gateway"
+        E[Nginx/Kubernetes Ingress] --> F[Load Balancer]
+    end
+    
+    subgraph "Backend Layer"
+        G[FastAPI Application] --> H[Pydantic Models]
+        H --> I[MongoDB Motor Driver]
+        G --> J[Background Tasks]
+        G --> K[Caching Layer]
+    end
+    
+    subgraph "Data Layer"
+        L[MongoDB Primary] --> M[MongoDB Replica Set]
+        N[Redis Cache] --> O[Session Storage]
+    end
+    
+    subgraph "External Services"
+        P[MINEDU SIA/SIAGIE] --> Q[Outbox Pattern]
+        R[Email Service] --> S[SMS Gateway]
+    end
+    
+    D --> E
+    F --> G
+    I --> L
+    K --> N
+    Q --> P
+```
 
-#### Índices Críticos
+### 🔧 **Patrones de Diseño Implementados**
+
+#### **1. Repository Pattern**
+```python
+class StudentRepository:
+    async def find_by_id(self, student_id: str) -> Optional[Student]:
+        return await self.collection.find_one({"id": student_id})
+    
+    async def create(self, student: Student) -> str:
+        result = await self.collection.insert_one(student.dict())
+        return str(result.inserted_id)
+```
+
+#### **2. Outbox Pattern (MINEDU)**
+```python
+@dataclass
+class OutboxEvent:
+    id: str
+    entity_type: EntityType
+    entity_id: str
+    payload: Dict[str, Any]
+    status: OutboxStatus
+    retry_count: int = 0
+```
+
+#### **3. Circuit Breaker**
+```python
+class CircuitBreaker:
+    def __init__(self, failure_threshold: int = 5, recovery_timeout: int = 60):
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self.state = CircuitBreakerState.CLOSED
+```
+
+#### **4. CQRS (Command Query Responsibility Segregation)**
+```python
+# Commands
+class CreateStudentCommand:
+    def __init__(self, student_data: StudentCreate):
+        self.student_data = student_data
+
+# Queries  
+class GetStudentQuery:
+    def __init__(self, student_id: str):
+        self.student_id = student_id
+```
+
+---
+
+## Stack Tecnológico
+
+### 🖥️ **Backend Stack**
+
+#### **Framework Principal**
+- **FastAPI 0.104+**: Framework web asíncrono
+- **Python 3.11+**: Lenguaje de programación
+- **Uvicorn**: Servidor ASGI
+
+#### **Base de Datos**
+- **MongoDB 7.0+**: Base de datos principal
+- **Motor 3.3+**: Driver asíncrono para MongoDB
+- **Redis 7.2+**: Cache y sesiones
+
+#### **Librerías Clave**
+```python
+dependencies = {
+    "fastapi": "0.104.1",
+    "motor": "3.3.2", 
+    "pydantic": "2.4.2",
+    "orjson": "3.9.10",
+    "redis": "5.0.1",
+    "celery": "5.3.4",
+    "reportlab": "4.0.7",
+    "qrcode": "7.4.2",
+    "openpyxl": "3.1.2",
+    "passlib": "1.7.4",
+    "python-jose": "3.3.0"
+}
+```
+
+### 🎨 **Frontend Stack**
+
+#### **Framework Principal**
+- **React 18.2+**: Framework de UI
+- **React Router 6.16+**: Enrutamiento
+- **Vite 4.5+**: Build tool y dev server
+
+#### **Librerías de UI**
+```json
+{
+  "react": "18.2.0",
+  "react-router-dom": "6.16.0", 
+  "axios": "1.5.1",
+  "@headlessui/react": "1.7.17",
+  "tailwindcss": "3.3.5",
+  "lucide-react": "0.288.0",
+  "sonner": "1.2.0"
+}
+```
+
+#### **Estado Global**
+- **Context API**: Manejo de estado
+- **Local Storage**: Persistencia de sesión
+- **React Query**: Cache de datos (opcional)
+
+### 🛠️ **DevOps y Deployment**
+
+#### **Containerización**
+- **Docker**: Containerización de aplicaciones
+- **Docker Compose**: Orquestación local
+- **Kubernetes**: Orquestación en producción
+
+#### **Monitoreo**
+- **Structured Logging**: JSON logs estructurados
+- **Correlation IDs**: Trazabilidad de requests
+- **Health Checks**: Endpoints de salud
+
+---
+
+## Base de Datos
+
+### 🗄️ **Diseño de Base de Datos**
+
+#### **Colecciones Principales**
+
 ```javascript
-// Bank Accounts
-db.bank_accounts.createIndex({"account_number": 1}, {unique: true})
-db.bank_accounts.createIndex({"is_active": 1})
+// Usuarios y Autenticación
+db.users = {
+  "id": "UUID",
+  "email": "string",
+  "password_hash": "string",
+  "role": "enum",
+  "is_active": "boolean",
+  "created_at": "ISO8601",
+  "last_login": "ISO8601"
+}
 
-// Receipts
-db.receipts.createIndex({"receipt_number": 1}, {unique: true})
-db.receipts.createIndex([{"status": 1, "issued_at": -1}])
-db.receipts.createIndex({"customer_document": 1})
+// Estudiantes
+db.students = {
+  "id": "UUID",  
+  "user_id": "UUID",
+  "dni": "string",
+  "full_name": "string",
+  "birth_date": "ISO8601",
+  "program": "string",
+  "status": "enum",
+  "contact_info": {
+    "email": "string",
+    "phone": "string",
+    "address": "string"
+  }
+}
 
-// Inventory
-db.inventory_items.createIndex({"code": 1}, {unique: true})
-db.inventory_items.createIndex([{"category": 1, "is_active": 1}])
-db.inventory_movements.createIndex([{"item_id": 1, "created_at": 1}])
+// Cursos
+db.courses = {
+  "id": "string",
+  "name": "string", 
+  "credits": "number",
+  "prerequisites": ["course_id"],
+  "program": "string",
+  "status": "enum"
+}
 
-// Suppliers
-db.suppliers.createIndex({"ruc": 1}, {unique: true})
-db.suppliers.createIndex({"supplier_code": 1}, {unique: true})
+// Matrículas
+db.enrollments = {
+  "id": "UUID",
+  "student_id": "UUID",
+  "course_id": "string",
+  "section_id": "UUID",
+  "period_id": "string",
+  "status": "enum",
+  "enrollment_date": "ISO8601",
+  "credits": "number"
+}
 
-// Employees
-db.employees.createIndex({"document_number": 1}, {unique: true})
-db.employees.createIndex({"employee_code": 1}, {unique: true})
-
-// Audit Logs
-db.audit_logs.createIndex([{"table_name": 1, "timestamp": -1}])
-db.audit_logs.createIndex({"user_id": 1})
-```
-
-### 2.2 Esquemas de Datos Críticos
-
-#### CashSession (Sesión de Caja)
-```json
-{
-  "id": "uuid",
-  "session_number": "SES-2024-001",
-  "initial_amount": 1000.0,
-  "final_amount": 1350.0,
-  "expected_final_amount": 1350.0,
-  "difference": 0.0,
-  "status": "CLOSED", // OPEN | CLOSED | RECONCILED
-  "opened_by": "user_id",
-  "opened_at": "2024-09-01T08:00:00Z",
-  "closed_by": "user_id",
-  "closed_at": "2024-09-01T18:00:00Z",
-  "total_income": 500.0,
-  "total_expense": 150.0,
-  "cashier_notes": "Sesión normal",
-  "closing_notes": "Arqueo correcto"
+// Calificaciones
+db.grades = {
+  "id": "UUID",
+  "student_id": "UUID", 
+  "course_id": "string",
+  "period_id": "string",
+  "numerical_grade": "decimal",
+  "literal_grade": "enum", 
+  "status": "enum",
+  "evaluation_date": "ISO8601"
 }
 ```
 
-#### Receipt (Boleta Interna)
-```json
-{
-  "id": "uuid",
-  "receipt_number": "001-000123",
-  "series": "001",
-  "correlative": 123,
-  "concept": "TUITION", // ENROLLMENT | TUITION | CERTIFICATE | PROCEDURE
-  "description": "Pago de pensión marzo 2024",
-  "amount": 350.0,
-  "customer_name": "Juan Pérez López",
-  "customer_document": "12345678",
-  "customer_email": "juan.perez@example.com",
-  "status": "PAID", // PENDING | PAID | CANCELLED | REFUNDED
-  "issued_at": "2024-09-01T10:00:00Z",
-  "paid_at": "2024-09-01T10:15:00Z",
-  "payment_method": "CASH",
-  "qr_code": "data:image/png;base64,iVBOR...",
-  "pdf_path": "/tmp/receipt_uuid.pdf"
-}
+#### **Índices Críticos**
+```javascript
+// Índices de performance
+db.users.createIndex({"email": 1}, {"unique": true})
+db.students.createIndex({"dni": 1}, {"unique": true})
+db.students.createIndex({"user_id": 1})
+db.enrollments.createIndex({"student_id": 1, "period_id": 1})
+db.grades.createIndex({"student_id": 1, "course_id": 1, "period_id": 1})
+
+// Índices compuestos
+db.enrollments.createIndex({"period_id": 1, "status": 1})
+db.grades.createIndex({"course_id": 1, "period_id": 1, "status": 1})
+
+// Índices para MINEDU
+db.minedu_outbox.createIndex({"idempotent_key": 1}, {"unique": true})
+db.minedu_outbox.createIndex({"status": 1, "retry_count": 1})
 ```
 
-#### InventoryMovement (Movimiento FIFO)
-```json
-{
-  "id": "uuid",
-  "movement_number": "MOV-2024-001",
-  "item_id": "item_uuid",
-  "movement_type": "ENTRY", // ENTRY | EXIT | TRANSFER | ADJUSTMENT
-  "quantity": 50,
-  "unit_cost": 12.50,
-  "total_cost": 625.0,
-  "stock_before": 100,
-  "stock_after": 150,
-  "reason": "Compra de papel",
-  "batch_number": "LT001",
-  "expiry_date": "2025-12-31"
-}
-```
-
----
-
-## 3. APIs REST
-
-### 3.1 Endpoints Principales
-
-#### Autenticación y Autorización
-```
-POST /api/auth/login
-POST /api/auth/logout
-GET  /api/auth/me
-```
-
-#### Caja y Bancos
-```
-GET    /api/finance/bank-accounts
-POST   /api/finance/bank-accounts
-PUT    /api/finance/bank-accounts/{id}
-
-GET    /api/finance/cash-sessions/current
-POST   /api/finance/cash-sessions
-POST   /api/finance/cash-sessions/{id}/close
-
-GET    /api/finance/cash-movements
-POST   /api/finance/cash-movements
-
-POST   /api/finance/bank-reconciliation/upload
-```
-
-#### Boletas Internas
-```
-GET    /api/finance/receipts
-POST   /api/finance/receipts
-POST   /api/finance/receipts/{id}/pay
-POST   /api/finance/receipts/{id}/cancel
-GET    /api/finance/receipts/{id}/pdf
-
-GET    /api/verificar/{receipt_id}  # Endpoint público
-```
-
-#### Inventario
-```
-GET    /api/inventory/items
-POST   /api/inventory/items
-PUT    /api/inventory/items/{id}
-
-GET    /api/inventory/movements
-POST   /api/inventory/movements
-GET    /api/inventory/items/{id}/kardex
-
-GET    /api/inventory/alerts
-```
-
-#### Logística
-```
-GET    /api/logistics/suppliers
-POST   /api/logistics/suppliers
-
-GET    /api/logistics/requirements
-POST   /api/logistics/requirements
-```
-
-#### Recursos Humanos
-```
-GET    /api/hr/employees
-POST   /api/hr/employees
-PUT    /api/hr/employees/{id}
-
-GET    /api/hr/attendance
-POST   /api/hr/attendance
-```
-
-### 3.2 Códigos de Respuesta HTTP
-- **200**: Operación exitosa
-- **201**: Recurso creado
-- **400**: Error en datos de entrada
-- **401**: No autenticado
-- **403**: Sin permisos
-- **404**: Recurso no encontrado
-- **422**: Error de validación
-- **500**: Error interno del servidor
-
-### 3.3 Formato de Respuestas
-```json
-{
-  "status": "success|error",
-  "message": "Descripción de la operación",
-  "data": {...},
-  "errors": [...] // Solo en caso de error
-}
-```
-
----
-
-## 4. ROLES Y PERMISOS
-
-### 4.1 Roles del Sistema
-- **ADMIN**: Acceso completo al sistema
-- **FINANCE_ADMIN**: Administrador del módulo financiero
-- **CASHIER**: Cajero (sesiones, boletas, movimientos)
-- **WAREHOUSE**: Encargado de almacén (inventario)
-- **HR_ADMIN**: Administrador de recursos humanos
-- **LOGISTICS**: Encargado de logística (proveedores, compras)
-
-### 4.2 Matriz de Permisos
-
-| Funcionalidad | ADMIN | FINANCE_ADMIN | CASHIER | WAREHOUSE | HR_ADMIN | LOGISTICS |
-|---------------|-------|---------------|---------|-----------|----------|-----------|
-| Cuentas Bancarias | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Sesiones de Caja | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Boletas Internas | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Anular Boletas | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Inventario | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
-| Proveedores | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
-| Requerimientos | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
-| Empleados | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
-| Asistencia | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
-
----
-
-## 5. AUDITORÍA Y SEGURIDAD
-
-### 5.1 Sistema de Auditoría
-Todas las operaciones críticas son registradas en la colección `audit_logs`:
-
-```json
-{
-  "id": "uuid",
-  "table_name": "receipts",
-  "record_id": "receipt_uuid",
-  "action": "CREATE|UPDATE|DELETE|VIEW|EXPORT|PRINT",
-  "old_values": {...}, // Valores anteriores
-  "new_values": {...}, // Valores nuevos
-  "user_id": "user_uuid",
-  "ip_address": "192.168.1.100",
-  "timestamp": "2024-09-01T10:00:00Z"
-}
-```
-
-### 5.2 Funciones de Auditoría
-```python
-async def log_audit_trail(
-    db, table_name: str, record_id: str, action: str, 
-    old_values: Optional[Dict] = None, 
-    new_values: Optional[Dict] = None,
-    user_id: str = None, 
-    ip_address: str = None
-):
-    """Registra trail de auditoría para cualquier cambio"""
-    audit_log = {
-        "id": str(uuid.uuid4()),
-        "table_name": table_name,
-        "record_id": record_id,
-        "action": action,
-        "old_values": old_values,
-        "new_values": new_values,
-        "user_id": user_id,
-        "ip_address": ip_address,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+#### **Validación de Esquemas**
+```javascript
+db.createCollection("students", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: ["id", "dni", "full_name"],
+      properties: {
+        dni: {
+          bsonType: "string",
+          pattern: "^[0-9]{8}$"
+        },
+        email: {
+          bsonType: "string",
+          pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+        }
+      }
     }
-    await db.audit_logs.insert_one(audit_log)
+  }
+})
 ```
 
-### 5.3 Seguridad de Datos
-- **Cifrado**: Datos sensibles (cuentas bancarias) cifrados en reposo
-- **Mascarado**: Números de cuenta y documentos personales mascarados en logs
-- **JWT**: Tokens con expiración de 24 horas
-- **HTTPS**: Todas las comunicaciones sobre SSL/TLS
-- **Validación**: Validación estricta de datos de entrada (RUC, DNI, emails)
+### 📊 **Estrategia de Particionamiento**
 
----
-
-## 6. FUNCIONALIDADES ESPECÍFICAS
-
-### 6.1 Sistema FIFO (First In, First Out)
-El sistema implementa cálculo automático de costos FIFO para inventarios:
-
+#### **Por Período Académico**
 ```python
-def calculate_inventory_fifo(
-    current_stock: int,
-    inventory_movements: List[Dict[str, Any]],
-    exit_quantity: int
-) -> tuple[float, List[Dict[str, Any]]]:
-    """
-    Calcula costo FIFO para salida de inventario
-    Retorna: (costo_total, desglose_costos)
-    """
-    entries = [m for m in inventory_movements if m['movement_type'] == 'ENTRY']
-    entries.sort(key=lambda x: x['created_at'])  # FIFO por fecha
-    
-    remaining_to_exit = exit_quantity
-    total_cost = 0.0
-    cost_breakdown = []
-    
-    for entry in entries:
-        if remaining_to_exit <= 0:
-            break
-            
-        available_quantity = entry.get('remaining_quantity', entry['quantity'])
-        if available_quantity <= 0:
-            continue
-            
-        exit_from_this_entry = min(remaining_to_exit, available_quantity)
-        unit_cost = entry.get('unit_cost', 0)
-        entry_cost = exit_from_this_entry * unit_cost
-        
-        total_cost += entry_cost
-        cost_breakdown.append({
-            'entry_id': entry['id'],
-            'entry_date': entry['created_at'],
-            'quantity': exit_from_this_entry,
-            'unit_cost': unit_cost,
-            'total_cost': entry_cost
-        })
-        
-        remaining_to_exit -= exit_from_this_entry
-    
-    return total_cost, cost_breakdown
+# Colecciones particionadas por período
+period_collections = {
+    "2024-01": {
+        "enrollments_2024_01": "enrollments",
+        "grades_2024_01": "grades", 
+        "attendance_2024_01": "attendance"
+    }
+}
 ```
 
-### 6.2 Generación de QR y PDFs
-El sistema genera automáticamente códigos QR para verificación de boletas:
+#### **Agregaciones Optimizadas**
+```javascript
+// Pipeline de estadísticas por curso
+db.grades.aggregate([
+  {"$match": {"course_id": "MAT101", "period_id": "2024-02"}},
+  {"$group": {
+    "_id": "$literal_grade",
+    "count": {"$sum": 1},
+    "avg_numerical": {"$avg": "$numerical_grade"}
+  }},
+  {"$sort": {"_id": 1}}
+])
+```
 
+---
+
+## APIs y Endpoints
+
+### 🔗 **Estructura de APIs**
+
+#### **Convención de Rutas**
+```
+BASE_URL/api/{module}/{resource}/{action}
+```
+
+**Ejemplo**:
+```
+POST /api/academic/students
+GET /api/academic/students/{student_id}
+PUT /api/academic/students/{student_id}
+DELETE /api/academic/students/{student_id}
+```
+
+#### **Prefijos por Módulo**
+- `/api/auth/*` - Autenticación
+- `/api/academic/*` - Módulo académico
+- `/api/finance/*` - Tesorería
+- `/api/procedures/*` - Mesa de partes
+- `/api/minedu/*` - Integración MINEDU
+- `/api/reports/*` - Reportes
+- `/api/security/*` - Seguridad y compliance
+
+### 📝 **Documentación de APIs**
+
+#### **OpenAPI/Swagger**
 ```python
-def generate_qr_code(data: str, size: int = 10) -> str:
-    """Genera código QR como string base64"""
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=size,
-        border=4,
-    )
-    qr.add_data(data)
-    qr.make(fit=True)
-    
-    img = qr.make_image(fill_color="black", back_color="white")
-    buffer = io.BytesIO()
-    img.save(buffer, format='PNG')
-    buffer.seek(0)
-    
-    img_data = base64.b64encode(buffer.getvalue()).decode()
-    return f"data:image/png;base64,{img_data}"
-```
-
-### 6.3 Validación RUC
-Implementa algoritmo oficial de validación de RUC peruano:
-
-```python
-def validate_ruc(ruc: str) -> bool:
-    """Valida RUC peruano"""
-    if not ruc or len(ruc) != 11 or not ruc.isdigit():
-        return False
-    
-    factors = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2]
-    check_digit = int(ruc[10])
-    
-    total = sum(int(ruc[i]) * factors[i] for i in range(10))
-    remainder = total % 11
-    calculated_check_digit = 11 - remainder if remainder >= 2 else remainder
-    
-    return check_digit == calculated_check_digit
-```
-
-### 6.4 Idempotencia en Pagos
-Sistema de idempotencia para evitar pagos duplicados:
-
-```python
-# En el endpoint de pago
-if idempotency_key:
-    existing_payment = await db.receipt_payments.find_one({
-        "receipt_id": receipt_id,
-        "idempotency_key": idempotency_key
-    })
-    if existing_payment:
-        return {"status": "success", "message": "Payment already processed"}
-```
-
----
-
-## 7. CONFIGURACIÓN Y DEPLOYMENT
-
-### 7.1 Variables de Entorno
-```bash
-# Backend
-MONGO_URL=mongodb://localhost:27017/iespp_system
-JWT_SECRET_KEY=your-secret-key
-JWT_ALGORITHM=HS256
-JWT_EXPIRE_HOURS=24
-
-# Frontend
-REACT_APP_BACKEND_URL=https://api.iesppgal.edu.pe
-```
-
-### 7.2 Comandos de Deployment
-```bash
-# Inicializar datos
-cd /app/backend
-python seed_data.py
-
-# Generar reportes
-cd /app/scripts
-python finance_reports.py --report cash-flow --start-date 2024-09-01 --end-date 2024-09-30
-
-# Reiniciar servicios
-sudo supervisorctl restart all
-```
-
-### 7.3 Backup y Restore
-```bash
-# Backup MongoDB
-mongodump --uri="mongodb://localhost:27017/iespp_system" --out=/backup/$(date +%Y%m%d)
-
-# Restore MongoDB
-mongorestore --uri="mongodb://localhost:27017/iespp_system" /backup/20240901/iespp_system/
-```
-
----
-
-## 8. MONITOREO Y LOGS
-
-### 8.1 Logs del Sistema
-- **Backend**: `/var/log/supervisor/backend.*.log`
-- **Frontend**: `/var/log/supervisor/frontend.*.log`
-- **Auditoría**: Colección `audit_logs` en MongoDB
-
-### 8.2 Métricas de Performance
-- **Response Time**: < 1.5s (p95)
-- **Throughput**: 200 req/min en endpoints críticos
-- **Error Rate**: < 1% en operaciones financieras
-- **Uptime**: > 99.9%
-
-### 8.3 Alertas Críticas
-- Stock bajo en inventario
-- Diferencias en arqueo de caja > S/10
-- Fallos en validación RUC
-- Errores 5xx en APIs críticas
-- Intentos de acceso no autorizado
-
----
-
-## 9. MANTENIMIENTO
-
-### 9.1 Tareas Diarias
-- Verificar estado de servicios
-- Revisar logs de error
-- Validar backups automáticos
-- Monitorear alertas de inventario
-
-### 9.2 Tareas Semanales
-- Limpieza de logs antiguos
-- Revisión de performance de queries
-- Actualización de índices si es necesario
-- Revisión de auditoría de seguridad
-
-### 9.3 Tareas Mensuales
-- Cierre contable mensual
-- Conciliación bancaria completa
-- Arqueo físico de inventario
-- Reporte de gestión financiera
-- Backup completo del sistema
-
----
-
-## 10. TROUBLESHOOTING
-
-### 10.1 Problemas Comunes
-
-#### Error: "No se puede abrir sesión de caja"
-**Causa**: Usuario ya tiene sesión abierta
-**Solución**: 
-```sql
-db.cash_sessions.updateOne(
-  {"opened_by": "user_id", "status": "OPEN"},
-  {"$set": {"status": "CLOSED", "closed_at": new Date()}}
+app = FastAPI(
+    title="Sistema Académico Integral",
+    description="API completa para gestión académica",
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 ```
 
-#### Error: "RUC inválido"
-**Causa**: RUC no pasa validación de dígito verificador
-**Solución**: Verificar que el RUC tenga 11 dígitos y sea válido según SUNAT
+**Acceso a documentación**:
+- **Swagger UI**: `https://universidad.edu/docs`
+- **ReDoc**: `https://universidad.edu/redoc`
+- **OpenAPI JSON**: `https://universidad.edu/openapi.json`
 
-#### Error: "Stock insuficiente"
-**Causa**: Intento de salida mayor al stock disponible
-**Solución**: Verificar stock actual en inventario y ajustar cantidad
+#### **Modelos Pydantic**
+```python
+class StudentCreate(BaseModel):
+    dni: str = Field(..., regex=r"^[0-9]{8}$")
+    full_name: str = Field(..., min_length=3, max_length=100)
+    birth_date: date
+    email: EmailStr
+    phone: Optional[str] = Field(None, regex=r"^[0-9]{9}$")
+    program: str
 
-### 10.2 Comandos de Diagnóstico
-```bash
-# Verificar estado de servicios
-sudo supervisorctl status
+class StudentResponse(BaseModel):
+    id: str
+    dni: str  
+    full_name: str
+    program: str
+    status: StudentStatus
+    created_at: datetime
+```
 
-# Ver logs en tiempo real
-tail -f /var/log/supervisor/backend.out.log
+### 🔒 **Autenticación y Autorización**
 
-# Verificar conexión MongoDB
-mongo mongodb://localhost:27017/iespp_system --eval "db.stats()"
+#### **JWT Implementation**
+```python
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+```
 
-# Test de conectividad API
-curl -X GET "https://api.iesppgal.edu.pe/api/health"
+#### **Role-Based Access Control**
+```python
+def require_role(allowed_roles: List[UserRole]):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            current_user = kwargs.get('current_user')
+            if current_user.role not in allowed_roles and current_user.role != UserRole.ADMIN:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Insufficient permissions"
+                )
+            return await func(*args, **kwargs)
+        return wrapper
+    return decorator
+```
+
+### 📊 **Respuestas Estándar**
+
+#### **Formato de Respuesta Exitosa**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "name": "valor"
+  },
+  "message": "Operación completada exitosamente",
+  "correlation_id": "uuid",
+  "timestamp": "2024-09-07T12:00:00Z"
+}
+```
+
+#### **Formato de Error**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Datos de entrada inválidos",
+    "details": [
+      {
+        "field": "email",
+        "message": "Formato de email inválido"
+      }
+    ]
+  },
+  "correlation_id": "uuid",
+  "timestamp": "2024-09-07T12:00:00Z"
+}
 ```
 
 ---
 
-## 11. CHANGELOG
+## Integración MINEDU
 
-### Versión 1.0 (Septiembre 2024)
-- ✅ Implementación completa del módulo Tesorería y Administración
-- ✅ Sistema de caja con apertura/cierre y arqueo
-- ✅ Boletas internas con QR y verificación pública
-- ✅ Inventario con cálculo FIFO automático
-- ✅ Gestión de proveedores con validación RUC
-- ✅ Módulo de RRHH con control de asistencia
-- ✅ Sistema de auditoría completo
-- ✅ Dashboards interactivos por rol
-- ✅ Generación de reportes PDF y CSV
-- ✅ Testing automatizado frontend y backend
-- ✅ Documentación técnica y de usuario
+### 🔗 **Arquitectura de Integración**
+
+#### **Patrón Outbox Detallado**
+```python
+class MINEDUIntegration:
+    def __init__(self, db: AsyncIOMotorDatabase):
+        self.producer = MINEDUProducer(db)
+        self.worker = MINEDUWorker(db)
+        self.reconciler = MINEDUReconciler(db)
+```
+
+#### **Estados de Eventos**
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING
+    PENDING --> SENDING
+    SENDING --> SENT
+    SENDING --> RETRY
+    SENT --> ACKED
+    RETRY --> SENDING
+    RETRY --> FAILED
+    FAILED --> DEAD_LETTER
+    ACKED --> [*]
+```
+
+#### **Payload de Matrícula**
+```json
+{
+  "tipo": "matricula",
+  "estudiante_id": "STU20240001",
+  "curso_id": "MAT101",
+  "periodo_id": "2024-02",
+  "fecha_matricula": "2024-08-15T10:00:00Z",
+  "estado": "ACTIVE",
+  "creditos": 4,
+  "tipo_matricula": "PRIMERA_VEZ",
+  "modalidad": "PRESENCIAL"
+}
+```
+
+### ⚙️ **Configuración de Worker**
+```python
+# Worker configuration
+MINEDU_CONFIG = {
+    "api_url": "https://sia.minedu.gob.pe/api",
+    "batch_size": 10,
+    "max_retries": 5,
+    "circuit_breaker": {
+        "failure_threshold": 5,
+        "recovery_timeout": 60
+    },
+    "retry_delays": [1, 2, 4, 8, 16]  # Exponential backoff
+}
+```
+
+#### **Proceso de Conciliación**
+```python
+async def reconcile_period(period_id: str):
+    # 1. Obtener datos locales
+    local_data = await get_local_data(period_id)
+    
+    # 2. Consultar MINEDU
+    remote_data = await query_minedu_data(period_id)
+    
+    # 3. Comparar y identificar discrepancias
+    discrepancies = compare_datasets(local_data, remote_data)
+    
+    # 4. Generar reporte
+    report = generate_discrepancy_report(discrepancies)
+    
+    # 5. Reproceso automático
+    reprocessed = await auto_reprocess_missing(discrepancies)
+    
+    return {
+        "total_discrepancies": len(discrepancies),
+        "reprocessed_count": reprocessed,
+        "report_path": report.path
+    }
+```
 
 ---
 
-**DOCUMENTO TÉCNICO OFICIAL**  
-**Módulo Tesorería y Administración**  
-**Sistema Integral Académico IESPP "Gustavo Allende Llavería"**  
-**Versión 1.0 - Producción Ready**
+## Performance y Monitoreo
+
+### 📈 **Métricas de Performance**
+
+#### **SLAs Objetivo**
+- **P95 Latency**: < 1.5 segundos
+- **Throughput**: > 300 req/min
+- **Availability**: > 99.5%
+- **Error Rate**: < 0.5%
+
+#### **Optimizaciones Implementadas**
+```python
+# Connection pooling
+mongo_client = AsyncIOMotorClient(
+    mongo_url,
+    maxPoolSize=50,
+    minPoolSize=10,
+    maxIdleTimeMS=30000,
+    serverSelectionTimeoutMS=5000
+)
+
+# Caching strategy
+@lru_cache(maxsize=1000)
+def get_cached_course(course_id: str):
+    return course_data
+
+# Async processing
+async def process_batch_operations(operations: List[Operation]):
+    tasks = [process_single_operation(op) for op in operations]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    return results
+```
+
+### 📊 **Monitoreo y Logging**
+
+#### **Structured Logging**
+```python
+import structlog
+
+logger = structlog.get_logger("api.academic")
+
+# Log con contexto
+logger.info(
+    "Student enrolled successfully",
+    student_id=student.id,
+    course_id=course.id,
+    period_id=period,
+    correlation_id=get_correlation_id(),
+    duration_ms=125.5
+)
+```
+
+#### **Health Checks**
+```python
+@app.get("/health")
+async def health_check():
+    checks = await asyncio.gather(
+        check_database_connection(),
+        check_redis_connection(), 
+        check_minedu_integration(),
+        return_exceptions=True
+    )
+    
+    status = "healthy" if all(checks) else "unhealthy"
+    
+    return {
+        "status": status,
+        "timestamp": datetime.utcnow().isoformat(),
+        "checks": {
+            "database": checks[0],
+            "cache": checks[1], 
+            "minedu": checks[2]
+        }
+    }
+```
+
+#### **Métricas Customizadas**
+```python
+from prometheus_client import Counter, Histogram, Gauge
+
+# Contadores
+enrollment_counter = Counter('enrollments_total', 'Total enrollments')
+grade_submissions = Counter('grade_submissions_total', 'Total grade submissions')
+
+# Histogramas
+response_time = Histogram('http_request_duration_seconds', 'Request duration')
+minedu_sync_time = Histogram('minedu_sync_duration_seconds', 'MINEDU sync duration')
+
+# Gauges
+active_students = Gauge('active_students_total', 'Number of active students')
+pending_minedu_events = Gauge('minedu_pending_events', 'Pending MINEDU events')
+```
+
+---
+
+## Despliegue
+
+### 🐳 **Containerización**
+
+#### **Dockerfile - Backend**
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash app
+USER app
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD python -c "import requests; requests.get('http://localhost:8001/health')"
+
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001"]
+```
+
+#### **Dockerfile - Frontend**
+```dockerfile
+FROM node:18-alpine as builder
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/nginx.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+#### **Docker Compose - Development**
+```yaml
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8001:8001"
+    environment:
+      - MONGO_URL=mongodb://mongo:27017/sistemaacademico
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - mongo
+      - redis
+    volumes:
+      - ./backend:/app
+    
+  frontend:
+    build: ./frontend  
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_BACKEND_URL=http://localhost:8001
+    volumes:
+      - ./frontend:/app
+      
+  mongo:
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+      
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  mongo_data:
+  redis_data:
+```
+
+### ☸️ **Kubernetes Deployment**
+
+#### **Backend Deployment**
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: universidad/backend:latest
+        ports:
+        - containerPort: 8001
+        env:
+        - name: MONGO_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-secret
+              key: mongo-url
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+```
+
+#### **Service Configuration**
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+spec:
+  selector:
+    app: backend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8001
+  type: ClusterIP
+```
+
+#### **Ingress Configuration**
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sistema-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  tls:
+  - hosts:
+    - universidad.edu
+    secretName: tls-secret
+  rules:
+  - host: universidad.edu
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 80
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 80
+```
+
+### 🔧 **Variables de Entorno**
+
+#### **Backend (.env)**
+```bash
+# Database
+MONGO_URL=mongodb://localhost:27017/sistemaacademico
+REDIS_URL=redis://localhost:6379
+
+# Security
+SECRET_KEY=your-super-secret-key-here
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# MINEDU Integration
+MINEDU_API_URL=https://sia.minedu.gob.pe/api
+MINEDU_API_TOKEN=your-minedu-token
+MINEDU_INSTITUTION_CODE=IESPP_GUSTAVO_ALLENDE
+
+# Email/SMS
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=noreply@universidad.edu
+SMTP_PASSWORD=your-email-password
+SMS_PROVIDER_URL=https://api.sms-provider.com
+
+# Performance
+MAX_CONNECTIONS=50
+CACHE_TTL=3600
+WORKER_PROCESSES=4
+```
+
+#### **Frontend (.env)**
+```bash
+REACT_APP_BACKEND_URL=https://universidad.edu/api
+REACT_APP_INSTITUTION_NAME=IESPP Gustavo Allende Llavería
+REACT_APP_VERSION=2.0.0
+```
+
+---
+
+## Mantenimiento
+
+### 🔧 **Rutinas de Mantenimiento**
+
+#### **Tareas Diarias**
+```bash
+#!/bin/bash
+# daily_maintenance.sh
+
+# 1. Health check
+curl -f https://universidad.edu/health || exit 1
+
+# 2. Database backup
+mongodump --uri="$MONGO_URL" --out="/backups/daily/$(date +%Y%m%d)"
+
+# 3. Log rotation
+logrotate /etc/logrotate.conf
+
+# 4. Clear old cache
+redis-cli FLUSHDB
+
+# 5. Disk space check
+df -h | awk '$5 > 80 {print $0}' | mail -s "Disk Space Alert" admin@universidad.edu
+```
+
+#### **Tareas Semanales**
+```bash
+#!/bin/bash
+# weekly_maintenance.sh
+
+# 1. Database optimization
+mongo --eval "db.runCommand({compact: 'students'})"
+mongo --eval "db.runCommand({compact: 'enrollments'})"
+
+# 2. Index analysis
+mongo --eval "db.students.getIndexes()" > /tmp/index_analysis.txt
+
+# 3. Performance report
+python generate_performance_report.py --week
+
+# 4. Security scan
+python security_scan.py --full
+```
+
+#### **Tareas Mensuales**
+```bash
+#!/bin/bash
+# monthly_maintenance.sh
+
+# 1. Full system backup
+tar -czf "/backups/monthly/sistema_$(date +%Y%m).tar.gz" /app
+
+# 2. Certificate renewal check
+certbot renew --dry-run
+
+# 3. Dependency updates
+pip list --outdated > /tmp/outdated_packages.txt
+
+# 4. MINEDU reconciliation
+python reconcile_minedu.py --period="$(date +%Y-%m)"
+
+# 5. Audit log archive
+python archive_audit_logs.py --older-than=90
+```
+
+### 📊 **Monitoreo de Salud**
+
+#### **Script de Monitoreo**
+```python
+import asyncio
+import aiohttp
+import logging
+from datetime import datetime
+
+async def health_monitor():
+    """Monitor system health and send alerts"""
+    
+    checks = [
+        ("API Health", "https://universidad.edu/health"),
+        ("Database", "mongodb://localhost:27017"),
+        ("Cache", "redis://localhost:6379"),
+        ("MINEDU", "https://sia.minedu.gob.pe/health")
+    ]
+    
+    results = []
+    
+    for name, url in checks:
+        try:
+            if url.startswith('http'):
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, timeout=10) as response:
+                        status = "OK" if response.status == 200 else "FAIL"
+            else:
+                # Database/Redis checks
+                status = await check_service(url)
+            
+            results.append({"service": name, "status": status, "timestamp": datetime.utcnow()})
+        except Exception as e:
+            results.append({"service": name, "status": "ERROR", "error": str(e)})
+    
+    # Send alerts if any service is down
+    failed_services = [r for r in results if r["status"] != "OK"]
+    if failed_services:
+        await send_alert(failed_services)
+    
+    return results
+
+# Ejecutar cada 5 minutos
+if __name__ == "__main__":
+    asyncio.run(health_monitor())
+```
+
+### 🔄 **Actualización del Sistema**
+
+#### **Proceso de Update**
+```bash
+#!/bin/bash
+# update_system.sh
+
+set -e  # Exit on any error
+
+echo "Starting system update..."
+
+# 1. Backup current version
+echo "Creating backup..."
+docker-compose exec backend python backup_system.py
+
+# 2. Pull new images
+echo "Pulling new images..."
+docker-compose pull
+
+# 3. Run database migrations
+echo "Running migrations..."
+docker-compose exec backend python migrate.py
+
+# 4. Rolling update
+echo "Performing rolling update..."
+docker-compose up -d --no-deps backend
+sleep 30
+
+# 5. Health check
+echo "Performing health check..."
+curl -f https://universidad.edu/health || {
+    echo "Health check failed, rolling back..."
+    docker-compose exec backend python rollback.py
+    exit 1
+}
+
+# 6. Update frontend
+echo "Updating frontend..."
+docker-compose up -d --no-deps frontend
+
+echo "Update completed successfully!"
+```
+
+---
+
+## Troubleshooting
+
+### 🚨 **Problemas Comunes**
+
+#### **1. Alto Uso de CPU**
+```bash
+# Diagnóstico
+top -p $(pgrep -f uvicorn)
+py-spy top --pid $(pgrep -f uvicorn)
+
+# Análisis de queries lentas
+mongo --eval "db.setProfilingLevel(2, {slowms: 100})"
+mongo --eval "db.system.profile.find().sort({ts: -1}).limit(5)"
+```
+
+#### **2. Problemas de Memoria**
+```bash
+# Monitoring
+free -h
+docker stats
+
+# Memory leaks
+valgrind --tool=memcheck --leak-check=full python server.py
+```
+
+#### **3. Conexiones de Base de Datos**
+```python
+# Diagnóstico de conexiones
+async def diagnose_connections():
+    client_info = await db.admin.command("serverStatus")
+    connections = client_info["connections"]
+    
+    print(f"Current connections: {connections['current']}")
+    print(f"Available connections: {connections['available']}")
+    print(f"Total created: {connections['totalCreated']}")
+```
+
+#### **4. Integración MINEDU**
+```python
+# Debug MINEDU events
+async def debug_minedu_events():
+    # Check stuck events
+    stuck_events = await db.minedu_outbox.find({
+        "status": "SENDING",
+        "updated_at": {"$lt": datetime.utcnow() - timedelta(hours=1)}
+    }).to_list(None)
+    
+    # Check failed events
+    failed_events = await db.minedu_outbox.find({
+        "status": "FAILED"
+    }).to_list(None)
+    
+    # Circuit breaker status
+    circuit_status = await get_circuit_breaker_status()
+    
+    return {
+        "stuck_events": len(stuck_events),
+        "failed_events": len(failed_events),
+        "circuit_breaker": circuit_status
+    }
+```
+
+### 📝 **Logs de Error**
+
+#### **Ubicaciones de Logs**
+```bash
+# Application logs
+/var/log/supervisor/backend.*.log
+/var/log/supervisor/frontend.*.log
+
+# System logs
+/var/log/syslog
+/var/log/nginx/access.log
+/var/log/nginx/error.log
+
+# Container logs
+docker-compose logs backend
+docker-compose logs frontend
+```
+
+#### **Análisis de Logs**
+```bash
+# Errores más frecuentes
+grep -i error /var/log/supervisor/backend.err.log | sort | uniq -c | sort -nr
+
+# Requests más lentos
+awk '$9 > 1000 {print $0}' access.log | head -10
+
+# Correlation ID tracking
+jq '.correlation_id="abc123"' /var/log/app.json
+```
+
+### 🔧 **Scripts de Reparación**
+
+#### **Reparar Índices**
+```python
+async def rebuild_indexes():
+    """Rebuild database indexes"""
+    collections = ['students', 'courses', 'enrollments', 'grades']
+    
+    for collection_name in collections:
+        collection = db[collection_name]
+        
+        # Drop old indexes (except _id)
+        indexes = await collection.list_indexes().to_list(None)
+        for index in indexes:
+            if index['name'] != '_id_':
+                await collection.drop_index(index['name'])
+        
+        # Recreate indexes
+        await create_collection_indexes(collection_name)
+        
+        print(f"Rebuilt indexes for {collection_name}")
+```
+
+#### **Limpiar Datos Corruptos**
+```python
+async def clean_corrupted_data():
+    """Clean corrupted or inconsistent data"""
+    
+    # Find orphaned grades (without enrollment)
+    orphaned_grades = await db.grades.aggregate([
+        {
+            "$lookup": {
+                "from": "enrollments",
+                "localField": "student_id",
+                "foreignField": "student_id",
+                "as": "enrollment"
+            }
+        },
+        {"$match": {"enrollment": []}},
+        {"$project": {"_id": 1, "student_id": 1, "course_id": 1}}
+    ]).to_list(None)
+    
+    # Remove orphaned records
+    if orphaned_grades:
+        orphaned_ids = [g["_id"] for g in orphaned_grades]
+        await db.grades.delete_many({"_id": {"$in": orphaned_ids}})
+        print(f"Removed {len(orphaned_ids)} orphaned grades")
+    
+    # Fix invalid numerical grades
+    await db.grades.update_many(
+        {"numerical_grade": {"$gt": 20}},
+        {"$set": {"numerical_grade": 20}}
+    )
+    
+    # Fix missing literal grades
+    await fix_missing_literal_grades()
+```
+
+---
+
+## Seguridad
+
+### 🔒 **Configuración de Seguridad**
+
+#### **Headers de Seguridad**
+```python
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
+
+# HTTPS redirect
+app.add_middleware(HTTPSRedirectMiddleware)
+
+# Trusted hosts
+app.add_middleware(
+    TrustedHostMiddleware, 
+    allowed_hosts=["universidad.edu", "*.universidad.edu"]
+)
+
+# Security headers
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY" 
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+```
+
+#### **Rate Limiting**
+```python
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+@app.post("/api/auth/login")
+@limiter.limit("5/minute")
+async def login(request: Request, user_credentials: UserLogin):
+    # Login logic
+    pass
+```
+
+#### **Input Validation**
+```python
+class SecureStudentCreate(BaseModel):
+    dni: str = Field(..., regex=r"^[0-9]{8}$")
+    full_name: str = Field(..., min_length=3, max_length=100)
+    email: EmailStr
+    phone: Optional[str] = Field(None, regex=r"^[0-9]{9}$")
+    
+    @validator('full_name')
+    def validate_name(cls, v):
+        # Prevent XSS
+        if '<' in v or '>' in v or '"' in v:
+            raise ValueError('Invalid characters in name')
+        return v.strip().title()
+    
+    @validator('dni')
+    def validate_dni(cls, v):
+        # DNI checksum validation
+        if not validate_peruvian_dni(v):
+            raise ValueError('Invalid DNI')
+        return v
+```
+
+### 🛡️ **Auditoría**
+
+#### **Log de Auditoría**
+```python
+async def log_audit_event(
+    user_id: str,
+    action: str, 
+    resource: str,
+    resource_id: str = None,
+    result: str = "SUCCESS",
+    details: dict = None
+):
+    audit_entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "user_id": user_id,
+        "action": action,
+        "resource": resource,
+        "resource_id": resource_id,
+        "result": result,
+        "details": details or {},
+        "ip_address": get_client_ip(),
+        "user_agent": get_user_agent(),
+        "correlation_id": get_correlation_id()
+    }
+    
+    await db.audit_logs.insert_one(audit_entry)
+```
+
+#### **Compliance Reports**
+```python
+async def generate_compliance_report(start_date: date, end_date: date):
+    """Generate compliance report for audit"""
+    
+    # Failed login attempts
+    failed_logins = await db.audit_logs.count_documents({
+        "action": "LOGIN_ATTEMPT",
+        "result": "FAILED",
+        "timestamp": {
+            "$gte": start_date.isoformat(),
+            "$lte": end_date.isoformat()
+        }
+    })
+    
+    # Data access patterns
+    data_access = await db.audit_logs.aggregate([
+        {"$match": {"action": {"$in": ["READ", "UPDATE", "DELETE"]}}},
+        {"$group": {"_id": "$user_id", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]).to_list(None)
+    
+    # Permission changes
+    permission_changes = await db.audit_logs.count_documents({
+        "action": "PERMISSION_CHANGE",
+        "timestamp": {
+            "$gte": start_date.isoformat(),
+            "$lte": end_date.isoformat()
+        }
+    })
+    
+    return {
+        "period": f"{start_date} to {end_date}",
+        "failed_logins": failed_logins,
+        "data_access_summary": data_access,
+        "permission_changes": permission_changes,
+        "generated_at": datetime.utcnow().isoformat()
+    }
+```
+
+---
+
+**© 2024 IESPP "Gustavo Allende Llavería". Todos los derechos reservados.**
+
+**Versión del Manual**: 1.0  
+**Última actualización**: Septiembre 2024  
+**Próxima revisión**: Diciembre 2024
