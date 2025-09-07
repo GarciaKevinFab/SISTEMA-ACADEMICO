@@ -3220,6 +3220,176 @@ async def upload_bank_statement(
         logger.error(f"Error processing bank statement: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
+@api_router.post("/finance/bank-reconciliation/advanced-upload")
+async def advanced_bank_reconciliation(
+    reconciliation_data: BankReconciliationUpload,
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_role([UserRole.FINANCE_ADMIN]))
+):
+    """Advanced bank reconciliation with duplicate detection and tolerance handling"""
+    
+    # Verify bank account exists
+    bank_account = await db.bank_accounts.find_one({"id": reconciliation_data.bank_account_id})
+    if not bank_account:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+    
+    # Validate file type
+    if not file.filename.endswith(('.csv', '.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Only CSV and Excel files are supported")
+    
+    try:
+        # Read file content
+        content = await file.read()
+        
+        # Parse based on file type
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(content), skiprows=1 if reconciliation_data.has_header else 0)
+        else:
+            df = pd.read_excel(io.BytesIO(content), skiprows=1 if reconciliation_data.has_header else 0)
+        
+        # Map columns based on configuration
+        column_mapping = {
+            reconciliation_data.date_column: 'date',
+            reconciliation_data.description_column: 'description', 
+            reconciliation_data.amount_column: 'amount',
+            reconciliation_data.reference_column: 'reference'
+        }
+        
+        # Rename columns
+        df = df.rename(columns=column_mapping)
+        
+        # Validate required columns exist
+        required_cols = ['date', 'description', 'amount']
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required columns: {missing_cols}"
+            )
+        
+        # Process reconciliation with advanced features
+        processed_movements = []
+        duplicates = []
+        errors = []
+        tolerance_threshold = 0.02  # 2 centavos tolerance
+        
+        # Get existing movements for duplicate detection
+        existing_movements = await db.bank_movements.find({
+            "bank_account_id": reconciliation_data.bank_account_id
+        }).to_list(10000)
+        
+        for index, row in df.iterrows():
+            try:
+                # Parse and validate date
+                movement_date = pd.to_datetime(row['date']).date()
+                
+                # Check if date is within reconciliation period
+                reconciliation_start = reconciliation_data.reconciliation_date - timedelta(days=30)
+                reconciliation_end = reconciliation_data.reconciliation_date + timedelta(days=1)
+                
+                if not (reconciliation_start <= movement_date <= reconciliation_end.date()):
+                    errors.append({
+                        "row": index + 1,
+                        "error": f"Date {movement_date} outside reconciliation period",
+                        "data": row.to_dict()
+                    })
+                    continue
+                
+                # Parse amount
+                amount = float(row['amount'])
+                description = str(row['description'])
+                reference = str(row.get('reference', ''))
+                
+                # Check for duplicates (same date, similar amount within tolerance, similar description)
+                is_duplicate = False
+                for existing in existing_movements:
+                    existing_date = datetime.fromisoformat(existing['date']).date()
+                    existing_amount = existing['amount']
+                    existing_desc = existing.get('description', '')
+                    
+                    # Check date match
+                    if existing_date == movement_date:
+                        # Check amount tolerance (2 centavos)
+                        amount_diff = abs(existing_amount - amount)
+                        if amount_diff <= tolerance_threshold:
+                            # Check description similarity (simple contains check)
+                            if existing_desc.lower() in description.lower() or description.lower() in existing_desc.lower():
+                                is_duplicate = True
+                                duplicates.append({
+                                    "row": index + 1,
+                                    "existing_id": existing['id'],
+                                    "new_data": row.to_dict(),
+                                    "existing_data": existing
+                                })
+                                break
+                
+                if not is_duplicate:
+                    movement = {
+                        "id": str(uuid.uuid4()),
+                        "bank_account_id": reconciliation_data.bank_account_id,
+                        "date": movement_date.isoformat(),
+                        "description": description,
+                        "amount": amount,
+                        "reference": reference,
+                        "movement_type": "DEBIT" if amount < 0 else "CREDIT",
+                        "is_reconciled": False,
+                        "reconciliation_id": str(uuid.uuid4()),
+                        "uploaded_by": current_user.id,
+                        "uploaded_at": datetime.now(timezone.utc).isoformat()
+                    }
+                    processed_movements.append(movement)
+                    
+            except Exception as e:
+                errors.append({
+                    "row": index + 1,
+                    "error": str(e),
+                    "data": row.to_dict()
+                })
+        
+        # Save processed movements
+        if processed_movements:
+            await db.bank_movements.insert_many(processed_movements)
+        
+        # Create reconciliation summary
+        reconciliation_summary = {
+            "id": str(uuid.uuid4()),
+            "bank_account_id": reconciliation_data.bank_account_id,
+            "reconciliation_date": reconciliation_data.reconciliation_date.isoformat(),
+            "file_format": reconciliation_data.file_format,
+            "processed_count": len(processed_movements),
+            "duplicate_count": len(duplicates),
+            "error_count": len(errors),
+            "total_rows": len(df),
+            "created_by": current_user.id,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.bank_reconciliations.insert_one(reconciliation_summary)
+        
+        # Log audit trail
+        await log_audit_trail(
+            db, "bank_reconciliations", reconciliation_summary["id"], "CREATE",
+            None, reconciliation_summary, current_user.id
+        )
+        
+        return {
+            "status": "success",
+            "message": "Bank reconciliation completed",
+            "summary": {
+                "processed_movements": len(processed_movements),
+                "duplicates_found": len(duplicates),
+                "errors_found": len(errors),
+                "total_rows": len(df)
+            },
+            "duplicates": duplicates,
+            "errors": errors,
+            "reconciliation_id": reconciliation_summary["id"]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in advanced bank reconciliation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing reconciliation: {str(e)}")
+
 # ====================================================================================================
 # RECEIPTS (BOLETAS INTERNAS) APIs
 # ====================================================================================================
