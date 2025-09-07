@@ -1047,21 +1047,69 @@ async def send_procedure_notification(
     logger.info(f"Notification sent to {recipient_email} for procedure {procedure_id}")
     return notification
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request = None
+):
+    """Enhanced get_current_user with structured logging"""
+    correlation_id = get_correlation_id(request) if request else str(uuid.uuid4())
+    auth_logger = logging.getLogger("api.auth")
+    
     try:
         token = credentials.credentials
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
+            log_with_correlation(
+                auth_logger, "warning", 
+                "Invalid token - no username in payload",
+                request,
+                extra_data={"correlation_id": correlation_id}
+            )
+            raise HTTPException(
+                status_code=401, 
+                detail={"error": {"code": ErrorCodes.AUTHENTICATION_ERROR, "message": "Token inválido", "correlation_id": correlation_id}}
+            )
         
         user = await db.users.find_one({"username": username})
         if user is None:
-            raise HTTPException(status_code=401, detail="User not found")
+            log_with_correlation(
+                auth_logger, "warning",
+                f"User not found for username: {username}",
+                request,
+                extra_data={"correlation_id": correlation_id, "username": username}
+            )
+            raise HTTPException(
+                status_code=401, 
+                detail={"error": {"code": ErrorCodes.AUTHENTICATION_ERROR, "message": "Usuario no encontrado", "correlation_id": correlation_id}}
+            )
         
         return User(**user)
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        
+    except JWTError as e:
+        log_with_correlation(
+            auth_logger, "warning",
+            f"JWT error during authentication: {str(e)}",
+            request,
+            extra_data={"correlation_id": correlation_id}
+        )
+        raise HTTPException(
+            status_code=401, 
+            detail={"error": {"code": ErrorCodes.AUTHENTICATION_ERROR, "message": "Token inválido", "correlation_id": correlation_id}}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_with_correlation(
+            auth_logger, "error",
+            f"Unexpected error during authentication: {str(e)}",
+            request,
+            extra_data={"correlation_id": correlation_id}
+        )
+        raise HTTPException(
+            status_code=500, 
+            detail={"error": {"code": ErrorCodes.INTERNAL_SERVER_ERROR, "message": "Error de autenticación", "correlation_id": correlation_id}}
+        )
 
 def require_role(allowed_roles: List[UserRole]):
     def role_checker(current_user: User = Depends(get_current_user)):
