@@ -631,10 +631,13 @@ const ProceduresManagement = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex gap-2">
-                        <Button variant="ghost" size="sm">
+                        <Button data-testid="procedure-view" variant="ghost" size="sm">
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm">
+                        <Button data-testid="procedure-download-pdf" variant="ghost" size="sm">
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button data-testid="procedure-verify-qr" variant="ghost" size="sm">
                           <QrCode className="h-4 w-4" />
                         </Button>
                       </div>
