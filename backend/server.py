@@ -3901,9 +3901,8 @@ async def create_inventory_movement(
             current_stock, all_movements, movement_data.quantity
         )
         
-        # Use calculated cost if not provided
-        if not movement_data.unit_cost:
-            movement_data.unit_cost = total_cost / movement_data.quantity if movement_data.quantity > 0 else 0
+        # Use calculated FIFO cost for exits (overrides any provided unit_cost)
+        movement_data.unit_cost = total_cost / movement_data.quantity if movement_data.quantity > 0 else 0
     
     # Create movement
     movement_dict = movement_data.dict()
