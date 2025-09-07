@@ -3874,6 +3874,10 @@ async def create_inventory_movement(
     
     current_stock = item.get("current_stock", 0)
     
+    # Initialize cost variables
+    total_cost = 0.0
+    cost_breakdown = []
+    
     # For exits, check stock availability and calculate FIFO cost
     if movement_data.movement_type == InventoryMovementType.EXIT.value:
         # Check if negative stock is allowed (configurable per item)
