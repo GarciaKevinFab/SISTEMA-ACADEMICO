@@ -12,7 +12,8 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 
-from shared_deps import get_current_user, db, logger, generate_tracking_code, calculate_deadline, log_procedure_action, send_procedure_notification
+from shared_deps import get_current_user, db, logger
+from logging_middleware import get_correlation_id, log_with_correlation, ErrorResponse, ErrorCodes, generate_tracking_code, calculate_deadline, log_procedure_action, send_procedure_notification
 
 mesa_partes_router = APIRouter(prefix="/mesa-partes", tags=["Mesa de Partes"])
 
