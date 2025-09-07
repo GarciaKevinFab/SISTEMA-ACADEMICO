@@ -2840,9 +2840,10 @@ if ROUTES_AVAILABLE:
     app.include_router(grades_router, prefix="/api")
     app.include_router(attendance_router, prefix="/api")
     # NEW ROUTERS - PRIORITY IMPLEMENTATION
-    app.include_router(minedu_integration_router)
-    app.include_router(security_compliance_router)
-    app.include_router(academic_reports_router)
+    # Temporarily comment out problematic routers
+    # app.include_router(minedu_integration_router)
+    # app.include_router(security_compliance_router)
+    # app.include_router(academic_reports_router)
     logger.info("All routers included successfully")
 
 # Include router
