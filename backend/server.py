@@ -60,6 +60,9 @@ try:
     from optimized_endpoints import optimized_router
     from enrollment_routes import enrollment_router
     from teachers_sections import teacher_section_manager
+    from grades_routes import grades_router
+    from grades_system import grades_system
+    from attendance_system import attendance_system
     ROUTES_AVAILABLE = True
     logger.info("All route modules imported successfully")
 except ImportError as e:
