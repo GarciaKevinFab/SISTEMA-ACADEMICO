@@ -1,758 +1,601 @@
-# Academic Module API Routes - Complete Implementation
-
-from fastapi import APIRouter, HTTPException, Depends, status, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, status
+from fastapi.security import HTTPAuthorizationCredentials
 from typing import List, Dict, Any, Optional
 from datetime import datetime, date, timezone
-from models import *
-from academic_models import *
-from finance_utils import log_audit_trail, prepare_for_mongo
 import uuid
+
+from academic_models import *
+from academic_enums import *
+from server import get_current_user, db, logger
 
 academic_router = APIRouter(prefix="/academic", tags=["Academic"])
 
-# ====================================================================================================
-# CAREER & CURRICULAR PLAN MANAGEMENT
-# ====================================================================================================
-
-@academic_router.post("/careers")
-async def create_career(
-    career_data: CareerCreate,
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.ACADEMIC_STAFF]))
-):
-    """Create new career program"""
-    
-    # Check if career code already exists
-    existing_career = await db.careers.find_one({"code": career_data.code})
-    if existing_career:
-        raise HTTPException(status_code=400, detail="Career code already exists")
-    
-    career = Career(**career_data.dict())
-    career_doc = prepare_for_mongo(career.dict())
-    
-    await db.careers.insert_one(career_doc)
-    
-    # Create default study plan
-    study_plan_data = generate_study_plan(career.id, 10)  # Default 10 semesters
-    await db.curricular_plans.insert_one(study_plan_data)
-    
-    await log_audit_trail(
-        db, "careers", career.id, "CREATE",
-        None, career_doc, current_user.id
-    )
-    
-    return {"status": "success", "career": career}
-
-@academic_router.get("/careers")
-async def get_careers(
-    is_active: bool = True,
-    skip: int = 0,
-    limit: int = 100,
-    current_user: User = Depends(get_current_user)
-):
-    """Get all careers"""
-    
-    filter_query = {"is_active": is_active}
-    
-    careers = await db.careers.find(filter_query).skip(skip).limit(limit).to_list(limit)
-    total = await db.careers.count_documents(filter_query)
-    
-    return {
-        "careers": [Career(**career) for career in careers],
-        "total": total,
-        "skip": skip,
-        "limit": limit
-    }
-
-@academic_router.post("/courses")
-async def create_course(
-    course_data: CourseCreate,
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.ACADEMIC_STAFF]))
-):
-    """Create new course"""
-    
-    # Check if course code already exists for the program
-    existing_course = await db.courses.find_one({
-        "code": course_data.code,
-        "program": course_data.program
-    })
-    if existing_course:
-        raise HTTPException(status_code=400, detail="Course code already exists for this program")
-    
-    course = Course(**course_data.dict())
-    course_doc = prepare_for_mongo(course.dict())
-    
-    await db.courses.insert_one(course_doc)
-    
-    await log_audit_trail(
-        db, "courses", course.id, "CREATE",
-        None, course_doc, current_user.id
-    )
-    
-    return {"status": "success", "course": course}
-
-@academic_router.get("/courses")
-async def get_courses(
-    program: Optional[str] = None,
-    semester: Optional[int] = None,
-    is_active: bool = True,
-    skip: int = 0,
-    limit: int = 100,
-    current_user: User = Depends(get_current_user)
-):
-    """Get courses with filters"""
-    
-    filter_query = {"is_active": is_active}
-    if program:
-        filter_query["program"] = program
-    if semester:
-        filter_query["semester"] = semester
-    
-    courses = await db.courses.find(filter_query).skip(skip).limit(limit).to_list(limit)
-    total = await db.courses.count_documents(filter_query)
-    
-    return {
-        "courses": [Course(**course) for course in courses],
-        "total": total,
-        "skip": skip,
-        "limit": limit
-    }
-
-# ====================================================================================================
-# ACADEMIC PERIODS MANAGEMENT
-# ====================================================================================================
-
-@academic_router.post("/periods")
-async def create_academic_period(
-    period_data: AcademicPeriod,
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.ACADEMIC_STAFF]))
-):
-    """Create new academic period"""
-    
-    # Check for overlapping periods
-    existing_period = await db.academic_periods.find_one({
-        "year": period_data.year,
-        "period": period_data.period
-    })
-    if existing_period:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Academic period {period_data.year}-{period_data.period} already exists"
-        )
-    
-    # If this is set as current, update other periods
-    if period_data.is_current:
-        await db.academic_periods.update_many(
-            {"is_current": True},
-            {"$set": {"is_current": False}}
-        )
-    
-    period_doc = prepare_for_mongo(period_data.dict())
-    await db.academic_periods.insert_one(period_doc)
-    
-    await log_audit_trail(
-        db, "academic_periods", period_data.id, "CREATE",
-        None, period_doc, current_user.id
-    )
-    
-    return {"status": "success", "period": period_data}
-
-@academic_router.get("/periods")
-async def get_academic_periods(
-    year: Optional[int] = None,
-    is_active: bool = True,
-    skip: int = 0,
-    limit: int = 100,
-    current_user: User = Depends(get_current_user)
-):
-    """Get academic periods"""
-    
-    filter_query = {"is_active": is_active}
-    if year:
-        filter_query["year"] = year
-    
-    periods = await db.academic_periods.find(filter_query).sort("year", -1).skip(skip).limit(limit).to_list(limit)
-    total = await db.academic_periods.count_documents(filter_query)
-    
-    return {
-        "periods": [AcademicPeriod(**period) for period in periods],
-        "total": total,
-        "skip": skip,
-        "limit": limit
-    }
-
-@academic_router.get("/periods/current")
-async def get_current_period(current_user: User = Depends(get_current_user)):
-    """Get current academic period"""
-    
-    current_period = await db.academic_periods.find_one({"is_current": True})
-    if not current_period:
-        raise HTTPException(status_code=404, detail="No current academic period set")
-    
-    return {"period": AcademicPeriod(**current_period)}
-
-# ====================================================================================================
-# ENROLLMENT MANAGEMENT
-# ====================================================================================================
-
-@academic_router.post("/enrollments")
-async def create_enrollment(
-    enrollment_data: EnrollmentCreate,
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.REGISTRAR, UserRole.STUDENT]))
-):
-    """Create new enrollment with validation"""
-    
-    # Validate student exists
-    student = await db.students.find_one({"id": enrollment_data.student_id})
-    if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
-    
-    # Validate course exists
-    course = await db.courses.find_one({"id": enrollment_data.course_id})
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
-    
-    # Check if enrollment already exists for this period
-    existing_enrollment = await db.enrollments.find_one({
-        "student_id": enrollment_data.student_id,
-        "course_id": enrollment_data.course_id,
-        "academic_year": enrollment_data.academic_year,
-        "academic_period": enrollment_data.academic_period
-    })
-    if existing_enrollment:
-        raise HTTPException(status_code=400, detail="Student already enrolled in this course for this period")
-    
-    # Get student's current enrollments for validation
-    current_enrollments = await db.enrollments.find({
-        "student_id": enrollment_data.student_id,
-        "academic_year": enrollment_data.academic_year,
-        "academic_period": enrollment_data.academic_period,
-        "status": "ACTIVE"
-    }).to_list(100)
-    
-    # Get course prerequisites
-    prerequisites = await db.course_prerequisites.find({"course_id": enrollment_data.course_id}).to_list(100)
-    
-    # Validate enrollment requirements
-    validation = validate_enrollment_requirements(
-        current_enrollments, 
-        [CoursePrerequisite(**p) for p in prerequisites],
-        enrollment_data.course_id
-    )
-    
-    if not validation.can_enroll:
-        raise HTTPException(status_code=400, detail=f"Enrollment not allowed: {', '.join(validation.errors)}")
-    
-    # Create enrollment
-    enrollment = Enrollment(**enrollment_data.dict())
-    enrollment_doc = prepare_for_mongo(enrollment.dict())
-    
-    await db.enrollments.insert_one(enrollment_doc)
-    
-    # Create grade components for the course
-    grade_components = await db.grade_components.find({"course_id": enrollment_data.course_id}).to_list(100)
-    for component in grade_components:
-        student_grade = StudentGrade(
-            enrollment_id=enrollment.id,
-            grade_component_id=component["id"],
-            graded_by=current_user.id
-        )
-        grade_doc = prepare_for_mongo(student_grade.dict())
-        await db.student_grades.insert_one(grade_doc)
-    
-    await log_audit_trail(
-        db, "enrollments", enrollment.id, "CREATE",
-        None, enrollment_doc, current_user.id
-    )
-    
-    return {
-        "status": "success", 
-        "enrollment": enrollment,
-        "validation_warnings": validation.warnings
-    }
-
-@academic_router.get("/enrollments")
-async def get_enrollments(
-    student_id: Optional[str] = None,
-    course_id: Optional[str] = None,
-    academic_year: Optional[int] = None,
-    academic_period: Optional[str] = None,
-    status: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 100,
-    current_user: User = Depends(get_current_user)
-):
-    """Get enrollments with filters"""
-    
-    filter_query = {}
-    if student_id:
-        filter_query["student_id"] = student_id
-    if course_id:
-        filter_query["course_id"] = course_id
-    if academic_year:
-        filter_query["academic_year"] = academic_year
-    if academic_period:
-        filter_query["academic_period"] = academic_period
-    if status:
-        filter_query["status"] = status
-    
-    enrollments = await db.enrollments.find(filter_query).skip(skip).limit(limit).to_list(limit)
-    total = await db.enrollments.count_documents(filter_query)
-    
-    # Enrich with student and course data
-    enriched_enrollments = []
-    for enrollment in enrollments:
-        student = await db.students.find_one({"id": enrollment["student_id"]})
-        course = await db.courses.find_one({"id": enrollment["course_id"]})
+# Dashboard and Statistics
+@academic_router.get("/dashboard/stats")
+async def get_dashboard_stats(current_user = Depends(get_current_user)):
+    """Get dashboard statistics based on user role"""
+    try:
+        stats = {}
         
-        enriched_enrollment = {
-            **enrollment,
-            "student": Student(**student) if student else None,
-            "course": Course(**course) if course else None
+        if current_user['role'] == 'ADMIN':
+            # Admin sees all stats
+            total_students = await db.students.count_documents({"status": "ENROLLED"})
+            total_courses = await db.courses.count_documents({"is_active": True})
+            active_enrollments = await db.enrollments.count_documents({"status": "ACTIVE"})
+            pending_procedures = await db.procedures.count_documents({"status": "RECEIVED"})
+            
+            stats = {
+                "total_students": total_students,
+                "total_courses": total_courses,
+                "active_enrollments": active_enrollments,
+                "pending_procedures": pending_procedures
+            }
+            
+        elif current_user['role'] == 'TEACHER':
+            # Teacher sees their assigned courses and pending grades
+            my_courses = await db.enrollments.count_documents({"teacher_id": current_user['id']})
+            pending_grades = await db.enrollments.count_documents({
+                "teacher_id": current_user['id'],
+                "grade_status": "INCOMPLETE"
+            })
+            
+            stats = {
+                "my_courses": my_courses,
+                "pending_grades": pending_grades
+            }
+            
+        elif current_user['role'] == 'STUDENT':
+            # Student sees their enrollments and approved courses
+            my_enrollments = await db.enrollments.count_documents({"student_id": current_user['id']})
+            approved_courses = await db.enrollments.count_documents({
+                "student_id": current_user['id'],
+                "grade_status": "APPROVED"
+            })
+            
+            stats = {
+                "my_enrollments": my_enrollments,
+                "approved_courses": approved_courses
+            }
+        
+        return {"stats": stats}
+        
+    except Exception as e:
+        logger.error(f"Error fetching dashboard stats: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al obtener estadísticas")
+
+# Students Management
+@academic_router.post("/students", response_model=Student)
+async def create_student(student_data: StudentCreate, current_user = Depends(get_current_user)):
+    """Create a new student"""
+    try:
+        # Check permissions
+        if current_user['role'] not in ['ADMIN', 'REGISTRAR']:
+            raise HTTPException(status_code=403, detail="No autorizado para crear estudiantes")
+        
+        # Check if student already exists
+        existing_student = await db.students.find_one({
+            "document_number": student_data.document_number
+        })
+        
+        if existing_student:
+            raise HTTPException(status_code=400, detail="Ya existe un estudiante con este documento")
+        
+        # Create student
+        student = Student(**student_data.dict(), created_by=current_user['id'])
+        student_dict = student.dict()
+        
+        # Convert date objects to strings for MongoDB
+        if isinstance(student_dict.get('birth_date'), date):
+            student_dict['birth_date'] = student_dict['birth_date'].isoformat()
+        if isinstance(student_dict.get('created_at'), datetime):
+            student_dict['created_at'] = student_dict['created_at'].isoformat()
+        if isinstance(student_dict.get('updated_at'), datetime):
+            student_dict['updated_at'] = student_dict['updated_at'].isoformat()
+        
+        await db.students.insert_one(student_dict)
+        
+        logger.info(f"Student created: {student.student_code} by {current_user['username']}")
+        return student
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating student: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al crear estudiante")
+
+@academic_router.get("/students", response_model=Dict[str, Any])
+async def get_students(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    program: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    current_user = Depends(get_current_user)
+):
+    """Get students with filtering and pagination"""
+    try:
+        # Build query
+        query = {}
+        
+        if program and program != 'ALL':
+            query["program"] = program
+            
+        if status and status != 'ALL':
+            query["status"] = status
+            
+        if search:
+            query["$or"] = [
+                {"first_name": {"$regex": search, "$options": "i"}},
+                {"last_name": {"$regex": search, "$options": "i"}},
+                {"document_number": {"$regex": search, "$options": "i"}},
+                {"student_code": {"$regex": search, "$options": "i"}}
+            ]
+        
+        # Get students
+        students_cursor = db.students.find(query).skip(skip).limit(limit)
+        students = await students_cursor.to_list(length=limit)
+        
+        # Parse dates back from strings
+        for student in students:
+            if isinstance(student.get('birth_date'), str):
+                student['birth_date'] = datetime.fromisoformat(student['birth_date']).date()
+            if isinstance(student.get('created_at'), str):
+                student['created_at'] = datetime.fromisoformat(student['created_at'])
+            if isinstance(student.get('updated_at'), str):
+                student['updated_at'] = datetime.fromisoformat(student['updated_at'])
+        
+        total = await db.students.count_documents(query)
+        
+        return {
+            "students": students,
+            "total": total,
+            "skip": skip,
+            "limit": limit
         }
-        enriched_enrollments.append(enriched_enrollment)
-    
-    return {
-        "enrollments": enriched_enrollments,
-        "total": total,
-        "skip": skip,
-        "limit": limit
-    }
+        
+    except Exception as e:
+        logger.error(f"Error fetching students: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al obtener estudiantes")
 
-# ====================================================================================================
-# GRADES MANAGEMENT
-# ====================================================================================================
+@academic_router.get("/students/{student_id}", response_model=Student)
+async def get_student(student_id: str, current_user = Depends(get_current_user)):
+    """Get student by ID"""
+    try:
+        student = await db.students.find_one({"id": student_id})
+        
+        if not student:
+            raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+        
+        # Parse dates back from strings
+        if isinstance(student.get('birth_date'), str):
+            student['birth_date'] = datetime.fromisoformat(student['birth_date']).date()
+        if isinstance(student.get('created_at'), str):
+            student['created_at'] = datetime.fromisoformat(student['created_at'])
+        if isinstance(student.get('updated_at'), str):
+            student['updated_at'] = datetime.fromisoformat(student['updated_at'])
+        
+        return Student(**student)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching student {student_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al obtener estudiante")
 
-@academic_router.post("/grades")
-async def update_grade(
-    enrollment_id: str,
-    component_id: str,
-    grade_data: GradeUpdate,
-    current_user: User = Depends(require_role([UserRole.TEACHER, UserRole.ADMIN, UserRole.ACADEMIC_STAFF]))
+# Courses Management
+@academic_router.post("/courses", response_model=Course)
+async def create_course(course_data: CourseCreate, current_user = Depends(get_current_user)):
+    """Create a new course"""
+    try:
+        # Check permissions
+        if current_user['role'] not in ['ADMIN', 'REGISTRAR']:
+            raise HTTPException(status_code=403, detail="No autorizado para crear cursos")
+        
+        # Check if course code already exists
+        existing_course = await db.courses.find_one({"code": course_data.code})
+        
+        if existing_course:
+            raise HTTPException(status_code=400, detail="Ya existe un curso con este código")
+        
+        # Create course
+        course = Course(**course_data.dict())
+        course_dict = course.dict()
+        
+        # Convert datetime to string for MongoDB
+        if isinstance(course_dict.get('created_at'), datetime):
+            course_dict['created_at'] = course_dict['created_at'].isoformat()
+        
+        await db.courses.insert_one(course_dict)
+        
+        logger.info(f"Course created: {course.code} by {current_user['username']}")
+        return course
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating course: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al crear curso")
+
+@academic_router.get("/courses", response_model=Dict[str, Any])
+async def get_courses(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    program: Optional[str] = Query(None),
+    semester: Optional[int] = Query(None),
+    is_active: Optional[bool] = Query(None),
+    current_user = Depends(get_current_user)
 ):
-    """Update student grade for specific component"""
-    
-    # Validate enrollment exists
-    enrollment = await db.enrollments.find_one({"id": enrollment_id})
-    if not enrollment:
-        raise HTTPException(status_code=404, detail="Enrollment not found")
-    
-    # Check if teacher is authorized for this course (if not admin)
-    if current_user.role == UserRole.TEACHER:
-        if enrollment.get("teacher_id") != current_user.id:
-            raise HTTPException(status_code=403, detail="Not authorized to grade this course")
-    
-    # Find and update grade
-    grade = await db.student_grades.find_one({
-        "enrollment_id": enrollment_id,
-        "grade_component_id": component_id
-    })
-    
-    if not grade:
-        raise HTTPException(status_code=404, detail="Grade component not found for this enrollment")
-    
-    # Determine literal grade
-    literal_grade = "C"
-    if grade_data.numerical_grade >= 17:
-        literal_grade = "AD"
-    elif grade_data.numerical_grade >= 14:
-        literal_grade = "A"
-    elif grade_data.numerical_grade >= 11:
-        literal_grade = "B"
-    
-    update_data = {
-        "score": grade_data.numerical_grade,
-        "literal_grade": literal_grade,
-        "grade_status": grade_data.grade_status.value,
-        "comments": grade_data.comments,
-        "graded_by": current_user.id,
-        "graded_at": datetime.now(timezone.utc).isoformat()
-    }
-    
-    await db.student_grades.update_one(
-        {"id": grade["id"]},
-        {"$set": update_data}
-    )
-    
-    # Calculate final grade for enrollment
-    await calculate_final_grade(enrollment_id)
-    
-    await log_audit_trail(
-        db, "student_grades", grade["id"], "UPDATE",
-        {"score": grade.get("score")}, update_data, current_user.id
-    )
-    
-    return {"status": "success", "message": "Grade updated successfully"}
+    """Get courses with filtering and pagination"""
+    try:
+        # Build query
+        query = {}
+        
+        if program and program != 'ALL':
+            query["program"] = program
+            
+        if semester:
+            query["semester"] = semester
+            
+        if is_active is not None:
+            query["is_active"] = is_active
+        
+        # Get courses
+        courses_cursor = db.courses.find(query).skip(skip).limit(limit)
+        courses = await courses_cursor.to_list(length=limit)
+        
+        # Parse dates back from strings
+        for course in courses:
+            if isinstance(course.get('created_at'), str):
+                course['created_at'] = datetime.fromisoformat(course['created_at'])
+        
+        total = await db.courses.count_documents(query)
+        
+        return {
+            "courses": courses,
+            "total": total,
+            "skip": skip,
+            "limit": limit
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching courses: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al obtener cursos")
 
-async def calculate_final_grade(enrollment_id: str):
-    """Calculate final grade based on all components"""
-    
-    # Get all grades for the enrollment
-    grades = await db.student_grades.find({"enrollment_id": enrollment_id}).to_list(100)
-    
-    if not grades:
-        return
-    
-    # Get grade components to calculate weighted average
-    total_weight = 0
-    weighted_score = 0
-    
-    for grade_record in grades:
-        if grade_record.get("score") is not None:
-            component = await db.grade_components.find_one({"id": grade_record["grade_component_id"]})
-            if component:
-                weight = component.get("weight_percentage", 0) / 100
-                weighted_score += grade_record["score"] * weight
-                total_weight += weight
-    
-    if total_weight > 0:
-        final_numerical = round(weighted_score, 2)
+# Enrollments Management
+@academic_router.post("/enrollments", response_model=Enrollment)
+async def create_enrollment(enrollment_data: EnrollmentCreate, current_user = Depends(get_current_user)):
+    """Create a new enrollment"""
+    try:
+        # Check permissions
+        if current_user['role'] not in ['ADMIN', 'REGISTRAR']:
+            raise HTTPException(status_code=403, detail="No autorizado para crear matrículas")
         
-        # Determine final status
-        final_status = GradeStatus.APPROVED if final_numerical >= 11 else GradeStatus.FAILED
-        final_literal = "C"
-        if final_numerical >= 17:
-            final_literal = "AD"
-        elif final_numerical >= 14:
-            final_literal = "A"
-        elif final_numerical >= 11:
-            final_literal = "B"
+        # Validate student exists
+        student = await db.students.find_one({"id": enrollment_data.student_id})
+        if not student:
+            raise HTTPException(status_code=404, detail="Estudiante no encontrado")
         
-        # Update enrollment with final grade
-        await db.enrollments.update_one(
-            {"id": enrollment_id},
+        # Validate course exists
+        course = await db.courses.find_one({"id": enrollment_data.course_id})
+        if not course:
+            raise HTTPException(status_code=404, detail="Curso no encontrado")
+        
+        # Check if enrollment already exists
+        existing_enrollment = await db.enrollments.find_one({
+            "student_id": enrollment_data.student_id,
+            "course_id": enrollment_data.course_id,
+            "academic_year": enrollment_data.academic_year,
+            "academic_period": enrollment_data.academic_period
+        })
+        
+        if existing_enrollment:
+            raise HTTPException(status_code=400, detail="El estudiante ya está matriculado en este curso")
+        
+        # Create enrollment
+        enrollment = Enrollment(**enrollment_data.dict())
+        enrollment_dict = enrollment.dict()
+        
+        # Convert datetime to string for MongoDB
+        if isinstance(enrollment_dict.get('enrollment_date'), datetime):
+            enrollment_dict['enrollment_date'] = enrollment_dict['enrollment_date'].isoformat()
+        if isinstance(enrollment_dict.get('created_at'), datetime):
+            enrollment_dict['created_at'] = enrollment_dict['created_at'].isoformat()
+        if isinstance(enrollment_dict.get('updated_at'), datetime):
+            enrollment_dict['updated_at'] = enrollment_dict['updated_at'].isoformat()
+        
+        await db.enrollments.insert_one(enrollment_dict)
+        
+        logger.info(f"Enrollment created: {enrollment.id} by {current_user['username']}")
+        return enrollment
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating enrollment: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al crear matrícula")
+
+@academic_router.get("/enrollments", response_model=Dict[str, Any])
+async def get_enrollments(
+    student_id: Optional[str] = Query(None),
+    course_id: Optional[str] = Query(None),
+    academic_year: Optional[int] = Query(None),
+    academic_period: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    current_user = Depends(get_current_user)
+):
+    """Get enrollments with filtering and pagination"""
+    try:
+        # Build query
+        query = {}
+        
+        if student_id:
+            query["student_id"] = student_id
+            
+        if course_id:
+            query["course_id"] = course_id
+            
+        if academic_year:
+            query["academic_year"] = academic_year
+            
+        if academic_period and academic_period != 'ALL':
+            query["academic_period"] = academic_period
+            
+        if status and status != 'ALL':
+            query["status"] = status
+        
+        # Get enrollments with student and course details
+        pipeline = [
+            {"$match": query},
+            {"$skip": skip},
+            {"$limit": limit},
             {
-                "$set": {
-                    "numerical_grade": final_numerical,
-                    "literal_grade": final_literal,
-                    "grade_status": final_status.value,
-                    "updated_at": datetime.now(timezone.utc).isoformat()
+                "$lookup": {
+                    "from": "students",
+                    "localField": "student_id",
+                    "foreignField": "id",
+                    "as": "student_info"
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "courses",
+                    "localField": "course_id", 
+                    "foreignField": "id",
+                    "as": "course_info"
                 }
             }
-        )
-
-@academic_router.get("/grades/enrollment/{enrollment_id}")
-async def get_enrollment_grades(
-    enrollment_id: str,
-    current_user: User = Depends(get_current_user)
-):
-    """Get all grades for an enrollment"""
-    
-    # Validate enrollment exists
-    enrollment = await db.enrollments.find_one({"id": enrollment_id})
-    if not enrollment:
-        raise HTTPException(status_code=404, detail="Enrollment not found")
-    
-    # Check authorization
-    if current_user.role == UserRole.STUDENT:
-        if enrollment["student_id"] != current_user.id:
-            raise HTTPException(status_code=403, detail="Can only view your own grades")
-    elif current_user.role == UserRole.TEACHER:
-        if enrollment.get("teacher_id") != current_user.id:
-            raise HTTPException(status_code=403, detail="Can only view grades for your courses")
-    
-    # Get grades with component details
-    grades = await db.student_grades.find({"enrollment_id": enrollment_id}).to_list(100)
-    
-    enriched_grades = []
-    for grade in grades:
-        component = await db.grade_components.find_one({"id": grade["grade_component_id"]})
-        enriched_grades.append({
-            **grade,
-            "component": GradeComponent(**component) if component else None
-        })
-    
-    return {
-        "enrollment_id": enrollment_id,
-        "grades": enriched_grades,
-        "final_grade": {
-            "numerical": enrollment.get("numerical_grade"),
-            "literal": enrollment.get("literal_grade"),
-            "status": enrollment.get("grade_status")
-        }
-    }
-
-# ====================================================================================================
-# ATTENDANCE MANAGEMENT
-# ====================================================================================================
-
-@academic_router.post("/attendance/sessions")
-async def create_attendance_session(
-    session_data: AttendanceSession,
-    current_user: User = Depends(require_role([UserRole.TEACHER, UserRole.ADMIN]))
-):
-    """Create attendance session"""
-    
-    # Validate course exists and teacher is authorized
-    course = await db.courses.find_one({"id": session_data.course_id})
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
-    
-    if current_user.role == UserRole.TEACHER and session_data.teacher_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Can only create sessions for your courses")
-    
-    session_doc = prepare_for_mongo(session_data.dict())
-    await db.attendance_sessions.insert_one(session_doc)
-    
-    await log_audit_trail(
-        db, "attendance_sessions", session_data.id, "CREATE",
-        None, session_doc, current_user.id
-    )
-    
-    return {"status": "success", "session": session_data}
-
-@academic_router.post("/attendance/mark")
-async def mark_attendance(
-    attendance_data: StudentAttendance,
-    current_user: User = Depends(require_role([UserRole.TEACHER, UserRole.ADMIN]))
-):
-    """Mark student attendance"""
-    
-    # Validate session exists
-    session = await db.attendance_sessions.find_one({"id": attendance_data.attendance_session_id})
-    if not session:
-        raise HTTPException(status_code=404, detail="Attendance session not found")
-    
-    # Validate enrollment exists
-    enrollment = await db.enrollments.find_one({"id": attendance_data.enrollment_id})
-    if not enrollment:
-        raise HTTPException(status_code=404, detail="Enrollment not found")
-    
-    # Check for existing attendance record
-    existing_attendance = await db.student_attendance.find_one({
-        "attendance_session_id": attendance_data.attendance_session_id,
-        "student_id": attendance_data.student_id
-    })
-    
-    if existing_attendance:
-        # Update existing record
-        update_data = {
-            "status": attendance_data.status,
-            "arrival_time": attendance_data.arrival_time,
-            "notes": attendance_data.notes
+        ]
+        
+        enrollments = await db.enrollments.aggregate(pipeline).to_list(length=limit)
+        
+        # Parse dates back from strings
+        for enrollment in enrollments:
+            if isinstance(enrollment.get('enrollment_date'), str):
+                enrollment['enrollment_date'] = datetime.fromisoformat(enrollment['enrollment_date'])
+            if isinstance(enrollment.get('created_at'), str):
+                enrollment['created_at'] = datetime.fromisoformat(enrollment['created_at'])
+            if isinstance(enrollment.get('updated_at'), str):
+                enrollment['updated_at'] = datetime.fromisoformat(enrollment['updated_at'])
+        
+        total = await db.enrollments.count_documents(query)
+        
+        return {
+            "enrollments": enrollments,
+            "total": total,
+            "skip": skip,
+            "limit": limit
         }
         
-        await db.student_attendance.update_one(
-            {"id": existing_attendance["id"]},
+    except Exception as e:
+        logger.error(f"Error fetching enrollments: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al obtener matrículas")
+
+# Grades Management
+@academic_router.put("/enrollments/{enrollment_id}/grade")
+async def update_grade(
+    enrollment_id: str, 
+    grade_data: GradeUpdate, 
+    current_user = Depends(get_current_user)
+):
+    """Update enrollment grades"""
+    try:
+        # Check permissions
+        if current_user['role'] not in ['ADMIN', 'TEACHER']:
+            raise HTTPException(status_code=403, detail="No autorizado para actualizar calificaciones")
+        
+        # Get enrollment
+        enrollment = await db.enrollments.find_one({"id": enrollment_id})
+        if not enrollment:
+            raise HTTPException(status_code=404, detail="Matrícula no encontrada")
+        
+        # If teacher, verify they are assigned to this course
+        if current_user['role'] == 'TEACHER' and enrollment.get('teacher_id') != current_user['id']:
+            raise HTTPException(status_code=403, detail="No autorizado para calificar este curso")
+        
+        # Convert numerical grade to literal grade
+        literal_grade = "C"
+        if grade_data.numerical_grade >= 18:
+            literal_grade = "AD"
+        elif grade_data.numerical_grade >= 14:
+            literal_grade = "A"
+        elif grade_data.numerical_grade >= 11:
+            literal_grade = "B"
+        
+        # Update enrollment
+        update_data = {
+            "numerical_grade": grade_data.numerical_grade,
+            "literal_grade": literal_grade,
+            "grade_status": grade_data.grade_status.value,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.enrollments.update_one(
+            {"id": enrollment_id},
             {"$set": update_data}
         )
         
-        return {"status": "success", "message": "Attendance updated"}
-    else:
-        # Create new record
-        attendance_doc = prepare_for_mongo(attendance_data.dict())
-        await db.student_attendance.insert_one(attendance_doc)
+        logger.info(f"Grade updated for enrollment {enrollment_id} by {current_user['username']}")
         
-        # Update enrollment attendance statistics
-        await update_enrollment_attendance(attendance_data.enrollment_id)
+        return {"message": "Calificación actualizada exitosamente"}
         
-        return {"status": "success", "message": "Attendance marked"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating grade: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al actualizar calificación")
 
-async def update_enrollment_attendance(enrollment_id: str):
-    """Update attendance statistics for enrollment"""
-    
-    attendance_records = await db.student_attendance.find({"enrollment_id": enrollment_id}).to_list(1000)
-    
-    total_classes = len(attendance_records)
-    attended_classes = len([r for r in attendance_records if r["status"] in ["PRESENT", "LATE"]])
-    attendance_percentage = calculate_attendance_percentage(attended_classes, total_classes)
-    
-    await db.enrollments.update_one(
-        {"id": enrollment_id},
-        {
-            "$set": {
-                "total_classes": total_classes,
-                "attended_classes": attended_classes,
-                "attendance_percentage": attendance_percentage,
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }
+# Attendance Management
+@academic_router.put("/enrollments/{enrollment_id}/attendance")
+async def update_attendance(
+    enrollment_id: str,
+    attendance_data: AttendanceUpdate,
+    current_user = Depends(get_current_user)
+):
+    """Update enrollment attendance"""
+    try:
+        # Check permissions
+        if current_user['role'] not in ['ADMIN', 'TEACHER']:
+            raise HTTPException(status_code=403, detail="No autorizado para actualizar asistencia")
+        
+        # Get enrollment
+        enrollment = await db.enrollments.find_one({"id": enrollment_id})
+        if not enrollment:
+            raise HTTPException(status_code=404, detail="Matrícula no encontrada")
+        
+        # If teacher, verify they are assigned to this course
+        if current_user['role'] == 'TEACHER' and enrollment.get('teacher_id') != current_user['id']:
+            raise HTTPException(status_code=403, detail="No autorizado para registrar asistencia de este curso")
+        
+        # Calculate attendance percentage
+        attendance_percentage = 0.0
+        if attendance_data.total_classes > 0:
+            attendance_percentage = (attendance_data.attended_classes / attendance_data.total_classes) * 100
+        
+        # Update enrollment
+        update_data = {
+            "total_classes": attendance_data.total_classes,
+            "attended_classes": attendance_data.attended_classes,
+            "attendance_percentage": round(attendance_percentage, 2),
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }
-    )
-
-# ====================================================================================================
-# SCHEDULES MANAGEMENT
-# ====================================================================================================
-
-@academic_router.post("/schedules")
-async def create_class_schedule(
-    schedule_data: ClassSchedule,
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.ACADEMIC_STAFF]))
-):
-    """Create class schedule"""
-    
-    # Validate no conflicts
-    existing_schedules = await db.class_schedules.find({
-        "day_of_week": schedule_data.day_of_week,
-        "is_active": True
-    }).to_list(1000)
-    
-    conflicts = validate_schedule_conflict(existing_schedules + [schedule_data])
-    if conflicts:
-        raise HTTPException(status_code=400, detail=f"Schedule conflicts: {', '.join(conflicts)}")
-    
-    schedule_doc = prepare_for_mongo(schedule_data.dict())
-    await db.class_schedules.insert_one(schedule_doc)
-    
-    await log_audit_trail(
-        db, "class_schedules", schedule_data.id, "CREATE",
-        None, schedule_doc, current_user.id
-    )
-    
-    return {"status": "success", "schedule": schedule_data}
-
-@academic_router.get("/schedules")
-async def get_schedules(
-    teacher_id: Optional[str] = None,
-    course_id: Optional[str] = None,
-    day_of_week: Optional[int] = None,
-    current_user: User = Depends(get_current_user)
-):
-    """Get class schedules"""
-    
-    filter_query = {"is_active": True}
-    if teacher_id:
-        filter_query["teacher_id"] = teacher_id
-    if course_id:
-        filter_query["course_id"] = course_id
-    if day_of_week:
-        filter_query["day_of_week"] = day_of_week
-    
-    schedules = await db.class_schedules.find(filter_query).sort([("day_of_week", 1), ("start_time", 1)]).to_list(1000)
-    
-    # Enrich with course and teacher data
-    enriched_schedules = []
-    for schedule in schedules:
-        course = await db.courses.find_one({"id": schedule["course_id"]})
-        teacher = await db.users.find_one({"id": schedule["teacher_id"]})
         
-        enriched_schedules.append({
-            **schedule,
-            "course": Course(**course) if course else None,
-            "teacher": User(**teacher) if teacher else None
-        })
-    
-    return {"schedules": enriched_schedules}
-
-# ====================================================================================================
-# REPORTS AND TRANSCRIPTS
-# ====================================================================================================
-
-@academic_router.get("/reports/student/{student_id}/transcript")
-async def generate_student_transcript(
-    student_id: str,
-    transcript_type: str = "COMPLETE",
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.REGISTRAR]))
-):
-    """Generate official student transcript"""
-    
-    # Validate student exists
-    student = await db.students.find_one({"id": student_id})
-    if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
-    
-    # Get all enrollments
-    enrollments = await db.enrollments.find({
-        "student_id": student_id,
-        "grade_status": {"$in": ["APPROVED", "FAILED"]}
-    }).sort([("academic_year", 1), ("academic_period", 1)]).to_list(1000)
-    
-    # Calculate GPA and credits
-    approved_enrollments = [e for e in enrollments if e.get("grade_status") == "APPROVED"]
-    grades = [e.get("numerical_grade", 0) for e in approved_enrollments if e.get("numerical_grade")]
-    credits = []
-    
-    total_credits_earned = 0
-    total_credits_attempted = 0
-    
-    for enrollment in enrollments:
-        course = await db.courses.find_one({"id": enrollment["course_id"]})
-        if course:
-            course_credits = course.get("credits", 0)
-            total_credits_attempted += course_credits
-            
-            if enrollment.get("grade_status") == "APPROVED":
-                total_credits_earned += course_credits
-                credits.append(course_credits)
-    
-    overall_gpa = calculate_gpa(grades, credits)
-    academic_standing = determine_academic_standing(overall_gpa, total_credits_earned, total_credits_attempted)
-    
-    # Create transcript record
-    transcript = OfficialTranscript(
-        student_id=student_id,
-        academic_period_id="current",  # This should reference actual current period
-        transcript_type=transcript_type,
-        overall_gpa=overall_gpa,
-        total_credits_earned=total_credits_earned,
-        total_credits_attempted=total_credits_attempted,
-        academic_standing=academic_standing,
-        generated_by=current_user.id
-    )
-    
-    transcript_doc = prepare_for_mongo(transcript.dict())
-    await db.official_transcripts.insert_one(transcript_doc)
-    
-    return {
-        "status": "success",
-        "transcript": transcript,
-        "enrollments": enrollments,
-        "student": Student(**student)
-    }
-
-@academic_router.get("/reports/course/{course_id}/grade-report")
-async def generate_course_grade_report(
-    course_id: str,
-    academic_year: int,
-    academic_period: str,
-    current_user: User = Depends(require_role([UserRole.TEACHER, UserRole.ADMIN, UserRole.ACADEMIC_STAFF]))
-):
-    """Generate course grade report"""
-    
-    # Validate course exists
-    course = await db.courses.find_one({"id": course_id})
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
-    
-    # Get enrollments for the course in specified period
-    enrollments = await db.enrollments.find({
-        "course_id": course_id,
-        "academic_year": academic_year,
-        "academic_period": academic_period
-    }).sort("student_id", 1).to_list(1000)
-    
-    # Enrich with student data and grades
-    grade_report = []
-    for enrollment in enrollments:
-        student = await db.students.find_one({"id": enrollment["student_id"]})
-        grades = await db.student_grades.find({"enrollment_id": enrollment["id"]}).to_list(100)
+        await db.enrollments.update_one(
+            {"id": enrollment_id},
+            {"$set": update_data}
+        )
         
-        # Get grade components
-        grade_details = []
-        for grade in grades:
-            component = await db.grade_components.find_one({"id": grade["grade_component_id"]})
-            grade_details.append({
-                "component": component.get("component_name") if component else "Unknown",
-                "score": grade.get("score"),
-                "weight": component.get("weight_percentage") if component else 0
-            })
+        logger.info(f"Attendance updated for enrollment {enrollment_id} by {current_user['username']}")
         
-        grade_report.append({
-            "student": Student(**student) if student else None,
-            "enrollment": Enrollment(**enrollment),
-            "grade_details": grade_details,
-            "final_grade": enrollment.get("numerical_grade"),
-            "final_status": enrollment.get("grade_status"),
-            "attendance_percentage": enrollment.get("attendance_percentage", 0)
-        })
-    
-    return {
-        "course": Course(**course),
-        "academic_year": academic_year,
-        "academic_period": academic_period,
-        "grade_report": grade_report,
-        "statistics": {
-            "total_students": len(grade_report),
-            "approved": len([r for r in grade_report if r["enrollment"].grade_status == "APPROVED"]),
-            "failed": len([r for r in grade_report if r["enrollment"].grade_status == "FAILED"]),
-            "pending": len([r for r in grade_report if r["enrollment"].grade_status == "INCOMPLETE"])
+        return {"message": "Asistencia actualizada exitosamente"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating attendance: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al actualizar asistencia")
+
+# Academic Periods Management
+@academic_router.get("/academic-periods", response_model=Dict[str, Any])
+async def get_academic_periods(current_user = Depends(get_current_user)):
+    """Get academic periods"""
+    try:
+        periods = await db.academic_periods.find({}).to_list(length=None)
+        
+        # Parse dates back from strings
+        for period in periods:
+            if isinstance(period.get('start_date'), str):
+                period['start_date'] = datetime.fromisoformat(period['start_date']).date()
+            if isinstance(period.get('end_date'), str):
+                period['end_date'] = datetime.fromisoformat(period['end_date']).date()
+            if isinstance(period.get('created_at'), str):
+                period['created_at'] = datetime.fromisoformat(period['created_at'])
+        
+        return {"periods": periods}
+        
+    except Exception as e:
+        logger.error(f"Error fetching academic periods: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al obtener períodos académicos")
+
+# Reports
+@academic_router.get("/reports/student-grades/{student_id}")
+async def get_student_grades_report(student_id: str, current_user = Depends(get_current_user)):
+    """Get student grades report"""
+    try:
+        # Verify student exists
+        student = await db.students.find_one({"id": student_id})
+        if not student:
+            raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+        
+        # Get enrollments with grades
+        enrollments = await db.enrollments.find({
+            "student_id": student_id,
+            "numerical_grade": {"$exists": True, "$ne": None}
+        }).to_list(length=None)
+        
+        # Get course details for each enrollment
+        enriched_enrollments = []
+        for enrollment in enrollments:
+            course = await db.courses.find_one({"id": enrollment['course_id']})
+            if course:
+                enrollment['course_name'] = course['name']
+                enrollment['course_code'] = course['code']
+                enrollment['credits'] = course['credits']
+                enriched_enrollments.append(enrollment)
+        
+        # Calculate GPA
+        total_points = sum(e['numerical_grade'] * e.get('credits', 0) for e in enriched_enrollments)
+        total_credits = sum(e.get('credits', 0) for e in enriched_enrollments)
+        gpa = round(total_points / total_credits, 2) if total_credits > 0 else 0.0
+        
+        return {
+            "student": student,
+            "enrollments": enriched_enrollments,
+            "gpa": gpa,
+            "total_credits": total_credits,
+            "completed_courses": len(enriched_enrollments)
         }
-    }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating student grades report: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al generar reporte de notas")
+
+@academic_router.get("/reports/course-enrollment/{course_id}")
+async def get_course_enrollment_report(course_id: str, current_user = Depends(get_current_user)):
+    """Get course enrollment report"""
+    try:
+        # Verify course exists
+        course = await db.courses.find_one({"id": course_id})
+        if not course:
+            raise HTTPException(status_code=404, detail="Curso no encontrado")
+        
+        # Get enrollments for this course
+        enrollments = await db.enrollments.find({"course_id": course_id}).to_list(length=None)
+        
+        # Get student details for each enrollment
+        enriched_enrollments = []
+        for enrollment in enrollments:
+            student = await db.students.find_one({"id": enrollment['student_id']})
+            if student:
+                enrollment['student_name'] = f"{student['first_name']} {student['last_name']}"
+                enrollment['student_code'] = student['student_code']
+                enrollment['student_program'] = student['program']
+                enriched_enrollments.append(enrollment)
+        
+        return {
+            "course": course,
+            "enrollments": enriched_enrollments,
+            "total_enrolled": len(enriched_enrollments),
+            "approved_count": len([e for e in enriched_enrollments if e.get('grade_status') == 'APPROVED']),
+            "failed_count": len([e for e in enriched_enrollments if e.get('grade_status') == 'FAILED']),
+            "pending_count": len([e for e in enriched_enrollments if e.get('grade_status') == 'INCOMPLETE'])
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating course enrollment report: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al generar reporte de matrícula")
