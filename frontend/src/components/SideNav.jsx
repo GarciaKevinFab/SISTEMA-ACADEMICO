@@ -10,7 +10,8 @@ import {
   User,
   BookOpen,
   Building,
-  Database
+  Database,
+  LogOut
 } from 'lucide-react';
 
 const SideNav = () => {
