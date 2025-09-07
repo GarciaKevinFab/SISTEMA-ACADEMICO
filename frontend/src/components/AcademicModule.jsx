@@ -690,12 +690,13 @@ const AcademicModule = () => {
   return (
     <div className="p-6">
       <Tabs defaultValue="dashboard" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="students">Estudiantes</TabsTrigger>
           <TabsTrigger value="courses">Cursos</TabsTrigger>
           <TabsTrigger value="enrollments">Matrículas</TabsTrigger>
           <TabsTrigger value="grades">Calificaciones</TabsTrigger>
+          <TabsTrigger value="attendance">Asistencia</TabsTrigger>
           <TabsTrigger value="reports">Reportes</TabsTrigger>
         </TabsList>
         
