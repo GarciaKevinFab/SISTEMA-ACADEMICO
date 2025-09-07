@@ -29,7 +29,7 @@ import {
   Building
 } from 'lucide-react';
 import axios from 'axios';
-import { toast } from '../hooks/use-toast';
+import { toast } from 'sonner';
 
 const API = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001/api';
 
