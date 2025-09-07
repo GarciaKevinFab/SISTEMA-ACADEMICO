@@ -383,9 +383,9 @@ backend:
 
   - task: "Performance & Stress Testing (200 req/min, <1.5s latency, 0 5xx errors)"
     implemented: true
-    working: true
+    working: false
     file: "server.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "medium"
     needs_retesting: false
     status_history:
@@ -395,6 +395,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ EXCELLENT: Performance requirements exceeded in final testing. Load capacity: 322.8 req/min (target: 200) ✅, P95 latency: 0.052s (target: <1.5s) ✅. System consistently performs well under concurrent load testing. Zero 5xx errors observed during stress testing. Performance is production-ready and exceeds requirements."
+      - working: false
+        agent: "testing"
+        comment: "❌ MIXED RESULTS: Load capacity excellent (284.9 req/min exceeds 200+ target) ✅, Zero 5xx errors maintained ✅. ❌ CRITICAL: P95 latency degraded to 5.698s (far exceeds <1.5s target). Performance has regressed significantly - latency issues need investigation and optimization before production deployment."
 
   - task: "Role-based Permissions"
     implemented: true
