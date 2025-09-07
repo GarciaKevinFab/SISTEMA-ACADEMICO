@@ -163,7 +163,7 @@ class MINEDUIntegrationCycle:
                 
                 if result["success"]:
                     # Actualizar con ID de MINEDU (idempotente)
-                    await await safe_update_one(collection, 
+                    await safe_update_one(collection, 
                         {"id": item["id"]},
                         {
                             "$set": {
@@ -177,7 +177,7 @@ class MINEDUIntegrationCycle:
                     success_count += 1
                 else:
                     # Marcar como fallido
-                    await await safe_update_one(collection, 
+                    await safe_update_one(collection, 
                         {"id": item["id"]},
                         {
                             "$set": {
