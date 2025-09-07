@@ -5114,12 +5114,11 @@ async def get_receptions(
         "limit": limit
     }
 
-# Include routers
+# Include routers - Fixed routers only
 app.include_router(api_router)
-# Temporarily comment out problematic routers
-# app.include_router(academic_router)
-# app.include_router(minedu_router)
-# app.include_router(mesa_partes_router)
+# Import and include fixed academic router
+from academic_routes_fixed import academic_router
+app.include_router(academic_router)
 
 if __name__ == "__main__":
     import uvicorn
