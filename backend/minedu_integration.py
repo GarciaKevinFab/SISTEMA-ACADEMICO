@@ -5,6 +5,7 @@ import uuid
 import json
 
 from shared_deps import get_current_user, db, logger
+from logging_middleware import get_correlation_id, log_with_correlation, ErrorResponse, ErrorCodes
 
 minedu_router = APIRouter(prefix="/minedu", tags=["MINEDU Integration"])
 
