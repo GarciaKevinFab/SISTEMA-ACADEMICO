@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for IESPP Gustavo Allende Llavería Academic System
-Tests all CRUD operations, authentication, and role-based permissions
+Comprehensive Backend API Testing for IESPP Gustavo Allende Llavería Academic System
+Tests: Academic Module, Mesa de Partes, Admission Module, MINEDU Integration
 """
 
 import requests
