@@ -3420,6 +3420,82 @@ async def pay_receipt(
         "payment_id": payment_record["id"]
     }
 
+@api_router.post("/finance/receipts/{receipt_id}/void")
+async def void_receipt(
+    receipt_id: str,
+    void_data: ReceiptVoidRequest,
+    current_user: User = Depends(require_role([UserRole.FINANCE_ADMIN]))
+):
+    """Void/refund a receipt with proper authorization and time window checks"""
+    
+    receipt = await db.receipts.find_one({"id": receipt_id})
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    
+    if receipt["status"] != ReceiptStatus.PAID.value:
+        raise HTTPException(status_code=400, detail="Can only void paid receipts")
+    
+    # Check time window (e.g., can only void within 24 hours)
+    receipt_paid_at = datetime.fromisoformat(receipt.get("paid_at", ""))
+    time_since_payment = datetime.now(timezone.utc) - receipt_paid_at
+    if time_since_payment.total_seconds() > 86400:  # 24 hours
+        if not void_data.supervisor_approval:
+            raise HTTPException(
+                status_code=400, 
+                detail="Receipts older than 24 hours require supervisor approval"
+            )
+    
+    void_time = datetime.now(timezone.utc)
+    
+    # Update receipt status
+    update_data = {
+        "status": ReceiptStatus.VOID.value,
+        "voided_at": void_time.isoformat(),
+        "void_reason": void_data.reason,
+        "void_method": void_data.refund_method.value if void_data.refund_method else None,
+        "supervisor_approval": void_data.supervisor_approval,
+        "updated_at": void_time.isoformat(),
+        "updated_by": current_user.id
+    }
+    
+    await db.receipts.update_one({"id": receipt_id}, {"$set": update_data})
+    
+    # Create refund cash movement if refund method is cash
+    if void_data.refund_method == PaymentMethod.CASH:
+        cash_session = await db.cash_sessions.find_one({
+            "opened_by": current_user.id,
+            "status": CashSessionStatus.OPEN.value
+        })
+        
+        if cash_session:
+            refund_movement = CashMovement(
+                cash_session_id=cash_session["id"],
+                movement_type=MovementType.EXPENSE.value,
+                amount=receipt["amount"],
+                concept="RECEIPT_REFUND",
+                description=f"Devolución boleta {receipt['receipt_number']} - {void_data.reason}",
+                reference_id=receipt_id,
+                created_by=current_user.id
+            )
+            
+            refund_movement_doc = prepare_for_mongo(refund_movement.dict())
+            await db.cash_movements.insert_one(refund_movement_doc)
+    
+    # Log audit trail
+    await log_audit_trail(
+        db, "receipts", receipt_id, "VOID",
+        {"status": receipt["status"]}, update_data, current_user.id
+    )
+    
+    logger.info(f"Receipt {receipt['receipt_number']} voided by {current_user.username}")
+    
+    return {
+        "status": "success",
+        "message": "Receipt voided successfully",
+        "void_time": void_time.isoformat(),
+        "refund_amount": receipt["amount"]
+    }
+
 @api_router.post("/finance/receipts/{receipt_id}/cancel")
 async def cancel_receipt(
     receipt_id: str,
