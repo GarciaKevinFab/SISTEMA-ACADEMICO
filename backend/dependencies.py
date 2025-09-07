@@ -8,6 +8,7 @@ import os
 import logging
 import uuid
 from datetime import datetime, timezone, timedelta
+from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_one_and_update, MongoUpdateError
 
 # Configuration and setup
 ROOT_DIR = Path(__file__).parent
