@@ -87,10 +87,41 @@ def calculate_inventory_fifo(
     Calculate FIFO cost for inventory exit
     Returns: (total_cost, cost_breakdown)
     """
-    # Sort entries by date (FIFO)
-    entries = [m for m in inventory_movements if m['movement_type'] == 'ENTRY']
-    entries.sort(key=lambda x: x['created_at'])
+    # Sort entries by date (FIFO - oldest first)
+    entries = [m for m in inventory_movements if m.get('movement_type') == 'ENTRY']
+    entries.sort(key=lambda x: x.get('created_at', ''))
     
+    # Calculate remaining quantities for each entry by processing all previous exits
+    exits = [m for m in inventory_movements if m.get('movement_type') == 'EXIT']
+    exits.sort(key=lambda x: x.get('created_at', ''))
+    
+    # Track how much has been consumed from each entry
+    entry_consumption = {}
+    for entry in entries:
+        entry_consumption[entry['id']] = 0
+    
+    # Process all previous exits to determine remaining quantities
+    for exit_mov in exits:
+        exit_qty = exit_mov.get('quantity', 0)
+        temp_remaining = exit_qty
+        
+        for entry in entries:
+            if temp_remaining <= 0:
+                break
+            
+            entry_id = entry['id']
+            entry_qty = entry.get('quantity', 0)
+            already_consumed = entry_consumption.get(entry_id, 0)
+            available_from_entry = entry_qty - already_consumed
+            
+            if available_from_entry <= 0:
+                continue
+                
+            consume_from_entry = min(temp_remaining, available_from_entry)
+            entry_consumption[entry_id] += consume_from_entry
+            temp_remaining -= consume_from_entry
+    
+    # Now calculate cost for current exit
     remaining_to_exit = exit_quantity
     total_cost = 0.0
     cost_breakdown = []
@@ -99,7 +130,11 @@ def calculate_inventory_fifo(
         if remaining_to_exit <= 0:
             break
             
-        available_quantity = entry.get('remaining_quantity', entry['quantity'])
+        entry_id = entry['id']
+        entry_qty = entry.get('quantity', 0)
+        consumed = entry_consumption.get(entry_id, 0)
+        available_quantity = entry_qty - consumed
+        
         if available_quantity <= 0:
             continue
             
@@ -109,8 +144,8 @@ def calculate_inventory_fifo(
         
         total_cost += entry_cost
         cost_breakdown.append({
-            'entry_id': entry['id'],
-            'entry_date': entry['created_at'],
+            'entry_id': entry_id,
+            'entry_date': entry.get('created_at'),
             'quantity': exit_from_this_entry,
             'unit_cost': unit_cost,
             'total_cost': entry_cost
