@@ -65,6 +65,9 @@ security = HTTPBearer()
 app = FastAPI(title="Sistema Académico IESPP Gustavo Allende Llavería")
 api_router = APIRouter(prefix="/api")
 
+# Add structured logging middleware
+app.add_middleware(CorrelationIdMiddleware)
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -73,6 +76,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add exception handler
+app.add_exception_handler(Exception, create_standardized_exception_handler())
 
 # Logging
 logging.basicConfig(level=logging.INFO)
