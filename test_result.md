@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Implementar módulo completo de Tesorería y Administración con sub-módulos: Cash & Banks (apertura/cierre de caja, conciliación bancaria), Internal Receipts con QR, Income/Expense Tracking, Inventory (FIFO), Logistics (requerimientos a entregas), HR (personal/contratos/asistencia). Incluye idempotencia, auditoría, PDF con QR, dashboards por rol, validaciones, APIs REST con prefijo /api, y testing comprehensivo."
+user_problem_statement: "Implementar Sistema Académico Integral IESPP 'Gustavo Allende Llavería' completo al 100% para producción. Módulos: Admisión (postulantes, convocatorias, pagos), Académico (estudiantes, matrículas, calificaciones, asistencia), Tesorería ✅ (completado), Trámites Digitales (Mesa de Partes con PDF+QR), Portal Web, Integración MINEDU. Todos los endpoints y UI 100% funcionales."
 
 backend:
   - task: "Finance Dependencies Installation"
