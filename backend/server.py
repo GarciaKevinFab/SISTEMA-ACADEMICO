@@ -3029,16 +3029,16 @@ async def close_cash_session(
     
     # Calculate difference
     expected_final = session.get('expected_final_amount', 0)
-    difference = final_amount - expected_final
+    difference = close_data.final_amount - expected_final
     
     # Update session
     update_data = {
         "status": CashSessionStatus.CLOSED.value,
-        "final_amount": final_amount,
+        "final_amount": close_data.final_amount,
         "difference": difference,
         "closed_at": datetime.now(timezone.utc).isoformat(),
         "closed_by": current_user.id,
-        "closing_notes": closing_notes
+        "closing_notes": close_data.closing_notes
     }
     
     await db.cash_sessions.update_one({"id": session_id}, {"$set": update_data})
