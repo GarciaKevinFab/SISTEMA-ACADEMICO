@@ -3327,9 +3327,7 @@ async def get_receipts(
 @api_router.post("/finance/receipts/{receipt_id}/pay")
 async def pay_receipt(
     receipt_id: str,
-    payment_method: PaymentMethod,
-    payment_reference: Optional[str] = None,
-    idempotency_key: Optional[str] = None,
+    payment_data: PaymentRequest,
     current_user: User = Depends(require_role([UserRole.CASHIER, UserRole.FINANCE_ADMIN]))
 ):
     """Mark receipt as paid with idempotency support"""
