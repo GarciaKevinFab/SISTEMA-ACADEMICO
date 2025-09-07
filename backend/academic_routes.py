@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Query, status
+from fastapi import APIRouter, HTTPException, Depends, Query, status, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from typing import List, Dict, Any, Optional
 from datetime import datetime, date, timezone
@@ -12,6 +12,7 @@ from server import (
 from academic_models import *
 from academic_enums import *
 from shared_deps import get_current_user, db, logger
+from logging_middleware import get_correlation_id, log_with_correlation, ErrorResponse, ErrorCodes
 
 academic_router = APIRouter(prefix="/academic", tags=["Academic"])
 
