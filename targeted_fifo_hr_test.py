@@ -143,10 +143,10 @@ class TargetedTester:
 
         # 4. Create exit: 60 units (should cost 50*15 + 10*18 = 750 + 180 = 930)
         exit_data = {
-            "inventory_item_id": item_id,
+            "item_id": item_id,
             "movement_type": "EXIT",
             "quantity": 60,
-            "reference": "FIFO Test Exit",
+            "reason": "FIFO Test Exit",
             "notes": "FIFO exit - should cost 930.00"
         }
 
