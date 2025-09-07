@@ -3873,8 +3873,21 @@ async def create_inventory_movement(movement_data: InventoryMovementCreate, curr
     
     # For exits, check stock availability and calculate FIFO cost
     if movement_data.movement_type == InventoryMovementType.EXIT.value:
+        # Check if negative stock is allowed (configurable per item)
+        allow_negative_stock = item.get("allow_negative_stock", False)
+        
+        if not allow_negative_stock and current_stock < movement_data.quantity:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Insufficient stock. Available: {current_stock}, Requested: {movement_data.quantity}"
+            )
+        
+        # Even if negative stock is allowed, warn about it
         if current_stock < movement_data.quantity:
-            raise HTTPException(status_code=400, detail="Insufficient stock")
+            logger.warning(
+                f"Negative stock warning: Item {item['item_code']} will have negative stock "
+                f"({current_stock - movement_data.quantity}) after this movement"
+            )
         
         # Get previous entries for FIFO calculation
         previous_movements = await db.inventory_movements.find({
