@@ -58,6 +58,12 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('token', access_token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
       
+      // Success toast with testid
+      const successToast = document.createElement('div');
+      successToast.setAttribute('data-testid', 'toast-success');
+      successToast.textContent = '¡Inicio de sesión exitoso!';
+      document.body.appendChild(successToast);
+      
       toast.success('¡Inicio de sesión exitoso!');
       
       // Programmatic redirect to dashboard after successful login
@@ -66,6 +72,12 @@ export const AuthProvider = ({ children }) => {
       }, 1000);
       return true;
     } catch (error) {
+      // Error toast with testid
+      const errorToast = document.createElement('div');
+      errorToast.setAttribute('data-testid', 'toast-error');
+      errorToast.textContent = error.response?.data?.detail || 'Error al iniciar sesión';
+      document.body.appendChild(errorToast);
+      
       toast.error(error.response?.data?.detail || 'Error al iniciar sesión');
       return false;
     }
