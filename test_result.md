@@ -143,9 +143,9 @@ backend:
 
   - task: "Cash & Banks APIs"
     implemented: true
-    working: true
+    working: false
     file: "server.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
@@ -155,6 +155,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ PASSED: Bank account creation/retrieval, cash session workflow (open→movements→close), cash movements (income/expense), bank reconciliation upload endpoint. Minor: Close session expects query parameters instead of request body. Role-based permissions working correctly for FINANCE_ADMIN and CASHIER roles."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL ISSUES: 1) Cash session close endpoint expects query parameters (final_amount) instead of request body, 2) Cash movement creation without open session not properly blocked, 3) Bank reconciliation error handling needs improvement for missing files and invalid accounts. Core functionality works but parameter format issues prevent proper workflow completion."
 
   - task: "Internal Receipts APIs with QR"
     implemented: true
