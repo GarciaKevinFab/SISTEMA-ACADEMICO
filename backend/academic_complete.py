@@ -154,9 +154,9 @@ class Schedule(BaseModel):
     student_id: Optional[str] = None  # Si es para estudiante específico
     teacher_id: Optional[str] = None  # Si es para docente
     classroom: Optional[str] = None   # Si es para aula
-    day_of_week: str = Field(..., regex="^(MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY)$")
-    start_time: str = Field(..., regex="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$")  # HH:MM
-    end_time: str = Field(..., regex="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$")    # HH:MM
+    day_of_week: str = Field(..., pattern="^(MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY)$")
+    start_time: str = Field(..., pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$")  # HH:MM
+    end_time: str = Field(..., pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$")    # HH:MM
     academic_year: int = Field(..., ge=2020, le=2030)
     academic_period: str = Field(..., min_length=1, max_length=10)
 
