@@ -3375,11 +3375,11 @@ async def pay_receipt(
         "id": str(uuid.uuid4()),
         "receipt_id": receipt_id,
         "amount": receipt["amount"],
-        "payment_method": payment_method.value,
-        "payment_reference": payment_reference,
+        "payment_method": payment_data.payment_method.value,
+        "payment_reference": payment_data.payment_reference,
         "paid_by": current_user.id,
         "paid_at": payment_time.isoformat(),
-        "idempotency_key": idempotency_key
+        "idempotency_key": payment_data.idempotency_key
     }
     
     await db.receipt_payments.insert_one(payment_record)
