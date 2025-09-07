@@ -9,6 +9,7 @@ import FinanceModule from './components/FinanceModule';
 import MineduIntegrationModule from './components/MineduIntegrationModule';
 import InstitutionalPortal from './components/InstitutionalPortal';
 import PublicAdmissionCalls from './components/PublicAdmissionCalls';
+import { Toaster } from 'sonner';
 import './App.css';
 
 // Login Component
