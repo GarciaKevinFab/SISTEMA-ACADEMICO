@@ -430,7 +430,7 @@ class ComprehensiveBackendTester:
             "is_active": True
         }
         
-        success_valid, data_valid = self.make_request('POST', 'finance/suppliers', 
+        success_valid, data_valid = self.make_request('POST', 'logistics/suppliers', 
                                                     valid_supplier_data, token=token)
         
         # Test with invalid RUC
@@ -438,7 +438,7 @@ class ComprehensiveBackendTester:
         invalid_supplier_data["ruc"] = "12345678901"  # Invalid RUC
         invalid_supplier_data["company_name"] = "Invalid RUC Supplier"
         
-        success_invalid, data_invalid = self.make_request('POST', 'finance/suppliers', 
+        success_invalid, data_invalid = self.make_request('POST', 'logistics/suppliers', 
                                                         invalid_supplier_data, token=token, expected_status=400)
         
         self.log_test("RUC Validation", success_valid and success_invalid,
