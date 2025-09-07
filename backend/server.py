@@ -3895,7 +3895,7 @@ async def create_inventory_movement(movement_data: InventoryMovementCreate, curr
         }).sort("created_at", 1).to_list(1000)
         
         total_cost, cost_breakdown = calculate_inventory_fifo(
-            current_stock, previous_movements, movement_data.quantity
+            current_stock, all_movements, movement_data.quantity
         )
         
         # Use calculated cost if not provided
