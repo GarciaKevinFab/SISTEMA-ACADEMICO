@@ -134,12 +134,11 @@ class FIFOTester:
 
         # Step 3: Add Entry 2 - 30 units @ S/18.00
         entry2_data = {
-            "inventory_item_id": item_id,
+            "item_id": item_id,
             "movement_type": "ENTRY",
             "quantity": 30,
             "unit_cost": 18.00,
-            "total_cost": 540.00,  # 30 × 18.00
-            "reference": f"ENTRY2_{timestamp}",
+            "reason": "FIFO Test Entry 2",
             "notes": "Second FIFO entry - 30 units at S/18.00"
         }
 
