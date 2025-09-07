@@ -467,7 +467,8 @@ async def process_single_minedu_export(export_id: str):
             return
         
         # Update status to processing
-        await db.await safe_update_one(minedu_exports, 
+        await safe_update_one(
+            db.minedu_exports,
             {"id": export_id},
             {
                 "$set": {
