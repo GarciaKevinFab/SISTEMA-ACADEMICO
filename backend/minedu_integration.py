@@ -532,7 +532,6 @@ async def simulate_minedu_api_call(export_record: dict) -> bool:
         
         # Simulate 90% success rate
         import random
-from safe_mongo_operations import safe_update_one, safe_update_many, safe_find_one_and_update, MongoUpdateError
         return random.random() > 0.1
         
     except Exception:
