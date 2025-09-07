@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 const ReceiptsDashboard = () => {
-  const { user } = useAuth();
+  const { user } = useContext(AuthContext);
   const [receipts, setReceipts] = useState([]);
   const [filteredReceipts, setFilteredReceipts] = useState([]);
   const [loading, setLoading] = useState(true);
