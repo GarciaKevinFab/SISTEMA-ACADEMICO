@@ -3009,12 +3009,11 @@ async def get_current_cash_session(current_user: User = Depends(require_role([Us
         }
     }
 
-@api_router.post("/finance/cash-sessions/{session_id}/close", dependencies=[Depends(require_role([UserRole.CASHIER, UserRole.FINANCE_ADMIN]))])
+@api_router.post("/finance/cash-sessions/{session_id}/close")
 async def close_cash_session(
     session_id: str,
-    final_amount: float,
-    closing_notes: Optional[str] = None,
-    current_user: User = Depends(get_current_user)
+    close_data: CashSessionCloseRequest,
+    current_user: User = Depends(require_role([UserRole.CASHIER, UserRole.FINANCE_ADMIN]))
 ):
     """Close cash session with final amount"""
     
