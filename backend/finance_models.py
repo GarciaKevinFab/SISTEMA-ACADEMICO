@@ -5,6 +5,8 @@ from datetime import datetime, date, timezone
 from enum import Enum
 import uuid
 
+# Import finance enums
+from finance_enums import PaymentMethod, ReceiptStatus
 
 # Finance and Administration Models
 
