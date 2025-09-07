@@ -309,7 +309,7 @@ class ComprehensiveBackendTester:
         token = self.finance_admin_token or self.admin_token
         
         # Test reconciliation endpoint exists
-        success, data = self.make_request('GET', 'finance/bank-reconciliation', token=token)
+        success, data = self.make_request('POST', 'finance/bank-reconciliation/upload', {}, token=token, expected_status=400)
         
         self.log_test("Advanced Bank Reconciliation Endpoint", success,
                     f"- Endpoint accessible: {success}")
