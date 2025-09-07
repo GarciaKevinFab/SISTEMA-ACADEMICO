@@ -65,10 +65,9 @@ except ImportError as e:
     logger.warning(f"Could not import route modules: {e}")
     ROUTES_AVAILABLE = False
 
-# Database connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# Database connection - Optimized with connection pooling
+mongo_client = OptimizedMongoClient(mongo_url, os.environ['DB_NAME'])
+db = mongo_client.get_database()
 
 # Security setup
 SECRET_KEY = os.environ.get("SECRET_KEY", "your-secret-key-here")
