@@ -540,21 +540,15 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Frontend Login Auto-Redirect Enhancement (Minor)"
-    - "Logout Functionality Implementation (Minor)"
-    - "RUC Validation Logic (Regression - All Tests Failing)"
-    - "Performance Optimization (P95 Latency Too High)"
-    - "Complete Logistics Workflow (PO Lifecycle, Receptions, Validations)"
-    - "Advanced HR Features (Bulk Import, Contracts, Timezone Handling)"
-    - "Audit & Security Features (Immutable Logs, Data Masking, Correlation-ID)"
+    - "PHASE 1: Hardening & Stabilization - Structured Logging with Correlation ID"
+    - "PHASE 1: Backend Testing - All Critical Routes (Academic, Admission, Mesa de Partes, Finance)"
+    - "PHASE 1: Performance & Error Handling - Idempotency, 4xx/5xx Fixes"
+    - "PHASE 1: Stress Testing - ≥200 req/min, p95 < 1.5s, 0 5xx errors"
   stuck_tasks:
-    - "RUC Validation Logic"
-    - "Performance Optimization"
-    - "Complete Logistics Workflow"
-    - "Advanced HR Features"
-    - "Audit & Security Features"
-  test_all: false
-  test_priority: "login_resolved_focus_remaining_modules"
+    - "RUC Validation Logic (Previous regression)"
+    - "Performance Optimization (Previous P95 latency issues)"
+  test_all: true
+  test_priority: "phase1_hardening_comprehensive"
 
 agent_communication:
   - agent: "main"
