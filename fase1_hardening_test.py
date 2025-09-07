@@ -607,7 +607,10 @@ class Fase1HardeningTester:
         
         response_times = self.performance_metrics['response_times']
         if response_times:
-            p95_latency = statistics.quantile(response_times, 0.95)
+            # Use percentile calculation for Python 3.7 compatibility
+            sorted_times = sorted(response_times)
+            p95_index = int(0.95 * len(sorted_times))
+            p95_latency = sorted_times[p95_index] if p95_index < len(sorted_times) else sorted_times[-1]
             avg_latency = statistics.mean(response_times)
         else:
             p95_latency = float('inf')
