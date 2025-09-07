@@ -483,19 +483,16 @@ metadata:
 
 test_plan:
   current_focus:
-    - "FIFO Inventory Cost Calculation (CRITICAL - Completely Broken)"
-    - "Inventory Movement Endpoints (Entry/Exit Not Working)"
     - "RUC Validation Logic (Regression - All Tests Failing)"
     - "Bank Account Creation (Endpoint Issues)"
     - "Performance Optimization (P95 Latency Too High)"
     - "Receipt Void Functionality"
     - "HR Attendance Auto-Calculation"
   stuck_tasks:
-    - "FIFO Inventory Cost Calculation"
     - "RUC Validation Logic"
     - "Performance Optimization"
-  test_all: true
-  test_priority: "critical_fixes_required"
+  test_all: false
+  test_priority: "fifo_validated_other_fixes_needed"
 
 agent_communication:
   - agent: "main"
