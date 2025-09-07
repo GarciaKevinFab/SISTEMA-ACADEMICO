@@ -11,7 +11,7 @@ from datetime import datetime, date
 from typing import Dict, Any, Optional
 
 class AcademicSystemTester:
-    def __init__(self, base_url="https://academic-admin-sys-1.preview.emergentagent.com/api"):
+    def __init__(self, base_url="https://academic-sys-1.preview.emergentagent.com/api"):
         self.base_url = base_url
         self.admin_token = None
         self.teacher_token = None
@@ -2662,7 +2662,7 @@ class AcademicSystemTester:
 def main():
     """Main test execution"""
     print("🎯 IESPP Gustavo Allende Llavería - Academic System API Testing")
-    print("🌐 Testing Backend: https://academic-admin-sys-1.preview.emergentagent.com/api")
+    print("🌐 Testing Backend: https://academic-sys-1.preview.emergentagent.com/api")
     print()
     
     tester = AcademicSystemTester()
