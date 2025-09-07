@@ -3333,16 +3333,17 @@ async def pay_receipt(
     """Mark receipt as paid with idempotency support"""
     
     # Check idempotency
-    if idempotency_key:
+    if payment_data.idempotency_key:
         existing_payment = await db.receipt_payments.find_one({
             "receipt_id": receipt_id,
-            "idempotency_key": idempotency_key
+            "idempotency_key": payment_data.idempotency_key
         })
         if existing_payment:
             return {
                 "status": "success",
                 "message": "Payment already processed",
-                "payment_id": existing_payment["id"]
+                "payment_id": existing_payment["id"],
+                "idempotent": True
             }
     
     # Get receipt
