@@ -529,7 +529,7 @@ class ComprehensiveBackendTester:
             "notes": "Test attendance record"
         }
         
-        success, data = self.make_request('POST', 'finance/attendance', attendance_data, token=token)
+        success, data = self.make_request('POST', 'hr/attendance', attendance_data, token=token)
         
         # Check if hours were calculated correctly (8.5 hours)
         calculated_hours = data.get('worked_hours', 0) if success else 0
