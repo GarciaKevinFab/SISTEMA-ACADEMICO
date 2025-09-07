@@ -1520,34 +1520,37 @@ async def update_attendance(enrollment_id: str, attendance_data: AttendanceUpdat
 
 # Dashboard and Reports
 @api_router.get("/dashboard/stats")
+@performance_monitor
 async def get_dashboard_stats(request: Request, current_user: User = Depends(get_current_user)):
-    """Ultra-optimized dashboard stats with caching and parallel queries"""
+    """FIXED optimized dashboard stats with proper caching and reduced queries"""
     start_time = time.time()
     correlation_id = get_correlation_id(request)
     
     try:
-        # Use cached dashboard stats based on role
+        # Use optimized queries based on role
         if current_user.role in [UserRole.ADMIN, UserRole.REGISTRAR]:
-            stats = await DashboardCache.get_admin_stats(db, current_user.id)
+            stats = await OptimizedQueries.get_admin_dashboard_stats(db)
         elif current_user.role == UserRole.TEACHER:
-            stats = await DashboardCache.get_teacher_stats(db, current_user.id)  
+            stats = await OptimizedQueries.get_teacher_dashboard_stats(db, current_user.id)
         elif current_user.role == UserRole.STUDENT:
-            stats = await DashboardCache.get_student_stats(db, current_user.id)
+            stats = await OptimizedQueries.get_student_dashboard_stats(db, current_user.id)
         else:
-            # Fallback to optimized query
-            stats = await QueryOptimizer.get_dashboard_stats_optimized(db, current_user.role, current_user.id)
+            # Fallback for other roles
+            stats = {}
         
-        # Record performance metrics
+        # Calculate execution time
         execution_time = time.time() - start_time
-        performance_monitor.record_request(execution_time)
         
-        # Compress response and add metadata
+        # Get cache statistics
+        cache_stats = memory_cache.get_stats()
+        
+        # Build response with performance metadata
         response_data = {
             "stats": stats,
             "correlation_id": correlation_id,
             "_performance": {
                 "execution_time_ms": round(execution_time * 1000, 2),
-                "cached": True,
+                "cache_hit_rate": cache_stats.get("hit_rate", 0),
                 "timestamp": datetime.utcnow().isoformat()
             }
         }
@@ -1556,21 +1559,20 @@ async def get_dashboard_stats(request: Request, current_user: User = Depends(get
             logger, "info",
             f"Dashboard stats retrieved for {current_user.role} in {execution_time:.3f}s",
             request,
-            user_data=current_user.__dict__ if hasattr(current_user, '__dict__') else {"role": current_user.role},
-            extra_data={"execution_time": execution_time, "stats_count": len(stats) if stats else 0}
+            user_data={"id": current_user.id, "role": current_user.role},
+            extra_data={"execution_time": execution_time, "stats_count": len(stats)}
         )
         
         return response_data
         
     except Exception as e:
         execution_time = time.time() - start_time
-        performance_monitor.record_request(execution_time)
         
         log_with_correlation(
             logger, "error",
             f"Error getting dashboard stats: {str(e)}",
             request,
-            user_data=current_user.__dict__ if hasattr(current_user, '__dict__') else {"role": current_user.role},
+            user_data={"id": current_user.id, "role": current_user.role},
             extra_data={"execution_time": execution_time}
         )
         
