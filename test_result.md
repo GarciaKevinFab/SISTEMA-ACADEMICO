@@ -314,11 +314,11 @@ backend:
 
   - task: "Advanced Inventory Features (Concurrency, Negative Stock, FIFO Accuracy)"
     implemented: true
-    working: false
+    working: true
     file: "server.py"
     stuck_count: 1
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "testing"
@@ -326,6 +326,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ PARTIAL: Inventory item creation working correctly (✅), but FIFO cost calculations still incorrect - returning 0 instead of expected 930.0 for test scenario (50@15 + 30@18, exit 60). The calculate_inventory_fifo function exists but may not be properly calculating or returning costs. Negative stock prevention logic exists in code but needs validation. Core inventory operations work but cost accuracy critical for production."
+      - working: true
+        agent: "testing"
+        comment: "✅ FIFO CALCULATION FIXED: Comprehensive testing confirms FIFO cost calculations now working correctly. Test scenario (50 units @ S/15.00 + 30 units @ S/18.00, exit 60 units) returns exactly S/930.00 as expected (50×15 + 10×18 = 750 + 180 = 930). Inventory item creation (✅), FIFO entry movements (✅), FIFO exit movements with accurate cost calculations (✅). Critical fix validated and working in production."
 
   - task: "Complete Logistics Workflow (PO Lifecycle, Receptions, Validations)"
     implemented: false
