@@ -103,7 +103,7 @@ else
 MONGO_URL=mongodb://localhost:27017
 DB_NAME=sistema_academico
 SECRET_KEY=your-secret-key-here-change-in-production
-CORS_ORIGINS=http://localhost:3000,https://edusphere-24.preview.emergentagent.com
+CORS_ORIGINS=http://localhost:3000,https://academic-admin-sys-1.preview.emergentagent.com
 MINEDU_API_BASE=https://api.minedu.gob.pe/siagie/v1
 MINEDU_API_KEY=test-key
 INSTITUTION_CODE=IESPP123
@@ -114,7 +114,7 @@ EOF
     # Create frontend .env if missing
     if [ ! -f "frontend/.env" ]; then
         cat > frontend/.env << EOF
-REACT_APP_BACKEND_URL=https://edusphere-24.preview.emergentagent.com/api
+REACT_APP_BACKEND_URL=https://academic-admin-sys-1.preview.emergentagent.com/api
 EOF
         print_status "Frontend .env created"
     fi
@@ -170,9 +170,9 @@ echo "• Database: MongoDB with demo data"
 echo "• Modules: Academic, Admission, Mesa de Partes, Treasury"
 echo ""
 echo -e "${BLUE}🌐 ACCESS URLS:${NC}"
-echo "• Frontend: https://edusphere-24.preview.emergentagent.com"
-echo "• Backend API: https://edusphere-24.preview.emergentagent.com/api"
-echo "• Health Check: https://edusphere-24.preview.emergentagent.com/api/health"
+echo "• Frontend: https://academic-admin-sys-1.preview.emergentagent.com"
+echo "• Backend API: https://academic-admin-sys-1.preview.emergentagent.com/api"
+echo "• Health Check: https://academic-admin-sys-1.preview.emergentagent.com/api/health"
 echo ""
 echo -e "${BLUE}👥 DEMO CREDENTIALS:${NC}"
 echo "• Admin: admin / password123"
