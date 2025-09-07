@@ -3018,7 +3018,7 @@ async def initialize_default_data():
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    mongo_client.close()
 
 # ====================================================================================================
 # TESORERÍA Y ADMINISTRACIÓN - CASH & BANKS APIs
