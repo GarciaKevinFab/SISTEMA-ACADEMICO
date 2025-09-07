@@ -133,10 +133,10 @@ const Login = () => {
           <div className="mt-6 p-4 bg-blue-50 rounded-md">
             <h4 className="text-sm font-medium text-blue-800 mb-2">Credenciales de Demostración:</h4>
             <div className="text-xs text-blue-700 space-y-1">
-              <p><strong>Administrador:</strong> admin@universidad.edu / password123</p>
-              <p><strong>Docente:</strong> teacher@universidad.edu / password123</p>
-              <p><strong>Estudiante:</strong> student@universidad.edu / password123</p>
-              <p><strong>Postulante:</strong> applicant@universidad.edu / password123</p>
+              <p><strong>Administrador:</strong> admin / password123</p>
+              <p><strong>Docente:</strong> teacher1 / password123</p>
+              <p><strong>Estudiante:</strong> student1 / password123</p>
+              <p><strong>Postulante:</strong> applicant1 / password123</p>
             </div>
           </div>
         </form>
