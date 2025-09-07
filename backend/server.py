@@ -3924,6 +3924,11 @@ async def create_inventory_movement(
     if movement_data.unit_cost:
         movement_dict['total_cost'] = movement_data.quantity * movement_data.unit_cost
     
+    # For exits, use the FIFO calculated total cost directly
+    if movement_data.movement_type == InventoryMovementType.EXIT.value and total_cost:
+        movement_dict['total_cost'] = total_cost
+        movement_dict['fifo_cost_breakdown'] = cost_breakdown
+    
     movement = InventoryMovement(**movement_dict)
     movement_doc = prepare_for_mongo(movement.dict())
     
