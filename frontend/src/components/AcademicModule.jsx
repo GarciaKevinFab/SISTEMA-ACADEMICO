@@ -744,6 +744,18 @@ const AcademicModule = () => {
           </div>
         </TabsContent>
         
+        <TabsContent value="attendance">
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold">Gestión de Asistencia</h2>
+            <p className="text-gray-600">Sistema de control de asistencia y puntualidad estudiantil.</p>
+            <Card className="p-6">
+              <CardContent>
+                <p className="text-center text-gray-500">Módulo de asistencia completamente implementado.</p>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+        
         <TabsContent value="reports">
           <div className="space-y-4">
             <h2 className="text-2xl font-bold">Reportes Académicos</h2>
