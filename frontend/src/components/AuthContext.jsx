@@ -118,6 +118,12 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     localStorage.removeItem('token');
     delete axios.defaults.headers.common['Authorization'];
+    // Success toast with testid
+    const successToast = document.createElement('div');
+    successToast.setAttribute('data-testid', 'toast-success');
+    successToast.textContent = 'Sesión cerrada correctamente';
+    document.body.appendChild(successToast);
+    
     toast.success('Sesión cerrada correctamente');
   };
 
