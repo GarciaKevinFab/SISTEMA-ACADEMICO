@@ -150,10 +150,10 @@ class ComprehensiveBackendTester:
         # Test role-specific access
         role_tests = [
             (self.finance_admin_token, "FINANCE_ADMIN", "finance/bank-accounts"),
-            (self.cashier_token, "CASHIER", "finance/cash-sessions"),
-            (self.warehouse_token, "WAREHOUSE", "finance/inventory-items"),
-            (self.logistics_token, "LOGISTICS", "finance/suppliers"),
-            (self.hr_admin_token, "HR_ADMIN", "finance/employees")
+            (self.cashier_token, "CASHIER", "finance/receipts"),
+            (self.warehouse_token, "WAREHOUSE", "inventory/items"),
+            (self.logistics_token, "LOGISTICS", "logistics/suppliers"),
+            (self.hr_admin_token, "HR_ADMIN", "hr/employees")
         ]
         
         for token, role, endpoint in role_tests:
