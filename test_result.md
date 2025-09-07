@@ -285,6 +285,90 @@ backend:
         agent: "main"
         comment: "Created comprehensive reporting system with PDF generation for cash flow, receipts, inventory valuation"
 
+  - task: "Advanced Receipts Features (Idempotency, State Transitions, QR)"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL: Advanced receipts testing failed. 1) Idempotency not working due to payment endpoint parameter format issues, 2) State transitions cannot be tested due to payment failures, 3) QR verification public endpoint not returning expected safe data format (receipt_number, date, total, status), 4) Void/refund logic cannot be tested due to payment prerequisite failures. Core receipt creation works but advanced features broken."
+
+  - task: "Advanced Cash & Banks Features (Mandatory Count, Reconciliation, Arqueo)"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL: Advanced cash features testing failed. 1) Mandatory cash count not enforced - can create movements without open session, 2) Bank reconciliation error handling inadequate for missing files/invalid accounts, 3) Cash arqueo with differences fails due to parameter format (expects query params not body). Basic operations work but advanced validation missing."
+
+  - task: "Advanced Inventory Features (Concurrency, Negative Stock, FIFO Accuracy)"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL: Advanced inventory testing revealed issues. 1) FIFO cost calculations incorrect (got 955.0 vs expected 930.0), 2) Negative stock prevention not working - allows over-exits, 3) Concurrent operations work but may have race conditions. Kardex generation works and is chronological. Basic FIFO works but accuracy and validation need fixes."
+
+  - task: "Complete Logistics Workflow (PO Lifecycle, Receptions, Validations)"
+    implemented: false
+    working: "NA"
+    file: "server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "testing"
+        comment: "❌ NOT IMPLEMENTED: Complete logistics workflow missing. 1) Purchase Order endpoints not found, 2) Reception endpoints not found, 3) PO lifecycle (Requisition→PO→Reception→Inventory) cannot be tested, 4) Partial reception tracking not available. Only supplier creation and requirements work. RUC validation working correctly (accepts valid, rejects invalid formats)."
+
+  - task: "Advanced HR Features (Bulk Import, Contracts, Timezone Handling)"
+    implemented: false
+    working: "NA"
+    file: "server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "testing"
+        comment: "❌ NOT IMPLEMENTED: Advanced HR features missing. 1) Bulk attendance import endpoints not found, 2) Contract expiration warning endpoints not found, 3) Timezone-aware date handling fails validation (expects exact dates not datetimes), 4) CSV import template endpoint not available. Basic employee and attendance management works but advanced features missing."
+
+  - task: "Audit & Security Features (Immutable Logs, Data Masking, Correlation-ID)"
+    implemented: false
+    working: "NA"
+    file: "server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "testing"
+        comment: "❌ NOT IMPLEMENTED: Audit and security features missing. 1) Audit logs endpoint not available (/audit/logs returns 404), 2) Data masking not implemented in public QR verification, 3) Correlation-ID not present in write operation responses, 4) Role permissions have critical issues preventing authorized access. Security framework exists but advanced features missing."
+
+  - task: "Performance & Stress Testing (200 req/min, <1.5s latency, 0 5xx errors)"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ PASSED: Performance requirements met. 1) Receipts endpoint handles 893.4 req/min (target: 200), 2) P95 latency 0.064s (target: <1.5s), 3) Zero 5xx errors under load (target: 0). System performs well under stress testing conditions."
+
   - task: "Role-based Permissions"
     implemented: true
     working: false
