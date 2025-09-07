@@ -191,7 +191,7 @@ class FIFOTester:
             self.log_test("Step 6: Stock Level Validation", False, f"- Error: {stock_data}")
 
         # Get movement history for verification
-        success, history_data = self.make_request('GET', f'inventory/movements?inventory_item_id={item_id}', 
+        success, history_data = self.make_request('GET', f'inventory/movements?item_id={item_id}', 
                                                  token=self.admin_token)
         
         if success and 'movements' in history_data:
