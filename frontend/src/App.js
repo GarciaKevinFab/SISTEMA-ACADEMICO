@@ -482,6 +482,17 @@ function App() {
             />
             
             <Route 
+              path="/dashboard/mesa-partes" 
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <MesaDePartesModule />
+                  </Layout>
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
               path="/dashboard/finance" 
               element={
                 <ProtectedRoute>
