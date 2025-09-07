@@ -721,27 +721,11 @@ const AcademicModule = () => {
         </TabsContent>
         
         <TabsContent value="enrollments">
-          <div className="space-y-4">
-            <h2 className="text-2xl font-bold">Gestión de Matrículas</h2>
-            <p className="text-gray-600">Sistema de matrículas con validación de prerrequisitos.</p>
-            <Card className="p-6">
-              <CardContent>
-                <p className="text-center text-gray-500">Módulo de matrículas completamente implementado.</p>
-              </CardContent>
-            </Card>
-          </div>
+          <EnrollmentComponent />
         </TabsContent>
         
         <TabsContent value="grades">
-          <div className="space-y-4">
-            <h2 className="text-2xl font-bold">Gestión de Calificaciones</h2>
-            <p className="text-gray-600">Sistema de calificaciones con escala peruana (0-20, AD/A/B/C).</p>
-            <Card className="p-6">
-              <CardContent>
-                <p className="text-center text-gray-500">Módulo de calificaciones completamente implementado.</p>
-              </CardContent>
-            </Card>
-          </div>
+          <GradesAttendanceComponent />
         </TabsContent>
         
         <TabsContent value="attendance">
@@ -750,7 +734,8 @@ const AcademicModule = () => {
             <p className="text-gray-600">Sistema de control de asistencia y puntualidad estudiantil.</p>
             <Card className="p-6">
               <CardContent>
-                <p className="text-center text-gray-500">Módulo de asistencia completamente implementado.</p>
+                <p className="text-center text-gray-500">La gestión de asistencia está integrada en el módulo de Calificaciones.</p>
+                <p className="text-center text-gray-500 mt-2">Acceda a la pestaña "Calificaciones" para importar y gestionar asistencia.</p>
               </CardContent>
             </Card>
           </div>
