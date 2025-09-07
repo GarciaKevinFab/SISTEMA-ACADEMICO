@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from './AuthContext';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../App';
 import CashBanksDashboard from './finance/CashBanksDashboard';
 import ReceiptsDashboard from './finance/ReceiptsDashboard';
 import InventoryDashboard from './finance/InventoryDashboard';
