@@ -31,6 +31,14 @@ from logging_middleware import (
     create_standardized_exception_handler
 )
 
+# Configuration and setup
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
+# Setup structured logging
+setup_logging()
+logger = logging.getLogger("api.main")
+
 # Import all modules
 from finance_models import *
 from finance_enums import *
@@ -46,14 +54,6 @@ try:
 except ImportError as e:
     logger.warning(f"Could not import route modules: {e}")
     ROUTES_AVAILABLE = False
-
-# Configuration and setup
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
-
-# Setup structured logging
-setup_logging()
-logger = logging.getLogger("api.main")
 
 # Database connection
 mongo_url = os.environ['MONGO_URL']
