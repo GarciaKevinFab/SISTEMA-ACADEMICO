@@ -19,6 +19,7 @@ import pandas as pd
 import qrcode
 import io
 import base64
+import time
 
 # Import structured logging
 from logging_middleware import (
