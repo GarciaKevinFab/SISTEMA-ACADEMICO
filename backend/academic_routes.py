@@ -6,7 +6,7 @@ import uuid
 
 from academic_models import *
 from academic_enums import *
-from server import get_current_user, db, logger
+from shared_deps import get_current_user, db, logger
 
 academic_router = APIRouter(prefix="/academic", tags=["Academic"])
 
