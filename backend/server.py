@@ -4203,6 +4203,60 @@ async def update_employee(
     
     return {"status": "success", "message": "Employee updated successfully"}
 
+# ====================================================================================================
+# AUDIT LOGS APIs
+# ====================================================================================================
+
+@api_router.get("/audit/logs")
+async def get_audit_logs(
+    table_name: Optional[str] = None,
+    action: Optional[str] = None,
+    user_id: Optional[str] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.FINANCE_ADMIN]))
+):
+    """Get audit logs with filters (admin only)"""
+    
+    filter_query = {}
+    
+    if table_name:
+        filter_query["table_name"] = table_name
+    if action:
+        filter_query["action"] = action.upper()
+    if user_id:
+        filter_query["user_id"] = user_id
+    if date_from:
+        filter_query["timestamp"] = {"$gte": date_from.isoformat()}
+    if date_to:
+        if "timestamp" in filter_query:
+            filter_query["timestamp"]["$lte"] = (date_to + timedelta(days=1)).isoformat()
+        else:
+            filter_query["timestamp"] = {"$lte": (date_to + timedelta(days=1)).isoformat()}
+    
+    audit_logs = await db.audit_logs.find(filter_query).sort("timestamp", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.audit_logs.count_documents(filter_query)
+    
+    # Enrich with user data
+    enriched_logs = []
+    for log in audit_logs:
+        user = await db.users.find_one({"id": log.get("user_id")}) if log.get("user_id") else None
+        
+        enriched_log = {
+            **log,
+            "user": User(**user) if user else None
+        }
+        enriched_logs.append(enriched_log)
+    
+    return {
+        "audit_logs": enriched_logs,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
 @api_router.post("/hr/attendance", dependencies=[Depends(require_role([UserRole.HR_ADMIN]))])
 async def create_attendance(attendance_data: AttendanceCreate, current_user: User = Depends(get_current_user)):
     """Create attendance record"""
