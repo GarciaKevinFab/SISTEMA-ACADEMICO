@@ -505,6 +505,28 @@ function App() {
                 </ProtectedRoute>
               } 
             />
+            
+            <Route 
+              path="/dashboard/minedu" 
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <MineduIntegrationModule />
+                  </Layout>
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="/dashboard/portal" 
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <InstitutionalPortal />
+                  </Layout>
+                </ProtectedRoute>
+              } 
+            />
 
             {/* Redirect */}
             <Route path="*" element={<Navigate to="/" replace />} />
