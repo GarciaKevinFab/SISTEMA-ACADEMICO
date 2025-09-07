@@ -556,7 +556,7 @@ const ProceduresManagement = () => {
                 <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                <Button data-testid="procedure-create" type="submit" className="bg-blue-600 hover:bg-blue-700">
                   Crear Trámite
                 </Button>
               </div>
