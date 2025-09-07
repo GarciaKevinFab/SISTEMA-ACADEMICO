@@ -11,7 +11,7 @@ from datetime import datetime, date
 from typing import Dict, Any, Optional
 
 class FinalTargetedTester:
-    def __init__(self, base_url="https://academic-treasury.preview.emergentagent.com/api"):
+    def __init__(self, base_url="https://academic-admin-sys.preview.emergentagent.com/api"):
         self.base_url = base_url
         self.admin_token = None
         self.tests_run = 0
