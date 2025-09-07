@@ -3385,7 +3385,7 @@ async def pay_receipt(
     await db.receipt_payments.insert_one(payment_record)
     
     # Create cash movement if payment is in cash
-    if payment_method == PaymentMethod.CASH:
+    if payment_data.payment_method == PaymentMethod.CASH:
         # Get current open cash session
         cash_session = await db.cash_sessions.find_one({
             "opened_by": current_user.id,
