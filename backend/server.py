@@ -4239,14 +4239,18 @@ async def get_audit_logs(
     audit_logs = await db.audit_logs.find(filter_query).sort("timestamp", -1).skip(skip).limit(limit).to_list(limit)
     total = await db.audit_logs.count_documents(filter_query)
     
-    # Enrich with user data
+    # Enrich with user data (simplified to avoid validation issues)
     enriched_logs = []
     for log in audit_logs:
         user = await db.users.find_one({"id": log.get("user_id")}) if log.get("user_id") else None
         
         enriched_log = {
             **log,
-            "user": User(**user) if user else None
+            "user_info": {
+                "id": user.get("id"),
+                "username": user.get("username"),
+                "role": user.get("role")
+            } if user else None
         }
         enriched_logs.append(enriched_log)
     
