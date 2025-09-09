@@ -263,7 +263,7 @@ class UserCreate(BaseModel):
     role: UserRole = UserRole.STUDENT
     phone: Optional[str] = Field(None, max_length=15)
 
-class UserLogin(BaseModel):
+class UserLogin(BaseModel): 
     username: str
     password: str
 

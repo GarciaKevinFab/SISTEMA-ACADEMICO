@@ -1,151 +1,151 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from './AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Badge } from './ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { toast } from 'sonner';
-import { 
-  BookOpen, 
-  CheckCircle, 
-  AlertTriangle, 
+// src/components/EnrollmentComponent.jsx
+import React, { useState, useEffect } from "react";
+import { useAuth } from "./AuthContext";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Badge } from "./ui/badge";
+import { toast } from "sonner";
+import {
+  CheckCircle,
+  AlertTriangle,
   Clock,
   Plus,
   Search,
   FileText,
-  Download
-} from 'lucide-react';
-import { generatePDFWithPolling, downloadFile } from '../utils/pdfQrPolling';
+} from "lucide-react";
+import { generatePDFWithPolling, downloadFile } from "../utils/pdfQrPolling";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+/* ---------------- helpers ---------------- */
+function formatApiError(err, fallback = "Ocurrió un error") {
+  const data = err?.response?.data;
+  if (data?.detail) {
+    const d = data.detail;
+    if (typeof d === "string") return d;
+    if (Array.isArray(d)) {
+      const msgs = d
+        .map((e) => {
+          const field = Array.isArray(e?.loc) ? e.loc.join(".") : e?.loc;
+          return e?.msg ? (field ? `${field}: ${e.msg}` : e.msg) : null;
+        })
+        .filter(Boolean);
+      if (msgs.length) return msgs.join(" | ");
+    }
+  }
+  if (typeof data?.error?.message === "string") return data.error.message;
+  if (typeof data?.message === "string") return data.message;
+  if (typeof data?.error === "string") return data.error;
+  if (typeof err?.message === "string") return err.message;
+  return fallback;
+}
 
 const EnrollmentComponent = () => {
-  const { user } = useContext(AuthContext);
+  const { user, api } = useAuth();
+
   const [courses, setCourses] = useState([]);
   const [selectedCourses, setSelectedCourses] = useState([]);
+
   const [enrollmentData, setEnrollmentData] = useState({
-    student_id: user?.id || '',
-    academic_period: '2025-I',
-    selected_courses: []
+    student_id: user?.id || "",
+    academic_period: "2025-I",
+    selected_courses: [],
   });
-  
+
   const [validation, setValidation] = useState({
     status: null,
     errors: [],
     warnings: [],
-    suggestions: []
+    suggestions: [],
   });
-  
+
   const [loading, setLoading] = useState(false);
   const [scheduleConflicts, setScheduleConflicts] = useState([]);
   const [isValidating, setIsValidating] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  // Si el user llega más tarde, sincroniza el student_id
+  useEffect(() => {
+    setEnrollmentData((d) => ({ ...d, student_id: user?.id || "" }));
+  }, [user?.id]);
+
   useEffect(() => {
     fetchAvailableCourses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchAvailableCourses = async () => {
     try {
-      const response = await fetch(`${API}/courses/available`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setCourses(data.courses || []);
-      }
+      const { data } = await api.get("/courses/available");
+      setCourses(data?.courses ?? data ?? []);
     } catch (error) {
-      console.error('Error fetching courses:', error);
-      showToast('error', 'Error al cargar cursos disponibles');
+      console.error("Error fetching courses:", error);
+      showToast("error", formatApiError(error, "Error al cargar cursos disponibles"));
     }
   };
 
+  // Mantengo tu helper para E2E (inserta un nodo visible con data-testid + toast real)
   const showToast = (type, message) => {
-    const toastElement = document.createElement('div');
-    toastElement.setAttribute('data-testid', `toast-${type}`);
+    const toastElement = document.createElement("div");
+    toastElement.setAttribute("data-testid", `toast-${type}`);
     toastElement.textContent = message;
     document.body.appendChild(toastElement);
-    
+
     toast[type](message);
-    
+
     setTimeout(() => {
-      document.body.removeChild(toastElement);
+      if (toastElement.parentNode) document.body.removeChild(toastElement);
     }, 5000);
   };
 
   const validateEnrollment = async () => {
     if (selectedCourses.length === 0) {
-      showToast('error', 'Seleccione al menos un curso para validar');
+      showToast("error", "Seleccione al menos un curso para validar");
       return;
     }
 
     setIsValidating(true);
     setValidation({ status: null, errors: [], warnings: [], suggestions: [] });
+    setScheduleConflicts([]);
+
+    const payload = {
+      student_id: enrollmentData.student_id,
+      academic_period: enrollmentData.academic_period,
+      course_ids: selectedCourses.map((c) => c.id),
+    };
 
     try {
-      const payload = {
-        student_id: enrollmentData.student_id,
-        academic_period: enrollmentData.academic_period,
-        course_ids: selectedCourses.map(c => c.id)
-      };
-
-      const response = await fetch(`${API}/enrollments/validate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(payload)
+      // Si 2xx: válido (con posibles warnings)
+      const { data } = await api.post("/enrollments/validate", payload);
+      setValidation({
+        status: "success",
+        errors: [],
+        warnings: data?.warnings || [],
+        suggestions: [],
       });
-
-      const result = await response.json();
-
-      if (response.status === 409) {
-        // Validation failed with conflicts
+      showToast("success", "Validación exitosa. Puede proceder con la matrícula.");
+    } catch (err) {
+      const status = err?.response?.status;
+      const result = err?.response?.data || {};
+      if (status === 409) {
+        // Conflictos devueltos por el backend
         setValidation({
-          status: 'conflict',
+          status: "conflict",
           errors: result.errors || [],
           warnings: result.warnings || [],
-          suggestions: result.suggestions || []
+          suggestions: result.suggestions || [],
         });
-        
-        if (result.schedule_conflicts) {
-          setScheduleConflicts(result.schedule_conflicts);
-        }
-        
-        showToast('error', 'Conflictos detectados en la matrícula');
-        
-      } else if (response.ok) {
-        // Validation passed
-        setValidation({
-          status: 'success',
-          errors: [],
-          warnings: result.warnings || [],
-          suggestions: []
-        });
-        
-        showToast('success', 'Validación exitosa. Puede proceder con la matrícula.');
-        
+        if (result.schedule_conflicts) setScheduleConflicts(result.schedule_conflicts);
+        showToast("error", "Conflictos detectados en la matrícula");
       } else {
-        throw new Error(result.detail || 'Error en validación');
+        setValidation({
+          status: "error",
+          errors: [formatApiError(err, "Error en validación")],
+          warnings: [],
+          suggestions: [],
+        });
+        showToast("error", "Error en la validación de matrícula");
       }
-
-    } catch (error) {
-      console.error('Validation error:', error);
-      setValidation({
-        status: 'error',
-        errors: [error.message],
-        warnings: [],
-        suggestions: []
-      });
-      showToast('error', 'Error en la validación de matrícula');
     } finally {
       setIsValidating(false);
     }
@@ -156,55 +156,39 @@ const EnrollmentComponent = () => {
   };
 
   const commitEnrollment = async () => {
-    if (validation.status !== 'success') {
-      showToast('error', 'Debe validar la matrícula antes de confirmarla');
+    if (validation.status !== "success") {
+      showToast("error", "Debe validar la matrícula antes de confirmarla");
       return;
     }
 
     setLoading(true);
+    const idempotencyKey = `enrollment-${user?.id ?? "anon"}-${Date.now()}`;
+
+    const payload = {
+      student_id: enrollmentData.student_id,
+      academic_period: enrollmentData.academic_period,
+      course_ids: selectedCourses.map((c) => c.id),
+    };
 
     try {
-      // Generate idempotency key
-      const idempotencyKey = `enrollment-${user.id}-${Date.now()}`;
-      
-      const payload = {
-        student_id: enrollmentData.student_id,
-        academic_period: enrollmentData.academic_period,
-        course_ids: selectedCourses.map(c => c.id)
-      };
-
-      const response = await fetch(`${API}/enrollments/commit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Idempotency-Key': idempotencyKey
-        },
-        body: JSON.stringify(payload)
+      const { data } = await api.post("/enrollments/commit", payload, {
+        headers: { "Idempotency-Key": idempotencyKey },
       });
 
-      const result = await response.json();
+      showToast("success", "Matrícula realizada exitosamente");
 
-      if (response.ok) {
-        showToast('success', 'Matrícula realizada exitosamente');
-        
-        // Reset form
-        setSelectedCourses([]);
-        setValidation({ status: null, errors: [], warnings: [], suggestions: [] });
-        setScheduleConflicts([]);
-        
-        // Optionally generate enrollment certificate
-        if (result.enrollment_id) {
-          await generateEnrollmentCertificate(result.enrollment_id);
-        }
-        
-      } else {
-        throw new Error(result.detail || 'Error al confirmar matrícula');
+      // Reset
+      setSelectedCourses([]);
+      setValidation({ status: null, errors: [], warnings: [], suggestions: [] });
+      setScheduleConflicts([]);
+
+      // Generar constancia si aplica
+      if (data?.enrollment_id) {
+        await generateEnrollmentCertificate(data.enrollment_id);
       }
-
     } catch (error) {
-      console.error('Enrollment commit error:', error);
-      showToast('error', error.message || 'Error al confirmar la matrícula');
+      console.error("Enrollment commit error:", error);
+      showToast("error", formatApiError(error, "Error al confirmar la matrícula"));
     } finally {
       setLoading(false);
     }
@@ -212,57 +196,61 @@ const EnrollmentComponent = () => {
 
   const generateEnrollmentCertificate = async (enrollmentId) => {
     try {
+      // Tu util asume el path base; lo dejamos igual
       const result = await generatePDFWithPolling(
         `/enrollments/${enrollmentId}/certificate`,
         {},
-        { testId: 'enrollment-certificate' }
+        { testId: "enrollment-certificate" }
       );
 
       if (result.success) {
         await downloadFile(result.downloadUrl, `matricula-${enrollmentId}.pdf`);
-        showToast('success', 'Constancia de matrícula generada');
+        showToast("success", "Constancia de matrícula generada");
       }
     } catch (error) {
-      console.error('Certificate generation error:', error);
-      showToast('error', 'Error al generar constancia de matrícula');
+      console.error("Certificate generation error:", error);
+      showToast("error", "Error al generar constancia de matrícula");
     }
   };
 
   const generateSchedulePDF = async () => {
     if (selectedCourses.length === 0) {
-      showToast('error', 'Seleccione cursos para generar horario');
+      showToast("error", "Seleccione cursos para generar horario");
       return;
     }
 
     try {
       const result = await generatePDFWithPolling(
-        '/schedules/export',
+        "/schedules/export",
         {
           student_id: enrollmentData.student_id,
           academic_period: enrollmentData.academic_period,
-          course_ids: selectedCourses.map(c => c.id)
+          course_ids: selectedCourses.map((c) => c.id),
         },
-        { testId: 'schedule-pdf' }
+        { testId: "schedule-pdf" }
       );
 
       if (result.success) {
-        await downloadFile(result.downloadUrl, `horario-${enrollmentData.academic_period}.pdf`);
-        showToast('success', 'Horario exportado exitosamente');
+        await downloadFile(
+          result.downloadUrl,
+          `horario-${enrollmentData.academic_period}.pdf`
+        );
+        showToast("success", "Horario exportado exitosamente");
       }
     } catch (error) {
-      console.error('Schedule export error:', error);
-      showToast('error', 'Error al exportar horario');
+      console.error("Schedule export error:", error);
+      showToast("error", "Error al exportar horario");
     }
   };
 
   const addCourseToSelection = (course) => {
-    if (!selectedCourses.find(c => c.id === course.id)) {
-      setSelectedCourses([...selectedCourses, course]);
-    }
+    setSelectedCourses((prev) =>
+      prev.find((c) => c.id === course.id) ? prev : [...prev, course]
+    );
   };
 
   const removeCourseFromSelection = (courseId) => {
-    setSelectedCourses(selectedCourses.filter(c => c.id !== courseId));
+    setSelectedCourses((prev) => prev.filter((c) => c.id !== courseId));
   };
 
   return (
@@ -271,9 +259,9 @@ const EnrollmentComponent = () => {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Matrícula de Cursos</h2>
         <div className="flex space-x-2">
-          <Button 
+          <Button
             data-testid="schedule-export-pdf"
-            variant="outline" 
+            variant="outline"
             onClick={generateSchedulePDF}
             disabled={selectedCourses.length === 0}
           >
@@ -293,33 +281,30 @@ const EnrollmentComponent = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {courses.map((course) => (
-              <Card key={course.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-semibold text-sm">{course.name}</h4>
-                    <Badge variant="outline">{course.credits} créditos</Badge>
-                  </div>
-                  <p className="text-xs text-gray-600 mb-2">{course.code}</p>
-                  <p className="text-xs text-gray-500 mb-3">{course.schedule}</p>
-                  
-                  <Button
-                    size="sm"
-                    variant={selectedCourses.find(c => c.id === course.id) ? "default" : "outline"}
-                    onClick={() => {
-                      if (selectedCourses.find(c => c.id === course.id)) {
-                        removeCourseFromSelection(course.id);
-                      } else {
-                        addCourseToSelection(course);
-                      }
-                    }}
-                    className="w-full"
-                  >
-                    {selectedCourses.find(c => c.id === course.id) ? 'Seleccionado' : 'Seleccionar'}
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+            {courses.map((course) => {
+              const selected = selectedCourses.some((c) => c.id === course.id);
+              return (
+                <Card key={course.id} className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="font-semibold text-sm">{course.name}</h4>
+                      <Badge variant="outline">{course.credits} créditos</Badge>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-2">{course.code}</p>
+                    <p className="text-xs text-gray-500 mb-3">{course.schedule}</p>
+
+                    <Button
+                      size="sm"
+                      variant={selected ? "default" : "outline"}
+                      onClick={() => (selected ? removeCourseFromSelection(course.id) : addCourseToSelection(course))}
+                      className="w-full"
+                    >
+                      {selected ? "Seleccionado" : "Seleccionar"}
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
@@ -340,11 +325,7 @@ const EnrollmentComponent = () => {
                   </div>
                   <div className="flex items-center space-x-2">
                     <Badge>{course.credits} créditos</Badge>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => removeCourseFromSelection(course.id)}
-                    >
+                    <Button size="sm" variant="ghost" onClick={() => removeCourseFromSelection(course.id)}>
                       ×
                     </Button>
                   </div>
@@ -360,9 +341,10 @@ const EnrollmentComponent = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
-              {validation.status === 'success' && <CheckCircle className="h-5 w-5 text-green-500" />}
-              {validation.status === 'conflict' && <AlertTriangle className="h-5 w-5 text-red-500" />}
-              {validation.status === 'error' && <AlertTriangle className="h-5 w-5 text-red-500" />}
+              {validation.status === "success" && <CheckCircle className="h-5 w-5 text-green-500" />}
+              {(validation.status === "conflict" || validation.status === "error") && (
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+              )}
               <span>Resultado de Validación</span>
             </CardTitle>
           </CardHeader>
@@ -372,18 +354,22 @@ const EnrollmentComponent = () => {
                 <h4 className="font-semibold text-red-600 mb-2">Errores:</h4>
                 <ul className="list-disc list-inside space-y-1">
                   {validation.errors.map((error, index) => (
-                    <li key={index} className="text-red-600 text-sm">{error}</li>
+                    <li key={index} className="text-red-600 text-sm">
+                      {error}
+                    </li>
                   ))}
                 </ul>
               </div>
             )}
-            
+
             {validation.warnings.length > 0 && (
               <div className="mb-4">
                 <h4 className="font-semibold text-yellow-600 mb-2">Advertencias:</h4>
                 <ul className="list-disc list-inside space-y-1">
                   {validation.warnings.map((warning, index) => (
-                    <li key={index} className="text-yellow-600 text-sm">{warning}</li>
+                    <li key={index} className="text-yellow-600 text-sm">
+                      {warning}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -399,7 +385,7 @@ const EnrollmentComponent = () => {
                     </div>
                   ))}
                 </div>
-                
+
                 <Button
                   data-testid="enroll-suggest-alt"
                   variant="outline"
@@ -438,7 +424,7 @@ const EnrollmentComponent = () => {
         <Button
           data-testid="enroll-commit"
           onClick={commitEnrollment}
-          disabled={loading || validation.status !== 'success'}
+          disabled={loading || validation.status !== "success"}
           className="bg-blue-600 hover:bg-blue-700"
         >
           {loading ? (
@@ -456,7 +442,7 @@ const EnrollmentComponent = () => {
       </div>
 
       {/* Status indicators for E2E testing */}
-      <div style={{ display: 'none' }}>
+      <div style={{ display: "none" }}>
         <div data-testid="enrollment-certificate-status">IDLE</div>
         <div data-testid="schedule-pdf-status">IDLE</div>
       </div>

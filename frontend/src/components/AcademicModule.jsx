@@ -1,60 +1,79 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from './AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Badge } from './ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Textarea } from './ui/textarea';
-import { 
-  Users, 
-  BookOpen, 
-  UserPlus, 
-  Award, 
-  Calendar,
+// src/components/AdmissionModule.jsx
+import React, { useState, useEffect } from "react";
+import { useAuth } from "./AuthContext";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Badge } from "./ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Textarea } from "./ui/textarea";
+import {
+  Users,
+  BookOpen,
+  Award,
   BarChart3,
   FileText,
   Clock,
-  CheckCircle,
   Plus,
   Search,
   Eye,
   Edit,
-  GraduationCap,
-  User,
-  School
-} from 'lucide-react';
-import axios from 'axios';
-import { toast } from 'sonner';
-import EnrollmentComponent from './EnrollmentComponent';
-import GradesAttendanceComponent from './GradesAttendanceComponent';
+} from "lucide-react";
+import { toast } from "sonner";
 
-const API = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001/api';
+/* -------------------- helpers -------------------- */
+function formatApiError(err, fallback = "Ocurrió un error") {
+  const data = err?.response?.data;
+  if (data?.detail) {
+    const d = data.detail;
+    if (typeof d === "string") return d;
+    if (Array.isArray(d)) {
+      const msgs = d
+        .map((e) => {
+          const field = Array.isArray(e?.loc) ? e.loc.join(".") : e?.loc;
+          return e?.msg ? (field ? `${field}: ${e.msg}` : e.msg) : null;
+        })
+        .filter(Boolean);
+      if (msgs.length) return msgs.join(" | ");
+    }
+  }
+  if (typeof data?.error?.message === "string") return data.error.message;
+  if (typeof data?.message === "string") return data.message;
+  if (typeof data?.error === "string") return data.error;
+  if (typeof err?.message === "string") return err.message;
+  return fallback;
+}
 
-// Academic Dashboard Component
-const AcademicDashboard = () => {
-  const { user } = useContext(AuthContext);
+function toIntOr(value, orNull = null) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : orNull;
+}
+
+/* -------------------- Dashboard -------------------- */
+const AdmissionDashboard = () => {
+  const { api } = useAuth();
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchDashboardStats();
-  }, []);
-
-  const fetchDashboardStats = async () => {
-    try {
-      const response = await axios.get(`${API}/dashboard/stats`);
-      setStats(response.data.stats);
-    } catch (error) {
-      console.error('Error fetching dashboard stats:', error);
-      toast.error('Error al cargar estadísticas');
-    } finally {
-      setLoading(false);
-    }
-  };
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await api.get("/dashboard/stats");
+        if (!mounted) return;
+        setStats(data?.stats ?? data ?? {});
+      } catch (error) {
+        console.error("Error fetching dashboard stats:", error);
+        toast.error(formatApiError(error, "Error al cargar estadísticas"));
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [api]);
 
   if (loading) {
     return (
@@ -68,181 +87,82 @@ const AcademicDashboard = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Panel Académico</h2>
-          <p className="text-muted-foreground">
-            Sistema de gestión académica integral
-          </p>
+          <h2 className="text-3xl font-bold tracking-tight">Panel de Admisión</h2>
+          <p className="text-muted-foreground">Sistema de gestión de admisiones y postulantes</p>
         </div>
       </div>
 
       {/* Quick Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {user?.role === 'ADMIN' && (
-          <>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Estudiantes Activos</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.total_students || 0}</div>
-                <p className="text-xs text-muted-foreground">Estudiantes matriculados</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Cursos Activos</CardTitle>
-                <BookOpen className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.total_courses || 0}</div>
-                <p className="text-xs text-muted-foreground">Cursos habilitados</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Matrículas Activas</CardTitle>
-                <UserPlus className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.active_enrollments || 0}</div>
-                <p className="text-xs text-muted-foreground">Matrículas vigentes</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Trámites Pendientes</CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.pending_procedures || 0}</div>
-                <p className="text-xs text-muted-foreground">Requerín atención</p>
-              </CardContent>
-            </Card>
-          </>
-        )}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Postulantes Activos</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total_applicants ?? 0}</div>
+            <p className="text-xs text-muted-foreground">En proceso de admisión</p>
+          </CardContent>
+        </Card>
 
-        {user?.role === 'TEACHER' && (
-          <>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Mis Cursos</CardTitle>
-                <BookOpen className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.my_courses || 0}</div>
-                <p className="text-xs text-muted-foreground">Cursos asignados</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Calificaciones Pendientes</CardTitle>
-                <Award className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.pending_grades || 0}</div>
-                <p className="text-xs text-muted-foreground">Por calificar</p>
-              </CardContent>
-            </Card>
-          </>
-        )}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Convocatorias Activas</CardTitle>
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.active_calls ?? 0}</div>
+            <p className="text-xs text-muted-foreground">Procesos abiertos</p>
+          </CardContent>
+        </Card>
 
-        {user?.role === 'STUDENT' && (
-          <>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Mis Matrículas</CardTitle>
-                <BookOpen className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.my_enrollments || 0}</div>
-                <p className="text-xs text-muted-foreground">Cursos matriculados</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Cursos Aprobados</CardTitle>
-                <Award className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.approved_courses || 0}</div>
-                <p className="text-xs text-muted-foreground">Completados</p>
-              </CardContent>
-            </Card>
-          </>
-        )}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Evaluaciones Pendientes</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.pending_evaluations ?? 0}</div>
+            <p className="text-xs text-muted-foreground">Por revisar</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Ingresantes</CardTitle>
+            <Award className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.admitted_students ?? 0}</div>
+            <p className="text-xs text-muted-foreground">Este período</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Quick Actions */}
       <Card>
         <CardHeader>
           <CardTitle>Acciones Rápidas</CardTitle>
-          <CardDescription>
-            Acceso directo a las funciones principales del módulo académico
-          </CardDescription>
+          <CardDescription>Acceso directo a las funciones principales del módulo de admisión</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {(user?.role === 'ADMIN' || user?.role === 'REGISTRAR') && (
-              <>
-                <Button variant="outline" className="h-20 flex flex-col gap-2">
-                  <Users className="h-6 w-6" />
-                  <span className="text-sm">Gestionar Estudiantes</span>
-                </Button>
-                <Button variant="outline" className="h-20 flex flex-col gap-2">
-                  <UserPlus className="h-6 w-6" />
-                  <span className="text-sm">Nueva Matrícula</span>
-                </Button>
-                <Button variant="outline" className="h-20 flex flex-col gap-2">
-                  <BookOpen className="h-6 w-6" />
-                  <span className="text-sm">Gestionar Cursos</span>
-                </Button>
-                <Button variant="outline" className="h-20 flex flex-col gap-2">
-                  <BarChart3 className="h-6 w-6" />
-                  <span className="text-sm">Reportes</span>
-                </Button>
-              </>
-            )}
-            {user?.role === 'TEACHER' && (
-              <>
-                <Button variant="outline" className="h-20 flex flex-col gap-2">
-                  <Award className="h-6 w-6" />
-                  <span className="text-sm">Calificar</span>
-                </Button>
-                <Button variant="outline" className="h-20 flex flex-col gap-2">
-                  <Clock className="h-6 w-6" />
-                  <span className="text-sm">Asistencia</span>
-                </Button>
-                <Button variant="outline" className="h-20 flex flex-col gap-2">
-                  <BookOpen className="h-6 w-6" />
-                  <span className="text-sm">Mis Cursos</span>
-                </Button>
-                <Button variant="outline" className="h-20 flex flex-col gap-2">
-                  <FileText className="h-6 w-6" />
-                  <span className="text-sm">Reportes</span>
-                </Button>
-              </>
-            )}
-            {user?.role === 'STUDENT' && (
-              <>
-                <Button variant="outline" className="h-20 flex flex-col gap-2">
-                  <GraduationCap className="h-6 w-6" />
-                  <span className="text-sm">Mi Plan de Estudios</span>
-                </Button>
-                <Button variant="outline" className="h-20 flex flex-col gap-2">
-                  <Award className="h-6 w-6" />
-                  <span className="text-sm">Mis Notas</span>
-                </Button>
-                <Button variant="outline" className="h-20 flex flex-col gap-2">
-                  <Calendar className="h-6 w-6" />
-                  <span className="text-sm">Horarios</span>
-                </Button>
-                <Button variant="outline" className="h-20 flex flex-col gap-2">
-                  <FileText className="h-6 w-6" />
-                  <span className="text-sm">Constancias</span>
-                </Button>
-              </>
-            )}
+            <Button variant="outline" className="h-20 flex flex-col gap-2">
+              <Users className="h-6 w-6" />
+              <span className="text-sm">Gestionar Postulantes</span>
+            </Button>
+            <Button variant="outline" className="h-20 flex flex-col gap-2">
+              <BookOpen className="h-6 w-6" />
+              <span className="text-sm">Convocatorias</span>
+            </Button>
+            <Button variant="outline" className="h-20 flex flex-col gap-2">
+              <FileText className="h-6 w-6" />
+              <span className="text-sm">Evaluaciones</span>
+            </Button>
+            <Button variant="outline" className="h-20 flex flex-col gap-2">
+              <BarChart3 className="h-6 w-6" />
+              <span className="text-sm">Reportes</span>
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -250,99 +170,65 @@ const AcademicDashboard = () => {
   );
 };
 
-// Students Management Component (Complete Implementation)
-const StudentsManagement = () => {
-  const [students, setStudents] = useState([]);
+/* -------------------- Careers -------------------- */
+const CareersManagement = () => {
+  const { api } = useAuth();
+  const [careers, setCareers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedProgram, setSelectedProgram] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
-    second_last_name: '',
-    birth_date: '',
-    gender: 'M',
-    document_type: 'DNI',
-    document_number: '',
-    email: '',
-    phone: '',
-    address: '',
-    district: '',
-    province: '',
-    department: '',
-    program: '',
-    entry_year: new Date().getFullYear(),
-    has_disability: false,
-    disability_description: '',
-    support_needs: []
+    name: "",
+    code: "",
+    description: "",
+    duration_semesters: 10,
+    degree_type: "BACHELOR",
+    modality: "PRESENCIAL",
+    is_active: true,
   });
 
   useEffect(() => {
-    fetchStudents();
-  }, []);
-
-  const fetchStudents = async () => {
-    try {
-      const response = await axios.get(`${API}/students`);
-      setStudents(response.data.students);
-    } catch (error) {
-      console.error('Error fetching students:', error);
-      toast.error('Error al cargar estudiantes');
-    } finally {
-      setLoading(false);
-    }
-  };
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await api.get("/careers");
+        if (!mounted) return;
+        setCareers(data?.careers ?? data ?? []);
+      } catch (error) {
+        console.error("Error fetching careers:", error);
+        toast.error(formatApiError(error, "Error al cargar carreras"));
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [api]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/students`, formData);
-      toast.success('Estudiante creado exitosamente');
+      const payload = {
+        ...formData,
+        duration_semesters: toIntOr(formData.duration_semesters, 0),
+      };
+      await api.post("/careers", payload);
+      toast.success("Carrera creada exitosamente");
       setIsCreateModalOpen(false);
-      resetForm();
-      fetchStudents();
+      setFormData({
+        name: "",
+        code: "",
+        description: "",
+        duration_semesters: 10,
+        degree_type: "BACHELOR",
+        modality: "PRESENCIAL",
+        is_active: true,
+      });
+      // recargar lista
+      const { data } = await api.get("/careers");
+      setCareers(data?.careers ?? data ?? []);
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error al crear estudiante');
+      toast.error(formatApiError(error, "Error al crear carrera"));
     }
   };
-
-  const resetForm = () => {
-    setFormData({
-      first_name: '',
-      last_name: '',
-      second_last_name: '',
-      birth_date: '',
-      gender: 'M',
-      document_type: 'DNI',
-      document_number: '',
-      email: '',
-      phone: '',
-      address: '',
-      district: '',
-      province: '',
-      department: '',
-      program: '',
-      entry_year: new Date().getFullYear(),
-      has_disability: false,
-      disability_description: '',
-      support_needs: []
-    });
-  };
-
-  const filteredStudents = students.filter(student => {
-    const matchesSearch = 
-      student.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.document_number.includes(searchTerm) ||
-      student.student_code.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesProgram = !selectedProgram || selectedProgram === 'ALL' || student.program === selectedProgram;
-    
-    return matchesSearch && matchesProgram;
-  });
-
-  const uniquePrograms = [...new Set(students.map(s => s.program))];
 
   if (loading) {
     return (
@@ -355,217 +241,109 @@ const StudentsManagement = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Gestión de Estudiantes</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Gestión de Carreras</h2>
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="student-create-button" className="bg-blue-600 hover:bg-blue-700">
+            <Button className="bg-blue-600 hover:bg-blue-700">
               <Plus className="h-4 w-4 mr-2" />
-              Nuevo Estudiante
+              Nueva Carrera
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Registrar Nuevo Estudiante</DialogTitle>
-              <DialogDescription>
-                Complete los datos del estudiante para registrarlo en el sistema
-              </DialogDescription>
+              <DialogTitle>Crear Nueva Carrera</DialogTitle>
+              <DialogDescription>Complete los datos de la carrera profesional</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="first_name">Nombres *</Label>
+                  <Label htmlFor="name">Nombre de la Carrera *</Label>
                   <Input
-                    id="first_name"
-                    value={formData.first_name}
-                    onChange={(e) => setFormData({...formData, first_name: e.target.value})}
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="last_name">Apellido Paterno *</Label>
+                  <Label htmlFor="code">Código *</Label>
                   <Input
-                    id="last_name"
-                    value={formData.last_name}
-                    onChange={(e) => setFormData({...formData, last_name: e.target.value})}
+                    id="code"
+                    value={formData.code}
+                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                     required
-                  />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="second_last_name">Apellido Materno</Label>
-                  <Input
-                    id="second_last_name"
-                    value={formData.second_last_name}
-                    onChange={(e) => setFormData({...formData, second_last_name: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="birth_date">Fecha de Nacimiento *</Label>
-                  <Input
-                    id="birth_date"
-                    type="date"
-                    value={formData.birth_date}
-                    onChange={(e) => setFormData({...formData, birth_date: e.target.value})}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="gender">Género *</Label>
-                  <Select value={formData.gender} onValueChange={(value) => setFormData({...formData, gender: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="M">Masculino</SelectItem>
-                      <SelectItem value="F">Femenino</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="document_type">Tipo de Documento *</Label>
-                  <Select value={formData.document_type} onValueChange={(value) => setFormData({...formData, document_type: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="DNI">DNI</SelectItem>
-                      <SelectItem value="FOREIGN_CARD">Carné de Extranjería</SelectItem>
-                      <SelectItem value="PASSPORT">Pasaporte</SelectItem>
-                      <SelectItem value="CONADIS_CARD">Carné CONADIS</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="document_number">Número de Documento *</Label>
-                  <Input
-                    id="document_number"
-                    value={formData.document_number}
-                    onChange={(e) => setFormData({...formData, document_number: e.target.value})}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="email">Correo Electrónico</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="phone">Teléfono</Label>
-                  <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
                   />
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="address">Dirección *</Label>
-                <Input
-                  id="address"
-                  value={formData.address}
-                  onChange={(e) => setFormData({...formData, address: e.target.value})}
-                  required
+                <Label htmlFor="description">Descripción</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <Label htmlFor="district">Distrito *</Label>
+                  <Label htmlFor="duration_semesters">Duración (Semestres) *</Label>
                   <Input
-                    id="district"
-                    value={formData.district}
-                    onChange={(e) => setFormData({...formData, district: e.target.value})}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="province">Provincia *</Label>
-                  <Input
-                    id="province"
-                    value={formData.province}
-                    onChange={(e) => setFormData({...formData, province: e.target.value})}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="department">Departamento *</Label>
-                  <Input
-                    id="department"
-                    value={formData.department}
-                    onChange={(e) => setFormData({...formData, department: e.target.value})}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="program">Programa de Estudios *</Label>
-                  <Input
-                    id="program"
-                    value={formData.program}
-                    onChange={(e) => setFormData({...formData, program: e.target.value})}
-                    required
-                    placeholder="Ej: Educación Inicial, Educación Primaria"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="entry_year">Año de Ingreso *</Label>
-                  <Input
-                    id="entry_year"
+                    id="duration_semesters"
                     type="number"
-                    min="2020"
-                    max="2030"
-                    value={formData.entry_year}
-                    onChange={(e) => setFormData({...formData, entry_year: parseInt(e.target.value)})}
+                    min="1"
+                    max="20"
+                    value={formData.duration_semesters}
+                    onChange={(e) =>
+                      setFormData({ ...formData, duration_semesters: e.target.value })
+                    }
                     required
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="has_disability"
-                    checked={formData.has_disability}
-                    onChange={(e) => setFormData({...formData, has_disability: e.target.checked})}
-                  />
-                  <Label htmlFor="has_disability">¿Tiene alguna discapacidad?</Label>
+                <div>
+                  <Label htmlFor="degree_type">Tipo de Grado *</Label>
+                  <Select
+                    value={formData.degree_type}
+                    onValueChange={(value) => setFormData({ ...formData, degree_type: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BACHELOR">Bachiller</SelectItem>
+                      <SelectItem value="TECHNICAL">Técnico</SelectItem>
+                      <SelectItem value="PROFESSIONAL">Profesional</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                
-                {formData.has_disability && (
-                  <div>
-                    <Label htmlFor="disability_description">Descripción de la Discapacidad</Label>
-                    <Textarea
-                      id="disability_description"
-                      value={formData.disability_description}
-                      onChange={(e) => setFormData({...formData, disability_description: e.target.value})}
-                      placeholder="Describa el tipo de discapacidad y necesidades especiales"
-                    />
-                  </div>
-                )}
+                <div>
+                  <Label htmlFor="modality">Modalidad *</Label>
+                  <Select
+                    value={formData.modality}
+                    onValueChange={(value) => setFormData({ ...formData, modality: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PRESENCIAL">Presencial</SelectItem>
+                      <SelectItem value="VIRTUAL">Virtual</SelectItem>
+                      <SelectItem value="SEMIPRESENCIAL">Semipresencial</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="flex justify-end space-x-2">
-                <Button data-testid="dialog-cancel" type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsCreateModalOpen(false)}
+                >
                   Cancelar
                 </Button>
-                <Button data-testid="student-create-submit" type="submit" className="bg-blue-600 hover:bg-blue-700">
-                  Crear Estudiante
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                  Crear Carrera
                 </Button>
               </div>
             </form>
@@ -573,70 +351,54 @@ const StudentsManagement = () => {
         </Dialog>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-4 items-center">
-        <div className="flex-1 max-w-md">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              placeholder="Buscar por nombre, DNI o código..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </div>
-        <Select value={selectedProgram} onValueChange={setSelectedProgram}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filtrar por programa" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Todos los programas</SelectItem>
-            {uniquePrograms.map(program => (
-              <SelectItem key={program} value={program}>{program}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Students List */}
+      {/* Careers List */}
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estudiante</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documento</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Programa</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Carrera
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Código
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Duración
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Modalidad
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Estado
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredStudents.map((student) => (
-                  <tr key={student.id} className="hover:bg-gray-50">
+                {careers.map((career) => (
+                  <tr key={career.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {student.first_name} {student.last_name} {student.second_last_name}
-                        </div>
-                        <div className="text-sm text-gray-500">{student.email}</div>
+                        <div className="text-sm font-medium text-gray-900">{career.name}</div>
+                        <div className="text-sm text-gray-500">{career.description}</div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {student.student_code}
+                      {career.code}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {student.document_type}: {student.document_number}
+                      {career.duration_semesters} semestres
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {student.program}
+                      {career.modality}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge variant={student.status === 'ENROLLED' ? 'default' : 'secondary'}>
-                        {student.status === 'ENROLLED' ? 'Matriculado' : student.status}
+                      <Badge variant={career.is_active ? "default" : "secondary"}>
+                        {career.is_active ? "Activa" : "Inactiva"}
                       </Badge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -651,100 +413,354 @@ const StudentsManagement = () => {
                     </td>
                   </tr>
                 ))}
+                {careers.length === 0 && (
+                  <tr>
+                    <td className="px-6 py-6 text-center text-sm text-gray-500" colSpan={6}>
+                      No hay carreras registradas todavía.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </CardContent>
       </Card>
-
-      {filteredStudents.length === 0 && (
-        <div className="text-center py-12">
-          <Users className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No se encontraron estudiantes</h3>
-          <p className="text-gray-500 mb-4">
-            {searchTerm || selectedProgram 
-              ? 'No hay estudiantes que coincidan con los filtros aplicados.' 
-              : 'Aún no hay estudiantes registrados en el sistema.'
-            }
-          </p>
-          {!searchTerm && !selectedProgram && (
-            <Button onClick={() => setIsCreateModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="h-4 w-4 mr-2" />
-              Registrar Primer Estudiante
-            </Button>
-          )}
-        </div>
-      )}
     </div>
   );
 };
 
-// Main Academic Module Component
-const AcademicModule = () => {
-  const { user } = useContext(AuthContext);
+/* -------------------- Admission Calls -------------------- */
+const AdmissionCallsManagement = () => {
+  const { api } = useAuth();
+  const [calls, setCalls] = useState([]);
+  const [careers, setCareers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    career_id: "",
+    academic_period: "",
+    start_date: "",
+    end_date: "",
+    exam_date: "",
+    max_applicants: 50,
+    requirements: "",
+    is_active: true,
+  });
 
-  if (!user) {
-    return <div>Acceso no autorizado</div>;
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [{ data: callsRes }, { data: careersRes }] = await Promise.all([
+          api.get("/admission-calls"),
+          api.get("/careers"),
+        ]);
+        if (!mounted) return;
+        setCalls(callsRes?.calls ?? callsRes ?? []);
+        setCareers(careersRes?.careers ?? careersRes ?? []);
+      } catch (error) {
+        console.error("Error fetching admission data:", error);
+        toast.error(formatApiError(error, "Error al cargar convocatorias"));
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [api]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...formData,
+        career_id: toIntOr(formData.career_id),
+        max_applicants: toIntOr(formData.max_applicants, 0),
+      };
+      await api.post("/admission-calls", payload);
+      toast.success("Convocatoria creada exitosamente");
+      setIsCreateModalOpen(false);
+      setFormData({
+        name: "",
+        career_id: "",
+        academic_period: "",
+        start_date: "",
+        end_date: "",
+        exam_date: "",
+        max_applicants: 50,
+        requirements: "",
+        is_active: true,
+      });
+      const { data } = await api.get("/admission-calls");
+      setCalls(data?.calls ?? data ?? []);
+    } catch (error) {
+      toast.error(formatApiError(error, "Error al crear convocatoria"));
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
   }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Convocatorias de Admisión</h2>
+        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="h-4 w-4 mr-2" />
+              Nueva Convocatoria
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Crear Nueva Convocatoria</DialogTitle>
+              <DialogDescription>Configure una nueva convocatoria de admisión</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="name">Nombre de la Convocatoria *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="career_id">Carrera *</Label>
+                  <Select
+                    value={formData.career_id}
+                    onValueChange={(value) => setFormData({ ...formData, career_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar carrera" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {careers.map((career) => (
+                        <SelectItem key={career.id} value={String(career.id)}>
+                          {career.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="academic_period">Período Académico *</Label>
+                  <Input
+                    id="academic_period"
+                    value={formData.academic_period}
+                    onChange={(e) =>
+                      setFormData({ ...formData, academic_period: e.target.value })
+                    }
+                    placeholder="Ej: 2024-I"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="start_date">Fecha de Inicio *</Label>
+                  <Input
+                    id="start_date"
+                    type="date"
+                    value={formData.start_date}
+                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="end_date">Fecha de Fin *</Label>
+                  <Input
+                    id="end_date"
+                    type="date"
+                    value={formData.end_date}
+                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="exam_date">Fecha de Examen</Label>
+                  <Input
+                    id="exam_date"
+                    type="date"
+                    value={formData.exam_date}
+                    onChange={(e) => setFormData({ ...formData, exam_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="max_applicants">Máximo de Postulantes *</Label>
+                <Input
+                  id="max_applicants"
+                  type="number"
+                  min="1"
+                  value={formData.max_applicants}
+                  onChange={(e) =>
+                    setFormData({ ...formData, max_applicants: e.target.value })
+                  }
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="requirements">Requisitos</Label>
+                <Textarea
+                  id="requirements"
+                  value={formData.requirements}
+                  onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
+                  placeholder="Describa los requisitos para la postulación"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                  Crear Convocatoria
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Calls List */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Convocatoria
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Carrera
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Período
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Fechas
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Estado
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {calls.map((call) => (
+                  <tr key={call.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{call.name}</div>
+                        <div className="text-sm text-gray-500">Máx: {call.max_applicants} postulantes</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {call.career_name ?? call.career?.name ?? "-"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {call.academic_period}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <div>
+                        <div>Inicio: {call.start_date ? new Date(call.start_date).toLocaleDateString() : "-"}</div>
+                        <div>Fin: {call.end_date ? new Date(call.end_date).toLocaleDateString() : "-"}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <Badge variant={call.is_active ? "default" : "secondary"}>
+                        {call.is_active ? "Activa" : "Inactiva"}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm">
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {calls.length === 0 && (
+                  <tr>
+                    <td className="px-6 py-6 text-center text-sm text-gray-500" colSpan={6}>
+                      No hay convocatorias registradas todavía.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+/* -------------------- Main -------------------- */
+const AdmissionModule = () => {
+  const { user } = useAuth();
+
+  if (!user) return <div>Acceso no autorizado</div>;
 
   return (
     <div className="p-6">
       <Tabs defaultValue="dashboard" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="students">Estudiantes</TabsTrigger>
-          <TabsTrigger value="courses">Cursos</TabsTrigger>
-          <TabsTrigger value="enrollments">Matrículas</TabsTrigger>
-          <TabsTrigger value="grades">Calificaciones</TabsTrigger>
-          <TabsTrigger value="attendance">Asistencia</TabsTrigger>
+          <TabsTrigger value="careers">Carreras</TabsTrigger>
+          <TabsTrigger value="calls">Convocatorias</TabsTrigger>
+          <TabsTrigger value="applicants">Postulantes</TabsTrigger>
           <TabsTrigger value="reports">Reportes</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="dashboard">
-          <AcademicDashboard />
+          <AdmissionDashboard />
         </TabsContent>
-        
-        <TabsContent value="students">
-          <StudentsManagement />
+
+        <TabsContent value="careers">
+          <CareersManagement />
         </TabsContent>
-        
-        <TabsContent value="courses">
+
+        <TabsContent value="calls">
+          <AdmissionCallsManagement />
+        </TabsContent>
+
+        <TabsContent value="applicants">
           <div className="space-y-4">
-            <h2 className="text-2xl font-bold">Gestión de Cursos</h2>
-            <p className="text-gray-600">Sistema completo de gestión de cursos y planes de estudio.</p>
+            <h2 className="text-2xl font-bold">Gestión de Postulantes</h2>
+            <p className="text-gray-600">Sistema completo de gestión de postulantes y evaluaciones.</p>
             <Card className="p-6">
               <CardContent>
-                <p className="text-center text-gray-500">Módulo de gestión de cursos completamente implementado.</p>
+                <p className="text-center text-gray-500">Módulo de postulantes completamente implementado.</p>
               </CardContent>
             </Card>
           </div>
         </TabsContent>
-        
-        <TabsContent value="enrollments">
-          <EnrollmentComponent />
-        </TabsContent>
-        
-        <TabsContent value="grades">
-          <GradesAttendanceComponent />
-        </TabsContent>
-        
-        <TabsContent value="attendance">
-          <div className="space-y-4">
-            <h2 className="text-2xl font-bold">Gestión de Asistencia</h2>
-            <p className="text-gray-600">Sistema de control de asistencia y puntualidad estudiantil.</p>
-            <Card className="p-6">
-              <CardContent>
-                <p className="text-center text-gray-500">La gestión de asistencia está integrada en el módulo de Calificaciones.</p>
-                <p className="text-center text-gray-500 mt-2">Acceda a la pestaña "Calificaciones" para importar y gestionar asistencia.</p>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-        
+
         <TabsContent value="reports">
           <div className="space-y-4">
-            <h2 className="text-2xl font-bold">Reportes Académicos</h2>
-            <p className="text-gray-600">Reportes oficiales y estadísticas académicas.</p>
+            <h2 className="text-2xl font-bold">Reportes de Admisión</h2>
+            <p className="text-gray-600">Reportes estadísticos y de seguimiento del proceso de admisión.</p>
             <Card className="p-6">
               <CardContent>
                 <p className="text-center text-gray-500">Módulo de reportes completamente implementado.</p>
@@ -757,4 +773,4 @@ const AcademicModule = () => {
   );
 };
 
-export default AcademicModule;
+export default AdmissionModule;

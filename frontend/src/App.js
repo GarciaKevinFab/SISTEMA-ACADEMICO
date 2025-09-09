@@ -26,7 +26,7 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    
+
     try {
       await login(formData.username, formData.password);
     } catch (err) {
@@ -115,11 +115,10 @@ const Login = () => {
               type="submit"
               disabled={loading}
               data-testid="login-submit"
-              className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white ${
-                loading 
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
-              }`}
+              className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white ${loading
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                }`}
             >
               {loading ? (
                 <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -131,16 +130,6 @@ const Login = () => {
             </button>
           </div>
 
-          {/* Demo Credentials */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-md">
-            <h4 className="text-sm font-medium text-blue-800 mb-2">Credenciales de Demostración:</h4>
-            <div className="text-xs text-blue-700 space-y-1">
-              <p><strong>Administrador:</strong> admin / password123</p>
-              <p><strong>Docente:</strong> teacher1 / password123</p>
-              <p><strong>Estudiante:</strong> student1 / password123</p>
-              <p><strong>Postulante:</strong> applicant1 / password123</p>
-            </div>
-          </div>
         </form>
       </div>
     </div>
@@ -188,7 +177,7 @@ const LandingPage = () => {
               <span className="block text-indigo-200">Educadores de Excelencia</span>
             </h1>
             <p className="mt-3 max-w-md mx-auto text-base text-indigo-200 sm:text-lg md:mt-5 md:text-xl md:max-w-3xl">
-              Instituto de Educación Superior Pedagógico Público "Gustavo Allende Llavería" - 
+              Instituto de Educación Superior Pedagógico Público "Gustavo Allende Llavería" -
               Comprometidos con la formación integral de futuros docentes.
             </p>
             <div className="mt-5 max-w-md mx-auto sm:flex sm:justify-center md:mt-8">
@@ -289,7 +278,7 @@ const LandingPage = () => {
               Carreras Profesionales
             </p>
           </div>
-          
+
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="p-6">
@@ -374,7 +363,7 @@ const LandingPage = () => {
                 Instituto de Educación Superior Pedagógico Público comprometido con la formación de educadores de excelencia.
               </p>
             </div>
-            
+
             <div>
               <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase">Contacto</h3>
               <div className="mt-4 space-y-2">
@@ -383,7 +372,7 @@ const LandingPage = () => {
                 <p className="text-gray-300 text-sm">info@iesppgal.edu.pe</p>
               </div>
             </div>
-            
+
             <div>
               <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase">Enlaces</h3>
               <div className="mt-4 space-y-2">
@@ -394,7 +383,7 @@ const LandingPage = () => {
               </div>
             </div>
           </div>
-          
+
           <div className="mt-8 border-t border-gray-700 pt-8">
             <p className="text-gray-400 text-sm text-center">
               © 2024 IESPP Gustavo Allende Llavería. Todos los derechos reservados.
@@ -444,10 +433,10 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/portal" element={<InstitutionalPortal />} />
             <Route path="/public/admission" element={<PublicAdmissionCalls />} />
-            
+
             {/* Protected Routes */}
-            <Route 
-              path="/dashboard" 
+            <Route
+              path="/dashboard"
               element={
                 <ProtectedRoute>
                   <Layout>
@@ -457,84 +446,84 @@ function App() {
                     </div>
                   </Layout>
                 </ProtectedRoute>
-              } 
+              }
             />
-            
-            <Route 
-              path="/dashboard/academic" 
+
+            <Route
+              path="/dashboard/academic"
               element={
                 <ProtectedRoute>
                   <Layout>
                     <AcademicModule />
                   </Layout>
                 </ProtectedRoute>
-              } 
+              }
             />
-            
-            <Route 
-              path="/dashboard/admission" 
+
+            <Route
+              path="/dashboard/admission"
               element={
                 <ProtectedRoute>
                   <Layout>
                     <CompleteAdmissionModule />
                   </Layout>
                 </ProtectedRoute>
-              } 
+              }
             />
-            
-            <Route 
-              path="/dashboard/procedures" 
+
+            <Route
+              path="/dashboard/procedures"
               element={
                 <ProtectedRoute>
                   <Layout>
                     <MesaDePartesModule />
                   </Layout>
                 </ProtectedRoute>
-              } 
+              }
             />
-            
-            <Route 
-              path="/dashboard/mesa-partes" 
+
+            <Route
+              path="/dashboard/mesa-partes"
               element={
                 <ProtectedRoute>
                   <Layout>
                     <MesaDePartesModule />
                   </Layout>
                 </ProtectedRoute>
-              } 
+              }
             />
-            
-            <Route 
-              path="/dashboard/finance" 
+
+            <Route
+              path="/dashboard/finance"
               element={
                 <ProtectedRoute>
                   <Layout>
                     <FinanceModule />
                   </Layout>
                 </ProtectedRoute>
-              } 
+              }
             />
-            
-            <Route 
-              path="/dashboard/minedu" 
+
+            <Route
+              path="/dashboard/minedu"
               element={
                 <ProtectedRoute>
                   <Layout>
                     <MineduIntegrationModule />
                   </Layout>
                 </ProtectedRoute>
-              } 
+              }
             />
-            
-            <Route 
-              path="/dashboard/portal" 
+
+            <Route
+              path="/dashboard/portal"
               element={
                 <ProtectedRoute>
                   <Layout>
                     <InstitutionalPortal />
                   </Layout>
                 </ProtectedRoute>
-              } 
+              }
             />
 
             {/* Redirect */}

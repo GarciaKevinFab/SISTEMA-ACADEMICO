@@ -1,10 +1,10 @@
 import React, { useContext } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from './AuthContext';
-import { 
-  GraduationCap, 
-  FileText, 
-  UserPlus, 
+import {
+  GraduationCap,
+  FileText,
+  UserPlus,
   Calculator,
   BarChart3,
   User,
@@ -23,11 +23,11 @@ const SideNav = () => {
   const hasAdmissionAccess = ['ADMIN', 'REGISTRAR', 'APPLICANT'].includes(user?.role);
   const hasMesaDePartesAccess = ['ADMIN', 'STUDENT', 'TEACHER', 'ADMIN_WORKER', 'APPLICANT'].includes(user?.role);
   const hasFinanceAccess = [
-    'ADMIN', 
-    'FINANCE_ADMIN', 
-    'CASHIER', 
-    'WAREHOUSE', 
-    'HR_ADMIN', 
+    'ADMIN',
+    'FINANCE_ADMIN',
+    'CASHIER',
+    'WAREHOUSE',
+    'HR_ADMIN',
     'LOGISTICS'
   ].includes(user?.role);
   const hasMineduAccess = ['ADMIN', 'REGISTRAR'].includes(user?.role);
@@ -76,13 +76,6 @@ const SideNav = () => {
       icon: Database,
       hasAccess: hasMineduAccess
     },
-    {
-      id: 'portal',
-      title: 'Portal Web',
-      path: '/dashboard/portal',
-      icon: Building,
-      hasAccess: hasPortalAccess
-    }
   ];
 
   const isActive = (path) => {
@@ -105,7 +98,7 @@ const SideNav = () => {
             <p className="text-xs text-gray-400">"Gustavo Allende Llavería"</p>
           </div>
         </div>
-        
+
         {user && (
           <div className="mt-4 p-3 bg-gray-700 rounded-lg">
             <div className="flex items-center space-x-2">
@@ -125,17 +118,16 @@ const SideNav = () => {
         <ul className="space-y-2">
           {menuItems.map((item) => {
             if (!item.hasAccess) return null;
-            
+
             const Icon = item.icon;
             return (
               <li key={item.id}>
                 <Link
                   to={item.path}
-                  className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors ${
-                    isActive(item.path)
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                  }`}
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors ${isActive(item.path)
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
                 >
                   <Icon className="h-5 w-5 flex-shrink-0" />
                   <span className="truncate">{item.title}</span>

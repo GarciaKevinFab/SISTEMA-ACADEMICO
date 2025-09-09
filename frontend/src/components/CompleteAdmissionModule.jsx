@@ -1,62 +1,83 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from './AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Badge } from './ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Textarea } from './ui/textarea';
-import { 
-  Users, 
-  BookOpen, 
-  UserPlus, 
-  Award, 
+// src/components/CompleteAdmissionModule.jsx
+import React, { useState, useEffect } from "react";
+import { useAuth } from "./AuthContext";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Badge } from "./ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Textarea } from "./ui/textarea";
+import {
+  Users,
+  BookOpen,
+  UserPlus,
+  Award,
   Calendar,
   BarChart3,
   FileText,
   Clock,
-  CheckCircle,
   Plus,
-  Search,
   Eye,
   Edit,
-  GraduationCap,
-  User,
   School,
-  TrendingUp,
-  AlertCircle,
   Download,
-  Upload
-} from 'lucide-react';
-import axios from 'axios';
-import { toast } from 'sonner';
+} from "lucide-react";
+import { toast } from "sonner";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+/* -------------------- helpers -------------------- */
+function formatApiError(err, fallback = "Ocurrió un error") {
+  const data = err?.response?.data;
+  if (data?.detail) {
+    const d = data.detail;
+    if (typeof d === "string") return d;
+    if (Array.isArray(d)) {
+      const msgs = d
+        .map((e) => {
+          const field = Array.isArray(e?.loc) ? e.loc.join(".") : e?.loc;
+          return e?.msg ? (field ? `${field}: ${e.msg}` : e.msg) : null;
+        })
+        .filter(Boolean);
+      if (msgs.length) return msgs.join(" | ");
+    }
+  }
+  if (typeof data?.error?.message === "string") return data.error.message;
+  if (typeof data?.message === "string") return data.message;
+  if (typeof data?.error === "string") return data.error;
+  if (typeof err?.message === "string") return err.message;
+  return fallback;
+}
+function toIntOr(value, orNull = null) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : orNull;
+}
 
-// Complete Admission Dashboard Component
+/* -------------------- Complete Admission Dashboard -------------------- */
 const CompleteAdmissionDashboard = () => {
-  const { user } = useContext(AuthContext);
+  const { api } = useAuth();
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchDashboardStats();
-  }, []);
-
-  const fetchDashboardStats = async () => {
-    try {
-      const response = await axios.get(`${API}/dashboard/stats`);
-      setStats(response.data.stats);
-    } catch (error) {
-      console.error('Error fetching dashboard stats:', error);
-      toast.error('Error al cargar estadísticas');
-    } finally {
-      setLoading(false);
-    }
-  };
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await api.get("/dashboard/stats");
+        if (!mounted) return;
+        setStats(data?.stats ?? data ?? {});
+      } catch (error) {
+        console.error("Error fetching dashboard stats:", error);
+        toast.error(formatApiError(error, "Error al cargar estadísticas"));
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [api]);
 
   if (loading) {
     return (
@@ -71,9 +92,7 @@ const CompleteAdmissionDashboard = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Sistema Integral de Admisión</h2>
-          <p className="text-muted-foreground">
-            Gestión completa del proceso de admisión institucional
-          </p>
+          <p className="text-muted-foreground">Gestión completa del proceso de admisión institucional</p>
         </div>
       </div>
 
@@ -85,46 +104,46 @@ const CompleteAdmissionDashboard = () => {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.total_applicants || 0}</div>
+            <div className="text-2xl font-bold">{stats.total_applicants ?? 0}</div>
             <p className="text-xs text-muted-foreground">Registrados este año</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Convocatorias Activas</CardTitle>
             <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.active_calls || 0}</div>
+            <div className="text-2xl font-bold">{stats.active_calls ?? 0}</div>
             <p className="text-xs text-muted-foreground">Procesos en curso</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Evaluaciones Pendientes</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.pending_evaluations || 0}</div>
+            <div className="text-2xl font-bold">{stats.pending_evaluations ?? 0}</div>
             <p className="text-xs text-muted-foreground">Por calificar</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Ingresantes 2024</CardTitle>
             <Award className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.admitted_students || 0}</div>
+            <div className="text-2xl font-bold">{stats.admitted_students ?? 0}</div>
             <p className="text-xs text-muted-foreground">Estudiantes admitidos</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Process Overview */}
+      {/* Process Overview (placeholder UI) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -171,6 +190,7 @@ const CompleteAdmissionDashboard = () => {
             <CardDescription>Programas de estudio ofertados</CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Placeholder, reemplaza con datos reales si tu API los provee */}
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm font-medium">Educación Inicial</span>
@@ -202,9 +222,7 @@ const CompleteAdmissionDashboard = () => {
       <Card>
         <CardHeader>
           <CardTitle>Acciones Rápidas</CardTitle>
-          <CardDescription>
-            Herramientas principales para la gestión de admisión
-          </CardDescription>
+          <CardDescription>Herramientas principales para la gestión de admisión</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -231,62 +249,68 @@ const CompleteAdmissionDashboard = () => {
   );
 };
 
-// Careers Management Component
+/* -------------------- Careers Management -------------------- */
 const CareersManagement = () => {
+  const { api } = useAuth();
   const [careers, setCareers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    code: '',
-    description: '',
+    name: "",
+    code: "",
+    description: "",
     duration_semesters: 10,
-    degree_type: 'BACHELOR',
-    modality: 'PRESENCIAL',
+    degree_type: "BACHELOR",
+    modality: "PRESENCIAL",
     vacancies: 25,
-    is_active: true
+    is_active: true,
   });
 
   useEffect(() => {
-    fetchCareers();
-  }, []);
-
-  const fetchCareers = async () => {
-    try {
-      const response = await axios.get(`${API}/careers`);
-      setCareers(response.data.careers || []);
-    } catch (error) {
-      console.error('Error fetching careers:', error);
-      toast.error('Error al cargar carreras');
-    } finally {
-      setLoading(false);
-    }
-  };
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await api.get("/careers");
+        if (!mounted) return;
+        setCareers(data?.careers ?? data ?? []);
+      } catch (error) {
+        console.error("Error fetching careers:", error);
+        toast.error(formatApiError(error, "Error al cargar carreras"));
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [api]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/careers`, formData);
-      toast.success('Carrera creada exitosamente');
+      const payload = {
+        ...formData,
+        duration_semesters: toIntOr(formData.duration_semesters, 0),
+        vacancies: toIntOr(formData.vacancies, 0),
+      };
+      await api.post("/careers", payload);
+      toast.success("Carrera creada exitosamente");
       setIsCreateModalOpen(false);
-      resetForm();
-      fetchCareers();
+      setFormData({
+        name: "",
+        code: "",
+        description: "",
+        duration_semesters: 10,
+        degree_type: "BACHELOR",
+        modality: "PRESENCIAL",
+        vacancies: 25,
+        is_active: true,
+      });
+      const { data } = await api.get("/careers");
+      setCareers(data?.careers ?? data ?? []);
     } catch (error) {
-      toast.error('Error al crear carrera');
+      toast.error(formatApiError(error, "Error al crear carrera"));
     }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      code: '',
-      description: '',
-      duration_semesters: 10,
-      degree_type: 'BACHELOR',
-      modality: 'PRESENCIAL',
-      vacancies: 25,
-      is_active: true
-    });
   };
 
   if (loading) {
@@ -311,9 +335,7 @@ const CareersManagement = () => {
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Crear Nueva Carrera Profesional</DialogTitle>
-              <DialogDescription>
-                Configure una nueva carrera para el proceso de admisión
-              </DialogDescription>
+              <DialogDescription>Configure una nueva carrera para el proceso de admisión</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -322,7 +344,7 @@ const CareersManagement = () => {
                   <Input
                     id="name"
                     value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
                   />
                 </div>
@@ -331,18 +353,18 @@ const CareersManagement = () => {
                   <Input
                     id="code"
                     value={formData.code}
-                    onChange={(e) => setFormData({...formData, code: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                     required
                   />
                 </div>
               </div>
-              
+
               <div>
                 <Label htmlFor="description">Descripción</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 />
               </div>
 
@@ -355,7 +377,7 @@ const CareersManagement = () => {
                     min="1"
                     max="20"
                     value={formData.duration_semesters}
-                    onChange={(e) => setFormData({...formData, duration_semesters: parseInt(e.target.value)})}
+                    onChange={(e) => setFormData({ ...formData, duration_semesters: e.target.value })}
                     required
                   />
                 </div>
@@ -366,13 +388,16 @@ const CareersManagement = () => {
                     type="number"
                     min="1"
                     value={formData.vacancies}
-                    onChange={(e) => setFormData({...formData, vacancies: parseInt(e.target.value)})}
+                    onChange={(e) => setFormData({ ...formData, vacancies: e.target.value })}
                     required
                   />
                 </div>
                 <div>
                   <Label htmlFor="degree_type">Tipo de Grado *</Label>
-                  <Select value={formData.degree_type} onValueChange={(value) => setFormData({...formData, degree_type: value})}>
+                  <Select
+                    value={formData.degree_type}
+                    onValueChange={(value) => setFormData({ ...formData, degree_type: value })}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -385,7 +410,10 @@ const CareersManagement = () => {
                 </div>
                 <div>
                   <Label htmlFor="modality">Modalidad *</Label>
-                  <Select value={formData.modality} onValueChange={(value) => setFormData({...formData, modality: value})}>
+                  <Select
+                    value={formData.modality}
+                    onValueChange={(value) => setFormData({ ...formData, modality: value })}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -418,12 +446,24 @@ const CareersManagement = () => {
             <table className="w-full">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Carrera</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duración</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vacantes</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Carrera
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Código
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Duración
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Vacantes
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Estado
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -435,18 +475,16 @@ const CareersManagement = () => {
                         <div className="text-sm text-gray-500">{career.description}</div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {career.code}
-                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{career.code}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {career.duration_semesters} semestres
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {career.vacancies || 'N/A'}
+                      {career.vacancies ?? "N/A"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge variant={career.is_active ? 'default' : 'secondary'}>
-                        {career.is_active ? 'Activa' : 'Inactiva'}
+                      <Badge variant={career.is_active ? "default" : "secondary"}>
+                        {career.is_active ? "Activa" : "Inactiva"}
                       </Badge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -461,98 +499,91 @@ const CareersManagement = () => {
                     </td>
                   </tr>
                 ))}
+                {careers.length === 0 && (
+                  <tr>
+                    <td className="px-6 py-6 text-center text-sm text-gray-500" colSpan={6}>
+                      No hay carreras registradas todavía.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </CardContent>
       </Card>
-
-      {careers.length === 0 && (
-        <div className="text-center py-12">
-          <School className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No hay carreras registradas</h3>
-          <p className="text-gray-500 mb-4">
-            Comience creando las carreras profesionales que ofrecerá la institución.
-          </p>
-          <Button onClick={() => setIsCreateModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="h-4 w-4 mr-2" />
-            Crear Primera Carrera
-          </Button>
-        </div>
-      )}
     </div>
   );
 };
 
-// Admission Calls Management Component
+/* -------------------- Admission Calls Management -------------------- */
 const AdmissionCallsManagement = () => {
+  const { api } = useAuth();
   const [calls, setCalls] = useState([]);
   const [careers, setCareers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    career_id: '',
-    academic_period: '',
-    start_date: '',
-    end_date: '',
-    exam_date: '',
+    name: "",
+    career_id: "",
+    academic_period: "",
+    start_date: "",
+    end_date: "",
+    exam_date: "",
     max_applicants: 50,
-    requirements: '',
-    is_active: true
+    requirements: "",
+    is_active: true,
   });
 
   useEffect(() => {
-    fetchAdmissionCalls();
-    fetchCareers();
-  }, []);
-
-  const fetchAdmissionCalls = async () => {
-    try {
-      const response = await axios.get(`${API}/admission-calls`);
-      setCalls(response.data.calls || []);
-    } catch (error) {
-      console.error('Error fetching admission calls:', error);
-      toast.error('Error al cargar convocatorias');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchCareers = async () => {
-    try {
-      const response = await axios.get(`${API}/careers`);
-      setCareers(response.data.careers || []);
-    } catch (error) {
-      console.error('Error fetching careers:', error);
-    }
-  };
+    let mounted = true;
+    (async () => {
+      try {
+        const [{ data: callsRes }, { data: careersRes }] = await Promise.all([
+          api.get("/admission-calls"),
+          api.get("/careers"),
+        ]);
+        if (!mounted) return;
+        setCalls(callsRes?.calls ?? callsRes ?? []);
+        setCareers(careersRes?.careers ?? careersRes ?? []);
+      } catch (error) {
+        console.error("Error fetching admission calls:", error);
+        toast.error(formatApiError(error, "Error al cargar convocatorias"));
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [api]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/admission-calls`, formData);
-      toast.success('Convocatoria creada exitosamente');
+      const payload = {
+        ...formData,
+        career_id: toIntOr(formData.career_id),
+        max_applicants: toIntOr(formData.max_applicants, 0),
+      };
+      await api.post("/admission-calls", payload);
+      toast.success("Convocatoria creada exitosamente");
       setIsCreateModalOpen(false);
-      resetForm();
-      fetchAdmissionCalls();
+      setFormData({
+        name: "",
+        career_id: "",
+        academic_period: "",
+        start_date: "",
+        end_date: "",
+        exam_date: "",
+        max_applicants: 50,
+        requirements: "",
+        is_active: true,
+      });
+      const { data } = await api.get("/admission-calls");
+      setCalls(data?.calls ?? data ?? []);
     } catch (error) {
-      toast.error('Error al crear convocatoria');
+      toast.error(formatApiError(error, "Error al crear convocatoria"));
     }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      career_id: '',
-      academic_period: '',
-      start_date: '',
-      end_date: '',
-      exam_date: '',
-      max_applicants: 50,
-      requirements: '',
-      is_active: true
-    });
   };
 
   if (loading) {
@@ -577,9 +608,7 @@ const AdmissionCallsManagement = () => {
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Crear Nueva Convocatoria</DialogTitle>
-              <DialogDescription>
-                Configure una nueva convocatoria de admisión
-              </DialogDescription>
+              <DialogDescription>Configure una nueva convocatoria de admisión</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -587,7 +616,7 @@ const AdmissionCallsManagement = () => {
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
                 />
               </div>
@@ -595,13 +624,18 @@ const AdmissionCallsManagement = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="career_id">Carrera *</Label>
-                  <Select value={formData.career_id} onValueChange={(value) => setFormData({...formData, career_id: value})}>
+                  <Select
+                    value={formData.career_id}
+                    onValueChange={(value) => setFormData({ ...formData, career_id: value })}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar carrera" />
                     </SelectTrigger>
                     <SelectContent>
-                      {careers.map(career => (
-                        <SelectItem key={career.id} value={career.id.toString()}>{career.name}</SelectItem>
+                      {careers.map((career) => (
+                        <SelectItem key={career.id} value={String(career.id)}>
+                          {career.name}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -611,7 +645,7 @@ const AdmissionCallsManagement = () => {
                   <Input
                     id="academic_period"
                     value={formData.academic_period}
-                    onChange={(e) => setFormData({...formData, academic_period: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, academic_period: e.target.value })}
                     placeholder="Ej: 2024-I"
                     required
                   />
@@ -625,7 +659,7 @@ const AdmissionCallsManagement = () => {
                     id="start_date"
                     type="date"
                     value={formData.start_date}
-                    onChange={(e) => setFormData({...formData, start_date: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                     required
                   />
                 </div>
@@ -635,7 +669,7 @@ const AdmissionCallsManagement = () => {
                     id="end_date"
                     type="date"
                     value={formData.end_date}
-                    onChange={(e) => setFormData({...formData, end_date: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                     required
                   />
                 </div>
@@ -645,7 +679,7 @@ const AdmissionCallsManagement = () => {
                     id="exam_date"
                     type="date"
                     value={formData.exam_date}
-                    onChange={(e) => setFormData({...formData, exam_date: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, exam_date: e.target.value })}
                   />
                 </div>
               </div>
@@ -657,7 +691,7 @@ const AdmissionCallsManagement = () => {
                   type="number"
                   min="1"
                   value={formData.max_applicants}
-                  onChange={(e) => setFormData({...formData, max_applicants: parseInt(e.target.value)})}
+                  onChange={(e) => setFormData({ ...formData, max_applicants: e.target.value })}
                   required
                 />
               </div>
@@ -667,7 +701,7 @@ const AdmissionCallsManagement = () => {
                 <Textarea
                   id="requirements"
                   value={formData.requirements}
-                  onChange={(e) => setFormData({...formData, requirements: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
                   placeholder="Describa los requisitos para la postulación"
                 />
               </div>
@@ -692,12 +726,24 @@ const AdmissionCallsManagement = () => {
             <table className="w-full">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Convocatoria</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Carrera</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Período</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fechas</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Convocatoria
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Carrera
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Período
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Fechas
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Estado
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -710,20 +756,24 @@ const AdmissionCallsManagement = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {call.career_name || 'N/A'}
+                      {call.career_name ?? call.career?.name ?? "N/A"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {call.academic_period}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div>
-                        <div>Inicio: {new Date(call.start_date).toLocaleDateString()}</div>
-                        <div>Fin: {new Date(call.end_date).toLocaleDateString()}</div>
+                        <div>
+                          Inicio: {call.start_date ? new Date(call.start_date).toLocaleDateString() : "-"}
+                        </div>
+                        <div>
+                          Fin: {call.end_date ? new Date(call.end_date).toLocaleDateString() : "-"}
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge variant={call.is_active ? 'default' : 'secondary'}>
-                        {call.is_active ? 'Activa' : 'Inactiva'}
+                      <Badge variant={call.is_active ? "default" : "secondary"}>
+                        {call.is_active ? "Activa" : "Inactiva"}
                       </Badge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -738,6 +788,13 @@ const AdmissionCallsManagement = () => {
                     </td>
                   </tr>
                 ))}
+                {calls.length === 0 && (
+                  <tr>
+                    <td className="px-6 py-6 text-center text-sm text-gray-500" colSpan={6}>
+                      No hay convocatorias registradas todavía.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -747,26 +804,30 @@ const AdmissionCallsManagement = () => {
   );
 };
 
-// Applicants Management Component
+/* -------------------- Applicants Management -------------------- */
 const ApplicantsManagement = () => {
+  const { api } = useAuth();
   const [applicants, setApplicants] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchApplicants();
-  }, []);
-
-  const fetchApplicants = async () => {
-    try {
-      const response = await axios.get(`${API}/applications`);
-      setApplicants(response.data.applications || []);
-    } catch (error) {
-      console.error('Error fetching applicants:', error);
-      toast.error('Error al cargar datos de postulación');
-    } finally {
-      setLoading(false);
-    }
-  };
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await api.get("/applications");
+        if (!mounted) return;
+        setApplicants(data?.applications ?? data ?? []);
+      } catch (error) {
+        console.error("Error fetching applicants:", error);
+        toast.error(formatApiError(error, "Error al cargar datos de postulación"));
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [api]);
 
   if (loading) {
     return (
@@ -799,11 +860,21 @@ const ApplicantsManagement = () => {
             <table className="w-full">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Postulante</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Carrera</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Postulante
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Carrera
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Estado
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Fecha
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -811,20 +882,22 @@ const ApplicantsManagement = () => {
                   <tr key={applicant.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{applicant.applicant_name}</div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {applicant.applicant_name}
+                        </div>
                         <div className="text-sm text-gray-500">{applicant.document_number}</div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {applicant.career_name || 'N/A'}
+                      {applicant.career_name ?? applicant.career?.name ?? "N/A"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge variant="default">
-                        {applicant.status || 'Registrado'}
-                      </Badge>
+                      <Badge variant="default">{applicant.status ?? "Registrado"}</Badge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(applicant.created_at).toLocaleDateString()}
+                      {applicant.created_at
+                        ? new Date(applicant.created_at).toLocaleDateString()
+                        : "-"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex gap-2">
@@ -838,32 +911,27 @@ const ApplicantsManagement = () => {
                     </td>
                   </tr>
                 ))}
+                {applicants.length === 0 && (
+                  <tr>
+                    <td className="px-6 py-6 text-center text-sm text-gray-500" colSpan={5}>
+                      No hay postulantes registrados todavía.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </CardContent>
       </Card>
-
-      {applicants.length === 0 && (
-        <div className="text-center py-12">
-          <Users className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No hay postulantes registrados</h3>
-          <p className="text-gray-500 mb-4">
-            Los postulantes aparecerán aquí una vez que se registren en las convocatorias activas.
-          </p>
-        </div>
-      )}
     </div>
   );
 };
 
-// Main Complete Admission Module Component
+/* -------------------- Main -------------------- */
 const CompleteAdmissionModule = () => {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
 
-  if (!user) {
-    return <div>Acceso no autorizado</div>;
-  }
+  if (!user) return <div>Acceso no autorizado</div>;
 
   return (
     <div className="p-6">
@@ -875,23 +943,23 @@ const CompleteAdmissionModule = () => {
           <TabsTrigger value="applicants">Postulantes</TabsTrigger>
           <TabsTrigger value="reports">Reportes</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="dashboard">
           <CompleteAdmissionDashboard />
         </TabsContent>
-        
+
         <TabsContent value="careers">
           <CareersManagement />
         </TabsContent>
-        
+
         <TabsContent value="calls">
           <AdmissionCallsManagement />
         </TabsContent>
-        
+
         <TabsContent value="applicants">
           <ApplicantsManagement />
         </TabsContent>
-        
+
         <TabsContent value="reports">
           <div className="space-y-4">
             <h2 className="text-2xl font-bold">Reportes de Admisión</h2>

@@ -9,11 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
-import { 
-  Users, 
-  BookOpen, 
-  UserPlus, 
-  Award, 
+import {
+  Users,
+  BookOpen,
+  UserPlus,
+  Award,
   Calendar,
   BarChart3,
   FileText,
@@ -89,7 +89,7 @@ const AdmissionDashboard = () => {
             <p className="text-xs text-muted-foreground">En proceso de admisión</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Convocatorias Activas</CardTitle>
@@ -100,7 +100,7 @@ const AdmissionDashboard = () => {
             <p className="text-xs text-muted-foreground">Procesos abiertos</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Evaluaciones Pendientes</CardTitle>
@@ -111,7 +111,7 @@ const AdmissionDashboard = () => {
             <p className="text-xs text-muted-foreground">Por revisar</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Ingresantes</CardTitle>
@@ -246,7 +246,7 @@ const CareersManagement = () => {
                   <Input
                     id="name"
                     value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
                   />
                 </div>
@@ -255,18 +255,18 @@ const CareersManagement = () => {
                   <Input
                     id="code"
                     value={formData.code}
-                    onChange={(e) => setFormData({...formData, code: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                     required
                   />
                 </div>
               </div>
-              
+
               <div>
                 <Label htmlFor="description">Descripción</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 />
               </div>
 
@@ -279,13 +279,13 @@ const CareersManagement = () => {
                     min="1"
                     max="20"
                     value={formData.duration_semesters}
-                    onChange={(e) => setFormData({...formData, duration_semesters: parseInt(e.target.value)})}
+                    onChange={(e) => setFormData({ ...formData, duration_semesters: parseInt(e.target.value) })}
                     required
                   />
                 </div>
                 <div>
                   <Label htmlFor="degree_type">Tipo de Grado *</Label>
-                  <Select value={formData.degree_type} onValueChange={(value) => setFormData({...formData, degree_type: value})}>
+                  <Select value={formData.degree_type} onValueChange={(value) => setFormData({ ...formData, degree_type: value })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -298,7 +298,7 @@ const CareersManagement = () => {
                 </div>
                 <div>
                   <Label htmlFor="modality">Modalidad *</Label>
-                  <Select value={formData.modality} onValueChange={(value) => setFormData({...formData, modality: value})}>
+                  <Select value={formData.modality} onValueChange={(value) => setFormData({ ...formData, modality: value })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -486,7 +486,7 @@ const AdmissionCallsManagement = () => {
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
                 />
               </div>
@@ -494,7 +494,7 @@ const AdmissionCallsManagement = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="career_id">Carrera *</Label>
-                  <Select value={formData.career_id} onValueChange={(value) => setFormData({...formData, career_id: value})}>
+                  <Select value={formData.career_id} onValueChange={(value) => setFormData({ ...formData, career_id: value })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar carrera" />
                     </SelectTrigger>
@@ -510,7 +510,7 @@ const AdmissionCallsManagement = () => {
                   <Input
                     id="academic_period"
                     value={formData.academic_period}
-                    onChange={(e) => setFormData({...formData, academic_period: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, academic_period: e.target.value })}
                     placeholder="Ej: 2024-I"
                     required
                   />
@@ -524,7 +524,7 @@ const AdmissionCallsManagement = () => {
                     id="start_date"
                     type="date"
                     value={formData.start_date}
-                    onChange={(e) => setFormData({...formData, start_date: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                     required
                   />
                 </div>
@@ -534,7 +534,7 @@ const AdmissionCallsManagement = () => {
                     id="end_date"
                     type="date"
                     value={formData.end_date}
-                    onChange={(e) => setFormData({...formData, end_date: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                     required
                   />
                 </div>
@@ -544,7 +544,7 @@ const AdmissionCallsManagement = () => {
                     id="exam_date"
                     type="date"
                     value={formData.exam_date}
-                    onChange={(e) => setFormData({...formData, exam_date: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, exam_date: e.target.value })}
                   />
                 </div>
               </div>
@@ -556,7 +556,7 @@ const AdmissionCallsManagement = () => {
                   type="number"
                   min="1"
                   value={formData.max_applicants}
-                  onChange={(e) => setFormData({...formData, max_applicants: parseInt(e.target.value)})}
+                  onChange={(e) => setFormData({ ...formData, max_applicants: parseInt(e.target.value) })}
                   required
                 />
               </div>
@@ -566,7 +566,7 @@ const AdmissionCallsManagement = () => {
                 <Textarea
                   id="requirements"
                   value={formData.requirements}
-                  onChange={(e) => setFormData({...formData, requirements: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
                   placeholder="Describa los requisitos para la postulación"
                 />
               </div>
@@ -664,19 +664,19 @@ const AdmissionModule = () => {
           <TabsTrigger value="applicants">Postulantes</TabsTrigger>
           <TabsTrigger value="reports">Reportes</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="dashboard">
           <AdmissionDashboard />
         </TabsContent>
-        
+
         <TabsContent value="careers">
           <CareersManagement />
         </TabsContent>
-        
+
         <TabsContent value="calls">
           <AdmissionCallsManagement />
         </TabsContent>
-        
+
         <TabsContent value="applicants">
           <div className="space-y-4">
             <h2 className="text-2xl font-bold">Gestión de Postulantes</h2>
@@ -688,7 +688,7 @@ const AdmissionModule = () => {
             </Card>
           </div>
         </TabsContent>
-        
+
         <TabsContent value="reports">
           <div className="space-y-4">
             <h2 className="text-2xl font-bold">Reportes de Admisión</h2>
