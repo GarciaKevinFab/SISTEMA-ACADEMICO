@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from './AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Badge } from './ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { 
+import { AuthContext } from '../../context/AuthContext';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
+import { Badge } from '../../components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
+import {
   School,
   BookOpen,
   Users,
@@ -51,11 +51,11 @@ const HeroSection = () => {
                 </span>
               </h1>
               <p className="text-xl text-blue-100 leading-relaxed">
-                Formamos profesionales de la educación con excelencia académica, 
+                Formamos profesionales de la educación con excelencia académica,
                 valores éticos y compromiso social para transformar la realidad educativa del país.
               </p>
             </div>
-            
+
             <div className="flex flex-wrap gap-4">
               <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4">
                 <Users className="h-5 w-5 mr-2" />
@@ -86,8 +86,8 @@ const HeroSection = () => {
           <div className="hidden lg:block">
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-t from-blue-900/50 to-transparent rounded-2xl"></div>
-              <img 
-                src="/api/placeholder/600/500" 
+              <img
+                src="/api/placeholder/600/500"
                 alt="Campus IESPP Gustavo Allende Llavería"
                 className="rounded-2xl shadow-2xl w-full h-[500px] object-cover"
               />
@@ -132,7 +132,7 @@ const ProgramsSection = () => {
       modality: 'Presencial'
     },
     {
-      id: '2', 
+      id: '2',
       name: 'Educación Primaria',
       description: 'Preparación de docentes para la educación básica regular',
       duration_years: 5,
@@ -164,7 +164,7 @@ const ProgramsSection = () => {
             Nuestros Programas de Estudio
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Ofrecemos carreras pedagógicas de calidad, acreditadas y diseñadas 
+            Ofrecemos carreras pedagógicas de calidad, acreditadas y diseñadas
             para formar los mejores profesionales de la educación
           </p>
         </div>
@@ -190,7 +190,7 @@ const ProgramsSection = () => {
                   <p className="text-gray-600 text-sm leading-relaxed">
                     {program.description}
                   </p>
-                  
+
                   <div className="space-y-2">
                     <div className="flex items-center text-sm text-gray-500">
                       <Clock className="h-4 w-4 mr-2" />
@@ -201,7 +201,7 @@ const ProgramsSection = () => {
                       Modalidad: {program.modality || 'Presencial'}
                     </div>
                   </div>
-                  
+
                   <Button className="w-full bg-blue-600 hover:bg-blue-700">
                     Ver Más Información
                     <ChevronRight className="h-4 w-4 ml-2" />
@@ -241,7 +241,7 @@ const NewsSection = () => {
           image: '/api/placeholder/400/200'
         },
         {
-          id: '2', 
+          id: '2',
           title: 'Ceremonia de Graduación 2024',
           excerpt: 'Felicitamos a nuestros egresados de la promoción 2024 en una emotiva ceremonia.',
           date: '2024-06-10',
@@ -282,7 +282,7 @@ const NewsSection = () => {
             {news.map((article) => (
               <Card key={article.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-300">
                 <div className="relative">
-                  <img 
+                  <img
                     src={article.image}
                     alt={article.title}
                     className="w-full h-48 object-cover"
@@ -297,19 +297,19 @@ const NewsSection = () => {
                       <Calendar className="h-4 w-4 mr-2" />
                       {new Date(article.date).toLocaleDateString('es-PE', {
                         year: 'numeric',
-                        month: 'long', 
+                        month: 'long',
                         day: 'numeric'
                       })}
                     </div>
-                    
+
                     <h3 className="text-xl font-semibold text-gray-900 line-clamp-2">
                       {article.title}
                     </h3>
-                    
+
                     <p className="text-gray-600 line-clamp-3">
                       {article.excerpt}
                     </p>
-                    
+
                     <Button variant="outline" className="w-full">
                       Leer Más
                       <ChevronRight className="h-4 w-4 ml-2" />
@@ -344,7 +344,7 @@ const ContactSection = () => {
                 Contáctanos
               </h2>
               <p className="text-xl text-gray-300">
-                Estamos aquí para ayudarte. Contáctanos para obtener más información 
+                Estamos aquí para ayudarte. Contáctanos para obtener más información
                 sobre nuestros programas académicos.
               </p>
             </div>
@@ -444,32 +444,32 @@ const ContactSection = () => {
                     <Input id="surname" placeholder="Tus apellidos" />
                   </div>
                 </div>
-                
+
                 <div>
                   <Label htmlFor="email">Correo Electrónico</Label>
                   <Input id="email" type="email" placeholder="tu@correo.com" />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="phone">Teléfono</Label>
                   <Input id="phone" placeholder="999 999 999" />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="subject">Asunto</Label>
                   <Input id="subject" placeholder="Asunto de tu consulta" />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="message">Mensaje</Label>
-                  <textarea 
-                    id="message" 
-                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                    rows="4" 
+                  <textarea
+                    id="message"
+                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    rows="4"
                     placeholder="Escribe tu mensaje aquí..."
                   ></textarea>
                 </div>
-                
+
                 <Button className="w-full bg-blue-600 hover:bg-blue-700">
                   Enviar Mensaje
                 </Button>
@@ -628,7 +628,7 @@ const InstitutionalPortal = () => {
                 </div>
               </div>
               <p className="text-gray-300 text-sm">
-                Formando profesionales de la educación con excelencia 
+                Formando profesionales de la educación con excelencia
                 académica y compromiso social desde 1985.
               </p>
             </div>

@@ -1,11 +1,11 @@
 // src/components/EnrollmentComponent.jsx
-import React, { useState, useEffect } from "react";
-import { useAuth } from "./AuthContext";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Badge } from "./ui/badge";
+import React, { useState, useEffect, useCallback } from "react";
+import { useAuth } from "../../context/AuthContext";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
+import { Badge } from "../../components/ui/badge";
 import { toast } from "sonner";
 import {
   CheckCircle,
@@ -15,7 +15,7 @@ import {
   Search,
   FileText,
 } from "lucide-react";
-import { generatePDFWithPolling, downloadFile } from "../utils/pdfQrPolling";
+import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
 
 /* ---------------- helpers ---------------- */
 function formatApiError(err, fallback = "Ocurrió un error") {
@@ -71,10 +71,9 @@ const EnrollmentComponent = () => {
 
   useEffect(() => {
     fetchAvailableCourses();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchAvailableCourses]);
 
-  const fetchAvailableCourses = async () => {
+  const fetchAvailableCourses = useCallback(async () => {
     try {
       const { data } = await api.get("/courses/available");
       setCourses(data?.courses ?? data ?? []);
@@ -82,7 +81,7 @@ const EnrollmentComponent = () => {
       console.error("Error fetching courses:", error);
       showToast("error", formatApiError(error, "Error al cargar cursos disponibles"));
     }
-  };
+  }, [api]);
 
   // Mantengo tu helper para E2E (inserta un nodo visible con data-testid + toast real)
   const showToast = (type, message) => {

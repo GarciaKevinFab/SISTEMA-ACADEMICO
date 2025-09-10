@@ -1,18 +1,20 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from './AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Badge } from './ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Progress } from './ui/progress';
-import { 
+// src/components/MineduIntegrationModule.jsx
+import React, { useState, useEffect, useContext, useCallback } from "react";
+import { useAuth, AuthContext } from "../../context/AuthContext";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
+import { Label } from "../../components/ui/label";
+import { Badge } from "../../components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
+import {
   Database,
   Upload,
-  Download,
   RefreshCw,
   CheckCircle,
   XCircle,
@@ -20,50 +22,82 @@ import {
   AlertTriangle,
   BarChart3,
   FileSpreadsheet,
-  Send,
   Eye,
-  Settings,
-  Sync,
   Shield,
   Users,
   BookOpen,
   Award,
-  TrendingUp
-} from 'lucide-react';
-import axios from 'axios';
-import { toast } from 'sonner';
+  TrendingUp,
+} from "lucide-react";
+import { toast } from "sonner";
 
-const API = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001/api';
+// IMPORTANTE: Select de shadcn
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "../../components/ui/select";
 
-// MINEDU Dashboard Component
+// ---------- helpers ----------
+function formatApiError(err, fallback = "Ocurrió un error") {
+  const data = err?.response?.data;
+  if (data?.detail) {
+    const d = data.detail;
+    if (typeof d === "string") return d;
+    if (Array.isArray(d)) {
+      const msgs = d
+        .map((e) => {
+          const field = Array.isArray(e?.loc) ? e.loc.join(".") : e?.loc;
+          return e?.msg ? (field ? `${field}: ${e.msg}` : e.msg) : null;
+        })
+        .filter(Boolean);
+      if (msgs.length) return msgs.join(" | ");
+    }
+  }
+  if (typeof data?.error?.message === "string") return data.error.message;
+  if (typeof data?.message === "string") return data.message;
+  if (typeof data?.error === "string") return data.error;
+  if (typeof err?.message === "string") return err.message;
+  return fallback;
+}
+
+// ===================================
+// MINEDU Dashboard
+// ===================================
 const MineduDashboard = () => {
-  const { user } = useContext(AuthContext);
+  const { api } = useAuth();
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchDashboardStats();
-  }, []);
-
-  const fetchDashboardStats = async () => {
+  const fetchDashboardStats = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/minedu/dashboard/stats`);
-      setStats(response.data);
+      setLoading(true);
+      const { data } = await api.get("/minedu/dashboard/stats");
+      setStats(data ?? {});
     } catch (error) {
-      console.error('Error fetching MINEDU stats:', error);
-      toast.error('Error al cargar estadísticas MINEDU');
+      console.error("Error fetching MINEDU stats:", error);
+      toast.error(formatApiError(error, "Error al cargar estadísticas MINEDU"));
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    fetchDashboardStats();
+  }, [fetchDashboardStats]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
       </div>
     );
   }
+
+  const s = stats?.stats ?? {};
+  const breakdown = stats?.data_breakdown ?? {};
 
   return (
     <div className="space-y-6">
@@ -71,7 +105,7 @@ const MineduDashboard = () => {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Integración MINEDU</h2>
           <p className="text-muted-foreground">
-            Sistema de integración con MINEDU - SIA/SIAGIE para exportación de datos académicos
+            Sistema de integración con MINEDU – SIA/SIAGIE para exportación de datos académicos
           </p>
         </div>
       </div>
@@ -84,18 +118,18 @@ const MineduDashboard = () => {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.stats?.pending_exports || 0}</div>
+            <div className="text-2xl font-bold">{s.pending_exports || 0}</div>
             <p className="text-xs text-muted-foreground">Por procesar</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Exportaciones Completadas</CardTitle>
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.stats?.completed_exports || 0}</div>
+            <div className="text-2xl font-bold text-green-600">{s.completed_exports || 0}</div>
             <p className="text-xs text-muted-foreground">Enviadas exitosamente</p>
           </CardContent>
         </Card>
@@ -106,7 +140,7 @@ const MineduDashboard = () => {
             <XCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.stats?.failed_exports || 0}</div>
+            <div className="text-2xl font-bold text-red-600">{s.failed_exports || 0}</div>
             <p className="text-xs text-muted-foreground">Con errores</p>
           </CardContent>
         </Card>
@@ -117,7 +151,9 @@ const MineduDashboard = () => {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats.stats?.success_rate || 0}%</div>
+            <div className="text-2xl font-bold text-blue-600">
+              {typeof s.success_rate === "number" ? `${Math.round(s.success_rate)}%` : "0%"}
+            </div>
             <p className="text-xs text-muted-foreground">Exportaciones exitosas</p>
           </CardContent>
         </Card>
@@ -127,9 +163,7 @@ const MineduDashboard = () => {
       <Card>
         <CardHeader>
           <CardTitle>Desglose por Tipo de Datos</CardTitle>
-          <CardDescription>
-            Cantidad de exportaciones por tipo de información académica
-          </CardDescription>
+          <CardDescription>Cantidad de exportaciones por tipo de información académica</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -142,7 +176,7 @@ const MineduDashboard = () => {
                 </div>
               </div>
               <div className="text-2xl font-bold text-blue-600">
-                {stats.data_breakdown?.enrollment_exports || 0}
+                {breakdown.enrollment_exports || 0}
               </div>
             </div>
 
@@ -155,7 +189,7 @@ const MineduDashboard = () => {
                 </div>
               </div>
               <div className="text-2xl font-bold text-green-600">
-                {stats.data_breakdown?.grades_exports || 0}
+                {breakdown.grades_exports || 0}
               </div>
             </div>
 
@@ -168,7 +202,7 @@ const MineduDashboard = () => {
                 </div>
               </div>
               <div className="text-2xl font-bold text-purple-600">
-                {stats.data_breakdown?.students_exports || 0}
+                {breakdown.students_exports || 0}
               </div>
             </div>
           </div>
@@ -179,48 +213,62 @@ const MineduDashboard = () => {
       <Card>
         <CardHeader>
           <CardTitle>Actividad Reciente</CardTitle>
-          <CardDescription>
-            Últimas exportaciones realizadas al sistema MINEDU
-          </CardDescription>
+          <CardDescription>Últimas exportaciones realizadas al sistema MINEDU</CardDescription>
         </CardHeader>
         <CardContent>
-          {stats.recent_activity && stats.recent_activity.length > 0 ? (
+          {Array.isArray(stats.recent_activity) && stats.recent_activity.length > 0 ? (
             <div className="space-y-4">
-              {stats.recent_activity.slice(0, 5).map((activity, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-full ${
-                      activity.status === 'COMPLETED' ? 'bg-green-100 text-green-600' :
-                      activity.status === 'FAILED' ? 'bg-red-100 text-red-600' :
-                      'bg-yellow-100 text-yellow-600'
-                    }`}>
-                      {activity.status === 'COMPLETED' ? <CheckCircle className="h-4 w-4" /> :
-                       activity.status === 'FAILED' ? <XCircle className="h-4 w-4" /> :
-                       <Clock className="h-4 w-4" />}
-                    </div>
-                    <div>
-                      <div className="font-medium">{activity.data_type}</div>
-                      <div className="text-sm text-gray-500">
-                        {new Date(activity.created_at).toLocaleString()}
+              {stats.recent_activity.slice(0, 5).map((activity, idx) => {
+                const isCompleted = activity.status === "COMPLETED";
+                const isFailed = activity.status === "FAILED";
+                return (
+                  <div
+                    key={`${activity.id || idx}`}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div
+                        className={`p-2 rounded-full ${isCompleted
+                          ? "bg-green-100 text-green-600"
+                          : isFailed
+                            ? "bg-red-100 text-red-600"
+                            : "bg-yellow-100 text-yellow-600"
+                          }`}
+                      >
+                        {isCompleted ? (
+                          <CheckCircle className="h-4 w-4" />
+                        ) : isFailed ? (
+                          <XCircle className="h-4 w-4" />
+                        ) : (
+                          <Clock className="h-4 w-4" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-medium">{activity.data_type}</div>
+                        <div className="text-sm text-gray-500">
+                          {activity.created_at
+                            ? new Date(activity.created_at).toLocaleString()
+                            : ""}
+                        </div>
                       </div>
                     </div>
+                    <Badge
+                      variant="secondary"
+                      className={`${isCompleted
+                        ? "bg-green-100 text-green-700 border border-green-200"
+                        : isFailed
+                          ? "bg-red-100 text-red-700 border border-red-200"
+                          : "bg-yellow-100 text-yellow-700 border border-yellow-200"
+                        }`}
+                    >
+                      {activity.status}
+                    </Badge>
                   </div>
-                  <Badge 
-                    variant={
-                      activity.status === 'COMPLETED' ? 'success' :
-                      activity.status === 'FAILED' ? 'destructive' :
-                      'secondary'
-                    }
-                  >
-                    {activity.status}
-                  </Badge>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-500">
-              No hay actividad reciente
-            </div>
+            <div className="text-center py-8 text-gray-500">No hay actividad reciente</div>
           )}
         </CardContent>
       </Card>
@@ -229,9 +277,7 @@ const MineduDashboard = () => {
       <Card>
         <CardHeader>
           <CardTitle>Acciones Rápidas</CardTitle>
-          <CardDescription>
-            Operaciones comunes de exportación e integración con MINEDU
-          </CardDescription>
+          <CardDescription>Operaciones comunes de exportación e integración con MINEDU</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -239,17 +285,14 @@ const MineduDashboard = () => {
               <Upload className="h-6 w-6" />
               <span className="text-sm">Exportar Matrículas</span>
             </Button>
-            
             <Button variant="outline" className="h-20 flex flex-col gap-2">
               <FileSpreadsheet className="h-6 w-6" />
               <span className="text-sm">Exportar Calificaciones</span>
             </Button>
-            
             <Button variant="outline" className="h-20 flex flex-col gap-2">
               <Shield className="h-6 w-6" />
               <span className="text-sm">Validar Integridad</span>
             </Button>
-            
             <Button variant="outline" className="h-20 flex flex-col gap-2">
               <BarChart3 className="h-6 w-6" />
               <span className="text-sm">Ver Reportes</span>
@@ -261,41 +304,40 @@ const MineduDashboard = () => {
   );
 };
 
-// Export Data Component
+// ===================================
+// Export Data
+// ===================================
 const ExportDataModule = () => {
-  const { user } = useContext(AuthContext);
-  const [exportType, setExportType] = useState('');
-  const [academicYear, setAcademicYear] = useState(2024);
-  const [academicPeriod, setAcademicPeriod] = useState('');
+  const { api } = useAuth();
+  const [exportType, setExportType] = useState("");
+  const [academicYear, setAcademicYear] = useState("2024");
+  const [academicPeriod, setAcademicPeriod] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleExport = async (e) => {
     e.preventDefault();
-    
-    if (!exportType || !academicPeriod) {
-      toast.error('Complete todos los campos requeridos');
+    if (!exportType || !academicPeriod || !academicYear) {
+      toast.error("Complete todos los campos requeridos");
       return;
     }
 
     setLoading(true);
-
     try {
-      const endpoint = exportType === 'enrollments' ? 
-        'minedu/export/enrollments' : 
-        'minedu/export/grades';
+      const endpoint =
+        exportType === "enrollments"
+          ? "/minedu/export/enrollments"
+          : "/minedu/export/grades";
 
-      const response = await axios.post(`${API}/${endpoint}`, {
-        academic_year: academicYear,
-        academic_period: academicPeriod
+      const { data } = await api.post(endpoint, {
+        academic_year: parseInt(academicYear, 10),
+        academic_period: academicPeriod,
       });
 
-      toast.success(response.data.message);
-      
-      // Reset form
-      setExportType('');
-      setAcademicPeriod('');
+      toast.success(data?.message || "Exportación iniciada");
+      setExportType("");
+      setAcademicPeriod("");
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error al iniciar exportación');
+      toast.error(formatApiError(error, "Error al iniciar exportación"));
     } finally {
       setLoading(false);
     }
@@ -317,10 +359,11 @@ const ExportDataModule = () => {
         <CardContent>
           <form onSubmit={handleExport} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Tipo de Exportación */}
               <div>
-                <Label htmlFor="exportType">Tipo de Exportación *</Label>
+                <Label>Tipo de Exportación *</Label>
                 <Select value={exportType} onValueChange={setExportType}>
-                  <SelectTrigger>
+                  <SelectTrigger className="mt-2">
                     <SelectValue placeholder="Seleccione tipo de datos" />
                   </SelectTrigger>
                   <SelectContent>
@@ -340,13 +383,18 @@ const ExportDataModule = () => {
                 </Select>
               </div>
 
+              {/* Año Académico */}
               <div>
-                <Label htmlFor="academicYear">Año Académico *</Label>
-                <Select value={academicYear.toString()} onValueChange={(value) => setAcademicYear(parseInt(value))}>
-                  <SelectTrigger>
-                    <SelectValue />
+                <Label>Año Académico *</Label>
+                <Select
+                  value={academicYear}
+                  onValueChange={(v) => setAcademicYear(v)}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder="Seleccione año" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="2025">2025</SelectItem>
                     <SelectItem value="2024">2024</SelectItem>
                     <SelectItem value="2023">2023</SelectItem>
                     <SelectItem value="2022">2022</SelectItem>
@@ -354,10 +402,11 @@ const ExportDataModule = () => {
                 </Select>
               </div>
 
+              {/* Período Académico */}
               <div>
-                <Label htmlFor="academicPeriod">Período Académico *</Label>
+                <Label>Período Académico *</Label>
                 <Select value={academicPeriod} onValueChange={setAcademicPeriod}>
-                  <SelectTrigger>
+                  <SelectTrigger className="mt-2">
                     <SelectValue placeholder="Seleccione período" />
                   </SelectTrigger>
                   <SelectContent>
@@ -373,18 +422,22 @@ const ExportDataModule = () => {
               <div className="flex items-start space-x-3">
                 <AlertTriangle className="h-5 w-5 text-blue-600 mt-0.5" />
                 <div className="text-sm text-blue-700">
-                  <strong>Importante:</strong> Antes de exportar, asegúrese de que todos los datos estén 
-                  completos y validados. La exportación incluirá todos los registros del período seleccionado 
-                  que cumplan con los estándares de calidad de MINEDU.
+                  <strong>Importante:</strong> Valide datos antes de exportar. Se enviarán todos los
+                  registros del período seleccionado que cumplan los estándares MINEDU.
                 </div>
               </div>
             </div>
 
             <div className="flex justify-end space-x-4">
-              <Button type="button" variant="outline" onClick={() => {
-                setExportType('');
-                setAcademicPeriod('');
-              }}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setExportType("");
+                  setAcademicPeriod("");
+                  setAcademicYear("2024");
+                }}
+              >
                 Limpiar
               </Button>
               <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700">
@@ -405,7 +458,7 @@ const ExportDataModule = () => {
         </CardContent>
       </Card>
 
-      {/* Information Cards */}
+      {/* Info cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -434,7 +487,7 @@ const ExportDataModule = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3 text-sm text-gray-600">
-              <p>• Notas numéricas y literales (0-20, AD/A/B/C)</p>
+              <p>• Notas numéricas y literales (0–20, AD/A/B/C)</p>
               <p>• Asistencia y porcentajes</p>
               <p>• Estados de aprobación/desaprobación</p>
               <p>• Evaluaciones parciales y finales</p>
@@ -447,69 +500,89 @@ const ExportDataModule = () => {
   );
 };
 
-// Export History Component
+// ===================================
+// Export History
+// ===================================
 const ExportHistoryModule = () => {
+  const { api } = useAuth();
   const [exports, setExports] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [typeFilter, setTypeFilter] = useState("ALL");
 
-  useEffect(() => {
-    fetchExports();
-  }, []);
-
-  const fetchExports = async () => {
+  const fetchExports = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/minedu/exports`);
-      setExports(response.data.exports || []);
+      setLoading(true);
+      const { data } = await api.get("/minedu/exports");
+      setExports(data?.exports ?? data ?? []);
     } catch (error) {
-      console.error('Error fetching exports:', error);
-      toast.error('Error al cargar historial de exportaciones');
+      console.error("Error fetching exports:", error);
+      toast.error(formatApiError(error, "Error al cargar historial de exportaciones"));
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    fetchExports();
+  }, [fetchExports]);
 
   const handleRetryExport = async (exportId) => {
     try {
-      await axios.post(`${API}/minedu/exports/${exportId}/retry`);
-      toast.success('Reintento de exportación iniciado');
+      await api.post(`/minedu/exports/${exportId}/retry`);
+      toast.success("Reintento de exportación iniciado");
       fetchExports();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error al reintentar exportación');
+      toast.error(formatApiError(error, "Error al reintentar exportación"));
     }
   };
 
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      'PENDING': { variant: 'secondary', label: 'Pendiente', icon: Clock },
-      'PROCESSING': { variant: 'default', label: 'Procesando', icon: RefreshCw },
-      'COMPLETED': { variant: 'success', label: 'Completado', icon: CheckCircle },
-      'FAILED': { variant: 'destructive', label: 'Fallido', icon: XCircle },
-      'RETRYING': { variant: 'warning', label: 'Reintentando', icon: RefreshCw }
-    };
-    
-    const config = statusConfig[status] || { variant: 'secondary', label: status, icon: Clock };
-    const Icon = config.icon;
-    
-    return (
-      <Badge variant={config.variant} className="flex items-center space-x-1">
-        <Icon className="h-3 w-3" />
-        <span>{config.label}</span>
-      </Badge>
-    );
+  const statusCfg = (status) => {
+    switch (status) {
+      case "COMPLETED":
+        return {
+          label: "Completado",
+          className: "bg-green-100 text-green-700 border border-green-200",
+          Icon: CheckCircle,
+        };
+      case "FAILED":
+        return {
+          label: "Fallido",
+          className: "bg-red-100 text-red-700 border border-red-200",
+          Icon: XCircle,
+        };
+      case "PROCESSING":
+        return {
+          label: "Procesando",
+          className: "bg-yellow-100 text-yellow-700 border border-yellow-200",
+          Icon: RefreshCw,
+        };
+      case "RETRYING":
+        return {
+          label: "Reintentando",
+          className: "bg-yellow-100 text-yellow-700 border border-yellow-200",
+          Icon: RefreshCw,
+        };
+      case "PENDING":
+      default:
+        return {
+          label: "Pendiente",
+          className: "bg-gray-100 text-gray-700 border border-gray-200",
+          Icon: Clock,
+        };
+    }
   };
 
-  const filteredExports = exports.filter(exp => {
-    const matchesStatus = !statusFilter || statusFilter === 'ALL' || exp.status === statusFilter;
-    const matchesType = !typeFilter || typeFilter === 'ALL' || exp.data_type === typeFilter;
+  const filtered = exports.filter((exp) => {
+    const matchesStatus = statusFilter === "ALL" || exp.status === statusFilter;
+    const matchesType = typeFilter === "ALL" || exp.data_type === typeFilter;
     return matchesStatus && matchesType;
   });
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
       </div>
     );
   }
@@ -525,32 +598,38 @@ const ExportHistoryModule = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4 items-center">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filtrar por estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Todos los estados</SelectItem>
-            <SelectItem value="PENDING">Pendiente</SelectItem>
-            <SelectItem value="PROCESSING">Procesando</SelectItem>
-            <SelectItem value="COMPLETED">Completado</SelectItem>
-            <SelectItem value="FAILED">Fallido</SelectItem>
-            <SelectItem value="RETRYING">Reintentando</SelectItem>
-          </SelectContent>
-        </Select>
-        
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filtrar por tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Todos los tipos</SelectItem>
-            <SelectItem value="ENROLLMENT">Matrículas</SelectItem>
-            <SelectItem value="GRADES">Calificaciones</SelectItem>
-            <SelectItem value="STUDENTS">Estudiantes</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="w-48">
+          <Label className="sr-only">Estado</Label>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Filtrar por estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todos los estados</SelectItem>
+              <SelectItem value="PENDING">Pendiente</SelectItem>
+              <SelectItem value="PROCESSING">Procesando</SelectItem>
+              <SelectItem value="COMPLETED">Completado</SelectItem>
+              <SelectItem value="FAILED">Fallido</SelectItem>
+              <SelectItem value="RETRYING">Reintentando</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="w-48">
+          <Label className="sr-only">Tipo</Label>
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Filtrar por tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todos los tipos</SelectItem>
+              <SelectItem value="ENROLLMENT">Matrículas</SelectItem>
+              <SelectItem value="GRADES">Calificaciones</SelectItem>
+              <SelectItem value="STUDENTS">Estudiantes</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Exports List */}
@@ -569,61 +648,74 @@ const ExportHistoryModule = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredExports.map((exp) => (
-                  <tr key={exp.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
-                        {exp.data_type === 'ENROLLMENT' ? <Users className="h-4 w-4 text-blue-600" /> :
-                         exp.data_type === 'GRADES' ? <Award className="h-4 w-4 text-green-600" /> :
-                         <BookOpen className="h-4 w-4 text-purple-600" />}
-                        <span className="font-medium">{exp.data_type}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {exp.record_data?.academic_year}-{exp.record_data?.academic_period}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(exp.status)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {exp.total_records || 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(exp.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        {exp.status === 'FAILED' && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleRetryExport(exp.id)}
-                          >
-                            <RefreshCw className="h-4 w-4" />
+                {filtered.map((exp) => {
+                  const cfg = statusCfg(exp.status);
+                  const Icon = cfg.Icon;
+                  return (
+                    <tr key={exp.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center space-x-2">
+                          {exp.data_type === "ENROLLMENT" ? (
+                            <Users className="h-4 w-4 text-blue-600" />
+                          ) : exp.data_type === "GRADES" ? (
+                            <Award className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <BookOpen className="h-4 w-4 text-purple-600" />
+                          )}
+                          <span className="font-medium">{exp.data_type}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {exp.record_data?.academic_year}-{exp.record_data?.academic_period}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <Badge variant="secondary" className={cfg.className}>
+                          <span className="flex items-center gap-1">
+                            <Icon className="h-3 w-3" />
+                            {cfg.label}
+                          </span>
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {exp.total_records ?? "N/A"}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {exp.created_at ? new Date(exp.created_at).toLocaleDateString() : "-"}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm" title="Ver detalle">
+                            <Eye className="h-4 w-4" />
                           </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {exp.status === "FAILED" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRetryExport(exp.id)}
+                              title="Reintentar"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </CardContent>
       </Card>
 
-      {filteredExports.length === 0 && (
+      {filtered.length === 0 && (
         <div className="text-center py-12">
           <Database className="h-12 w-12 mx-auto text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No se encontraron exportaciones</h3>
           <p className="text-gray-500">
-            {statusFilter || typeFilter 
-              ? 'No hay exportaciones que coincidan con los filtros aplicados.' 
-              : 'Aún no se han realizado exportaciones al sistema MINEDU.'
-            }
+            {statusFilter !== "ALL" || typeFilter !== "ALL"
+              ? "No hay exportaciones que coincidan con los filtros aplicados."
+              : "Aún no se han realizado exportaciones al sistema MINEDU."}
           </p>
         </div>
       )}
@@ -631,24 +723,26 @@ const ExportHistoryModule = () => {
   );
 };
 
-// Data Validation Component
+// ===================================
+// Data Validation
+// ===================================
 const DataValidationModule = () => {
+  const { api } = useAuth();
   const [validation, setValidation] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const runValidation = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API}/minedu/validation/data-integrity`);
-      setValidation(response.data);
-      
-      if (response.data.valid) {
-        toast.success('Validación completada: Datos íntegros');
+      const { data } = await api.get("/minedu/validation/data-integrity");
+      setValidation(data);
+      if (data?.valid) {
+        toast.success("Validación completada: Datos íntegros");
       } else {
-        toast.warning('Validación completada: Se encontraron inconsistencias');
+        toast.warning("Validación completada: Se encontraron inconsistencias");
       }
     } catch (error) {
-      toast.error('Error al ejecutar validación');
+      toast.error(formatApiError(error, "Error al ejecutar validación"));
     } finally {
       setLoading(false);
     }
@@ -684,11 +778,10 @@ const DataValidationModule = () => {
           {validation ? (
             <div className="space-y-6">
               {/* Overall Status */}
-              <div className={`p-4 rounded-lg border ${
-                validation.valid 
-                  ? 'bg-green-50 border-green-200' 
-                  : 'bg-red-50 border-red-200'
-              }`}>
+              <div
+                className={`p-4 rounded-lg border ${validation.valid ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
+                  }`}
+              >
                 <div className="flex items-center space-x-3">
                   {validation.valid ? (
                     <CheckCircle className="h-6 w-6 text-green-600" />
@@ -696,42 +789,38 @@ const DataValidationModule = () => {
                     <XCircle className="h-6 w-6 text-red-600" />
                   )}
                   <div>
-                    <h3 className={`font-semibold ${
-                      validation.valid ? 'text-green-800' : 'text-red-800'
-                    }`}>
-                      {validation.valid ? 'Datos Válidos' : 'Se Encontraron Problemas'}
+                    <h3 className={`font-semibold ${validation.valid ? "text-green-800" : "text-red-800"}`}>
+                      {validation.valid ? "Datos Válidos" : "Se Encontraron Problemas"}
                     </h3>
-                    <p className={`text-sm ${
-                      validation.valid ? 'text-green-700' : 'text-red-700'
-                    }`}>
-                      {validation.valid 
-                        ? 'Todos los datos están íntegros y listos para exportación'
-                        : 'Se requiere corrección antes de exportar a MINEDU'
-                      }
+                    <p className={`text-sm ${validation.valid ? "text-green-700" : "text-red-700"}`}>
+                      {validation.valid
+                        ? "Todos los datos están íntegros y listos para exportación"
+                        : "Se requiere corrección antes de exportar a MINEDU"}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Statistics */}
+              {/* Stats */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {Object.entries(validation.stats || {}).map(([key, value]) => (
                   <div key={key} className="p-4 bg-gray-50 rounded-lg">
                     <div className="text-2xl font-bold text-gray-900">{value}</div>
-                    <div className="text-sm text-gray-600 capitalize">
-                      {key.replace(/_/g, ' ')}
-                    </div>
+                    <div className="text-sm text-gray-600 capitalize">{key.replace(/_/g, " ")}</div>
                   </div>
                 ))}
               </div>
 
               {/* Errors */}
-              {validation.errors && validation.errors.length > 0 && (
+              {Array.isArray(validation.errors) && validation.errors.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="font-semibold text-red-800">Errores Encontrados:</h4>
                   <div className="space-y-2">
-                    {validation.errors.map((error, index) => (
-                      <div key={index} className="flex items-start space-x-2 p-3 bg-red-50 border border-red-200 rounded">
+                    {validation.errors.map((error, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-start space-x-2 p-3 bg-red-50 border border-red-200 rounded"
+                      >
                         <XCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
                         <span className="text-sm text-red-700">{error}</span>
                       </div>
@@ -741,12 +830,15 @@ const DataValidationModule = () => {
               )}
 
               {/* Warnings */}
-              {validation.warnings && validation.warnings.length > 0 && (
+              {Array.isArray(validation.warnings) && validation.warnings.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="font-semibold text-yellow-800">Advertencias:</h4>
                   <div className="space-y-2">
-                    {validation.warnings.map((warning, index) => (
-                      <div key={index} className="flex items-start space-x-2 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                    {validation.warnings.map((warning, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-start space-x-2 p-3 bg-yellow-50 border border-yellow-200 rounded"
+                      >
                         <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
                         <span className="text-sm text-yellow-700">{warning}</span>
                       </div>
@@ -774,11 +866,13 @@ const DataValidationModule = () => {
   );
 };
 
-// Main MINEDU Integration Module Component
+// ===================================
+// Main
+// ===================================
 const MineduIntegrationModule = () => {
   const { user } = useContext(AuthContext);
 
-  if (!user || !['ADMIN', 'REGISTRAR'].includes(user.role)) {
+  if (!user || !["ADMIN", "REGISTRAR"].includes(user.role)) {
     return (
       <div className="p-6 text-center">
         <Shield className="h-12 w-12 mx-auto text-gray-400 mb-4" />
@@ -799,19 +893,19 @@ const MineduIntegrationModule = () => {
           <TabsTrigger value="history">Historial</TabsTrigger>
           <TabsTrigger value="validation">Validación</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="dashboard">
           <MineduDashboard />
         </TabsContent>
-        
+
         <TabsContent value="export">
           <ExportDataModule />
         </TabsContent>
-        
+
         <TabsContent value="history">
           <ExportHistoryModule />
         </TabsContent>
-        
+
         <TabsContent value="validation">
           <DataValidationModule />
         </TabsContent>

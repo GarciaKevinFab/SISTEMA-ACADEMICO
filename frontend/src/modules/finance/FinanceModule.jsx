@@ -1,14 +1,14 @@
 // src/components/FinanceModule.jsx
 import React, { useState, useEffect, useCallback } from "react";
-import { useAuth } from "./AuthContext";
-import CashBanksDashboard from "./finance/CashBanksDashboard";
-import ReceiptsDashboard from "./finance/ReceiptsDashboard";
-import InventoryDashboard from "./finance/InventoryDashboard";
-import LogisticsDashboard from "./finance/LogisticsDashboard";
-import HRDashboard from "./finance/HRDashboard";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
-import { Button } from "./ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { useAuth } from "../../context/AuthContext";
+import CashBanksDashboard from "../../components/finance/CashBanksDashboard";
+import ReceiptsDashboard from "../../components/finance/ReceiptsDashboard";
+import InventoryDashboard from "../../components/finance/InventoryDashboard";
+import LogisticsDashboard from "../../components/finance/LogisticsDashboard";
+import HRDashboard from "../../components/finance/HRDashboard";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import {
   Banknote,
   Receipt,

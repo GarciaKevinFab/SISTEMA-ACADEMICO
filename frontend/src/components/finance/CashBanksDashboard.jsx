@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from '../AuthContext';
+import { AuthContext } from '../../context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -10,11 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { toast } from 'sonner';
-import { 
-  Plus, 
-  DollarSign, 
-  TrendingUp, 
-  TrendingDown, 
+import {
+  Plus,
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
   Clock,
   CheckCircle,
   Upload,
@@ -65,14 +65,14 @@ const CashBanksDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/finance/cash-sessions/current`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setCurrentSession(data.session);
@@ -94,14 +94,14 @@ const CashBanksDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/finance/bank-accounts`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setBankAccounts(data.accounts || []);
@@ -118,7 +118,7 @@ const CashBanksDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/finance/cash-sessions`, {
         method: 'POST',
         headers: {
@@ -130,7 +130,7 @@ const CashBanksDashboard = () => {
           cashier_notes: 'Sesión abierta desde dashboard'
         })
       });
-      
+
       if (response.ok) {
         toast({
           title: "Éxito",
@@ -168,7 +168,7 @@ const CashBanksDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/finance/cash-movements`, {
         method: 'POST',
         headers: {
@@ -181,7 +181,7 @@ const CashBanksDashboard = () => {
           amount: parseFloat(newMovement.amount)
         })
       });
-      
+
       if (response.ok) {
         toast({
           title: "Éxito",
@@ -220,7 +220,7 @@ const CashBanksDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/finance/cash-sessions/${currentSession.id}/close?final_amount=${sessionClose.final_amount}&closing_notes=${encodeURIComponent(sessionClose.closing_notes)}`, {
         method: 'POST',
         headers: {
@@ -228,7 +228,7 @@ const CashBanksDashboard = () => {
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         toast({
           title: "Éxito",
@@ -260,7 +260,7 @@ const CashBanksDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/finance/bank-accounts`, {
         method: 'POST',
         headers: {
@@ -269,7 +269,7 @@ const CashBanksDashboard = () => {
         },
         body: JSON.stringify(newBankAccount)
       });
-      
+
       if (response.ok) {
         toast({
           title: "Éxito",
@@ -328,8 +328,8 @@ const CashBanksDashboard = () => {
             {!currentSession ? (
               <Button onClick={openCashSession}>Abrir Caja</Button>
             ) : (
-              <Dialog 
-                open={openDialogs.closeSession} 
+              <Dialog
+                open={openDialogs.closeSession}
                 onOpenChange={(open) => setOpenDialogs({ ...openDialogs, closeSession: open })}
               >
                 <DialogTrigger asChild>
@@ -375,7 +375,7 @@ const CashBanksDashboard = () => {
                     )}
                   </div>
                   <DialogFooter>
-                    <Button 
+                    <Button
                       onClick={closeCashSession}
                       disabled={!sessionClose.final_amount}
                     >
@@ -425,8 +425,8 @@ const CashBanksDashboard = () => {
                 <CardTitle>Movimientos de Caja</CardTitle>
                 <CardDescription>Registro de ingresos y egresos</CardDescription>
               </div>
-              <Dialog 
-                open={openDialogs.newMovement} 
+              <Dialog
+                open={openDialogs.newMovement}
                 onOpenChange={(open) => setOpenDialogs({ ...openDialogs, newMovement: open })}
               >
                 <DialogTrigger asChild>
@@ -445,8 +445,8 @@ const CashBanksDashboard = () => {
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="movement_type">Tipo de Movimiento *</Label>
-                      <Select 
-                        value={newMovement.movement_type} 
+                      <Select
+                        value={newMovement.movement_type}
                         onValueChange={(value) => setNewMovement({ ...newMovement, movement_type: value })}
                       >
                         <SelectTrigger>
@@ -498,7 +498,7 @@ const CashBanksDashboard = () => {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button 
+                    <Button
                       onClick={createCashMovement}
                       disabled={!newMovement.amount || !newMovement.concept}
                     >
@@ -549,8 +549,8 @@ const CashBanksDashboard = () => {
                 <CardTitle>Cuentas Bancarias</CardTitle>
                 <CardDescription>Gestión de cuentas bancarias</CardDescription>
               </div>
-              <Dialog 
-                open={openDialogs.newBankAccount} 
+              <Dialog
+                open={openDialogs.newBankAccount}
                 onOpenChange={(open) => setOpenDialogs({ ...openDialogs, newBankAccount: open })}
               >
                 <DialogTrigger asChild>
@@ -596,8 +596,8 @@ const CashBanksDashboard = () => {
                     </div>
                     <div>
                       <Label htmlFor="account_type">Tipo de Cuenta *</Label>
-                      <Select 
-                        value={newBankAccount.account_type} 
+                      <Select
+                        value={newBankAccount.account_type}
                         onValueChange={(value) => setNewBankAccount({ ...newBankAccount, account_type: value })}
                       >
                         <SelectTrigger>
@@ -612,8 +612,8 @@ const CashBanksDashboard = () => {
                     </div>
                     <div>
                       <Label htmlFor="currency">Moneda</Label>
-                      <Select 
-                        value={newBankAccount.currency} 
+                      <Select
+                        value={newBankAccount.currency}
                         onValueChange={(value) => setNewBankAccount({ ...newBankAccount, currency: value })}
                       >
                         <SelectTrigger>
@@ -627,7 +627,7 @@ const CashBanksDashboard = () => {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button 
+                    <Button
                       onClick={createBankAccount}
                       disabled={!newBankAccount.account_name || !newBankAccount.bank_name || !newBankAccount.account_number}
                     >

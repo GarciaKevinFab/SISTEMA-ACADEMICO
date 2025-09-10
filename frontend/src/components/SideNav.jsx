@@ -1,6 +1,6 @@
 import React, { useContext } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { AuthContext } from './AuthContext';
+import { AuthContext } from '../context/AuthContext';
 import {
   GraduationCap,
   FileText,
@@ -13,12 +13,14 @@ import {
   Database,
   LogOut
 } from 'lucide-react';
+import { Shield } from "lucide-react";
 
 const SideNav = () => {
   const { user, logout } = useContext(AuthContext);
   const location = useLocation();
 
   // Check user permissions
+  const hasAdminAccess = ['ADMIN'].includes(user?.role);
   const hasAcademicAccess = ['ADMIN', 'TEACHER', 'STUDENT', 'REGISTRAR'].includes(user?.role);
   const hasAdmissionAccess = ['ADMIN', 'REGISTRAR', 'APPLICANT'].includes(user?.role);
   const hasMesaDePartesAccess = ['ADMIN', 'STUDENT', 'TEACHER', 'ADMIN_WORKER', 'APPLICANT'].includes(user?.role);
@@ -40,6 +42,20 @@ const SideNav = () => {
       path: '/dashboard',
       icon: BarChart3,
       hasAccess: true
+    },
+    {
+      id: 'security',
+      title: 'Seguridad',
+      path: '/dashboard/security',
+      icon: Shield,
+      hasAccess: !!user
+    },
+    {
+      id: 'admin',
+      title: 'Administración',
+      path: '/dashboard/admin',
+      icon: Building,
+      hasAccess: hasAdminAccess
     },
     {
       id: 'academic',

@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Badge } from './ui/badge';
-import { 
+// src/components/PublicAdmissionCalls.jsx
+import React, { useState, useEffect, useCallback } from "react";
+import { useAuth } from "../../context/AuthContext";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
+import { Badge } from "../../components/ui/badge";
+import {
   Calendar,
   Clock,
   Users,
@@ -14,79 +16,119 @@ import {
   Award,
   MapPin,
   Phone,
-  Mail
-} from 'lucide-react';
-import axios from 'axios';
+  Mail,
+} from "lucide-react";
+import { toast } from "sonner";
 
-const API = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001/api';
+// ------- helpers -------
+function formatApiError(err, fallback = "Ocurrió un error") {
+  const data = err?.response?.data;
+  if (data?.detail) {
+    const d = data.detail;
+    if (typeof d === "string") return d;
+    if (Array.isArray(d)) {
+      const msgs = d
+        .map((e) => {
+          const field = Array.isArray(e?.loc) ? e.loc.join(".") : e?.loc;
+          return e?.msg ? (field ? `${field}: ${e.msg}` : e.msg) : null;
+        })
+        .filter(Boolean);
+      if (msgs.length) return msgs.join(" | ");
+    }
+  }
+  if (typeof data?.error?.message === "string") return data.error.message;
+  if (typeof data?.message === "string") return data.message;
+  if (typeof data?.error === "string") return data.error;
+  if (typeof err?.message === "string") return err.message;
+  return fallback;
+}
 
 const PublicAdmissionCalls = () => {
+  const { api } = useAuth(); // cliente axios centralizado con baseURL/interceptores
   const [admissionCalls, setAdmissionCalls] = useState([]);
   const [searchResults, setSearchResults] = useState(null);
   const [searchData, setSearchData] = useState({
-    admissionCallId: '',
-    documentNumber: ''
+    admissionCallId: "",
+    documentNumber: "",
   });
   const [loading, setLoading] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
 
+  const fetchPublicAdmissionCalls = useCallback(async () => {
+    let cancelled = false;
+    try {
+      setLoading(true);
+      const { data } = await api.get("/portal/public/admission-calls");
+      if (!cancelled) setAdmissionCalls(data?.admission_calls || []);
+    } catch (error) {
+      console.error("Error fetching admission calls:", error);
+      toast.error(formatApiError(error, "Error al cargar convocatorias"));
+    } finally {
+      if (!cancelled) setLoading(false);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [api]);
+
   useEffect(() => {
-    fetchPublicAdmissionCalls();
-  }, []);
+    const cleanup = fetchPublicAdmissionCalls();
+    return () => {
+      // si fetchPublicAdmissionCalls devolvió un cleanup, lo ejecutamos
+      if (typeof cleanup === "function") cleanup();
+    };
+  }, [fetchPublicAdmissionCalls]);
 
-  const fetchPublicAdmissionCalls = async () => {
-    try {
-      const response = await axios.get(`${API}/portal/public/admission-calls`);
-      setAdmissionCalls(response.data.admission_calls || []);
-    } catch (error) {
-      console.error('Error fetching admission calls:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResultSearch = async (e) => {
-    e.preventDefault();
-    if (!searchData.admissionCallId || !searchData.documentNumber) {
-      alert('Por favor complete todos los campos');
-      return;
-    }
-
-    setSearchLoading(true);
-    try {
-      const response = await axios.get(
-        `${API}/admission-results/public/${searchData.admissionCallId}/${searchData.documentNumber}`
-      );
-      setSearchResults(response.data);
-    } catch (error) {
-      if (error.response?.status === 404) {
-        setSearchResults({ error: 'No se encontraron resultados para los datos ingresados.' });
-      } else {
-        setSearchResults({ error: 'Error al consultar resultados. Intente nuevamente.' });
+  const handleResultSearch = useCallback(
+    async (e) => {
+      e.preventDefault();
+      const { admissionCallId, documentNumber } = searchData;
+      if (!admissionCallId || !documentNumber) {
+        toast.error("Por favor complete todos los campos");
+        return;
       }
-    } finally {
-      setSearchLoading(false);
-    }
-  };
+
+      setSearchLoading(true);
+      setSearchResults(null);
+      try {
+        const { data } = await api.get(
+          `/admission-results/public/${admissionCallId}/${documentNumber}`
+        );
+        setSearchResults(data);
+      } catch (error) {
+        if (error?.response?.status === 404) {
+          setSearchResults({
+            error: "No se encontraron resultados para los datos ingresados.",
+          });
+        } else {
+          setSearchResults({
+            error: formatApiError(error, "Error al consultar resultados. Intente nuevamente."),
+          });
+        }
+      } finally {
+        setSearchLoading(false);
+      }
+    },
+    [api, searchData]
+  );
 
   const getCallStatusBadge = (call) => {
     const now = new Date();
-    const regStart = new Date(call.registration_start);
-    const regEnd = new Date(call.registration_end);
-    
-    if (now < regStart) {
-      return <Badge variant="secondary">Próximamente</Badge>;
-    } else if (now >= regStart && now <= regEnd) {
-      return <Badge className="bg-green-600">Inscripciones Abiertas</Badge>;
-    } else {
-      return <Badge variant="outline">Cerrada</Badge>;
-    }
+    const regStart = call?.registration_start ? new Date(call.registration_start) : null;
+    const regEnd = call?.registration_end ? new Date(call.registration_end) : null;
+
+    if (!regStart || !regEnd) return <Badge variant="secondary">Por confirmar</Badge>;
+    if (now < regStart) return <Badge variant="secondary">Próximamente</Badge>;
+    if (now >= regStart && now <= regEnd) return <Badge className="bg-green-600">Inscripciones Abiertas</Badge>;
+    return <Badge variant="outline">Cerrada</Badge>;
   };
+
+  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "-");
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
       </div>
     );
   }
@@ -102,15 +144,11 @@ const PublicAdmissionCalls = () => {
                 <School className="h-8 w-8 text-blue-600" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Portal de Admisión
-                </h1>
-                <p className="text-sm text-gray-600">
-                  IESPP "Gustavo Allende Llavería"
-                </p>
+                <h1 className="text-2xl font-bold text-gray-900">Portal de Admisión</h1>
+                <p className="text-sm text-gray-600">IESPP &quot;Gustavo Allende Llavería&quot;</p>
               </div>
             </div>
-            <Button variant="outline" onClick={() => window.location.href = '/login'}>
+            <Button variant="outline" onClick={() => (window.location.href = "/login")}>
               Acceso al Sistema
             </Button>
           </div>
@@ -119,13 +157,10 @@ const PublicAdmissionCalls = () => {
 
       <div className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
           {/* Admission Calls List */}
           <div className="lg:col-span-2 space-y-6">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                Convocatorias de Admisión
-              </h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Convocatorias de Admisión</h2>
               <p className="text-gray-600 mb-6">
                 Consulte las convocatorias activas y próximas para postular a nuestros programas de estudio.
               </p>
@@ -135,12 +170,8 @@ const PublicAdmissionCalls = () => {
               <Card>
                 <CardContent className="p-8 text-center">
                   <Calendar className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    No hay convocatorias activas
-                  </h3>
-                  <p className="text-gray-500">
-                    Próximamente se publicarán nuevas convocatorias de admisión.
-                  </p>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No hay convocatorias activas</h3>
+                  <p className="text-gray-500">Próximamente se publicarán nuevas convocatorias de admisión.</p>
                 </CardContent>
               </Card>
             ) : (
@@ -151,46 +182,46 @@ const PublicAdmissionCalls = () => {
                       <div className="flex items-start justify-between">
                         <div className="space-y-2">
                           <CardTitle className="text-xl">{call.name}</CardTitle>
-                          <CardDescription>{call.description}</CardDescription>
+                          {call.description && <CardDescription>{call.description}</CardDescription>}
                         </div>
                         {getCallStatusBadge(call)}
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      
                       {/* Key Information */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="flex items-center space-x-2 text-sm text-gray-600">
                           <Calendar className="h-4 w-4" />
                           <span>
-                            Inscripciones: {new Date(call.registration_start).toLocaleDateString()} - {new Date(call.registration_end).toLocaleDateString()}
+                            Inscripciones: {fmtDate(call.registration_start)} - {fmtDate(call.registration_end)}
                           </span>
                         </div>
-                        
+
                         {call.exam_date && (
                           <div className="flex items-center space-x-2 text-sm text-gray-600">
                             <Clock className="h-4 w-4" />
-                            <span>
-                              Examen: {new Date(call.exam_date).toLocaleDateString()}
-                            </span>
+                            <span>Examen: {fmtDate(call.exam_date)}</span>
                           </div>
                         )}
-                        
+
                         <div className="flex items-center space-x-2 text-sm text-gray-600">
                           <Users className="h-4 w-4" />
-                          <span>Período: {call.academic_year}-{call.academic_period}</span>
+                          <span>
+                            Período: {call.academic_year}
+                            {call.academic_period ? `-${call.academic_period}` : ""}
+                          </span>
                         </div>
-                        
+
                         {call.application_fee > 0 && (
                           <div className="flex items-center space-x-2 text-sm text-gray-600">
                             <FileText className="h-4 w-4" />
-                            <span>Costo: S/ {call.application_fee}</span>
+                            <span>Costo: S/ {Number(call.application_fee).toFixed(2)}</span>
                           </div>
                         )}
                       </div>
 
                       {/* Available Careers */}
-                      {call.careers && call.careers.length > 0 && (
+                      {Array.isArray(call.careers) && call.careers.length > 0 && (
                         <div>
                           <h4 className="font-semibold text-gray-900 mb-2">Carreras Disponibles:</h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -198,7 +229,7 @@ const PublicAdmissionCalls = () => {
                               <div key={career.id} className="flex items-center space-x-2 text-sm">
                                 <Award className="h-4 w-4 text-blue-600" />
                                 <span>{career.name}</span>
-                                {call.career_vacancies && call.career_vacancies[career.id] && (
+                                {call.career_vacancies?.[career.id] != null && (
                                   <span className="text-gray-500">
                                     ({call.career_vacancies[career.id]} vacantes)
                                   </span>
@@ -210,18 +241,17 @@ const PublicAdmissionCalls = () => {
                       )}
 
                       {/* Age Requirements */}
-                      <div className="text-sm text-gray-600">
-                        <strong>Requisitos de edad:</strong> {call.minimum_age} - {call.maximum_age} años
-                      </div>
+                      {(call.minimum_age != null || call.maximum_age != null) && (
+                        <div className="text-sm text-gray-600">
+                          <strong>Requisitos de edad:</strong>{" "}
+                          {call.minimum_age ?? "-"} {call.maximum_age ? ` - ${call.maximum_age} años` : "años"}
+                        </div>
+                      )}
 
                       {/* Actions */}
                       <div className="flex space-x-4">
-                        <Button className="bg-blue-600 hover:bg-blue-700">
-                          Ver Detalles
-                        </Button>
-                        <Button variant="outline">
-                          Descargar Reglamento
-                        </Button>
+                        <Button className="bg-blue-600 hover:bg-blue-700">Ver Detalles</Button>
+                        <Button variant="outline">Descargar Reglamento</Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -238,9 +268,7 @@ const PublicAdmissionCalls = () => {
                   <Search className="h-5 w-5" />
                   <span>Consultar Resultados</span>
                 </CardTitle>
-                <CardDescription>
-                  Ingrese sus datos para consultar los resultados de admisión
-                </CardDescription>
+                <CardDescription>Ingrese sus datos para consultar los resultados de admisión</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleResultSearch} className="space-y-4">
@@ -250,7 +278,9 @@ const PublicAdmissionCalls = () => {
                       id="admissionCall"
                       className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       value={searchData.admissionCallId}
-                      onChange={(e) => setSearchData({...searchData, admissionCallId: e.target.value})}
+                      onChange={(e) =>
+                        setSearchData((prev) => ({ ...prev, admissionCallId: e.target.value }))
+                      }
                       required
                     >
                       <option value="">Seleccione convocatoria</option>
@@ -261,26 +291,28 @@ const PublicAdmissionCalls = () => {
                       ))}
                     </select>
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="documentNumber">Número de Documento</Label>
                     <Input
                       id="documentNumber"
+                      inputMode="numeric"
+                      pattern="[0-9]{8,12}"
+                      maxLength={12}
                       placeholder="Ingrese su DNI"
                       value={searchData.documentNumber}
-                      onChange={(e) => setSearchData({...searchData, documentNumber: e.target.value})}
+                      onChange={(e) =>
+                        setSearchData((prev) => ({ ...prev, documentNumber: e.target.value.trim() }))
+                      }
                       required
                     />
+                    <p className="text-xs text-gray-500 mt-1">Solo números, 8-12 dígitos.</p>
                   </div>
-                  
-                  <Button 
-                    type="submit" 
-                    disabled={searchLoading}
-                    className="w-full bg-blue-600 hover:bg-blue-700"
-                  >
+
+                  <Button type="submit" disabled={searchLoading} className="w-full bg-blue-600 hover:bg-blue-700">
                     {searchLoading ? (
                       <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
                         Consultando...
                       </>
                     ) : (
@@ -296,28 +328,30 @@ const PublicAdmissionCalls = () => {
                 {searchResults && (
                   <div className="mt-6 p-4 border rounded-lg">
                     {searchResults.error ? (
-                      <div className="text-red-600 text-sm">
-                        {searchResults.error}
-                      </div>
+                      <div className="text-red-600 text-sm">{searchResults.error}</div>
                     ) : (
                       <div className="space-y-3">
-                        <h4 className="font-semibold text-gray-900">
-                          Resultado de Admisión
-                        </h4>
+                        <h4 className="font-semibold text-gray-900">Resultado de Admisión</h4>
                         <div className="space-y-2 text-sm">
-                          <div><strong>Postulante:</strong> {searchResults.applicant_name}</div>
-                          <div><strong>DNI:</strong> {searchResults.document_number}</div>
-                          <div><strong>Carrera:</strong> {searchResults.career}</div>
-                          <div><strong>Puntaje:</strong> {searchResults.final_score}</div>
-                          <div><strong>Posición:</strong> {searchResults.position}</div>
                           <div>
+                            <strong>Postulante:</strong> {searchResults.applicant_name || "-"}
+                          </div>
+                          <div>
+                            <strong>DNI:</strong> {searchResults.document_number || "-"}
+                          </div>
+                          <div>
+                            <strong>Carrera:</strong> {searchResults.career || "-"}
+                          </div>
+                          <div>
+                            <strong>Puntaje:</strong> {searchResults.final_score ?? "-"}
+                          </div>
+                          <div>
+                            <strong>Posición:</strong> {searchResults.position ?? "-"}
+                          </div>
+                          <div className="flex items-center">
                             <strong>Estado:</strong>
-                            <Badge 
-                              className={`ml-2 ${
-                                searchResults.is_admitted ? 'bg-green-600' : 'bg-red-600'
-                              }`}
-                            >
-                              {searchResults.is_admitted ? 'ADMITIDO' : 'NO ADMITIDO'}
+                            <Badge className={`ml-2 ${searchResults.is_admitted ? "bg-green-600" : "bg-red-600"}`}>
+                              {searchResults.is_admitted ? "ADMITIDO" : "NO ADMITIDO"}
                             </Badge>
                           </div>
                         </div>

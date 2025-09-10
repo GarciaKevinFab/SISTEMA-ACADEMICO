@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from './AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Badge } from './ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Textarea } from './ui/textarea';
+import { AuthContext } from '../../context/AuthContext';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
+import { Badge } from '../../components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import { Textarea } from '../../components/ui/textarea';
 import { toast } from 'sonner';
-import { 
+import {
   Upload,
   Download,
   Save,
@@ -25,7 +25,7 @@ import {
   Clock,
   Award
 } from 'lucide-react';
-import { generatePDFWithPolling, generateQRWithPolling, downloadFile } from '../utils/pdfQrPolling';
+import { generatePDFWithPolling, generateQRWithPolling, downloadFile } from '../../utils/pdfQrPolling';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -38,12 +38,12 @@ const GradesAttendanceComponent = () => {
   const [grades, setGrades] = useState({});
   const [attendance, setAttendance] = useState({});
   const [attendanceSessions, setAttendanceSessions] = useState([]);
-  
+
   const [activeTab, setActiveTab] = useState('grades');
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const [importDialog, setImportDialog] = useState(false);
   const [csvFile, setCsvFile] = useState(null);
   const [importPreview, setImportPreview] = useState([]);
@@ -53,7 +53,7 @@ const GradesAttendanceComponent = () => {
   const gradePeriods = ['PARCIAL_1', 'PARCIAL_2', 'PARCIAL_3', 'FINAL'];
   const gradeLabels = {
     'PARCIAL_1': '1er Parcial',
-    'PARCIAL_2': '2do Parcial', 
+    'PARCIAL_2': '2do Parcial',
     'PARCIAL_3': '3er Parcial',
     'FINAL': 'Examen Final'
   };
@@ -83,9 +83,9 @@ const GradesAttendanceComponent = () => {
     toastElement.setAttribute('data-testid', `toast-${type}`);
     toastElement.textContent = message;
     document.body.appendChild(toastElement);
-    
+
     toast[type](message);
-    
+
     setTimeout(() => {
       if (document.body.contains(toastElement)) {
         document.body.removeChild(toastElement);
@@ -100,7 +100,7 @@ const GradesAttendanceComponent = () => {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setSections(data.sections || []);
@@ -113,14 +113,14 @@ const GradesAttendanceComponent = () => {
 
   const fetchSectionStudents = async () => {
     if (!selectedSection) return;
-    
+
     try {
       const response = await fetch(`${API}/sections/${selectedSection.id}/students`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setStudents(data.students || []);
@@ -133,14 +133,14 @@ const GradesAttendanceComponent = () => {
 
   const fetchGrades = async () => {
     if (!selectedSection) return;
-    
+
     try {
       const response = await fetch(`${API}/sections/${selectedSection.id}/grades`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setGrades(data.grades || {});
@@ -153,14 +153,14 @@ const GradesAttendanceComponent = () => {
 
   const fetchAttendanceSessions = async () => {
     if (!selectedSection) return;
-    
+
     try {
       const response = await fetch(`${API}/sections/${selectedSection.id}/attendance/sessions`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setAttendanceSessions(data.sessions || []);
@@ -232,7 +232,7 @@ const GradesAttendanceComponent = () => {
     // Validate all grades are entered
     const missingGrades = students.some(student => {
       const studentGrades = grades[student.id] || {};
-      return gradePeriods.some(period => 
+      return gradePeriods.some(period =>
         studentGrades[period] === undefined || studentGrades[period] === null
       );
     });
@@ -261,10 +261,10 @@ const GradesAttendanceComponent = () => {
 
       if (response.ok) {
         showToast('success', 'Calificaciones enviadas y cerradas exitosamente');
-        
+
         // Generate acta automatically
         await generateActaPDF();
-        
+
       } else {
         const error = await response.json();
         throw new Error(error.detail || 'Error al enviar calificaciones');
@@ -337,7 +337,7 @@ const GradesAttendanceComponent = () => {
       if (result.success) {
         await downloadFile(result.downloadUrl, `acta-${selectedSection.course_code}-${selectedSection.id}.pdf`);
         showToast('success', 'Acta PDF generada exitosamente');
-        
+
         // Generate QR for verification
         await generateActaQR();
       }
@@ -390,7 +390,7 @@ const GradesAttendanceComponent = () => {
       if (response.ok) {
         setImportPreview(result.preview || []);
         setImportErrors(result.errors || []);
-        
+
         if (result.errors && result.errors.length > 0) {
           showToast('error', `${result.errors.length} errores encontrados en el archivo`);
         } else {
@@ -453,11 +453,11 @@ const GradesAttendanceComponent = () => {
     const parcial2 = studentGrades?.PARCIAL_2 || 0;
     const parcial3 = studentGrades?.PARCIAL_3 || 0;
     const final = studentGrades?.FINAL || 0;
-    
+
     // Average of 3 parcials (60%) + final exam (40%)
     const parcialAverage = (parcial1 + parcial2 + parcial3) / 3;
     const finalGrade = (parcialAverage * 0.6) + (final * 0.4);
-    
+
     return Math.round(finalGrade * 100) / 100; // Round to 2 decimals
   };
 
@@ -466,7 +466,7 @@ const GradesAttendanceComponent = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Calificaciones y Asistencia</h2>
-        
+
         {/* Section Selector */}
         <div className="flex items-center space-x-4">
           <Label htmlFor="section-select">Sección:</Label>
@@ -509,7 +509,7 @@ const GradesAttendanceComponent = () => {
                       Sección: {selectedSection.course_name} - {selectedSection.section_code}
                     </CardDescription>
                   </div>
-                  
+
                   <div className="flex space-x-2">
                     <Button
                       data-testid="grade-save"
@@ -571,7 +571,7 @@ const GradesAttendanceComponent = () => {
                   </div>
                 </div>
               </CardHeader>
-              
+
               <CardContent>
                 <div className="overflow-auto">
                   <table className="w-full border-collapse border border-gray-300">
@@ -591,13 +591,13 @@ const GradesAttendanceComponent = () => {
                       {students.map((student) => {
                         const studentGrades = grades[student.id] || {};
                         const finalGrade = calculateFinalGrade(studentGrades);
-                        
+
                         return (
                           <tr key={student.id}>
                             <td className="border border-gray-300 p-2">
                               {student.first_name} {student.last_name}
                             </td>
-                            
+
                             {gradePeriods.map(period => (
                               <td key={period} className="border border-gray-300 p-2">
                                 <Input
@@ -612,13 +612,13 @@ const GradesAttendanceComponent = () => {
                                 />
                               </td>
                             ))}
-                            
+
                             <td className="border border-gray-300 p-2 text-center font-bold">
                               {finalGrade.toFixed(2)}
                             </td>
-                            
+
                             <td className="border border-gray-300 p-2 text-center">
-                              <Badge 
+                              <Badge
                                 variant={finalGrade >= 11 ? "default" : "destructive"}
                               >
                                 {convertGradeToLetter(finalGrade)}
@@ -645,7 +645,7 @@ const GradesAttendanceComponent = () => {
                       Sección: {selectedSection.course_name} - {selectedSection.section_code}
                     </CardDescription>
                   </div>
-                  
+
                   <div className="flex space-x-2">
                     <Dialog open={importDialog} onOpenChange={setImportDialog}>
                       <DialogTrigger asChild>
@@ -654,7 +654,7 @@ const GradesAttendanceComponent = () => {
                           Importar CSV
                         </Button>
                       </DialogTrigger>
-                      
+
                       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
                         <DialogHeader>
                           <DialogTitle>Importar Asistencia desde CSV</DialogTitle>
@@ -662,7 +662,7 @@ const GradesAttendanceComponent = () => {
                             Seleccione un archivo CSV con los datos de asistencia
                           </DialogDescription>
                         </DialogHeader>
-                        
+
                         <div className="space-y-4">
                           <div>
                             <Label htmlFor="csv-file">Archivo CSV</Label>
@@ -673,12 +673,12 @@ const GradesAttendanceComponent = () => {
                               onChange={(e) => setCsvFile(e.target.files[0])}
                             />
                           </div>
-                          
+
                           <Button onClick={importAttendanceCSV} disabled={!csvFile}>
                             <FileText className="h-4 w-4 mr-2" />
                             Generar Vista Previa
                           </Button>
-                          
+
                           {importErrors.length > 0 && (
                             <div className="mt-4">
                               <h4 className="font-semibold text-red-600 mb-2">
@@ -693,7 +693,7 @@ const GradesAttendanceComponent = () => {
                               </div>
                             </div>
                           )}
-                          
+
                           {importPreview.length > 0 && (
                             <div className="mt-4">
                               <h4 className="font-semibold mb-2">
@@ -714,7 +714,7 @@ const GradesAttendanceComponent = () => {
                                         <td className="p-2">{record.student_name}</td>
                                         <td className="p-2">{record.date}</td>
                                         <td className="p-2">
-                                          <Badge 
+                                          <Badge
                                             className={attendanceStates[record.status]?.color}
                                           >
                                             {attendanceStates[record.status]?.label}
@@ -732,11 +732,11 @@ const GradesAttendanceComponent = () => {
                               </div>
                             </div>
                           )}
-                          
+
                           <div className="flex justify-end space-x-2">
-                            <Button 
+                            <Button
                               data-testid="dialog-cancel"
-                              variant="outline" 
+                              variant="outline"
                               onClick={() => setImportDialog(false)}
                             >
                               Cancelar
@@ -756,7 +756,7 @@ const GradesAttendanceComponent = () => {
                   </div>
                 </div>
               </CardHeader>
-              
+
               <CardContent>
                 <div className="text-center py-8 text-gray-500">
                   <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />

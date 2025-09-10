@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from '../AuthContext';
+import { AuthContext } from '../../context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -10,12 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { toast } from 'sonner';
-import { 
-  Plus, 
-  Users, 
-  UserCheck, 
-  UserX, 
-  Clock, 
+import {
+  Plus,
+  Users,
+  UserCheck,
+  UserX,
+  Clock,
   Calendar,
   FileText,
   Download,
@@ -101,14 +101,14 @@ const HRDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/hr/employees`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setEmployees(data.employees || []);
@@ -124,7 +124,7 @@ const HRDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const today = new Date().toISOString().split('T')[0];
       const response = await fetch(`${backendUrl}/api/hr/attendance?date_from=${today}&date_to=${today}`, {
         headers: {
@@ -132,7 +132,7 @@ const HRDashboard = () => {
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setAttendance(data.attendance || []);
@@ -159,12 +159,12 @@ const HRDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const employeeData = {
         ...newEmployee,
         salary: parseFloat(newEmployee.salary) || 0
       };
-      
+
       const response = await fetch(`${backendUrl}/api/hr/employees`, {
         method: 'POST',
         headers: {
@@ -173,7 +173,7 @@ const HRDashboard = () => {
         },
         body: JSON.stringify(employeeData)
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         toast({
@@ -229,7 +229,7 @@ const HRDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const attendanceData = {
         ...newAttendance,
         check_in: newAttendance.check_in ? `${newAttendance.date}T${newAttendance.check_in}:00` : null,
@@ -237,7 +237,7 @@ const HRDashboard = () => {
         break_minutes: parseInt(newAttendance.break_minutes) || 0,
         overtime_hours: parseFloat(newAttendance.overtime_hours) || 0
       };
-      
+
       const response = await fetch(`${backendUrl}/api/hr/attendance`, {
         method: 'POST',
         headers: {
@@ -246,7 +246,7 @@ const HRDashboard = () => {
         },
         body: JSON.stringify(attendanceData)
       });
-      
+
       if (response.ok) {
         toast({
           title: "Éxito",
@@ -283,22 +283,22 @@ const HRDashboard = () => {
 
   const calculateWorkedHours = (checkIn, checkOut, breakMinutes = 0) => {
     if (!checkIn || !checkOut) return 0;
-    
+
     const startTime = new Date(checkIn);
     const endTime = new Date(checkOut);
     const diffMs = endTime - startTime;
     const workedMinutes = (diffMs / 60000) - breakMinutes;
-    
+
     return Math.max(0, workedMinutes / 60);
   };
 
   const isLate = (checkIn) => {
     if (!checkIn) return false;
-    
+
     const checkInTime = new Date(checkIn);
     const expectedStart = new Date(checkIn);
     expectedStart.setHours(8, 0, 0, 0);
-    
+
     return checkInTime > expectedStart;
   };
 
@@ -329,7 +329,7 @@ const HRDashboard = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="border-l-4 border-l-green-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Presente Hoy</CardTitle>
@@ -379,8 +379,8 @@ const HRDashboard = () => {
                 <CardTitle>Gestión de Personal</CardTitle>
                 <CardDescription>Registro y control de empleados</CardDescription>
               </div>
-              <Dialog 
-                open={openDialogs.newEmployee} 
+              <Dialog
+                open={openDialogs.newEmployee}
                 onOpenChange={(open) => setOpenDialogs({ ...openDialogs, newEmployee: open })}
               >
                 <DialogTrigger asChild>
@@ -480,8 +480,8 @@ const HRDashboard = () => {
                       </div>
                       <div>
                         <Label htmlFor="department">Departamento</Label>
-                        <Select 
-                          value={newEmployee.department} 
+                        <Select
+                          value={newEmployee.department}
                           onValueChange={(value) => setNewEmployee({ ...newEmployee, department: value })}
                         >
                           <SelectTrigger>
@@ -507,8 +507,8 @@ const HRDashboard = () => {
                       </div>
                       <div>
                         <Label htmlFor="contract_type">Tipo de Contrato</Label>
-                        <Select 
-                          value={newEmployee.contract_type} 
+                        <Select
+                          value={newEmployee.contract_type}
                           onValueChange={(value) => setNewEmployee({ ...newEmployee, contract_type: value })}
                         >
                           <SelectTrigger>
@@ -555,7 +555,7 @@ const HRDashboard = () => {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button 
+                    <Button
                       onClick={createEmployee}
                       disabled={!newEmployee.first_name || !newEmployee.last_name || !newEmployee.document_number || !newEmployee.position}
                     >
@@ -565,7 +565,7 @@ const HRDashboard = () => {
                 </DialogContent>
               </Dialog>
             </CardHeader>
-            
+
             <CardContent>
               <div className="space-y-3">
                 {employees.length === 0 ? (
@@ -585,7 +585,7 @@ const HRDashboard = () => {
                           </p>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center space-x-4">
                         <div className="text-right">
                           <p className="text-sm text-gray-600">{contractTypes[employee.contract_type]}</p>
@@ -593,14 +593,14 @@ const HRDashboard = () => {
                             Ingreso: {employee.hire_date ? new Date(employee.hire_date).toLocaleDateString() : 'N/A'}
                           </p>
                         </div>
-                        
+
                         <Badge className={`${employeeStatuses[employee.status].color} text-white`}>
                           {employeeStatuses[employee.status].label}
                         </Badge>
 
                         <div className="flex space-x-2">
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="outline"
                             onClick={() => viewEmployee(employee)}
                           >
@@ -623,8 +623,8 @@ const HRDashboard = () => {
                 <CardTitle>Control de Asistencia</CardTitle>
                 <CardDescription>Registro de entrada y salida del personal</CardDescription>
               </div>
-              <Dialog 
-                open={openDialogs.newAttendance} 
+              <Dialog
+                open={openDialogs.newAttendance}
                 onOpenChange={(open) => setOpenDialogs({ ...openDialogs, newAttendance: open })}
               >
                 <DialogTrigger asChild>
@@ -643,8 +643,8 @@ const HRDashboard = () => {
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="employee_select">Empleado *</Label>
-                      <Select 
-                        value={newAttendance.employee_id} 
+                      <Select
+                        value={newAttendance.employee_id}
                         onValueChange={(value) => setNewAttendance({ ...newAttendance, employee_id: value })}
                       >
                         <SelectTrigger>
@@ -720,7 +720,7 @@ const HRDashboard = () => {
                         placeholder="Observaciones sobre la asistencia"
                       />
                     </div>
-                    
+
                     {newAttendance.check_in && newAttendance.check_out && (
                       <div className="p-3 bg-blue-50 rounded-lg">
                         <p className="text-sm font-medium text-blue-800">
@@ -739,7 +739,7 @@ const HRDashboard = () => {
                     )}
                   </div>
                   <DialogFooter>
-                    <Button 
+                    <Button
                       onClick={createAttendance}
                       disabled={!newAttendance.employee_id}
                     >
@@ -749,7 +749,7 @@ const HRDashboard = () => {
                 </DialogContent>
               </Dialog>
             </CardHeader>
-            
+
             <CardContent>
               <div className="space-y-3">
                 {attendance.length === 0 ? (
@@ -775,14 +775,14 @@ const HRDashboard = () => {
                           </p>
                         </div>
                       </div>
-                      
+
                       <div className="text-right">
                         {record.is_absent ? (
                           <Badge variant="destructive">Ausente</Badge>
                         ) : (
                           <div>
                             <p className="text-sm font-medium">
-                              {record.check_in ? new Date(record.check_in).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '--:--'} - 
+                              {record.check_in ? new Date(record.check_in).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '--:--'} -
                               {record.check_out ? new Date(record.check_out).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
                             </p>
                             <p className="text-xs text-gray-500">
@@ -879,8 +879,8 @@ const HRDashboard = () => {
       </Tabs>
 
       {/* View Employee Dialog */}
-      <Dialog 
-        open={openDialogs.viewEmployee} 
+      <Dialog
+        open={openDialogs.viewEmployee}
         onOpenChange={(open) => setOpenDialogs({ ...openDialogs, viewEmployee: open })}
       >
         <DialogContent className="max-w-2xl">
@@ -899,9 +899,9 @@ const HRDashboard = () => {
                     <p><strong>Nombre:</strong> {selectedEmployee.first_name} {selectedEmployee.last_name}</p>
                     <p><strong>DNI:</strong> {selectedEmployee.document_number}</p>
                     <p><strong>Fecha de Nacimiento:</strong> {
-                      selectedEmployee.birth_date ? 
-                      new Date(selectedEmployee.birth_date).toLocaleDateString() : 
-                      'No especificada'
+                      selectedEmployee.birth_date ?
+                        new Date(selectedEmployee.birth_date).toLocaleDateString() :
+                        'No especificada'
                     }</p>
                     <p><strong>Email:</strong> {selectedEmployee.email || 'No especificado'}</p>
                     <p><strong>Teléfono:</strong> {selectedEmployee.phone || 'No especificado'}</p>
@@ -913,12 +913,12 @@ const HRDashboard = () => {
                     <p><strong>Cargo:</strong> {selectedEmployee.position}</p>
                     <p><strong>Departamento:</strong> {selectedEmployee.department}</p>
                     <p><strong>Fecha de Ingreso:</strong> {
-                      selectedEmployee.hire_date ? 
-                      new Date(selectedEmployee.hire_date).toLocaleDateString() : 
-                      'No especificada'
+                      selectedEmployee.hire_date ?
+                        new Date(selectedEmployee.hire_date).toLocaleDateString() :
+                        'No especificada'
                     }</p>
                     <p><strong>Tipo de Contrato:</strong> {contractTypes[selectedEmployee.contract_type]}</p>
-                    <p><strong>Estado:</strong> 
+                    <p><strong>Estado:</strong>
                       <Badge className={`ml-2 ${employeeStatuses[selectedEmployee.status].color} text-white`}>
                         {employeeStatuses[selectedEmployee.status].label}
                       </Badge>

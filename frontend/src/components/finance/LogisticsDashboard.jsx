@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from '../AuthContext';
+import { AuthContext } from '../../context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -10,11 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { toast } from 'sonner';
-import { 
-  Plus, 
-  Truck, 
-  Building, 
-  FileText, 
+import {
+  Plus,
+  Truck,
+  Building,
+  FileText,
   Package,
   CheckCircle,
   Clock,
@@ -101,14 +101,14 @@ const LogisticsDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/logistics/suppliers`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setSuppliers(data.suppliers || []);
@@ -122,14 +122,14 @@ const LogisticsDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/logistics/requirements`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setRequirements(data.requirements || []);
@@ -145,14 +145,14 @@ const LogisticsDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/inventory/items`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setInventoryItems(data.items || []);
@@ -166,18 +166,18 @@ const LogisticsDashboard = () => {
     if (!ruc || ruc.length !== 11 || !/^\d+$/.test(ruc)) {
       return false;
     }
-    
+
     const factors = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
     const checkDigit = parseInt(ruc[10]);
-    
+
     let total = 0;
     for (let i = 0; i < 10; i++) {
       total += parseInt(ruc[i]) * factors[i];
     }
-    
+
     const remainder = total % 11;
     const calculatedCheckDigit = remainder >= 2 ? 11 - remainder : remainder;
-    
+
     return checkDigit === calculatedCheckDigit;
   };
 
@@ -194,7 +194,7 @@ const LogisticsDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/logistics/suppliers`, {
         method: 'POST',
         headers: {
@@ -203,7 +203,7 @@ const LogisticsDashboard = () => {
         },
         body: JSON.stringify(newSupplier)
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         toast({
@@ -289,7 +289,7 @@ const LogisticsDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/logistics/requirements`, {
         method: 'POST',
         headers: {
@@ -298,7 +298,7 @@ const LogisticsDashboard = () => {
         },
         body: JSON.stringify(newRequirement)
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         toast({
@@ -359,7 +359,7 @@ const LogisticsDashboard = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="border-l-4 border-l-yellow-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Requerimientos Pendientes</CardTitle>
@@ -409,8 +409,8 @@ const LogisticsDashboard = () => {
                 <CardTitle>Gestión de Requerimientos</CardTitle>
                 <CardDescription>Solicitudes de compra y adquisiciones</CardDescription>
               </div>
-              <Dialog 
-                open={openDialogs.newRequirement} 
+              <Dialog
+                open={openDialogs.newRequirement}
                 onOpenChange={(open) => setOpenDialogs({ ...openDialogs, newRequirement: open })}
               >
                 <DialogTrigger asChild>
@@ -490,8 +490,8 @@ const LogisticsDashboard = () => {
                           </div>
                           <div>
                             <Label htmlFor="item_unit">Unidad de Medida</Label>
-                            <Select 
-                              value={newItem.unit_of_measure} 
+                            <Select
+                              value={newItem.unit_of_measure}
                               onValueChange={(value) => setNewItem({ ...newItem, unit_of_measure: value })}
                             >
                               <SelectTrigger>
@@ -541,13 +541,13 @@ const LogisticsDashboard = () => {
                                 <div>
                                   <p className="font-medium">{item.description}</p>
                                   <p className="text-sm text-gray-600">
-                                    Cantidad: {item.quantity} {unitOfMeasures[item.unit_of_measure]} - 
+                                    Cantidad: {item.quantity} {unitOfMeasures[item.unit_of_measure]} -
                                     S/. {item.estimated_unit_price.toFixed(2)} c/u
                                   </p>
                                 </div>
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
+                                <Button
+                                  variant="outline"
+                                  size="sm"
                                   onClick={() => removeItemFromRequirement(index)}
                                 >
                                   Eliminar
@@ -557,7 +557,7 @@ const LogisticsDashboard = () => {
                           </div>
                           <div className="mt-3 p-3 bg-blue-50 rounded-lg">
                             <p className="font-semibold text-blue-800">
-                              Total Estimado: S/. {newRequirement.items.reduce((sum, item) => 
+                              Total Estimado: S/. {newRequirement.items.reduce((sum, item) =>
                                 sum + (item.quantity * item.estimated_unit_price), 0
                               ).toFixed(2)}
                             </p>
@@ -567,7 +567,7 @@ const LogisticsDashboard = () => {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button 
+                    <Button
                       onClick={createRequirement}
                       disabled={!newRequirement.title || !newRequirement.justification || newRequirement.items.length === 0}
                     >
@@ -577,7 +577,7 @@ const LogisticsDashboard = () => {
                 </DialogContent>
               </Dialog>
             </CardHeader>
-            
+
             <CardContent>
               <div className="space-y-3">
                 {requirements.length === 0 ? (
@@ -597,25 +597,25 @@ const LogisticsDashboard = () => {
                           </p>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center space-x-4">
                         <div className="text-right">
                           <p className="font-semibold">S/. {(requirement.estimated_total || 0).toFixed(2)}</p>
                           <p className="text-xs text-gray-500">
-                            {requirement.required_date ? 
-                              new Date(requirement.required_date).toLocaleDateString() : 
+                            {requirement.required_date ?
+                              new Date(requirement.required_date).toLocaleDateString() :
                               'Sin fecha'
                             }
                           </p>
                         </div>
-                        
+
                         <Badge className={`${requirementStatuses[requirement.status].color} text-white`}>
                           {requirementStatuses[requirement.status].label}
                         </Badge>
 
                         <div className="flex space-x-2">
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="outline"
                             onClick={() => viewRequirement(requirement)}
                           >
@@ -638,8 +638,8 @@ const LogisticsDashboard = () => {
                 <CardTitle>Gestión de Proveedores</CardTitle>
                 <CardDescription>Registro y evaluación de proveedores</CardDescription>
               </div>
-              <Dialog 
-                open={openDialogs.newSupplier} 
+              <Dialog
+                open={openDialogs.newSupplier}
                 onOpenChange={(open) => setOpenDialogs({ ...openDialogs, newSupplier: open })}
               >
                 <DialogTrigger asChild>
@@ -745,7 +745,7 @@ const LogisticsDashboard = () => {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button 
+                    <Button
                       onClick={createSupplier}
                       disabled={!newSupplier.ruc || !newSupplier.company_name}
                     >
@@ -755,7 +755,7 @@ const LogisticsDashboard = () => {
                 </DialogContent>
               </Dialog>
             </CardHeader>
-            
+
             <CardContent>
               <div className="space-y-3">
                 {suppliers.length === 0 ? (
@@ -773,16 +773,16 @@ const LogisticsDashboard = () => {
                           <p className="text-xs text-gray-500">{supplier.contact_person}</p>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center space-x-4">
                         <div className="text-right">
                           <p className="text-sm text-gray-600">Código: {supplier.supplier_code}</p>
                           <p className="text-xs text-gray-500">
-                            Órdenes: {supplier.total_orders || 0} | 
+                            Órdenes: {supplier.total_orders || 0} |
                             Completadas: {supplier.completed_orders || 0}
                           </p>
                         </div>
-                        
+
                         <Badge className={`${supplierStatuses[supplier.status].color} text-white`}>
                           {supplierStatuses[supplier.status].label}
                         </Badge>
@@ -870,8 +870,8 @@ const LogisticsDashboard = () => {
       </Tabs>
 
       {/* View Requirement Dialog */}
-      <Dialog 
-        open={openDialogs.viewRequirement} 
+      <Dialog
+        open={openDialogs.viewRequirement}
         onOpenChange={(open) => setOpenDialogs({ ...openDialogs, viewRequirement: open })}
       >
         <DialogContent className="max-w-2xl">
@@ -890,11 +890,11 @@ const LogisticsDashboard = () => {
                   <p><strong>Descripción:</strong> {selectedRequirement.description || 'N/A'}</p>
                   <p><strong>Justificación:</strong> {selectedRequirement.justification}</p>
                   <p><strong>Fecha Requerida:</strong> {
-                    selectedRequirement.required_date ? 
-                    new Date(selectedRequirement.required_date).toLocaleDateString() : 
-                    'No especificada'
+                    selectedRequirement.required_date ?
+                      new Date(selectedRequirement.required_date).toLocaleDateString() :
+                      'No especificada'
                   }</p>
-                  <p><strong>Estado:</strong> 
+                  <p><strong>Estado:</strong>
                     <Badge className={`ml-2 ${requirementStatuses[selectedRequirement.status].color} text-white`}>
                       {requirementStatuses[selectedRequirement.status].label}
                     </Badge>
@@ -909,7 +909,7 @@ const LogisticsDashboard = () => {
                     <div key={index} className="p-3 border rounded-lg bg-gray-50">
                       <p className="font-medium">{item.description}</p>
                       <p className="text-sm text-gray-600">
-                        Cantidad: {item.quantity} {unitOfMeasures[item.unit_of_measure]} - 
+                        Cantidad: {item.quantity} {unitOfMeasures[item.unit_of_measure]} -
                         S/. {(item.estimated_unit_price || 0).toFixed(2)} c/u
                       </p>
                       {item.technical_specifications && (

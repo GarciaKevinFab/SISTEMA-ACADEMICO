@@ -1,7 +1,7 @@
 import React, { useContext } from 'react';
 import { Outlet } from 'react-router-dom';
 import SideNav from './SideNav';
-import { AuthContext } from './AuthContext';
+import { AuthContext } from '../context/AuthContext';
 
 const Layout = ({ children }) => {
   const { user } = useContext(AuthContext);

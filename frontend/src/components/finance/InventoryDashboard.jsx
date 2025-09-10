@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from '../AuthContext';
+import { AuthContext } from '../../context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -10,11 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { toast } from 'sonner';
-import { 
-  Plus, 
-  Package, 
-  TrendingUp, 
-  TrendingDown, 
+import {
+  Plus,
+  Package,
+  TrendingUp,
+  TrendingDown,
   AlertTriangle,
   Eye,
   Edit,
@@ -88,14 +88,14 @@ const InventoryDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/inventory/items`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setItems(data.items || []);
@@ -111,14 +111,14 @@ const InventoryDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/inventory/movements?limit=20`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setMovements(data.movements || []);
@@ -132,14 +132,14 @@ const InventoryDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/inventory/alerts`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setAlerts(data.alerts || []);
@@ -153,14 +153,14 @@ const InventoryDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/inventory/items/${itemId}/kardex`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setKardex(data.kardex || []);
@@ -181,7 +181,7 @@ const InventoryDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/inventory/items`, {
         method: 'POST',
         headers: {
@@ -195,7 +195,7 @@ const InventoryDashboard = () => {
           unit_cost: parseFloat(newItem.unit_cost) || 0
         })
       });
-      
+
       if (response.ok) {
         toast({
           title: "Éxito",
@@ -235,7 +235,7 @@ const InventoryDashboard = () => {
     try {
       const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${backendUrl}/api/inventory/movements`, {
         method: 'POST',
         headers: {
@@ -249,7 +249,7 @@ const InventoryDashboard = () => {
           expiry_date: newMovement.expiry_date || null
         })
       });
-      
+
       if (response.ok) {
         toast({
           title: "Éxito",
@@ -309,7 +309,7 @@ const InventoryDashboard = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="border-l-4 border-l-green-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Stock Total</CardTitle>
@@ -385,8 +385,8 @@ const InventoryDashboard = () => {
                 <CardTitle>Gestión de Items</CardTitle>
                 <CardDescription>Catálogo de productos e inventario</CardDescription>
               </div>
-              <Dialog 
-                open={openDialogs.newItem} 
+              <Dialog
+                open={openDialogs.newItem}
                 onOpenChange={(open) => setOpenDialogs({ ...openDialogs, newItem: open })}
               >
                 <DialogTrigger asChild>
@@ -441,8 +441,8 @@ const InventoryDashboard = () => {
                     </div>
                     <div>
                       <Label htmlFor="unit_of_measure">Unidad de Medida *</Label>
-                      <Select 
-                        value={newItem.unit_of_measure} 
+                      <Select
+                        value={newItem.unit_of_measure}
                         onValueChange={(value) => setNewItem({ ...newItem, unit_of_measure: value })}
                       >
                         <SelectTrigger>
@@ -490,7 +490,7 @@ const InventoryDashboard = () => {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button 
+                    <Button
                       onClick={createItem}
                       disabled={!newItem.code || !newItem.name}
                     >
@@ -500,7 +500,7 @@ const InventoryDashboard = () => {
                 </DialogContent>
               </Dialog>
             </CardHeader>
-            
+
             <CardContent>
               <div className="space-y-3">
                 {items.length === 0 ? (
@@ -518,7 +518,7 @@ const InventoryDashboard = () => {
                           <p className="text-xs text-gray-500">{item.category}</p>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center space-x-4">
                         <div className="text-right">
                           <p className="font-semibold">Stock: {item.current_stock || 0}</p>
@@ -537,8 +537,8 @@ const InventoryDashboard = () => {
                         )}
 
                         <div className="flex space-x-2">
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="outline"
                             onClick={() => fetchKardex(item.id)}
                           >
@@ -561,8 +561,8 @@ const InventoryDashboard = () => {
                 <CardTitle>Movimientos de Inventario</CardTitle>
                 <CardDescription>Registro de entradas, salidas y transferencias</CardDescription>
               </div>
-              <Dialog 
-                open={openDialogs.newMovement} 
+              <Dialog
+                open={openDialogs.newMovement}
                 onOpenChange={(open) => setOpenDialogs({ ...openDialogs, newMovement: open })}
               >
                 <DialogTrigger asChild>
@@ -581,8 +581,8 @@ const InventoryDashboard = () => {
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="item_select">Item *</Label>
-                      <Select 
-                        value={newMovement.item_id} 
+                      <Select
+                        value={newMovement.item_id}
                         onValueChange={(value) => setNewMovement({ ...newMovement, item_id: value })}
                       >
                         <SelectTrigger>
@@ -599,8 +599,8 @@ const InventoryDashboard = () => {
                     </div>
                     <div>
                       <Label htmlFor="movement_type">Tipo de Movimiento *</Label>
-                      <Select 
-                        value={newMovement.movement_type} 
+                      <Select
+                        value={newMovement.movement_type}
                         onValueChange={(value) => setNewMovement({ ...newMovement, movement_type: value })}
                       >
                         <SelectTrigger>
@@ -676,7 +676,7 @@ const InventoryDashboard = () => {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button 
+                    <Button
                       onClick={createMovement}
                       disabled={!newMovement.item_id || !newMovement.quantity || !newMovement.reason}
                     >
@@ -686,7 +686,7 @@ const InventoryDashboard = () => {
                 </DialogContent>
               </Dialog>
             </CardHeader>
-            
+
             <CardContent>
               <div className="space-y-3">
                 {movements.length === 0 ? (
@@ -708,7 +708,7 @@ const InventoryDashboard = () => {
                           <p className="text-xs text-gray-500">{movement.reason}</p>
                         </div>
                       </div>
-                      
+
                       <div className="text-right">
                         <p className="font-semibold">
                           {movement.movement_type === 'ENTRY' ? '+' : '-'}{movement.quantity}
@@ -787,8 +787,8 @@ const InventoryDashboard = () => {
       </Tabs>
 
       {/* Kardex Dialog */}
-      <Dialog 
-        open={openDialogs.kardex} 
+      <Dialog
+        open={openDialogs.kardex}
         onOpenChange={(open) => setOpenDialogs({ ...openDialogs, kardex: open })}
       >
         <DialogContent className="max-w-4xl">
