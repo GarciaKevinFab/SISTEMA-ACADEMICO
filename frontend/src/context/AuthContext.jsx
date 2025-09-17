@@ -1,4 +1,3 @@
-// src/components/AuthContext.jsx
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { toast } from "sonner";
 import { api, attachToken } from "../lib/api";
@@ -33,10 +32,21 @@ function formatApiError(err, fallback = "Ocurrió un error") {
   return fallback;
 }
 
+// Normaliza permisos a Set cualquiera sea el nombre del campo que envíe el backend
+const toPermSet = (u) => {
+  const raw =
+    u?.permissions ||
+    u?.perms ||
+    u?.scopes ||
+    [];
+  return new Set(Array.isArray(raw) ? raw : []);
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem("token") || null);
   const [loading, setLoading] = useState(true);
+  const [permSet, setPermSet] = useState(new Set());
 
   // Mantén el Authorization en la instancia compartida cuando cambie el token
   useEffect(() => {
@@ -55,11 +65,13 @@ export const AuthProvider = ({ children }) => {
       try {
         const { data } = await api.get("/auth/me");
         if (!mounted) return;
-        // Acepta {user: {...}} o el objeto de usuario plano
-        setUser(data?.user ?? data ?? null);
+        const profile = data?.user ?? data ?? null;
+        setUser(profile);
+        setPermSet(toPermSet(profile));
       } catch {
         if (!mounted) return;
         setUser(null);
+        setPermSet(new Set());
         localStorage.removeItem("token");
         setToken(null);
       } finally {
@@ -72,6 +84,16 @@ export const AuthProvider = ({ children }) => {
       mounted = false;
     };
   }, [token]);
+
+  // Si cambia el user por cualquier motivo, recalcula permisos
+  useEffect(() => {
+    setPermSet(toPermSet(user));
+  }, [user]);
+
+  // Helpers de permisos
+  const hasPerm = (p) => permSet.has(p);
+  const hasAny = (arr = []) => arr.some((p) => permSet.has(p));
+  const hasAll = (arr = []) => arr.every((p) => permSet.has(p));
 
   const login = async (username, password) => {
     // Validaciones rápidas
@@ -93,14 +115,14 @@ export const AuthProvider = ({ children }) => {
       const { data } = await api.post("/auth/login", { username: u, password: p });
 
       const access_token = data?.access_token || data?.token || data?.accessToken;
-      const profile =
-        data?.user || data?.profile || data?.data?.user || null;
+      const profile = data?.user || data?.profile || data?.data?.user || null;
 
       if (!access_token) throw new Error("El backend no devolvió token.");
 
       localStorage.setItem("token", access_token);
       setToken(access_token); // dispara attachToken() vía useEffect
       setUser(profile);
+      setPermSet(toPermSet(profile));
 
       toast.success("¡Inicio de sesión exitoso!");
       setTimeout(() => (window.location.href = "/dashboard"), 600);
@@ -128,8 +150,9 @@ export const AuthProvider = ({ children }) => {
       if (!access_token) throw new Error("Registro OK pero sin token.");
 
       localStorage.setItem("token", access_token);
-      setToken(access_token); // dispara attachToken()
+      setToken(access_token);
       setUser(profile);
+      setPermSet(toPermSet(profile));
 
       toast.success("¡Registro exitoso!");
       return true;
@@ -141,6 +164,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     setUser(null);
+    setPermSet(new Set());
     setToken(null);
     localStorage.removeItem("token");
     attachToken(null);
@@ -148,7 +172,23 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, loading, api }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        login,
+        register,
+        logout,
+        loading,
+        api,
+        // helpers
+        hasPerm,
+        hasAny,
+        hasAll,
+        // 👇 expón el listado plano para utilidades como <IfPerm/>
+        permissions: Array.from(permSet),
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -1,105 +1,118 @@
-import React, { useContext } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
+// SideNav.jsx
+import React from "react";
+import { Link, useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import {
   GraduationCap,
   FileText,
-  UserPlus,
   Calculator,
   BarChart3,
   User,
   BookOpen,
   Building,
   Database,
-  LogOut
-} from 'lucide-react';
-import { Shield } from "lucide-react";
+  LogOut,
+  Shield,
+  FlaskConical // si no lo tienes, cambia por BookOpen
+} from "lucide-react";
+import { PERMS } from "../auth/permissions";
 
 const SideNav = () => {
-  const { user, logout } = useContext(AuthContext);
+  const { user, logout, hasAny } = useAuth();
   const location = useLocation();
 
-  // Check user permissions
-  const hasAdminAccess = ['ADMIN'].includes(user?.role);
-  const hasAcademicAccess = ['ADMIN', 'TEACHER', 'STUDENT', 'REGISTRAR'].includes(user?.role);
-  const hasAdmissionAccess = ['ADMIN', 'REGISTRAR', 'APPLICANT'].includes(user?.role);
-  const hasMesaDePartesAccess = ['ADMIN', 'STUDENT', 'TEACHER', 'ADMIN_WORKER', 'APPLICANT'].includes(user?.role);
-  const hasFinanceAccess = [
-    'ADMIN',
-    'FINANCE_ADMIN',
-    'CASHIER',
-    'WAREHOUSE',
-    'HR_ADMIN',
-    'LOGISTICS'
-  ].includes(user?.role);
-  const hasMineduAccess = ['ADMIN', 'REGISTRAR'].includes(user?.role);
-  const hasPortalAccess = ['ADMIN'].includes(user?.role);
+  // === Access by PERMISSIONS (alineado al Router) ===
+  const canSecurity = hasAny([
+    PERMS["admin.access.manage"],
+    PERMS["admin.audit.view"],
+    PERMS["security.policies.manage"],
+    PERMS["security.sessions.inspect"],
+  ]);
 
-  const menuItems = [
-    {
-      id: 'dashboard',
-      title: 'Dashboard',
-      path: '/dashboard',
-      icon: BarChart3,
-      hasAccess: true
-    },
-    {
-      id: 'security',
-      title: 'Seguridad',
-      path: '/dashboard/security',
-      icon: Shield,
-      hasAccess: !!user
-    },
-    {
-      id: 'admin',
-      title: 'Administración',
-      path: '/dashboard/admin',
-      icon: Building,
-      hasAccess: hasAdminAccess
-    },
-    {
-      id: 'academic',
-      title: 'Académico',
-      path: '/dashboard/academic',
-      icon: BookOpen,
-      hasAccess: hasAcademicAccess
-    },
-    {
-      id: 'admission',
-      title: 'Admisión',
-      path: '/dashboard/admission',
-      icon: GraduationCap,
-      hasAccess: hasAdmissionAccess
-    },
-    {
-      id: 'mesa-partes',
-      title: 'Mesa de Partes',
-      path: '/dashboard/mesa-partes',
-      icon: FileText,
-      hasAccess: hasMesaDePartesAccess
-    },
-    {
-      id: 'finance',
-      title: 'Tesorería',
-      path: '/dashboard/finance',
-      icon: Calculator,
-      hasAccess: hasFinanceAccess
-    },
-    {
-      id: 'minedu',
-      title: 'MINEDU',
-      path: '/dashboard/minedu',
-      icon: Database,
-      hasAccess: hasMineduAccess
-    },
-  ];
+  const canAdmin = hasAny([
+    PERMS["admin.access.manage"],
+    PERMS["admin.audit.view"],
+  ]);
+
+  const canAcademic = hasAny([
+    PERMS["academic.plans.view"],
+    PERMS["academic.sections.view"],
+    PERMS["academic.enrollment.view"],
+    PERMS["academic.grades.edit"],
+    PERMS["academic.kardex.view"],
+    PERMS["academic.reports.view"],
+  ]);
+
+  const canAdmission = hasAny([
+    PERMS["admission.calls.view"],
+    PERMS["admission.calls.manage"],
+    PERMS["admission.applicants.manage"],
+    PERMS["admission.documents.review"],
+    PERMS["admission.schedule.manage"],
+    PERMS["admission.evaluation.board"],
+    PERMS["admission.results.publish"],
+    PERMS["admission.reports.view"],
+  ]);
+
+  const canMPV = hasAny([
+    PERMS["mpv.processes.review"],
+    PERMS["mpv.processes.resolve"],
+    PERMS["mpv.reports.view"],
+  ]);
+
+  const canFinance = hasAny([
+    PERMS["fin.cashbanks.view"],
+    PERMS["fin.reconciliation.view"],
+    PERMS["fin.student.accounts.view"],
+    PERMS["fin.reports.view"],
+    PERMS["fin.concepts.manage"],
+    // operativos
+    PERMS["fin.payments.receive"],
+    PERMS["fin.cash.movements"],
+    PERMS["fin.electronic.invoice.issue"],
+    PERMS["fin.ar.manage"],
+    PERMS["fin.ap.manage"],
+    // subáreas
+    PERMS["fin.inventory.view"],
+    PERMS["fin.inventory.manage"],
+    PERMS["fin.logistics.view"],
+    PERMS["logistics.procure.manage"],
+    PERMS["logistics.warehouse.dispatch"],
+    PERMS["hr.view"],
+    PERMS["hr.people.manage"],
+    PERMS["hr.payroll.view"],
+  ]);
+
+  const canMinedu = hasAny([
+    PERMS["minedu.integration.view"],
+    PERMS["minedu.integration.export"],
+    PERMS["minedu.integration.validate"],
+  ]);
+
+  const canResearch = hasAny([
+    PERMS["research.calls.view"],
+    PERMS["research.calls.manage"],
+    PERMS["research.projects.view"],
+    PERMS["research.projects.edit"],
+    PERMS["research.tabs.reports"],
+  ]);
 
   const isActive = (path) => {
-    if (path === '/dashboard') {
-      return location.pathname === '/dashboard';
-    }
+    if (path === "/dashboard") return location.pathname === "/dashboard";
     return location.pathname.startsWith(path);
   };
+
+  const menuItems = [
+    { id: "dashboard", title: "Dashboard", path: "/dashboard", icon: BarChart3, show: !!user },
+    { id: "security", title: "Seguridad", path: "/dashboard/security", icon: Shield, show: canSecurity },
+    { id: "admin", title: "Administración", path: "/dashboard/admin", icon: Building, show: canAdmin },
+    { id: "academic", title: "Académico", path: "/dashboard/academic", icon: BookOpen, show: canAcademic },
+    { id: "admission", title: "Admisión", path: "/dashboard/admission", icon: GraduationCap, show: canAdmission },
+    { id: "mesa-partes", title: "Mesa de Partes", path: "/dashboard/mesa-partes", icon: FileText, show: canMPV },
+    { id: "finance", title: "Tesorería / Finanzas", path: "/dashboard/finance", icon: Calculator, show: canFinance },
+    { id: "minedu", title: "MINEDU", path: "/dashboard/minedu", icon: Database, show: canMinedu },
+    { id: "research", title: "Investigación", path: "/dashboard/research", icon: Database, show: canResearch },
+  ];
 
   return (
     <div className="bg-gray-800 text-white w-64 min-h-screen flex flex-col">
@@ -122,7 +135,10 @@ const SideNav = () => {
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate">{user.full_name}</div>
                 <div className="text-xs text-gray-400 truncate">{user.email}</div>
-                <div className="text-xs text-blue-400">{user.role}</div>
+                {/* roles/permisos de display */}
+                <div className="text-xs text-blue-400 truncate">
+                  {(Array.isArray(user.roles) ? user.roles : [user.role]).filter(Boolean).join(" · ")}
+                </div>
               </div>
             </div>
           </div>
@@ -132,17 +148,15 @@ const SideNav = () => {
       {/* Navigation */}
       <nav className="flex-1 p-4">
         <ul className="space-y-2">
-          {menuItems.map((item) => {
-            if (!item.hasAccess) return null;
-
+          {menuItems.filter(m => m.show).map(item => {
             const Icon = item.icon;
             return (
               <li key={item.id}>
                 <Link
                   to={item.path}
                   className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors ${isActive(item.path)
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-300 hover:bg-gray-700 hover:text-white"
                     }`}
                 >
                   <Icon className="h-5 w-5 flex-shrink-0" />

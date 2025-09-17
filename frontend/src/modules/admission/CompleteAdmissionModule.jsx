@@ -24,7 +24,12 @@ import ApplicantDocuments from "./ApplicantDocuments";
 import ApplicationWizard from "./ApplicationWizard";
 import EvaluationBoard from "./EvaluationBoard";
 import ResultsPublication from "./ResultsPublication";
-import AdmissionCallsManagement from "./AdmissionCallsManagement"; // si lo tienes separado
+import AdmissionCallsManagement from "./AdmissionCallsManagement";
+import DocumentReview from "./DocumentReview";
+import AdmissionScheduleModule from "./AdmissionSchedule";
+import PaymentsManagement from "./PaymentsManagement";
+import AdmissionCertificates from "./AdmissionCertificates";
+
 
 /* Helpers */
 function formatApiError(err, fallback = "Ocurrió un error") {
@@ -286,16 +291,20 @@ export default function CompleteAdmissionModule() {
   return (
     <div className="p-6">
       <Tabs value={active} onValueChange={onTabChange} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-10 md:grid-cols-8 lg:grid-cols-10">
+        <TabsList className="grid w-full grid-cols-12">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="careers">Carreras</TabsTrigger>
           <TabsTrigger value="calls">Convocatorias</TabsTrigger>
           <TabsTrigger value="applicants">Postulantes</TabsTrigger>
           <TabsTrigger value="apply">Postulación</TabsTrigger>
           <TabsTrigger value="docs">Documentos</TabsTrigger>
+          <TabsTrigger value="doc-review">Revisión Docs</TabsTrigger>
           <TabsTrigger value="eval">Evaluación</TabsTrigger>
           <TabsTrigger value="results">Resultados</TabsTrigger>
+          <TabsTrigger value="schedule">Cronograma</TabsTrigger>
+          <TabsTrigger value="certificates">Constancias</TabsTrigger>
           <TabsTrigger value="reports">Reportes</TabsTrigger>
+          <TabsTrigger value="payments">Pagos</TabsTrigger>
           <TabsTrigger value="params">Parámetros</TabsTrigger>
         </TabsList>
 
@@ -303,11 +312,15 @@ export default function CompleteAdmissionModule() {
         <TabsContent value="careers"><CareersManagement /></TabsContent>
         <TabsContent value="calls"><AdmissionCallsManagement /></TabsContent>
         <TabsContent value="applicants"><ApplicantsManagement /></TabsContent>
+        <TabsContent value="doc-review"><DocumentReview /></TabsContent>
 
         <TabsContent value="apply"><ApplicationWizard /></TabsContent>
         <TabsContent value="docs"><ApplicantDocuments /></TabsContent>
         <TabsContent value="eval"><EvaluationBoard /></TabsContent>
         <TabsContent value="results"><ResultsPublication /></TabsContent>
+        <TabsContent value="schedule"><AdmissionScheduleModule /></TabsContent>
+        <TabsContent value="payments"><PaymentsManagement /></TabsContent>
+        <TabsContent value="certificates"><AdmissionCertificates /></TabsContent>
         <TabsContent value="reports"><AdmissionReportsModule /></TabsContent>
         <TabsContent value="params"><AdmissionParamsModule /></TabsContent>
       </Tabs>

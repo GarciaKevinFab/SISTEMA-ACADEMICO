@@ -36,20 +36,6 @@ export const ApplicationPayment = {
         (await api.get(`/applications/${application_id}/payment/status`)).data,
 };
 
-// Documentos
-export const ApplicantDocs = {
-    listMine: async (application_id) =>
-        (await api.get(`/applications/${application_id}/documents`)).data,
-    upload: async (application_id, document_type, file) => {
-        const fd = new FormData();
-        fd.append("document_type", document_type);
-        fd.append("file", file);
-        return (await api.post(`/applications/${application_id}/documents`, fd, {
-            headers: { "Content-Type": "multipart/form-data" },
-        })).data;
-    },
-};
-
 // Evaluación
 export const Evaluation = {
     listForScoring: async (params) =>
@@ -92,3 +78,39 @@ export const AdmissionParams = {
 export const getApplicantMe = async () => (await api.get("/applicants/me")).data;
 export const createApplicant = async (payload) =>
     (await api.post("/applicants", payload)).data;
+
+
+// --- NUEVO: Revisión admin de documentos ---
+export const ApplicantDocs = {
+    listMine: async (application_id) =>
+        (await api.get(`/applications/${application_id}/documents`)).data,
+    upload: async (application_id, document_type, file) => {
+        const fd = new FormData();
+        fd.append("document_type", document_type);
+        fd.append("file", file);
+        return (await api.post(`/applications/${application_id}/documents`, fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+        })).data;
+    },
+    // nuevo: revisar
+    review: async (application_id, document_id, payload) =>
+        (await api.post(`/applications/${application_id}/documents/${document_id}/review`, payload)).data,
+};
+
+// --- NUEVO: Cronograma por convocatoria ---
+export const AdmissionSchedule = {
+    list: async (call_id) => (await api.get(`/admission-calls/${call_id}/schedule`)).data,
+    create: async (call_id, payload) => (await api.post(`/admission-calls/${call_id}/schedule`, payload)).data,
+    update: async (call_id, item_id, payload) => (await api.put(`/admission-calls/${call_id}/schedule/${item_id}`, payload)).data,
+    remove: async (call_id, item_id) => (await api.delete(`/admission-calls/${call_id}/schedule/${item_id}`)).data,
+};
+
+// --- NUEVO: Pagos (bandeja admin) ---
+export const Payments = {
+    list: async (params) => (await api.get(`/admission-payments`, { params })).data,
+    confirm: async (payment_id) => (await api.post(`/admission-payments/${payment_id}/confirm`)).data,
+    void: async (payment_id) => (await api.post(`/admission-payments/${payment_id}/void`)).data,
+    receiptPdf: async (payment_id) =>
+        await api.get(`/admission-payments/${payment_id}/receipt.pdf`, { responseType: "blob" }),
+};
+

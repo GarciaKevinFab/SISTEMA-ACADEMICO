@@ -18,40 +18,57 @@ import { UsersService } from "../../services/users.service";
 import { ACLService } from "../../services/acl.service";
 import { validatePassword } from "../../utils/passwordPolicy";
 import AuditTab from "./AuditTab";
+import { useAuth } from "../../context/AuthContext";
+import { PERMS } from "../../auth/permissions";
 
 const AccessControlModule = () => {
+    const { hasPerm } = useAuth();
+    const canManage = hasPerm(PERMS["admin.access.manage"]);
+    const canAudit = hasPerm(PERMS["admin.audit.view"]);
+
+    // define la primera pestaña disponible
+    const defaultTab = canManage ? "users" : canAudit ? "audit" : "users";
+
     return (
         <div className="p-6 space-y-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold">Administración</h1>
-                    <p className="text-gray-600">Usuarios, Roles y Permisos</p>
+                    <p className="text-gray-600">Usuarios, Roles, Permisos y Auditoría</p>
                 </div>
             </div>
 
-            <Tabs defaultValue="users" className="space-y-6">
+            <Tabs defaultValue={defaultTab} className="space-y-6">
                 <TabsList>
-                    <TabsTrigger value="users">Usuarios</TabsTrigger>
-                    <TabsTrigger value="roles">Roles</TabsTrigger>
-                    <TabsTrigger value="permissions">Permisos</TabsTrigger>
-                    <TabsTrigger value="audit">Auditoría</TabsTrigger>
+                    {canManage && <TabsTrigger value="users">Usuarios</TabsTrigger>}
+                    {canManage && <TabsTrigger value="roles">Roles</TabsTrigger>}
+                    {canManage && <TabsTrigger value="permissions">Permisos</TabsTrigger>}
+                    {canAudit && <TabsTrigger value="audit">Auditoría</TabsTrigger>}
                 </TabsList>
 
-                <TabsContent value="users">
-                    <UsersTab />
-                </TabsContent>
+                {canManage && (
+                    <TabsContent value="users">
+                        <UsersTab />
+                    </TabsContent>
+                )}
 
-                <TabsContent value="roles">
-                    <RolesTab />
-                </TabsContent>
+                {canManage && (
+                    <TabsContent value="roles">
+                        <RolesTab />
+                    </TabsContent>
+                )}
 
-                <TabsContent value="permissions">
-                    <PermissionsTab />
-                </TabsContent>
+                {canManage && (
+                    <TabsContent value="permissions">
+                        <PermissionsTab />
+                    </TabsContent>
+                )}
 
-                <TabsContent value="audit">
-                    <AuditTab />
-                </TabsContent>
+                {canAudit && (
+                    <TabsContent value="audit">
+                        <AuditTab />
+                    </TabsContent>
+                )}
             </Tabs>
         </div>
     );
@@ -63,6 +80,13 @@ const UsersTab = () => {
     const [q, setQ] = useState("");
     const [loading, setLoading] = useState(true);
     const [openCreate, setOpenCreate] = useState(false);
+    const [openEdit, setOpenEdit] = useState(false);
+    const [editing, setEditing] = useState(null);
+    const [editForm, setEditForm] = useState({
+        full_name: "",
+        email: "",
+        roles: [],
+    });
 
     const [form, setForm] = useState({
         full_name: "",
@@ -71,6 +95,8 @@ const UsersTab = () => {
         password: "",
         roles: ["STUDENT"], // por defecto
     });
+
+    const pwdFeedback = validatePassword(form.password || "");
 
     const fetchUsers = async () => {
         try {
@@ -115,6 +141,44 @@ const UsersTab = () => {
             toast.success("Contraseña reiniciada");
         } catch {
             toast.error("No se pudo reiniciar la contraseña");
+        }
+    };
+
+    const handleActivate = async (id) => {
+        try {
+            await UsersService.activate(id);
+            toast.success("Usuario reactivado");
+            fetchUsers();
+        } catch {
+            toast.error("No se pudo reactivar");
+        }
+    };
+
+    const openEditUser = (u) => {
+        setEditing(u);
+        setEditForm({
+            full_name: u.full_name || "",
+            email: u.email || "",
+            roles: Array.isArray(u.roles) ? u.roles : [],
+        });
+        setOpenEdit(true);
+    };
+
+    const submitEdit = async (e) => {
+        e.preventDefault();
+        if (!editing) return;
+        try {
+            await UsersService.update(editing.id, {
+                full_name: editForm.full_name,
+                email: editForm.email,
+            });
+            await UsersService.assignRoles(editing.id, editForm.roles);
+            toast.success("Usuario actualizado");
+            setOpenEdit(false);
+            setEditing(null);
+            fetchUsers();
+        } catch {
+            toast.error("No se pudo actualizar");
         }
     };
 
@@ -211,12 +275,18 @@ const UsersTab = () => {
                                             <Button size="sm" variant="outline" onClick={() => handleResetPass(u.id)}>
                                                 <KeyRound className="h-4 w-4 mr-1" /> Reset
                                             </Button>
-                                            <Button size="sm" variant="outline">
+                                            <Button size="sm" variant="outline" onClick={() => openEditUser(u)}>
                                                 <Edit className="h-4 w-4 mr-1" /> Editar
                                             </Button>
-                                            <Button size="sm" variant="outline" onClick={() => handleDeactivate(u.id)}>
-                                                <Trash2 className="h-4 w-4 mr-1" /> Baja
-                                            </Button>
+                                            {u.is_active ? (
+                                                <Button size="sm" variant="outline" onClick={() => handleDeactivate(u.id)}>
+                                                    <Trash2 className="h-4 w-4 mr-1" /> Baja
+                                                </Button>
+                                            ) : (
+                                                <Button size="sm" variant="outline" onClick={() => handleActivate(u.id)}>
+                                                    Activar
+                                                </Button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -230,6 +300,40 @@ const UsersTab = () => {
                         </tbody>
                     </table>
                 </div>
+                <Dialog open={openEdit} onOpenChange={setOpenEdit}>
+                    <DialogContent className="max-w-xl">
+                        <DialogHeader>
+                            <DialogTitle>Editar Usuario</DialogTitle>
+                            <DialogDescription>Actualiza los datos y roles</DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={submitEdit} className="space-y-3">
+                            <div>
+                                <Label>Nombre completo</Label>
+                                <Input value={editForm.full_name} onChange={e => setEditForm({ ...editForm, full_name: e.target.value })} required />
+                            </div>
+                            <div>
+                                <Label>Email</Label>
+                                <Input type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} required />
+                            </div>
+                            <div>
+                                <Label>Roles (coma separados)</Label>
+                                <Input
+                                    value={editForm.roles.join(",")}
+                                    onChange={(e) =>
+                                        setEditForm({
+                                            ...editForm,
+                                            roles: e.target.value.split(",").map(s => s.trim()).filter(Boolean),
+                                        })
+                                    }
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2">
+                                <Button type="button" variant="outline" onClick={() => setOpenEdit(false)}>Cancelar</Button>
+                                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">Guardar</Button>
+                            </div>
+                        </form>
+                    </DialogContent>
+                </Dialog>
             </CardContent>
         </Card>
     );
@@ -348,7 +452,6 @@ const PermissionsTab = () => {
             setRoles(allRoles);
             if (allRoles.length) {
                 setSelectedRole(allRoles[0]);
-                // si el rol trae permissions, precarga:
                 if (allRoles[0]?.permissions) {
                     setSelectedPerms(new Set(allRoles[0].permissions));
                 }

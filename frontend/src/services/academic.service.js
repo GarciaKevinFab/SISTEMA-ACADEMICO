@@ -84,3 +84,83 @@ export const Processes = {
     traslado: (payload) => http("POST", "/processes/transfer", payload),
     reincorporacion: (payload) => http("POST", "/processes/rejoin", payload),
 };
+
+/* ====== Periodos académicos ====== */
+export const Periods = {
+    list: () => http("GET", "/academic/periods"),
+};
+
+/* ====== Asistencia ====== */
+export const Attendance = {
+    // sesiones por sección
+    createSession: (sectionId, payload) => http("POST", `/sections/${sectionId}/attendance/sessions`, payload),
+    listSessions: (sectionId) => http("GET", `/sections/${sectionId}/attendance/sessions`),
+    closeSession: (sectionId, sessionId) => http("POST", `/sections/${sectionId}/attendance/sessions/${sessionId}/close`),
+
+    // marcar asistencia por alumno
+    set: (sectionId, sessionId, rows) => http("PUT", `/sections/${sectionId}/attendance/sessions/${sessionId}`, { rows }),
+};
+
+/* ====== Sugerencias de matrícula ====== */
+export const Enrollment = {
+    suggestions: (payload) => http("POST", "/enrollments/suggestions", payload),
+};
+
+/* ====== Sílabos & Evaluación ====== */
+export const Syllabus = {
+    get: (sectionId) => http("GET", `/sections/${sectionId}/syllabus`),
+    upload: (sectionId, file) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        return http("POST", `/sections/${sectionId}/syllabus`, fd, false);
+    },
+    delete: (sectionId) => http("DELETE", `/sections/${sectionId}/syllabus`),
+};
+
+export const Evaluation = {
+    getConfig: (sectionId) => http("GET", `/sections/${sectionId}/evaluation`),
+    setConfig: (sectionId, config) => http("PUT", `/sections/${sectionId}/evaluation`, config),
+    // config = [{code:"PARCIAL_1", label:"Parcial 1", weight:20}, ...] (suma 100)
+};
+
+/* ====== Procesos académicos: bandeja/seguimiento/archivos ====== */
+export const ProcessFiles = {
+    list: (processId) => http("GET", `/processes/${processId}/files`),
+    upload: (processId, file, meta = {}) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        if (meta.note) fd.append("note", meta.note);
+        return http("POST", `/processes/${processId}/files`, fd, false);
+    },
+    remove: (processId, fileId) => http("DELETE", `/processes/${processId}/files/${fileId}`),
+};
+
+export const ProcessesInbox = {
+    myRequests: (params = {}) => {
+        const q = new URLSearchParams(params).toString();
+        return http("GET", `/processes/my${q ? `?${q}` : ""}`);
+    },
+    listAll: (params = {}) => {
+        const q = new URLSearchParams(params).toString();
+        return http("GET", `/processes${q ? `?${q}` : ""}`);
+    },
+    get: (id) => http("GET", `/processes/${id}`),
+    setStatus: (id, payload) => http("POST", `/processes/${id}/status`, payload), // {status:"APROBADO"|"RECHAZADO", note:""}
+    notify: (id, payload) => http("POST", `/processes/${id}/notify`, payload),   // {channels:["EMAIL"], subject, message}
+};
+
+/* ====== Reportes académicos ====== */
+export const AcademicReports = {
+    summary: (params = {}) => {
+        const q = new URLSearchParams(params).toString();
+        return http("GET", `/academic/reports/summary${q ? `?${q}` : ""}`);
+    },
+    exportPerformance: (params = {}) => {
+        const q = new URLSearchParams(params).toString();
+        return http("GET", `/academic/reports/performance.xlsx${q ? `?${q}` : ""}`);
+    },
+    exportOccupancy: (params = {}) => {
+        const q = new URLSearchParams(params).toString();
+        return http("GET", `/academic/reports/occupancy.xlsx${q ? `?${q}` : ""}`);
+    },
+};

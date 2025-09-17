@@ -1,50 +1,169 @@
 // src/modules/academic/AcademicModule.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
-import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
-import { Label } from "../../components/ui/label";
-import { Textarea } from "../../components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
-import { Badge } from "../../components/ui/badge";
-import { toast } from "sonner";
-import { Plus, Save, Trash2, Calendar, Users, Clock, FileText, AlertTriangle, CheckCircle } from "lucide-react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { PERMS } from "@/auth/permissions";
+import IfPerm from "@/components/auth/IfPerm";
 
-// Usa tus utilidades existentes para PDF/QR
-import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
+import {
+  Tabs, TabsContent, TabsList, TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  Card, CardContent, CardDescription, CardHeader, CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { toast } from "sonner";
+import {
+  Plus, Save, Calendar, Users, Clock, FileText, AlertTriangle, CheckCircle,
+  Search as SearchIcon, BookOpen, GraduationCap, BarChart3, Inbox, LayoutGrid, ClipboardList, LibraryBig,
+} from "lucide-react";
+
+// Utils
+import { generatePDFWithPolling, downloadFile } from "@/utils/pdfQrPolling";
 
 // Servicios
-import { Careers, Plans, Sections, Kardex, Processes } from "../../services/academic.service";
+import { Careers, Plans, Sections, Kardex, Processes } from "@/services/academic.service";
 
-// Reutilizamos tus componentes existentes
+// Reutilizados
 import EnrollmentComponent from "./EnrollmentComponent";
 import GradesAttendanceComponent from "./GradesAttendanceComponent";
+import SectionSyllabusEvaluation from "./SectionSyllabusEvaluation";
+import AcademicProcessesInbox from "./AcademicProcessesInbox";
+import AcademicReportsPage from "./AcademicReports";
+
+/* ----------------------------- THEME HELPERS ----------------------------- */
+const tileBase =
+  "group h-24 rounded-2xl border bg-gradient-to-br from-muted/40 to-background hover:from-background hover:to-muted/40 transition-all duration-200 flex flex-col items-center justify-center gap-2 shadow-sm hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+
+const statCard = "relative overflow-hidden rounded-2xl border bg-card hover:bg-accent/10 transition-colors";
+
+const sectionHeader = ({ title, description, Icon }) => (
+  <div className="flex items-start justify-between">
+    <div>
+      <div className="flex items-center gap-2">
+        {Icon ? <Icon className="h-5 w-5 text-primary" /> : null}
+        <CardTitle>{title}</CardTitle>
+      </div>
+      {description ? (
+        <CardDescription className="mt-1">{description}</CardDescription>
+      ) : null}
+    </div>
+  </div>
+);
+
+/* ------------------- PERMISSION KEYS POR TAB/ACCIÓN ------------------- */
+const REQS = {
+  plans: [PERMS["academic.plans.view"], PERMS["academic.plans.edit"]],
+  load: [PERMS["academic.sections.view"], PERMS["academic.sections.create"], PERMS["academic.sections.conflicts"]],
+  enroll: [PERMS["academic.enrollment.view"], PERMS["academic.enrollment.commit"]],
+  grades: [PERMS["academic.grades.edit"], PERMS["academic.grades.submit"]],
+  syllabus: [PERMS["academic.syllabus.upload"], PERMS["academic.syllabus.delete"], PERMS["academic.evaluation.config"]],
+  kardex: [PERMS["academic.kardex.view"]],
+  reports: [PERMS["academic.reports.view"]],
+  procInbox: [PERMS["academic.reports.view"]],   // Bandeja de procesos académicos (REGISTRAR/ADMIN_ACADEMIC)
+  processes: [PERMS["academic.reports.view"]],   // Registro de procesos (puede ajustarse si agregas perms específicos)
+};
+
+/* ------------- ACCIONES RÁPIDAS (respetan permisos) ------------- */
+function AcademicQuickActions({ go }) {
+  const { hasAny } = useAuth();
+
+  const actions = [
+    { key: "enroll", label: "Matrícula", Icon: GraduationCap, need: REQS.enroll },
+    { key: "load", label: "Carga & Horarios", Icon: Calendar, need: REQS.load },
+    { key: "plans", label: "Mallas/Planes", Icon: BookOpen, need: REQS.plans },
+    { key: "grades", label: "Notas/Asistencia", Icon: CheckCircle, need: REQS.grades },
+    { key: "syllabus", label: "Sílabos/Evaluación", Icon: FileText, need: REQS.syllabus },
+    { key: "kardex", label: "Kárdex", Icon: Users, need: REQS.kardex },
+    { key: "reports", label: "Reportes", Icon: BarChart3, need: REQS.reports },
+    { key: "proc-inbox", label: "Bandeja procesos", Icon: Inbox, need: REQS.procInbox },
+    { key: "processes", label: "Procesos", Icon: Clock, need: REQS.processes },
+  ].filter(a => hasAny(a.need));
+
+  const MAX_QUICK = 5;
+  const primary = actions.slice(0, MAX_QUICK);
+  const more = actions.slice(MAX_QUICK);
+
+  return (
+    <Card className="border-0 shadow-none">
+      <CardHeader className="px-0 pt-0">{sectionHeader({ title: "Acciones Rápidas", Icon: LayoutGrid })}</CardHeader>
+      <CardContent className="px-0">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          {primary.map(({ key, label, Icon }) => (
+            <TooltipProvider key={key} delayDuration={100}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={tileBase}
+                    onClick={() => go(key)}
+                  >
+                    <Icon className="h-6 w-6 transition-transform duration-200 group-hover:scale-110" />
+                    <span className="text-xs font-medium">{label}</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Ir a {label}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ))}
+
+          {more.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className={tileBase}>
+                  <LayoutGrid className="h-6 w-6" />
+                  <span className="text-xs font-medium">Más</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {more.map(({ key, label, Icon }) => (
+                  <DropdownMenuItem key={key} onClick={() => go(key)} className="gap-2">
+                    <Icon className="h-4 w-4" /> {label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 /* ------------- DASHBOARD PEQUEÑO ------------- */
 function SmallAcademicDashboard() {
   const [stats, setStats] = useState({ sections: 0, teachers: 0, students: 0, openProcesses: 0 });
+  useEffect(() => { setStats((s) => s); }, []);
 
-  useEffect(() => {
-    // opcional: pegar endpoints reales si los tienes
-    setStats((s) => s);
-  }, []);
+  const items = [
+    { label: "Secciones", value: stats.sections, Icon: Calendar },
+    { label: "Docentes", value: stats.teachers, Icon: Users },
+    { label: "Estudiantes", value: stats.students, Icon: Users },
+    { label: "Procesos abiertos", value: stats.openProcesses, Icon: Clock },
+  ];
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      {[
-        { label: "Secciones", value: stats.sections, Icon: Calendar },
-        { label: "Docentes", value: stats.teachers, Icon: Users },
-        { label: "Estudiantes", value: stats.students, Icon: Users },
-        { label: "Procesos abiertos", value: stats.openProcesses, Icon: Clock },
-      ].map((k, i) => (
-        <Card key={i}>
+      {items.map((k, i) => (
+        <Card key={i} className={statCard}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">{k.label}</CardTitle>
-            <k.Icon className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">{k.label}</CardTitle>
+            <k.Icon className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{k.value}</div>
+            <div className="text-3xl font-bold tracking-tight">{k.value}</div>
           </CardContent>
         </Card>
       ))}
@@ -59,31 +178,38 @@ function PlansAndCurricula() {
   const [selectedPlan, setSelectedPlan] = useState(null);
 
   // Form plan
-  const [pform, setPform] = useState({ name: "", career_id: "", start_year: new Date().getFullYear(), semesters: 10, description: "" });
+  const [pform, setPform] = useState({
+    name: "", career_id: "", start_year: new Date().getFullYear(), semesters: 10, description: "",
+  });
 
   // Cursos del plan
   const [courses, setCourses] = useState([]);
-  const [cform, setCform] = useState({ code: "", name: "", credits: 3, weekly_hours: 3, semester: 1, type: "MANDATORY" });
+  const [cform, setCform] = useState({
+    code: "", name: "", credits: 3, weekly_hours: 3, semester: 1, type: "MANDATORY",
+  });
   const [prereqFor, setPrereqFor] = useState(null);
-  const [prereqs, setPrereqs] = useState([]); // ids seleccionados
+  const [prereqs, setPrereqs] = useState([]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const [pl, cs] = await Promise.all([Plans.list(), Careers.list()]);
-      setList(pl?.plans || pl || []);
-      setCareers(cs?.careers || cs || []);
+      const plans = Array.isArray(pl?.plans) ? pl.plans : Array.isArray(pl) ? pl : [];
+      const careersArr = Array.isArray(cs?.careers) ? cs.careers : Array.isArray(cs) ? cs : [];
+      setList(plans);
+      setCareers(careersArr);
     } catch (e) { toast.error(e.message || "Error al cargar planes"); }
-  };
+  }, []);
 
-  const loadCourses = async (planId) => {
+  const loadCourses = useCallback(async (planId) => {
     try {
       const c = await Plans.listCourses(planId);
-      setCourses(c?.courses || c || []);
+      const coursesArr = Array.isArray(c?.courses) ? c.courses : Array.isArray(c) ? c : [];
+      setCourses(coursesArr);
     } catch (e) { toast.error(e.message || "Error al cargar cursos"); }
-  };
+  }, []);
 
-  useEffect(() => { load(); }, []);
-  useEffect(() => { if (selectedPlan) loadCourses(selectedPlan.id); }, [selectedPlan?.id]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (selectedPlan?.id) loadCourses(selectedPlan.id); }, [selectedPlan?.id, loadCourses]);
 
   const createPlan = async (e) => {
     e.preventDefault();
@@ -91,7 +217,8 @@ function PlansAndCurricula() {
       const res = await Plans.create(pform);
       toast.success("Plan creado");
       setPform({ name: "", career_id: "", start_year: new Date().getFullYear(), semesters: 10, description: "" });
-      setList((prev) => [res?.plan || res, ...prev]);
+      const created = res?.plan || res;
+      setList((prev) => [created, ...prev]);
     } catch (e) { toast.error(e.message); }
   };
 
@@ -99,7 +226,7 @@ function PlansAndCurricula() {
     e.preventDefault();
     if (!selectedPlan) return toast.error("Seleccione un plan");
     try {
-      const res = await Plans.addCourse(selectedPlan.id, cform);
+      await Plans.addCourse(selectedPlan.id, cform);
       toast.success("Curso añadido");
       setCform({ code: "", name: "", credits: 3, weekly_hours: 3, semester: 1, type: "MANDATORY" });
       loadCourses(selectedPlan.id);
@@ -110,226 +237,240 @@ function PlansAndCurricula() {
     try {
       await Plans.setPrereqs(selectedPlan.id, prereqFor.id, prereqs);
       toast.success("Prerrequisitos guardados");
-      setPrereqFor(null); setPrereqs([]);
-      loadCourses(selectedPlan.id);
+      setPrereqFor(null); setPrereqs([]); loadCourses(selectedPlan.id);
     } catch (e) { toast.error(e.message); }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Alta plan */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Planes/Mallas Curriculares</CardTitle>
-          <CardDescription>Define planes por carrera y sus cursos</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <form onSubmit={createPlan} className="grid md:grid-cols-5 gap-3">
-            <div className="md:col-span-2">
-              <Label>Nombre *</Label>
-              <Input value={pform.name} onChange={e => setPform({ ...pform, name: e.target.value })} required />
-            </div>
-            <div>
-              <Label>Carrera *</Label>
-              <Select value={pform.career_id?.toString() || ""} onValueChange={v => setPform({ ...pform, career_id: +v })}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                <SelectContent>
-                  {careers.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Año inicio</Label>
-              <Input type="number" min="2000" max="2100" value={pform.start_year} onChange={e => setPform({ ...pform, start_year: +e.target.value })} />
-            </div>
-            <div>
-              <Label>Semestres</Label>
-              <Input type="number" min="1" max="20" value={pform.semesters} onChange={e => setPform({ ...pform, semesters: +e.target.value })} />
-            </div>
-            <div className="md:col-span-4">
-              <Label>Descripción</Label>
-              <Textarea value={pform.description} onChange={e => setPform({ ...pform, description: e.target.value })} />
-            </div>
-            <div className="md:col-span-5 flex justify-end">
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="h-4 w-4 mr-2" /> Crear plan
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-
-      {/* Lista de planes + cursos */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader><CardTitle>Planes</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            {list.length === 0 && <p className="text-sm text-gray-500">Sin planes</p>}
-            {list.map(p => (
-              <div key={p.id} className={`p-3 border rounded flex items-center justify-between ${selectedPlan?.id === p.id ? "bg-blue-50 border-blue-200" : ""}`}>
-                <div>
-                  <div className="font-medium">{p.name}</div>
-                  <div className="text-xs text-gray-500">Carrera: {p.career_name || p.career?.name} · Semestres: {p.semesters}</div>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setSelectedPlan(p)}>Cursos</Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Cursos del Plan {selectedPlan ? `– ${selectedPlan.name}` : ""}</CardTitle>
-            <CardDescription>Alta rápida + prerrequisitos</CardDescription>
+    <IfPerm any={REQS.plans}>
+      <div className="space-y-6">
+        <Card className="border-0 shadow-none">
+          <CardHeader className="px-0 pt-0">
+            {sectionHeader({ title: "Planes/Mallas Curriculares", description: "Define planes por carrera y sus cursos", Icon: LibraryBig })}
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Alta curso */}
-            <form onSubmit={createCourse} className="grid md:grid-cols-6 gap-3">
+          <CardContent className="px-0 space-y-4">
+            <form onSubmit={createPlan} className="grid md:grid-cols-5 gap-3">
               <div className="md:col-span-2">
                 <Label>Nombre *</Label>
-                <Input value={cform.name} onChange={e => setCform({ ...cform, name: e.target.value })} required />
+                <Input value={pform.name} onChange={(e) => setPform({ ...pform, name: e.target.value })} required />
               </div>
               <div>
-                <Label>Código *</Label>
-                <Input value={cform.code} onChange={e => setCform({ ...cform, code: e.target.value })} required />
-              </div>
-              <div>
-                <Label>Créditos</Label>
-                <Input type="number" min="0" value={cform.credits} onChange={e => setCform({ ...cform, credits: +e.target.value })} />
-              </div>
-              <div>
-                <Label>Hrs/Sem</Label>
-                <Input type="number" min="0" value={cform.weekly_hours} onChange={e => setCform({ ...cform, weekly_hours: +e.target.value })} />
-              </div>
-              <div>
-                <Label>Semestre</Label>
-                <Input type="number" min="1" value={cform.semester} onChange={e => setCform({ ...cform, semester: +e.target.value })} />
-              </div>
-              <div>
-                <Label>Tipo</Label>
-                <Select value={cform.type} onValueChange={v => setCform({ ...cform, type: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Label>Carrera *</Label>
+                <Select value={pform.career_id ? String(pform.career_id) : "ALL"} onValueChange={(v) => setPform({ ...pform, career_id: v === "ALL" ? "" : Number(v) })}>
+                  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="MANDATORY">Obligatorio</SelectItem>
-                    <SelectItem value="ELECTIVE">Electivo</SelectItem>
+                    <SelectItem value="ALL">Seleccionar</SelectItem>
+                    {(Array.isArray(careers) ? careers : []).map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="md:col-span-6 flex justify-end">
-                <Button disabled={!selectedPlan} type="submit"><Save className="h-4 w-4 mr-2" />Guardar curso</Button>
+              <div>
+                <Label>Año inicio</Label>
+                <Input type="number" min="2000" max="2100" value={pform.start_year} onChange={(e) => setPform({ ...pform, start_year: +e.target.value })} />
+              </div>
+              <div>
+                <Label>Semestres</Label>
+                <Input type="number" min="1" max="20" value={pform.semesters} onChange={(e) => setPform({ ...pform, semesters: +e.target.value })} />
+              </div>
+              <div className="md:col-span-5">
+                <Label>Descripción</Label>
+                <Textarea value={pform.description} onChange={(e) => setPform({ ...pform, description: e.target.value })} />
+              </div>
+              <div className="md:col-span-5 flex justify-end">
+                <Button type="submit" className="gap-2"><Plus className="h-4 w-4" /> Crear plan</Button>
               </div>
             </form>
-
-            {/* Tabla cursos */}
-            <div className="border rounded overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="p-2 text-left">Código</th>
-                    <th className="p-2 text-left">Curso</th>
-                    <th className="p-2 text-center">Cred.</th>
-                    <th className="p-2 text-center">Sem.</th>
-                    <th className="p-2 text-center">Tipo</th>
-                    <th className="p-2 text-right"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {courses.map(c => (
-                    <tr key={c.id} className="border-t">
-                      <td className="p-2">{c.code}</td>
-                      <td className="p-2">{c.name}</td>
-                      <td className="p-2 text-center">{c.credits}</td>
-                      <td className="p-2 text-center">{c.semester}</td>
-                      <td className="p-2 text-center">
-                        <Badge variant="outline">{c.type === "ELECTIVE" ? "Electivo" : "Obligatorio"}</Badge>
-                      </td>
-                      <td className="p-2 text-right">
-                        <Button size="sm" variant="outline" onClick={() => { setPrereqFor(c); setPrereqs(c.prerequisites?.map(p => p.id) || []); }}>
-                          Prerrequisitos
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                  {selectedPlan && courses.length === 0 && (
-                    <tr><td className="p-3 text-center text-gray-500" colSpan={6}>Sin cursos</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Editor de prerrequisitos */}
-            {prereqFor && (
-              <div className="border rounded p-3">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium">Prerrequisitos de: {prereqFor.name}</div>
-                  <Button variant="ghost" onClick={() => { setPrereqFor(null); setPrereqs([]); }}>✕</Button>
-                </div>
-                <div className="grid md:grid-cols-2 gap-2 mt-2">
-                  {courses
-                    .filter(c => c.id !== prereqFor.id)
-                    .map(c => {
-                      const checked = prereqs.includes(c.id);
-                      return (
-                        <label key={c.id} className="border rounded p-2 flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) => setPrereqs(prev => e.target.checked ? [...prev, c.id] : prev.filter(id => id !== c.id))}
-                          />
-                          {c.code} – {c.name}
-                        </label>
-                      );
-                    })}
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <Button onClick={savePrereqs}><Save className="h-4 w-4 mr-2" />Guardar prerrequisitos</Button>
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
+
+        <div className="grid lg:grid-cols-2 gap-6">
+          <Card className="border">
+            <CardHeader>{sectionHeader({ title: "Planes" })}</CardHeader>
+            <CardContent className="space-y-2">
+              {(Array.isArray(list) ? list : []).length === 0 && <Empty label="Sin planes" />}
+              {(Array.isArray(list) ? list : []).map((p) => (
+                <button
+                  type="button"
+                  key={p.id}
+                  onClick={() => setSelectedPlan(p)}
+                  className={`w-full text-left p-3 border rounded-xl flex items-center justify-between hover:bg-accent/10 transition-colors ${selectedPlan?.id === p.id ? "bg-primary/5 border-primary/30" : ""}`}
+                >
+                  <div>
+                    <div className="font-medium">{p.name}</div>
+                    <div className="text-xs text-muted-foreground">Carrera: {p.career_name || p.career?.name} · Semestres: {p.semesters}</div>
+                  </div>
+                  <Badge variant="secondary" className="rounded-full">{p.start_year}</Badge>
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="border">
+            <CardHeader>
+              {sectionHeader({ title: `Cursos del Plan ${selectedPlan ? `– ${selectedPlan.name}` : ""}`, description: "Alta rápida + prerrequisitos", Icon: ClipboardList })}
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form onSubmit={createCourse} className="grid md:grid-cols-6 gap-3">
+                <div className="md:col-span-2">
+                  <Label>Nombre *</Label>
+                  <Input value={cform.name} onChange={(e) => setCform({ ...cform, name: e.target.value })} required />
+                </div>
+                <div>
+                  <Label>Código *</Label>
+                  <Input value={cform.code} onChange={(e) => setCform({ ...cform, code: e.target.value })} required />
+                </div>
+                <div>
+                  <Label>Créditos</Label>
+                  <Input type="number" min="0" value={cform.credits} onChange={(e) => setCform({ ...cform, credits: +e.target.value || 0 })} />
+                </div>
+                <div>
+                  <Label>Hrs/Sem</Label>
+                  <Input type="number" min="0" value={cform.weekly_hours} onChange={(e) => setCform({ ...cform, weekly_hours: +e.target.value || 0 })} />
+                </div>
+                <div>
+                  <Label>Semestre</Label>
+                  <Input type="number" min="1" value={cform.semester} onChange={(e) => setCform({ ...cform, semester: +e.target.value || 1 })} />
+                </div>
+                <div>
+                  <Label>Tipo</Label>
+                  <Select value={cform.type} onValueChange={(v) => setCform({ ...cform, type: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MANDATORY">Obligatorio</SelectItem>
+                      <SelectItem value="ELECTIVE">Electivo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="md:col-span-6 flex justify-end">
+                  <Button disabled={!selectedPlan} type="submit" className="gap-2"><Save className="h-4 w-4" />Guardar curso</Button>
+                </div>
+              </form>
+
+              <div className="border rounded-xl overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40">
+                    <tr>
+                      <th className="p-2 text-left">Código</th>
+                      <th className="p-2 text-left">Curso</th>
+                      <th className="p-2 text-center">Cred.</th>
+                      <th className="p-2 text-center">Sem.</th>
+                      <th className="p-2 text-center">Tipo</th>
+                      <th className="p-2 text-right"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(Array.isArray(courses) ? courses : []).map((c) => (
+                      <tr key={c.id} className="border-t hover:bg-accent/5">
+                        <td className="p-2 font-mono text-xs">{c.code}</td>
+                        <td className="p-2">{c.name}</td>
+                        <td className="p-2 text-center">{c.credits}</td>
+                        <td className="p-2 text-center">{c.semester}</td>
+                        <td className="p-2 text-center">
+                          <Badge variant="outline" className="rounded-full px-2">
+                            {c.type === "ELECTIVE" ? "Electivo" : "Obligatorio"}
+                          </Badge>
+                        </td>
+                        <td className="p-2 text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setPrereqFor(c);
+                              setPrereqs(Array.isArray(c.prerequisites) ? c.prerequisites.map((p) => p.id) : []);
+                            }}
+                            className="gap-2"
+                          >
+                            <ClipboardList className="h-4 w-4" /> Prerrequisitos
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {selectedPlan && (Array.isArray(courses) ? courses : []).length === 0 && (
+                      <tr>
+                        <td className="p-3 text-center text-muted-foreground" colSpan={6}>Sin cursos</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {prereqFor && (
+                <div className="border rounded-2xl p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium">Prerrequisitos de: {prereqFor.name}</div>
+                    <Button variant="ghost" onClick={() => { setPrereqFor(null); setPrereqs([]); }}>✕</Button>
+                  </div>
+                  <ScrollArea className="h-56 mt-2 pr-2">
+                    <div className="grid md:grid-cols-2 gap-2">
+                      {(Array.isArray(courses) ? courses : [])
+                        .filter((c) => c.id !== prereqFor.id)
+                        .map((c) => {
+                          const checked = prereqs.includes(c.id);
+                          return (
+                            <label key={c.id} className={`border rounded-xl p-2 flex items-center gap-2 text-sm ${checked ? "bg-primary/5 border-primary/40" : ""}`}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) =>
+                                  setPrereqs((prev) => e.target.checked ? [...prev, c.id] : prev.filter((id) => id !== c.id))
+                                }
+                              />
+                              <span className="font-mono text-xs">{c.code}</span> – {c.name}
+                            </label>
+                          );
+                        })}
+                    </div>
+                  </ScrollArea>
+                  <div className="mt-3 flex justify-end">
+                    <Button onClick={savePrereqs} className="gap-2"><Save className="h-4 w-4" />Guardar prerrequisitos</Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </div>
+    </IfPerm>
   );
 }
 
 /* ------------- CARGA LECTIVA / HORARIOS ------------- */
 function LoadAndSchedules() {
+  const { hasAny } = useAuth();
+  if (!hasAny(REQS.load)) return null;
+
   const [teachers, setTeachers] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [sections, setSections] = useState([]);
 
   const [form, setForm] = useState({
-    course_code: "", course_name: "",
-    teacher_id: "", room_id: "", capacity: 30,
-    period: "2025-I",
-    // slots simples: { day: "MON", start: "08:00", end: "10:00" }
-    slots: [],
+    course_code: "", course_name: "", teacher_id: "", room_id: "", capacity: 30, period: "2025-I",
+    slots: [], // { day: "MON", start: "08:00", end: "10:00" }
   });
 
   const [newSlot, setNewSlot] = useState({ day: "MON", start: "08:00", end: "10:00" });
   const [conflicts, setConflicts] = useState([]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const [t, r, s] = await Promise.all([Sections.teachers(), Sections.rooms(), Sections.list({ period: "2025-I" })]);
-      setTeachers(t?.teachers || t || []);
-      setRooms(r?.classrooms || r || []);
-      setSections(s?.sections || s || []);
+      const teachersArr = Array.isArray(t?.teachers) ? t.teachers : Array.isArray(t) ? t : [];
+      const roomsArr = Array.isArray(r?.classrooms) ? r.classrooms : Array.isArray(r) ? r : [];
+      const sectionsArr = Array.isArray(s?.sections) ? s.sections : Array.isArray(s) ? s : [];
+      setTeachers(teachersArr); setRooms(roomsArr); setSections(sectionsArr);
     } catch (e) { toast.error(e.message); }
-  };
-  useEffect(() => { load(); }, []);
+  }, []);
 
-  const addSlot = () => {
-    setForm(f => ({ ...f, slots: [...f.slots, newSlot] }));
-  };
+  useEffect(() => { load(); }, [load]);
+
+  const addSlot = () => setForm((f) => ({ ...f, slots: [...f.slots, newSlot] }));
 
   const check = async () => {
     try {
       const res = await Sections.checkConflicts(form);
-      const list = res?.conflicts || [];
+      const list = Array.isArray(res?.conflicts) ? res.conflicts : [];
       setConflicts(list);
       if (list.length === 0) toast.success("Sin conflictos de horario / aforo");
       else toast.error("Conflictos detectados");
@@ -348,76 +489,67 @@ function LoadAndSchedules() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Nueva Sección / Horario</CardTitle>
-          <CardDescription>Asigna docente, aula y franja horaria</CardDescription>
+      <Card className="border-0 shadow-none">
+        <CardHeader className="px-0 pt-0">
+          {sectionHeader({ title: "Nueva Sección / Horario", description: "Asigna docente, aula y franja horaria", Icon: Calendar })}
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="px-0 space-y-4">
           <div className="grid md:grid-cols-3 gap-3">
-            <div>
-              <Label>Curso (código)</Label>
-              <Input value={form.course_code} onChange={e => setForm({ ...form, course_code: e.target.value })} placeholder="MAT101" />
-            </div>
-            <div>
-              <Label>Curso (nombre)</Label>
-              <Input value={form.course_name} onChange={e => setForm({ ...form, course_name: e.target.value })} placeholder="Matemática I" />
-            </div>
-            <div>
-              <Label>Período</Label>
-              <Input value={form.period} onChange={e => setForm({ ...form, period: e.target.value })} />
-            </div>
+            <Labeled value={form.course_code} label="Curso (código)" onChange={(v) => setForm({ ...form, course_code: v })} placeholder="MAT101" />
+            <Labeled value={form.course_name} label="Curso (nombre)" onChange={(v) => setForm({ ...form, course_name: v })} placeholder="Matemática I" />
+            <Labeled value={form.period} label="Período" onChange={(v) => setForm({ ...form, period: v })} />
+
             <div>
               <Label>Docente</Label>
-              <Select value={form.teacher_id?.toString() || ""} onValueChange={v => setForm({ ...form, teacher_id: +v })}>
+              <Select value={form.teacher_id ? String(form.teacher_id) : "ALL"} onValueChange={(v) => setForm({ ...form, teacher_id: v === "ALL" ? "" : Number(v) })}>
                 <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                 <SelectContent>
-                  {teachers.map(t => <SelectItem key={t.id} value={t.id.toString()}>{t.full_name || t.name}</SelectItem>)}
+                  <SelectItem value="ALL">Seleccionar</SelectItem>
+                  {(Array.isArray(teachers) ? teachers : []).map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>{t.full_name || t.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
               <Label>Aula</Label>
-              <Select value={form.room_id?.toString() || ""} onValueChange={v => setForm({ ...form, room_id: +v })}>
+              <Select value={form.room_id ? String(form.room_id) : "ALL"} onValueChange={(v) => setForm({ ...form, room_id: v === "ALL" ? "" : Number(v) })}>
                 <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                 <SelectContent>
-                  {rooms.map(r => <SelectItem key={r.id} value={r.id.toString()}>{r.name} (cap. {r.capacity})</SelectItem>)}
+                  <SelectItem value="ALL">Seleccionar</SelectItem>
+                  {(Array.isArray(rooms) ? rooms : []).map((r) => (
+                    <SelectItem key={r.id} value={String(r.id)}>{r.name} (cap. {r.capacity})</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
               <Label>Capacidad (sección)</Label>
-              <Input type="number" min="1" value={form.capacity} onChange={e => setForm({ ...form, capacity: +e.target.value })} />
+              <Input type="number" min="1" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: +e.target.value || 1 })} />
             </div>
           </div>
 
-          <div className="border rounded p-3">
+          <div className="border rounded-2xl p-3">
             <div className="flex items-end gap-2">
               <div className="w-40">
                 <Label>Día</Label>
-                <Select value={newSlot.day} onValueChange={(v) => setNewSlot(s => ({ ...s, day: v }))}>
+                <Select value={newSlot.day} onValueChange={(v) => setNewSlot((s) => ({ ...s, day: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {["MON", "TUE", "WED", "THU", "FRI", "SAT"].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                    {["MON", "TUE", "WED", "THU", "FRI", "SAT"].map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Inicio</Label>
-                <Input type="time" value={newSlot.start} onChange={e => setNewSlot(s => ({ ...s, start: e.target.value }))} />
-              </div>
-              <div>
-                <Label>Fin</Label>
-                <Input type="time" value={newSlot.end} onChange={e => setNewSlot(s => ({ ...s, end: e.target.value }))} />
-              </div>
-              <Button onClick={addSlot}><Plus className="h-4 w-4 mr-2" />Agregar franja</Button>
+              <Labeled type="time" label="Inicio" value={newSlot.start} onChange={(v) => setNewSlot((s) => ({ ...s, start: v }))} />
+              <Labeled type="time" label="Fin" value={newSlot.end} onChange={(v) => setNewSlot((s) => ({ ...s, end: v }))} />
+              <Button onClick={addSlot} className="gap-2"><Plus className="h-4 w-4" />Agregar franja</Button>
             </div>
 
             {form.slots.length > 0 && (
               <div className="mt-3">
                 <div className="flex flex-wrap gap-2">
                   {form.slots.map((s, i) => (
-                    <Badge key={i} variant="outline">{s.day} {s.start}-{s.end}</Badge>
+                    <Badge key={i} variant="outline" className="rounded-full">{s.day} {s.start}-{s.end}</Badge>
                   ))}
                 </div>
               </div>
@@ -425,26 +557,24 @@ function LoadAndSchedules() {
           </div>
 
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={check}><AlertTriangle className="h-4 w-4 mr-2" />Verificar conflictos</Button>
-            <Button onClick={createSection} className="bg-blue-600 hover:bg-blue-700">
-              <Save className="h-4 w-4 mr-2" />Crear sección
-            </Button>
+            <Button variant="outline" onClick={check} className="gap-2"><AlertTriangle className="h-4 w-4" />Verificar conflictos</Button>
+            <Button onClick={createSection} className="gap-2"><Save className="h-4 w-4" />Crear sección</Button>
           </div>
 
           {conflicts.length > 0 && (
-            <div className="mt-2 p-3 border rounded bg-red-50">
-              <div className="font-medium text-red-700 mb-1">Conflictos:</div>
-              {conflicts.map((c, i) => <div key={i} className="text-sm text-red-700">• {c.message}</div>)}
+            <div className="mt-2 p-3 border rounded-2xl bg-destructive/5">
+              <div className="font-medium text-destructive mb-1">Conflictos:</div>
+              {conflicts.map((c, i) => (<div key={i} className="text-sm text-destructive">• {c.message}</div>))}
             </div>
           )}
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Secciones {`(Período 2025-I)`}</CardTitle></CardHeader>
+        <CardHeader>{sectionHeader({ title: "Secciones (Período 2025-I)" })}</CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-muted/40">
               <tr>
                 <th className="p-2 text-left">Curso</th>
                 <th className="p-2 text-left">Docente</th>
@@ -454,16 +584,18 @@ function LoadAndSchedules() {
               </tr>
             </thead>
             <tbody>
-              {sections.map(s => (
-                <tr key={s.id} className="border-t">
+              {(Array.isArray(sections) ? sections : []).map((s) => (
+                <tr key={s.id} className="border-t hover:bg-accent/5">
                   <td className="p-2">{s.course_code} – {s.course_name}</td>
                   <td className="p-2">{s.teacher_name}</td>
                   <td className="p-2">{s.room_name}</td>
-                  <td className="p-2">{(s.slots || []).map((k, i) => `${k.day} ${k.start}-${k.end}`).join(", ")}</td>
+                  <td className="p-2">{(Array.isArray(s.slots) ? s.slots : []).map((k) => `${k.day} ${k.start}-${k.end}`).join(", ")}</td>
                   <td className="p-2 text-center">{s.capacity}</td>
                 </tr>
               ))}
-              {sections.length === 0 && <tr><td className="p-4 text-center text-gray-500" colSpan={5}>Sin secciones</td></tr>}
+              {(Array.isArray(sections) ? sections : []).length === 0 && (
+                <tr><td className="p-4 text-center text-muted-foreground" colSpan={5}>Sin secciones</td></tr>
+              )}
             </tbody>
           </table>
         </CardContent>
@@ -474,6 +606,9 @@ function LoadAndSchedules() {
 
 /* ------------- KÁRDEX / CONSTANCIAS ------------- */
 function KardexAndCertificates() {
+  const { hasAny } = useAuth();
+  if (!hasAny(REQS.kardex)) return null;
+
   const [studentId, setStudentId] = useState("");
   const [period, setPeriod] = useState("2025-I");
   const [data, setData] = useState(null);
@@ -505,33 +640,27 @@ function KardexAndCertificates() {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader><CardTitle>Consulta de Kárdex</CardTitle></CardHeader>
+        <CardHeader>{sectionHeader({ title: "Consulta de Kárdex", Icon: FileText })}</CardHeader>
         <CardContent className="grid md:grid-cols-4 gap-3">
-          <div className="md:col-span-2">
-            <Label>ID/DNI Estudiante</Label>
-            <Input value={studentId} onChange={e => setStudentId(e.target.value)} placeholder="e.g. 71234567" />
-          </div>
-          <div>
-            <Label>Período</Label>
-            <Input value={period} onChange={e => setPeriod(e.target.value)} />
-          </div>
+          <Labeled label="ID/DNI Estudiante" value={studentId} onChange={setStudentId} placeholder="e.g. 71234567" />
+          <Labeled label="Período" value={period} onChange={setPeriod} />
           <div className="flex items-end">
-            <Button onClick={fetchKardex}><Search className="h-4 w-4 mr-2" />Consultar</Button>
+            <Button onClick={fetchKardex} className="gap-2"><SearchIcon className="h-4 w-4" />Consultar</Button>
           </div>
         </CardContent>
       </Card>
 
       {data && (
-        <Card>
-          <CardHeader><CardTitle>Resultados</CardTitle></CardHeader>
+        <Card className="border">
+          <CardHeader>{sectionHeader({ title: "Resultados" })}</CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div><strong>Estudiante:</strong> {data.student_name}</div>
             <div><strong>Carrera:</strong> {data.career_name}</div>
             <div><strong>Créditos aprobados:</strong> {data.credits_earned}</div>
             <div><strong>PPA:</strong> {data.gpa ?? "-"}</div>
             <div className="flex gap-2 mt-2">
-              <Button variant="outline" onClick={genBoleta}><FileText className="h-4 w-4 mr-2" />Boleta PDF</Button>
-              <Button variant="outline" onClick={genConstancia}><FileText className="h-4 w-4 mr-2" />Constancia PDF</Button>
+              <Button variant="outline" onClick={genBoleta} className="gap-2"><FileText className="h-4 w-4" />Boleta PDF</Button>
+              <Button variant="outline" onClick={genConstancia} className="gap-2"><FileText className="h-4 w-4" />Constancia PDF</Button>
             </div>
           </CardContent>
         </Card>
@@ -542,6 +671,9 @@ function KardexAndCertificates() {
 
 /* ------------- PROCESOS ------------- */
 function AcademicProcesses() {
+  const { hasAny } = useAuth();
+  if (!hasAny(REQS.processes)) return null;
+
   const [type, setType] = useState("RETIRO");
   const [form, setForm] = useState({ student_id: "", period: "2025-I", reason: "", extra: "" });
 
@@ -562,7 +694,7 @@ function AcademicProcesses() {
 
   return (
     <Card>
-      <CardHeader><CardTitle>Procesos académicos</CardTitle></CardHeader>
+      <CardHeader>{sectionHeader({ title: "Procesos académicos", Icon: Clock })}</CardHeader>
       <CardContent className="grid md:grid-cols-2 gap-3">
         <div>
           <Label>Tipo</Label>
@@ -577,49 +709,138 @@ function AcademicProcesses() {
             </SelectContent>
           </Select>
         </div>
-        <div>
-          <Label>ID/DNI Estudiante</Label>
-          <Input value={form.student_id} onChange={e => setForm({ ...form, student_id: e.target.value })} />
-        </div>
-        <div>
-          <Label>Período</Label>
-          <Input value={form.period} onChange={e => setForm({ ...form, period: e.target.value })} />
-        </div>
+        <Labeled label="ID/DNI Estudiante" value={form.student_id} onChange={(v) => setForm({ ...form, student_id: v })} />
+        <Labeled label="Período" value={form.period} onChange={(v) => setForm({ ...form, period: v })} />
         <div className="md:col-span-2">
           <Label>Motivo / Detalle</Label>
-          <Textarea value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} />
+          <Textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
         </div>
         <div className="md:col-span-2 flex justify-end">
-          <Button onClick={submit}><Save className="h-4 w-4 mr-2" />Enviar solicitud</Button>
+          <Button onClick={submit} className="gap-2"><Save className="h-4 w-4" />Enviar solicitud</Button>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-/* ------------- CONTENEDOR PRINCIPAL ------------- */
-export default function AcademicModule() {
+/* ------------- UTILS UI ------------- */
+function Labeled({ label, value, onChange, placeholder, type = "text" }) {
   return (
-    <div className="p-6 space-y-6">
-      <Tabs defaultValue="dashboard" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="plans">Mallas</TabsTrigger>
-          <TabsTrigger value="load">Carga & Horarios</TabsTrigger>
-          <TabsTrigger value="enroll">Matrícula</TabsTrigger>
-          <TabsTrigger value="grades">Notas/Asistencia</TabsTrigger>
-          <TabsTrigger value="kardex">Kárdex</TabsTrigger>
-          <TabsTrigger value="processes">Procesos</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="dashboard"><SmallAcademicDashboard /></TabsContent>
-        <TabsContent value="plans"><PlansAndCurricula /></TabsContent>
-        <TabsContent value="load"><LoadAndSchedules /></TabsContent>
-        <TabsContent value="enroll"><EnrollmentComponent /></TabsContent>
-        <TabsContent value="grades"><GradesAttendanceComponent /></TabsContent>
-        <TabsContent value="kardex"><KardexAndCertificates /></TabsContent>
-        <TabsContent value="processes"><AcademicProcesses /></TabsContent>
-      </Tabs>
+    <div>
+      <Label>{label}</Label>
+      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
     </div>
   );
+}
+
+function Empty({ label = "Sin datos", Icon = Inbox }) {
+  return (
+    <div className="flex items-center gap-2 text-sm text-muted-foreground p-3 border rounded-xl">
+      <Icon className="h-4 w-4" />
+      {label}
+    </div>
+  );
+}
+
+/* ------------- CONTENEDOR PRINCIPAL ------------- */
+export default function AcademicModule() {
+  const { hasAny } = useAuth();
+  const [tab, setTab] = useState("dashboard");
+
+  // tabs permitidos según permisos del usuario
+  const tabs = useMemo(() => ([
+    { key: "dashboard", label: "Dashboard", need: [] }, // siempre
+    { key: "plans", label: "Mallas", need: REQS.plans },
+    { key: "load", label: "Carga & Horarios", need: REQS.load },
+    { key: "enroll", label: "Matrícula", need: REQS.enroll },
+    { key: "grades", label: "Notas/Asistencia", need: REQS.grades },
+    { key: "syllabus", label: "Sílabos/Evaluación", need: REQS.syllabus },
+    { key: "kardex", label: "Kárdex", need: REQS.kardex },
+    { key: "reports", label: "Reportes", need: REQS.reports },
+    { key: "proc-inbox", label: "Bandeja procesos", need: REQS.procInbox },
+    { key: "processes", label: "Procesos", need: REQS.processes },
+  ].filter(t => t.need.length === 0 || hasAny(t.need))), [hasAny]);
+
+  // si el tab actual no está permitido, muévete al primero visible
+  useEffect(() => {
+    if (!tabs.find(t => t.key === tab)) setTab(tabs[0]?.key ?? "dashboard");
+  }, [tabs, tab]);
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="rounded-3xl border bg-gradient-to-br from-muted/30 to-background p-4 md:p-6">
+        <div className="flex items-center gap-2">
+          <GraduationCap className="h-6 w-6 text-primary" />
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Módulo Académico</h1>
+        </div>
+        <p className="text-sm text-muted-foreground mt-1">
+          Gestión integral de planes, secciones, matrícula, notas y procesos
+        </p>
+        <Separator className="my-4" />
+
+        <div className="sticky top-0 z-10 backdrop-blur supports-[backdrop-filter]:bg-background/60 rounded-2xl">
+          <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+            <TabsList className="w-full flex gap-2 overflow-x-auto no-scrollbar">
+              {tabs.map(t => (
+                <IconTab key={t.key} value={t.key} label={t.label} Icon={tabIcon(t.key)} />
+              ))}
+            </TabsList>
+
+            <TabsContent value="dashboard">
+              <div className="space-y-6">
+                <AcademicQuickActions go={setTab} />
+                <SmallAcademicDashboard />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="plans"><PlansAndCurricula /></TabsContent>
+            <TabsContent value="load"><LoadAndSchedules /></TabsContent>
+            <TabsContent value="enroll">
+              <IfPerm any={REQS.enroll}><EnrollmentComponent /></IfPerm>
+            </TabsContent>
+            <TabsContent value="grades">
+              <IfPerm any={REQS.grades}><GradesAttendanceComponent /></IfPerm>
+            </TabsContent>
+            <TabsContent value="syllabus">
+              <IfPerm any={REQS.syllabus}><SectionSyllabusEvaluation /></IfPerm>
+            </TabsContent>
+            <TabsContent value="kardex"><KardexAndCertificates /></TabsContent>
+            <TabsContent value="reports">
+              <IfPerm any={REQS.reports}><AcademicReportsPage /></IfPerm>
+            </TabsContent>
+            <TabsContent value="proc-inbox">
+              <IfPerm any={REQS.procInbox}><AcademicProcessesInbox /></IfPerm>
+            </TabsContent>
+            <TabsContent value="processes"><AcademicProcesses /></TabsContent>
+          </Tabs>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function IconTab({ value, label, Icon }) {
+  return (
+    <TabsTrigger value={value} className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-2">
+      <Icon className="h-4 w-4" />
+      <span className="hidden sm:inline-block">{label}</span>
+      <span className="sm:hidden text-xs">{label.slice(0, 8)}</span>
+    </TabsTrigger>
+  );
+}
+
+function tabIcon(key) {
+  switch (key) {
+    case "dashboard": return LayoutGrid;
+    case "plans": return BookOpen;
+    case "load": return Calendar;
+    case "enroll": return GraduationCap;
+    case "grades": return CheckCircle;
+    case "syllabus": return FileText;
+    case "kardex": return Users;
+    case "reports": return BarChart3;
+    case "proc-inbox": return Inbox;
+    case "processes": return Clock;
+    default: return LayoutGrid;
+  }
 }

@@ -1,4 +1,3 @@
-// src/components/FinanceModule.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext";
 import CashBanksDashboard from "../../components/finance/CashBanksDashboard";
@@ -9,129 +8,106 @@ import HRDashboard from "../../components/finance/HRDashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
-import {
-  Banknote,
-  Receipt,
-  Package,
-  Truck,
-  Users,
-  BarChart3,
-  AlertTriangle,
-  TrendingUp,
-} from "lucide-react";
+import { Banknote, Receipt, Package, Truck, Users, BarChart3, AlertTriangle, TrendingUp, FileText, Coins } from "lucide-react";
 import { toast } from "sonner";
-
-/* ---------------- helpers ---------------- */
-function formatApiError(err, fallback = "Ocurrió un error") {
-  const data = err?.response?.data;
-  if (data?.detail) {
-    const d = data.detail;
-    if (typeof d === "string") return d;
-    if (Array.isArray(d)) {
-      const msgs = d
-        .map((e) => {
-          const field = Array.isArray(e?.loc) ? e.loc.join(".") : e?.loc;
-          return e?.msg ? (field ? `${field}: ${e.msg}` : e.msg) : null;
-        })
-        .filter(Boolean);
-      if (msgs.length) return msgs.join(" | ");
-    }
-  }
-  if (typeof data?.error?.message === "string") return data.error.message;
-  if (typeof data?.message === "string") return data.message;
-  if (typeof data?.error === "string") return data.error;
-  if (typeof err?.message === "string") return err.message;
-  return fallback;
-}
-
-const fmtCurrency = (n) =>
-  typeof n === "number"
-    ? `S/. ${n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    : "S/. 0.00";
+import ConceptsCatalog from "./ConceptsCatalog";
+import ReconciliationDashboard from "./ReconciliationDashboard";
+import StudentAccountsDashboard from "./StudentAccountsDashboard";
+import FinanceReports from "./FinanceReports";
+import { fmtCurrency, formatApiError } from "../../utils/format";
+import { PERMS } from "../../auth/permissions";
 
 const FinanceModule = () => {
-  const { user, api } = useAuth();
+  const { user, api, hasPerm, hasAny } = useAuth();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [dashboardStats, setDashboardStats] = useState({});
   const [loading, setLoading] = useState(true);
 
-  // Permisos por rol
-  const hasFinanceAccess = ["FINANCE_ADMIN", "ADMIN"].includes(user?.role);
-  const hasCashierAccess = ["CASHIER", "FINANCE_ADMIN", "ADMIN"].includes(user?.role);
-  const hasWarehouseAccess = ["WAREHOUSE", "FINANCE_ADMIN", "ADMIN"].includes(user?.role);
-  const hasLogisticsAccess = ["LOGISTICS", "FINANCE_ADMIN", "ADMIN"].includes(user?.role);
-  const hasHRAccess = ["HR_ADMIN", "FINANCE_ADMIN", "ADMIN"].includes(user?.role);
+  // ------- Permisos por funcionalidad (no por rol) -------
+  const canCashBanks = hasAny([PERMS["fin.cashbanks.view"]]);           // Caja y bancos + boletas
+  const canReceipts = hasAny([PERMS["fin.cashbanks.view"]]);           // Reutilizo la misma vista
+  const canStdAccounts = hasAny([PERMS["fin.student.accounts.view"]]);    // Estados de cuenta
+  const canConcepts = hasAny([PERMS["fin.concepts.manage"]]);          // Catálogo de conceptos
+  const canReconcile = hasAny([PERMS["fin.reconciliation.view"]]);      // Conciliación
+  const canReports = hasAny([PERMS["fin.reports.view"]]);             // Reportes fin.
+  const canInventory = hasAny([PERMS["fin.inventory.view"]]);           // Inventario (adm.)
+  const canLogistics = hasAny([PERMS["fin.logistics.view"]]);           // Logística (adm.)
+  const canHR = hasAny([PERMS["hr.view"]]);                      // RRHH (adm.)
 
-  useEffect(() => {
-    fetchDashboardStats();
-  }, [fetchDashboardStats]);
+  // etiqueta visible según el permiso principal del usuario (solo estética)
+  const roleLabel = (() => {
+    if (hasAny([PERMS["fin.concepts.manage"], PERMS["fin.reports.view"], PERMS["fin.reconciliation.view"]])) return "Administrador Financiero";
+    if (canCashBanks || canReceipts || canStdAccounts) return "Caja";
+    if (canInventory) return "Almacén";
+    if (canLogistics) return "Logística";
+    if (canHR) return "RR.HH.";
+    return "Usuario";
+  })();
 
   const fetchDashboardStats = useCallback(async () => {
+    let alive = true;
     try {
       setLoading(true);
       const { data } = await api.get("/dashboard/stats");
-      // acepta tanto {stats:{...}} como {...}
-      setDashboardStats(data?.stats ?? data ?? {});
+      if (alive) setDashboardStats(data?.stats ?? data ?? {});
     } catch (error) {
-      console.error("Error fetching dashboard stats:", error);
-      toast.error(formatApiError(error, "No se pudieron cargar las estadísticas"));
+      if (alive) toast.error(formatApiError(error, "No se pudieron cargar las estadísticas"));
     } finally {
-      setLoading(false);
+      if (alive) setLoading(false);
     }
-
+    return () => { alive = false; };
   }, [api]);
 
+  useEffect(() => {
+    let cleanup;
+    (async () => { cleanup = await fetchDashboardStats(); })();
+    return () => { if (typeof cleanup === 'function') cleanup(); };
+  }, [fetchDashboardStats]);
 
-  // Dashboard principal con tarjetas según rol
   const renderMainDashboard = () => {
-    // Campos esperados (opcionales) del backend:
-    const cashToday = dashboardStats?.cash_today_amount;             // número
-    const monthlyIncome = dashboardStats?.monthly_income_amount;     // número
-    const monthlyDelta = dashboardStats?.monthly_income_change_pct;  // número (porcentaje)
-    const lowStockAlerts = dashboardStats?.low_stock_alerts;         // entero
-    const activeEmployees = dashboardStats?.active_employees;        // entero
+    const cashToday = dashboardStats?.cash_today_amount;
+    const monthlyIncome = dashboardStats?.monthly_income_amount;
+    const monthlyDelta = dashboardStats?.monthly_income_change_pct;
+    const lowStockAlerts = dashboardStats?.low_stock_alerts;
+    const activeEmployees = dashboardStats?.active_employees;
 
     return (
       <div className="space-y-6">
-        {/* Finance Overview Cards */}
+        {/* tarjetas top, cada una condicionada por permiso */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {hasCashierAccess && (
+          {canCashBanks && (
             <Card className="border-l-4 border-l-green-500">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Caja del Día</CardTitle>
-                <Banknote className="h-4 w-4 text-green-600" />
+                <CardTitle className="text-sm font-medium">Caja del día</CardTitle>
+                <Banknote className="h-4 w-4 text-green-600" aria-hidden="true" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">
-                  {fmtCurrency(cashToday ?? 0)}
-                </div>
+                <div className="text-2xl font-bold text-green-600">{fmtCurrency(cashToday ?? 0)}</div>
                 <p className="text-xs text-muted-foreground">Sesión actual abierta</p>
               </CardContent>
             </Card>
           )}
 
-          {hasFinanceAccess && (
+          {canReports && (
             <Card className="border-l-4 border-l-blue-500">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Ingresos del Mes</CardTitle>
-                <TrendingUp className="h-4 w-4 text-blue-600" />
+                <CardTitle className="text-sm font-medium">Ingresos del mes</CardTitle>
+                <TrendingUp className="h-4 w-4 text-blue-600" aria-hidden="true" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-blue-600">
-                  {fmtCurrency(monthlyIncome ?? 0)}
-                </div>
+                <div className="text-2xl font-bold text-blue-600">{fmtCurrency(monthlyIncome ?? 0)}</div>
                 <p className="text-xs text-muted-foreground">
-                  {typeof monthlyDelta === "number" ? `${monthlyDelta > 0 ? "+" : ""}${monthlyDelta}% vs mes anterior` : "—"}
+                  {typeof monthlyDelta === "number" ? `${monthlyDelta > 0 ? "+" : ""}${monthlyDelta}% vs. mes anterior` : "—"}
                 </p>
               </CardContent>
             </Card>
           )}
 
-          {hasWarehouseAccess && (
+          {canInventory && (
             <Card className="border-l-4 border-l-orange-500">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Alertas de Stock</CardTitle>
-                <AlertTriangle className="h-4 w-4 text-orange-600" />
+                <CardTitle className="text-sm font-medium">Alertas de stock</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-orange-600" aria-hidden="true" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-orange-600">
@@ -142,11 +118,11 @@ const FinanceModule = () => {
             </Card>
           )}
 
-          {hasHRAccess && (
+          {canHR && (
             <Card className="border-l-4 border-l-purple-500">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Personal Activo</CardTitle>
-                <Users className="h-4 w-4 text-purple-600" />
+                <CardTitle className="text-sm font-medium">Personal activo</CardTitle>
+                <Users className="h-4 w-4 text-purple-600" aria-hidden="true" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-purple-600">
@@ -158,132 +134,116 @@ const FinanceModule = () => {
           )}
         </div>
 
-        {/* Acciones rápidas */}
-        <Card>
+        {/* Acciones rápidas según permisos */}
+        <Card aria-busy={loading}>
           <CardHeader>
-            <CardTitle>Acciones Rápidas</CardTitle>
-            <CardDescription>Accede rápidamente a las funciones principales</CardDescription>
+            <CardTitle>Acciones rápidas</CardTitle>
+            <CardDescription>Accede a las funciones principales</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              {hasCashierAccess && (
-                <Button
-                  onClick={() => setActiveTab("cash-banks")}
-                  className="h-20 flex flex-col items-center justify-center space-y-2"
-                  variant="outline"
-                >
-                  <Banknote className="h-6 w-6" />
+              {canCashBanks && (
+                <Button onClick={() => setActiveTab("cash-banks")} className="h-20 flex flex-col items-center justify-center space-y-2" variant="outline">
+                  <Banknote className="h-6 w-6" aria-hidden="true" />
                   <span className="text-sm">Caja y Bancos</span>
                 </Button>
               )}
-
-              {hasCashierAccess && (
-                <Button
-                  onClick={() => setActiveTab("receipts")}
-                  className="h-20 flex flex-col items-center justify-center space-y-2"
-                  variant="outline"
-                >
-                  <Receipt className="h-6 w-6" />
+              {canReceipts && (
+                <Button onClick={() => setActiveTab("receipts")} className="h-20 flex flex-col items-center justify-center space-y-2" variant="outline">
+                  <Receipt className="h-6 w-6" aria-hidden="true" />
                   <span className="text-sm">Boletas</span>
                 </Button>
               )}
-
-              {hasWarehouseAccess && (
-                <Button
-                  onClick={() => setActiveTab("inventory")}
-                  className="h-20 flex flex-col items-center justify-center space-y-2"
-                  variant="outline"
-                >
-                  <Package className="h-6 w-6" />
+              {canInventory && (
+                <Button onClick={() => setActiveTab("inventory")} className="h-20 flex flex-col items-center justify-center space-y-2" variant="outline">
+                  <Package className="h-6 w-6" aria-hidden="true" />
                   <span className="text-sm">Inventario</span>
                 </Button>
               )}
-
-              {hasLogisticsAccess && (
-                <Button
-                  onClick={() => setActiveTab("logistics")}
-                  className="h-20 flex flex-col items-center justify-center space-y-2"
-                  variant="outline"
-                >
-                  <Truck className="h-6 w-6" />
+              {canLogistics && (
+                <Button onClick={() => setActiveTab("logistics")} className="h-20 flex flex-col items-center justify-center space-y-2" variant="outline">
+                  <Truck className="h-6 w-6" aria-hidden="true" />
                   <span className="text-sm">Logística</span>
                 </Button>
               )}
-
-              {hasHRAccess && (
-                <Button
-                  onClick={() => setActiveTab("hr")}
-                  className="h-20 flex flex-col items-center justify-center space-y-2"
-                  variant="outline"
-                >
-                  <Users className="h-6 w-6" />
-                  <span className="text-sm">Recursos Humanos</span>
+              {canHR && (
+                <Button onClick={() => setActiveTab("hr")} className="h-20 flex flex-col items-center justify-center space-y-2" variant="outline">
+                  <Users className="h-6 w-6" aria-hidden="true" />
+                  <span className="text-sm">RRHH</span>
                 </Button>
               )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Actividades / Tareas: placeholders UI (si ya tienes endpoints, puedes cablearlos igual con api) */}
+        {/* demo de actividades / tareas */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Actividades Recientes</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Actividades recientes</CardTitle></CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">Boleta REC-001-000125 pagada</p>
-                    <p className="text-xs text-muted-foreground">Hace 5 minutos</p>
+                {canReceipts && (
+                  <div className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Boleta REC-001-000125 pagada</p>
+                      <p className="text-xs text-muted-foreground">Hace 5 minutos</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">Movimiento de inventario: Entrada</p>
-                    <p className="text-xs text-muted-foreground">Hace 12 minutos</p>
+                )}
+                {canInventory && (
+                  <div className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Movimiento de inventario: Entrada</p>
+                      <p className="text-xs text-muted-foreground">Hace 12 minutos</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">Alerta: Stock bajo en Papel Bond</p>
-                    <p className="text-xs text-muted-foreground">Hace 1 hora</p>
+                )}
+                {canInventory && (
+                  <div className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Alerta: Stock bajo en Papel Bond</p>
+                      <p className="text-xs text-muted-foreground">Hace 1 hora</p>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Próximas Tareas</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Próximas tareas</CardTitle></CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">Arqueo de caja pendiente</p>
-                    <p className="text-xs text-muted-foreground">Vence hoy</p>
+                {canCashBanks && (
+                  <div className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Arqueo de caja pendiente</p>
+                      <p className="text-xs text-muted-foreground">Vence hoy</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">Conciliación bancaria</p>
-                    <p className="text-xs text-muted-foreground">Vence mañana</p>
+                )}
+                {canReconcile && (
+                  <div className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Conciliación bancaria</p>
+                      <p className="text-xs text-muted-foreground">Vence mañana</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">Reporte de inventario mensual</p>
-                    <p className="text-xs text-muted-foreground">Vence en 3 días</p>
+                )}
+                {canReports && (
+                  <div className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Reporte de inventario mensual</p>
+                      <p className="text-xs text-muted-foreground">Vence en 3 días</p>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -294,113 +254,102 @@ const FinanceModule = () => {
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case "dashboard":
-        return renderMainDashboard();
-      case "cash-banks":
-        return hasCashierAccess ? (
-          <CashBanksDashboard />
-        ) : (
-          <div className="text-center py-8">No tienes permisos para acceder a esta sección</div>
-        );
-      case "receipts":
-        return hasCashierAccess ? (
-          <ReceiptsDashboard />
-        ) : (
-          <div className="text-center py-8">No tienes permisos para acceder a esta sección</div>
-        );
-      case "inventory":
-        return hasWarehouseAccess ? (
-          <InventoryDashboard />
-        ) : (
-          <div className="text-center py-8">No tienes permisos para acceder a esta sección</div>
-        );
-      case "logistics":
-        return hasLogisticsAccess ? (
-          <LogisticsDashboard />
-        ) : (
-          <div className="text-center py-8">No tienes permisos para acceder a esta sección</div>
-        );
-      case "hr":
-        return hasHRAccess ? (
-          <HRDashboard />
-        ) : (
-          <div className="text-center py-8">No tienes permisos para acceder a esta sección</div>
-        );
-      default:
-        return renderMainDashboard();
+      case "dashboard": return renderMainDashboard();
+      case "cash-banks": return canCashBanks ? <CashBanksDashboard /> : <div className="text-center py-8">No tienes permisos para acceder a esta sección</div>;
+      case "receipts": return canReceipts ? <ReceiptsDashboard /> : <div className="text-center py-8">No tienes permisos para acceder a esta sección</div>;
+      case "student-accounts": return canStdAccounts ? <StudentAccountsDashboard /> : <div className="text-center py-8">No tienes permisos…</div>;
+      case "concepts": return canConcepts ? <ConceptsCatalog /> : <div className="text-center py-8">No tienes permisos…</div>;
+      case "reconciliation": return canReconcile ? <ReconciliationDashboard /> : <div className="text-center py-8">No tienes permisos…</div>;
+      case "reports": return canReports ? <FinanceReports /> : <div className="text-center py-8">No tienes permisos…</div>;
+      case "inventory": return canInventory ? <InventoryDashboard /> : <div className="text-center py-8">No tienes permisos…</div>;
+      case "logistics": return canLogistics ? <LogisticsDashboard /> : <div className="text-center py-8">No tienes permisos…</div>;
+      case "hr": return canHR ? <HRDashboard /> : <div className="text-center py-8">No tienes permisos…</div>;
+      default: return renderMainDashboard();
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center h-64" aria-busy="true">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
       </div>
     );
   }
 
-  if (!user) {
-    return <div className="text-center py-12">Acceso no autorizado</div>;
-  }
+  if (!user) return <div className="text-center py-12">Acceso no autorizado</div>;
 
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Tesorería y Administración</h1>
-        <p className="text-gray-600 mt-2">
-          Sistema integral de gestión financiera y administrativa -{" "}
-          {user?.role === "FINANCE_ADMIN"
-            ? "Administrador"
-            : user?.role === "CASHIER"
-              ? "Cajero/a"
-              : user?.role === "WAREHOUSE"
-                ? "Almacén"
-                : user?.role === "LOGISTICS"
-                  ? "Logística"
-                  : user?.role === "HR_ADMIN"
-                    ? "RRHH"
-                    : "Usuario"}
-        </p>
+        <p className="text-gray-600 mt-2">Sistema integral — {roleLabel}</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-10">
           <TabsTrigger value="dashboard" className="flex items-center space-x-2">
-            <BarChart3 className="h-4 w-4" />
+            <BarChart3 className="h-4 w-4" aria-hidden="true" />
             <span>Dashboard</span>
           </TabsTrigger>
 
-          {hasCashierAccess && (
-            <TabsTrigger value="cash-banks" className="flex items-center space-x-2">
-              <Banknote className="h-4 w-4" />
-              <span>Caja y Bancos</span>
+          {canCashBanks && (
+            <>
+              <TabsTrigger value="cash-banks" className="flex items-center space-x-2">
+                <Banknote className="h-4 w-4" aria-hidden="true" />
+                <span>Caja y Bancos</span>
+              </TabsTrigger>
+              <TabsTrigger value="receipts" className="flex items-center space-x-2">
+                <Receipt className="h-4 w-4" aria-hidden="true" />
+                <span>Boletas</span>
+              </TabsTrigger>
+            </>
+          )}
+
+          {canStdAccounts && (
+            <TabsTrigger value="student-accounts" className="flex items-center space-x-2">
+              <Coins className="h-4 w-4" aria-hidden="true" />
+              <span>Estados de Cuenta</span>
             </TabsTrigger>
           )}
 
-          {hasCashierAccess && (
-            <TabsTrigger value="receipts" className="flex items-center space-x-2">
-              <Receipt className="h-4 w-4" />
-              <span>Boletas</span>
+          {canConcepts && (
+            <TabsTrigger value="concepts" className="flex items-center space-x-2">
+              <FileText className="h-4 w-4" aria-hidden="true" />
+              <span>Conceptos</span>
             </TabsTrigger>
           )}
 
-          {hasWarehouseAccess && (
+          {canReconcile && (
+            <TabsTrigger value="reconciliation" className="flex items-center space-x-2">
+              <Banknote className="h-4 w-4" aria-hidden="true" />
+              <span>Conciliación</span>
+            </TabsTrigger>
+          )}
+
+          {canReports && (
+            <TabsTrigger value="reports" className="flex items-center space-x-2">
+              <BarChart3 className="h-4 w-4" aria-hidden="true" />
+              <span>Reportes</span>
+            </TabsTrigger>
+          )}
+
+          {canInventory && (
             <TabsTrigger value="inventory" className="flex items-center space-x-2">
-              <Package className="h-4 w-4" />
+              <Package className="h-4 w-4" aria-hidden="true" />
               <span>Inventario</span>
             </TabsTrigger>
           )}
 
-          {hasLogisticsAccess && (
+          {canLogistics && (
             <TabsTrigger value="logistics" className="flex items-center space-x-2">
-              <Truck className="h-4 w-4" />
+              <Truck className="h-4 w-4" aria-hidden="true" />
               <span>Logística</span>
             </TabsTrigger>
           )}
 
-          {hasHRAccess && (
+          {canHR && (
             <TabsTrigger value="hr" className="flex items-center space-x-2">
-              <Users className="h-4 w-4" />
+              <Users className="h-4 w-4" aria-hidden="true" />
               <span>RRHH</span>
             </TabsTrigger>
           )}

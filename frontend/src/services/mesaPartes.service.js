@@ -75,3 +75,50 @@ export const PublicProcedures = {
     track: (code) =>
         http("GET", `/public/procedures/track?code=${encodeURIComponent(code)}`, null, { isJSON: true, isPublic: true }),
 };
+
+/* ===== Archivos de trámite ===== */
+export const ProcedureFiles = {
+    list: (id) => http("GET", `/procedures/${id}/files`),
+    upload: (id, file, meta = {}) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        if (meta.doc_type) fd.append("doc_type", meta.doc_type);
+        if (meta.description) fd.append("description", meta.description);
+        return http("POST", `/procedures/${id}/files`, fd, { isJSON: false });
+    },
+    remove: (id, fileId) => http("DELETE", `/procedures/${id}/files/${fileId}`),
+};
+
+/* ===== Recepción pública (ciudadano) ===== */
+export const PublicIntake = {
+    create: (payload) =>
+        http("POST", `/public/procedures`, payload, { isJSON: true, isPublic: true }),
+    uploadFile: (trackingCode, file, meta = {}) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        if (meta.doc_type) fd.append("doc_type", meta.doc_type);
+        if (meta.description) fd.append("description", meta.description);
+        return http(
+            "POST",
+            `/public/procedures/${encodeURIComponent(trackingCode)}/files`,
+            fd,
+            { isJSON: false, isPublic: true }
+        );
+    },
+};
+
+/* ===== Reportes (SLA/volúmenes) ===== */
+export const ProcedureReports = {
+    summary: (params = {}) => {
+        const q = new URLSearchParams(params).toString();
+        return http("GET", `/procedures/reports/summary${q ? `?${q}` : ""}`);
+    },
+    exportSLA: (params = {}) => {
+        const q = new URLSearchParams(params).toString();
+        return http("GET", `/procedures/reports/sla.xlsx${q ? `?${q}` : ""}`);
+    },
+    exportVolume: (params = {}) => {
+        const q = new URLSearchParams(params).toString();
+        return http("GET", `/procedures/reports/volume.xlsx${q ? `?${q}` : ""}`);
+    },
+};
