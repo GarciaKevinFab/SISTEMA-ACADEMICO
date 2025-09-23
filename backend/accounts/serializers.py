@@ -1,35 +1,37 @@
 # backend/accounts/serializers.py
+from django.contrib.auth.models import User, Group
 from rest_framework import serializers
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
-    password = serializers.CharField(write_only=True, required=False)
 
     class Meta:
         model = User
         fields = [
             "id", "username", "email", "first_name", "last_name",
-            "is_active", "is_staff", "date_joined", "roles", "password"
+            "is_active", "roles",
         ]
+        read_only_fields = ["id", "is_active", "roles"]
 
     def get_roles(self, obj):
-        return [g.name for g in obj.groups.all()]
+        return list(obj.groups.values_list("name", flat=True))
+
+class UserCreateSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=6)
+
+    class Meta:
+        model = User
+        fields = ["username", "email", "first_name", "last_name", "password"]
 
     def create(self, validated_data):
-        password = validated_data.pop("password", None)
+        pwd = validated_data.pop("password")
         user = User(**validated_data)
-        user.set_password(password or User.objects.make_random_password())
+        user.set_password(pwd)
+        user.is_active = True
         user.save()
         return user
 
-    def update(self, instance, validated_data):
-        password = validated_data.pop("password", None)
-        for attr, val in validated_data.items():
-            setattr(instance, attr, val)
-        if password:
-            instance.set_password(password)
-        instance.save()
-        return instance
+class UserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["email", "first_name", "last_name"]
