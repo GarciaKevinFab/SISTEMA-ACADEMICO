@@ -1,5 +1,12 @@
 // src/modules/mesa-partes/MesaDePartesModule.jsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import { useAuth } from "../../context/AuthContext";
 import IfPerm from "@/components/auth/IfPerm";
 import { PERMS } from "@/auth/permissions";
@@ -26,6 +33,8 @@ import {
   Send,
   Trash2,
   Paperclip,
+  Pencil,
+  Power,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BACKEND_URL } from "../../utils/config";
@@ -57,7 +66,7 @@ function formatApiError(err, fallback = "Ocurrió un error") {
 }
 
 /* ===================== DASHBOARD ===================== */
-const MesaDePartesDashboard = () => {
+const MesaDePartesDashboard = ({ onNew, onSearch, onQR, onReports }) => {
   const { api, hasAny } = useAuth();
   const canSee = hasAny([PERMS["mpv.processes.review"], PERMS["mpv.reports.view"]]);
   const [stats, setStats] = useState({});
@@ -66,7 +75,7 @@ const MesaDePartesDashboard = () => {
   const fetchDashboardStats = useCallback(async () => {
     try {
       setLoading(true);
-      const { data } = await api.get("/dashboard/stats");
+      const { data } = await api.get("/dashboard/stats/");
       setStats(data?.stats ?? data ?? {});
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
@@ -76,7 +85,9 @@ const MesaDePartesDashboard = () => {
     }
   }, [api]);
 
-  useEffect(() => { if (canSee) fetchDashboardStats(); }, [fetchDashboardStats, canSee]);
+  useEffect(() => {
+    if (canSee) fetchDashboardStats();
+  }, [fetchDashboardStats, canSee]);
 
   if (!canSee) return null;
 
@@ -144,7 +155,7 @@ const MesaDePartesDashboard = () => {
         </Card>
       </div>
 
-      {/* Acciones rápidas (visibles según permiso) */}
+      {/* Acciones rápidas */}
       <Card>
         <CardHeader>
           <CardTitle>Acciones Rápidas</CardTitle>
@@ -153,28 +164,28 @@ const MesaDePartesDashboard = () => {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <IfPerm any={[PERMS["mpv.processes.review"]]}>
-              <Button variant="outline" className="h-20 flex flex-col gap-2">
+              <Button variant="outline" className="h-20 flex flex-col gap-2" onClick={onNew}>
                 <Plus className="h-6 w-6" />
                 <span className="text-sm">Nuevo Trámite</span>
               </Button>
             </IfPerm>
 
             <IfPerm any={[PERMS["mpv.processes.review"]]}>
-              <Button variant="outline" className="h-20 flex flex-col gap-2">
+              <Button variant="outline" className="h-20 flex flex-col gap-2" onClick={onSearch}>
                 <Search className="h-6 w-6" />
                 <span className="text-sm">Consultar Estado</span>
               </Button>
             </IfPerm>
 
             <IfPerm any={[PERMS["mpv.processes.review"]]}>
-              <Button variant="outline" className="h-20 flex flex-col gap-2">
+              <Button variant="outline" className="h-20 flex flex-col gap-2" onClick={onQR}>
                 <QrCode className="h-6 w-6" />
                 <span className="text-sm">Generar QR</span>
               </Button>
             </IfPerm>
 
             <IfPerm any={[PERMS["mpv.reports.view"]]}>
-              <Button variant="outline" className="h-20 flex flex-col gap-2">
+              <Button variant="outline" className="h-20 flex flex-col gap-2" onClick={onReports}>
                 <BarChart3 className="h-6 w-6" />
                 <span className="text-sm">Reportes</span>
               </Button>
@@ -189,10 +200,16 @@ const MesaDePartesDashboard = () => {
 /* ===================== TYPES ===================== */
 const ProcedureTypesManagement = () => {
   const { api, hasPerm } = useAuth();
-  const canManageTypes = hasPerm(PERMS["mpv.processes.resolve"]); // o crea "mpv.catalog.manage" si lo prefieres
+  const canManageTypes = hasPerm(PERMS["mpv.processes.resolve"]); // o crea "mpv.catalog.manage"
   const [procedureTypes, setProcedureTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // modal detalle/edición
+  const [viewOpen, setViewOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [selected, setSelected] = useState(null);
+
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -215,9 +232,11 @@ const ProcedureTypesManagement = () => {
     }
   }, [api]);
 
-  useEffect(() => { fetchProcedureTypes(); }, [fetchProcedureTypes]);
+  useEffect(() => {
+    fetchProcedureTypes();
+  }, [fetchProcedureTypes]);
 
-  const handleSubmit = async (e) => {
+  const handleSubmitCreate = async (e) => {
     e.preventDefault();
     try {
       await api.post("/procedure-types", formData);
@@ -234,6 +253,45 @@ const ProcedureTypesManagement = () => {
       fetchProcedureTypes();
     } catch (error) {
       toast.error(formatApiError(error, "Error al crear tipo de trámite"));
+    }
+  };
+
+  const openView = (type) => {
+    setSelected(type);
+    setEditing(false);
+    setViewOpen(true);
+  };
+
+  const toggleActive = async () => {
+    if (!selected) return;
+    try {
+      const payload = { is_active: !selected.is_active };
+      await api.patch(`/procedure-types/${selected.id}`, payload);
+      toast.success(`Tipo ${payload.is_active ? "activado" : "inactivado"}`);
+      setSelected({ ...selected, ...payload });
+      fetchProcedureTypes();
+    } catch (err) {
+      toast.error(formatApiError(err, "No se pudo cambiar el estado"));
+    }
+  };
+
+  const saveEdit = async (e) => {
+    e?.preventDefault?.();
+    if (!selected) return;
+    try {
+      const body = {
+        name: selected.name?.trim() ?? "",
+        description: selected.description ?? "",
+        required_documents: selected.required_documents ?? "",
+        processing_days: Number(selected.processing_days || 0),
+        cost: Number(selected.cost || 0),
+      };
+      await api.patch(`/procedure-types/${selected.id}`, body);
+      toast.success("Tipo actualizado");
+      setEditing(false);
+      fetchProcedureTypes();
+    } catch (err) {
+      toast.error(formatApiError(err, "No se pudo actualizar el tipo"));
     }
   };
 
@@ -263,7 +321,7 @@ const ProcedureTypesManagement = () => {
               <DialogTitle>Crear Nuevo Tipo de Trámite</DialogTitle>
               <DialogDescription>Configure un nuevo tipo de trámite documentario</DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmitCreate} className="space-y-4">
               <div>
                 <Label htmlFor="name">Nombre del Trámite *</Label>
                 <Input
@@ -370,7 +428,7 @@ const ProcedureTypesManagement = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex gap-2">
-                        <Button variant="ghost" size="sm">
+                        <Button variant="ghost" size="sm" onClick={() => openView(type)} title="Ver / Editar">
                           <Eye className="h-4 w-4" />
                         </Button>
                       </div>
@@ -382,6 +440,109 @@ const ProcedureTypesManagement = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Modal Ver/Editar */}
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {editing ? "Editar Tipo de Trámite" : `Detalle: ${selected?.name ?? ""}`}
+            </DialogTitle>
+            {!editing && <DialogDescription>Revise la configuración del tipo de trámite</DialogDescription>}
+          </DialogHeader>
+
+          {selected && (
+            <form onSubmit={saveEdit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Nombre</Label>
+                  <Input
+                    disabled={!editing}
+                    value={selected.name || ""}
+                    onChange={(e) => setSelected({ ...selected, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Días de Procesamiento</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    disabled={!editing}
+                    value={selected.processing_days ?? 1}
+                    onChange={(e) =>
+                      setSelected({ ...selected, processing_days: parseInt(e.target.value || "0", 10) })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Costo (S/.)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    disabled={!editing}
+                    value={selected.cost ?? 0}
+                    onChange={(e) =>
+                      setSelected({ ...selected, cost: parseFloat(e.target.value || "0") })
+                    }
+                  />
+                </div>
+                <div className="flex items-end gap-2">
+                  <Badge variant={selected.is_active ? "default" : "secondary"}>
+                    {selected.is_active ? "Activo" : "Inactivo"}
+                  </Badge>
+                </div>
+              </div>
+
+              <div>
+                <Label>Descripción</Label>
+                <Textarea
+                  disabled={!editing}
+                  value={selected.description ?? ""}
+                  onChange={(e) => setSelected({ ...selected, description: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <Label>Documentos Requeridos</Label>
+                <Textarea
+                  disabled={!editing}
+                  value={selected.required_documents ?? ""}
+                  onChange={(e) => setSelected({ ...selected, required_documents: e.target.value })}
+                />
+              </div>
+
+              <div className="flex justify-between pt-2">
+                <Button type="button" variant="outline" onClick={toggleActive}>
+                  <Power className="h-4 w-4 mr-2" />
+                  {selected.is_active ? "Inactivar" : "Activar"}
+                </Button>
+
+                <div className="flex gap-2">
+                  {!editing ? (
+                    <Button type="button" onClick={() => setEditing(true)}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Editar
+                    </Button>
+                  ) : (
+                    <>
+                      <Button type="button" variant="outline" onClick={() => setEditing(false)}>
+                        Cancelar
+                      </Button>
+                      <Button type="submit">
+                        Guardar
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -446,11 +607,17 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
         Catalog.offices(),
         Catalog.users({ role: "STAFF" }),
       ]);
+
       const procData = p?.procedure || p;
       setProc(procData);
-      setTimeline(t?.timeline || t || []);
-      setOffices(o?.offices || o || []);
-      setUsers(u?.users || u || []);
+
+      const tArr = Array.isArray(t?.timeline) ? t.timeline : (Array.isArray(t) ? t : []);
+      setTimeline(tArr);
+
+      const officesArr = Array.isArray(o?.offices) ? o.offices : (Array.isArray(o) ? o : []);
+      const usersArr = Array.isArray(u?.users) ? u.users : (Array.isArray(u) ? u : []);
+      setOffices(officesArr);
+      setUsers(usersArr);
     } catch (e) {
       toast.error(e.message);
     } finally {
@@ -489,18 +656,45 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
     } catch (e) { toast.error(e.message); }
   };
 
+  // PDFs
   const genCover = async () => {
+    const id = proc?.id ?? procedureId;
+    if (!id) {
+      toast.error("No se pudo obtener el ID del trámite");
+      return;
+    }
     try {
-      const r = await generatePDFWithPolling(`/procedures/${proc.id}/cover`, {}, { testId: "cover-pdf" });
-      if (r.success) await downloadFile(r.downloadUrl, `caratula-${proc.tracking_code}.pdf`);
-    } catch { toast.error("Error al generar carátula"); }
+      const r = await generatePDFWithPolling(`/procedures/${id}/cover`, {}, { testId: "cover-pdf" });
+      if (r?.success && r.downloadUrl) {
+        await downloadFile(r.downloadUrl, `caratula-${proc?.tracking_code || id}.pdf`);
+        toast.success("Carátula generada");
+      } else {
+        toast.error("No se pudo generar la carátula");
+      }
+    } catch (e) {
+      console.error("cover error:", e);
+      toast.error("Error al generar carátula");
+    }
   };
 
   const genCargo = async () => {
+    const id = proc?.id ?? procedureId;
+    if (!id) {
+      toast.error("No se pudo obtener el ID del trámite");
+      return;
+    }
     try {
-      const r = await generatePDFWithPolling(`/procedures/${proc.id}/cargo`, {}, { testId: "cargo-pdf" });
-      if (r.success) await downloadFile(r.downloadUrl, `cargo-${proc.tracking_code}.pdf`);
-    } catch { toast.error("Error al generar cargo"); }
+      const r = await generatePDFWithPolling(`/procedures/${id}/cargo`, {}, { testId: "cargo-pdf" });
+      if (r?.success && r.downloadUrl) {
+        await downloadFile(r.downloadUrl, `cargo-${proc?.tracking_code || id}.pdf`);
+        toast.success("Cargo generado");
+      } else {
+        toast.error("No se pudo generar el cargo");
+      }
+    } catch (e) {
+      console.error("cargo error:", e);
+      toast.error("Error al generar cargo");
+    }
   };
 
   return (
@@ -540,8 +734,11 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
               <Card>
                 <CardHeader><CardTitle>Trazabilidad</CardTitle></CardHeader>
                 <CardContent className="space-y-2 max-h-[320px] overflow-y-auto">
-                  {timeline.length === 0 && <div className="text-sm text-gray-500">Sin eventos</div>}
-                  {timeline.map((ev, i) => (
+                  {(!Array.isArray(timeline) || timeline.length === 0) && (
+                    <div className="text-sm text-gray-500">Sin eventos</div>
+                  )}
+
+                  {Array.isArray(timeline) && timeline.map((ev, i) => (
                     <div key={i} className="border rounded p-2">
                       <div className="text-xs text-gray-500">{new Date(ev.at).toLocaleString()}</div>
                       <div className="text-sm"><b>{ev.type}</b> — {ev.description}</div>
@@ -595,7 +792,11 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                     >
                       <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>
-                        {offices.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
+                        {(Array.isArray(offices) ? offices : []).map((o) => (
+                          <SelectItem key={o.id} value={String(o.id)}>
+                            {o.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -608,7 +809,11 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                     >
                       <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>
-                        {users.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.full_name || u.name}</SelectItem>)}
+                        {(Array.isArray(users) ? users : []).map((u) => (
+                          <SelectItem key={u.id} value={String(u.id)}>
+                            {u.full_name || u.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -727,7 +932,7 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
 };
 
 /* ===================== PROCEDURES ===================== */
-const ProceduresManagement = () => {
+const ProceduresManagement = forwardRef((props, ref) => {
   const { api, hasPerm } = useAuth();
   const canReview = hasPerm(PERMS["mpv.processes.review"]);
   const canResolve = hasPerm(PERMS["mpv.processes.resolve"]);
@@ -740,6 +945,7 @@ const ProceduresManagement = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailId, setDetailId] = useState(null);
+  const searchInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
     procedure_type_id: "",
@@ -750,6 +956,15 @@ const ProceduresManagement = () => {
     description: "",
     urgency_level: "NORMAL",
   });
+
+  // Exponer acciones al padre
+  useImperativeHandle(ref, () => ({
+    openCreate: () => setIsCreateModalOpen(true),
+    focusSearch: () => {
+      setStatusFilter("ALL");
+      setTimeout(() => searchInputRef.current?.focus(), 0);
+    },
+  }));
 
   const fetchProcedures = useCallback(async () => {
     if (!canReview) return;
@@ -784,12 +999,18 @@ const ProceduresManagement = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.post("/procedures", {
+      const payload = {
         ...formData,
-        procedure_type_id: formData.procedure_type_id
+        procedure_type: formData.procedure_type_id
           ? Number(formData.procedure_type_id)
-          : formData.procedure_type_id,
-      });
+          : null,
+      };
+      delete payload.procedure_type_id;
+      // Si tu serializer de Procedure no define urgency_level:
+      // delete payload.urgency_level;
+
+      await api.post("/procedures", payload);
+
       toast.success("Trámite creado exitosamente");
       setIsCreateModalOpen(false);
       setFormData({
@@ -803,6 +1024,7 @@ const ProceduresManagement = () => {
       });
       fetchProcedures();
     } catch (error) {
+      console.log("create error:", error.response?.data);
       toast.error(formatApiError(error, "Error al crear trámite"));
     }
   };
@@ -830,10 +1052,15 @@ const ProceduresManagement = () => {
   };
 
   const handleDownloadPDF = async (proc) => {
+    const id = proc?.id;
+    if (!id) {
+      toast.error("No se pudo obtener el ID del trámite");
+      return;
+    }
     try {
-      const result = await generatePDFWithPolling(`/procedures/${proc.id}/pdf`, {}, { testId: "procedure-pdf" });
+      const result = await generatePDFWithPolling(`/procedures/${id}/cover`, {}, { testId: "procedure-cover" });
       if (result?.success) {
-        await downloadFile(result.downloadUrl, `tramite-${proc.tracking_code || proc.id}.pdf`);
+        await downloadFile(result.downloadUrl, `caratula-${proc.tracking_code || id}.pdf`);
         toast.success("Documento generado");
       } else {
         toast.error("No se pudo generar el PDF");
@@ -844,12 +1071,41 @@ const ProceduresManagement = () => {
     }
   };
 
+  // NUEVO: Generar QR desde acciones de la tabla
+  const handleGenerateQR = async (proc) => {
+    const id = proc?.id;
+    if (!id) return toast.error("No se pudo obtener el ID del trámite");
+    try {
+      // Si tu backend devuelve PNG, reemplaza el helper por una simple descarga de blob.
+      const result = await generatePDFWithPolling(`/procedures/${id}/qr`, {}, { testId: "procedure-qr" });
+      if (result?.success) {
+        await downloadFile(result.downloadUrl, `qr-${proc.tracking_code || id}.pdf`);
+        toast.success("QR generado");
+      } else {
+        toast.error("No se pudo generar el QR");
+      }
+    } catch (err) {
+      console.error("QR generation error:", err);
+      toast.error(formatApiError(err, "Error al generar QR"));
+    }
+  };
+
+  // (opcional) Verificación vía web pública
   const handleVerifyQR = (proc) => {
     const url = `${BACKEND_URL}/verify?code=${encodeURIComponent(proc.tracking_code || proc.id)}`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  const openDetail = (p) => { setDetailId(p.id); setDetailOpen(true); };
+  const openDetail = async (p) => {
+    let id = p?.id;
+    if (!id && p?.tracking_code) {
+      const d = await ProcSvc.getByCode(p.tracking_code);
+      id = d?.id || d?.procedure?.id;
+    }
+    if (!id) { toast.error("No se pudo obtener el ID del trámite"); return; }
+    setDetailId(id);
+    setDetailOpen(true);
+  };
 
   if (loading) {
     return (
@@ -987,6 +1243,7 @@ const ProceduresManagement = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
+              ref={searchInputRef}
             />
           </div>
         </div>
@@ -1041,7 +1298,7 @@ const ProceduresManagement = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex gap-2">
-                        <Button data-testid="procedure-view" variant="ghost" size="sm" onClick={() => openDetail(procedure)}>
+                        <Button data-testid="procedure-view" variant="ghost" size="sm" onClick={() => openDetail(procedure)} title="Ver detalle">
                           <Eye className="h-4 w-4" />
                         </Button>
                         <Button
@@ -1049,17 +1306,29 @@ const ProceduresManagement = () => {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDownloadPDF(procedure)}
+                          title="Descargar carátula"
                         >
                           <Download className="h-4 w-4" />
                         </Button>
                         <Button
-                          data-testid="procedure-verify-qr"
+                          data-testid="procedure-generate-qr"
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleVerifyQR(procedure)}
+                          onClick={() => handleGenerateQR(procedure)}
+                          title="Generar QR"
                         >
                           <QrCode className="h-4 w-4" />
                         </Button>
+                        {/* Si quieres mantener verificación pública, deja este botón adicional:
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleVerifyQR(procedure)}
+                          title="Verificar en portal"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                        */}
                       </div>
                     </td>
                   </tr>
@@ -1084,7 +1353,7 @@ const ProceduresManagement = () => {
       />
     </div>
   );
-};
+});
 
 /* ===================== MAIN ===================== */
 const MesaDePartesModule = () => {
@@ -1100,10 +1369,33 @@ const MesaDePartesModule = () => {
   ].filter(t => hasAny(t.need));
 
   const defaultTab = tabs[0]?.key || "dashboard";
+  const [activeTab, setActiveTab] = useState(defaultTab);
+  const procRef = useRef(null);
+
+  const goProcedures = () => setActiveTab("procedures");
+  const goReports = () => setActiveTab("reports");
+
+  const handleQuickNew = () => {
+    goProcedures();
+    procRef.current?.openCreate?.();
+  };
+
+  const handleQuickSearch = () => {
+    goProcedures();
+    procRef.current?.focusSearch?.();
+  };
+
+  const handleQuickQR = () => {
+    const code = window.prompt("Ingrese el código de trámite para verificar:");
+    if (code) {
+      const url = `${BACKEND_URL}/verify?code=${encodeURIComponent(code)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
 
   return (
     <div className="p-6">
-      <Tabs defaultValue={defaultTab} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className={`grid w-full ${tabs.length ? `grid-cols-${Math.min(tabs.length, 4)}` : "grid-cols-1"}`}>
           {tabs.map(t => (
             <TabsTrigger key={t.key} value={t.key}>{t.label}</TabsTrigger>
@@ -1112,7 +1404,12 @@ const MesaDePartesModule = () => {
 
         {tabs.some(t => t.key === "dashboard") && (
           <TabsContent value="dashboard">
-            <MesaDePartesDashboard />
+            <MesaDePartesDashboard
+              onNew={handleQuickNew}
+              onSearch={handleQuickSearch}
+              onQR={handleQuickQR}
+              onReports={goReports}
+            />
           </TabsContent>
         )}
 
@@ -1124,7 +1421,7 @@ const MesaDePartesModule = () => {
 
         {tabs.some(t => t.key === "procedures") && (
           <TabsContent value="procedures">
-            <ProceduresManagement />
+            <ProceduresManagement ref={procRef} />
           </TabsContent>
         )}
 

@@ -6,11 +6,14 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Badge } from "../../components/ui/badge";
-import { toast } from "sonner";
+import { toast } from "../../utils/safeToast"; // <- usa safeToast
 import { Save, CreditCard, FileText, Plus } from "lucide-react";
 import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
 import { fmtCurrency, formatApiError, toLimaDate } from "../../utils/format";
 import { optVal, safeText } from "../../utils/ui";
+
+// helper de error consistente
+const showApiError = (e, fallback) => toast.error(formatApiError(e, fallback));
 
 export default function StudentAccountsDashboard() {
     const [subjectType, setSubjectType] = useState("STUDENT");
@@ -28,7 +31,9 @@ export default function StudentAccountsDashboard() {
             try {
                 const cs = await Concepts.list();
                 setConcepts(cs?.items ?? cs ?? []);
-            } catch { }
+            } catch {
+                // silencioso
+            }
         })();
     }, []);
 
@@ -39,8 +44,10 @@ export default function StudentAccountsDashboard() {
             const data = await Accounts.statement({ subject_id: subjectId, subject_type: subjectType });
             setStatement(data);
         } catch (e) {
-            toast.error(formatApiError(e, "No se pudo cargar el estado de cuenta"));
-        } finally { setLoading(false); }
+            showApiError(e, "No se pudo cargar el estado de cuenta");
+        } finally {
+            setLoading(false);
+        }
     };
 
     const totals = useMemo(() => {
@@ -48,7 +55,9 @@ export default function StudentAccountsDashboard() {
         const ch = (statement.charges || []).reduce((a, c) => a + Number(c.amount || 0), 0);
         const py = (statement.payments || []).reduce((a, p) => a + Number(p.amount || 0), 0);
         const bal = ch - py;
-        const overdue = (statement.charges || []).filter(c => !c.paid && c.due_date && new Date(c.due_date) < new Date()).length;
+        const overdue = (statement.charges || []).filter(
+            (c) => !c.paid && c.due_date && new Date(c.due_date) < new Date()
+        ).length;
         return { charges: ch, payments: py, balance: bal, overdue };
     }, [statement]);
 
@@ -59,19 +68,19 @@ export default function StudentAccountsDashboard() {
                 subject_id: subjectId,
                 subject_type: subjectType,
                 concept_id: Number(charge.concept_id),
-                amount: charge.amount === '' ? undefined : Number(charge.amount), // permite 0
+                amount: charge.amount === "" ? undefined : Number(charge.amount), // permite 0
                 due_date: charge.due_date || undefined,
             });
             toast.success("Cargo registrado");
             setCharge({ concept_id: "", amount: "", due_date: "" });
             fetchStatement();
         } catch (e) {
-            toast.error(formatApiError(e));
+            showApiError(e, "No se pudo registrar el cargo");
         }
     };
 
     const registerPayment = async () => {
-        if (!subjectId || payment.amount === '') return toast.error("Monto requerido");
+        if (!subjectId || payment.amount === "") return toast.error("Monto requerido");
         try {
             await Accounts.pay({
                 subject_id: subjectId,
@@ -85,18 +94,22 @@ export default function StudentAccountsDashboard() {
             setPayment({ amount: "", method: "CASH", ref: "", date: "" });
             fetchStatement();
         } catch (e) {
-            toast.error(formatApiError(e));
+            showApiError(e, "No se pudo registrar el pago");
         }
     };
 
     const exportPdf = async () => {
         try {
             setExporting(true);
-            const res = await generatePDFWithPolling("/finance/accounts/statement/pdf", { subject_id: subjectId, subject_type: subjectType }, { testId: "statement-pdf" });
+            const res = await generatePDFWithPolling(
+                "/finance/accounts/statement/pdf",
+                { subject_id: subjectId, subject_type: subjectType },
+                { testId: "statement-pdf" }
+            );
             if (res?.success) await downloadFile(res.downloadUrl, `estado-cuenta-${subjectId}.pdf`);
             else toast.error("No se pudo generar el PDF");
         } catch (e) {
-            toast.error(formatApiError(e, "No se pudo exportar PDF"));
+            showApiError(e, "No se pudo exportar PDF");
         } finally {
             setExporting(false);
         }
@@ -110,7 +123,7 @@ export default function StudentAccountsDashboard() {
                 subject_type: subjectType,
                 amount: Number(totals.balance.toFixed(2)),
                 currency: "PEN",
-                meta: { origin: "STUDENT_ACCOUNTS_UI" }
+                meta: { origin: "STUDENT_ACCOUNTS_UI" },
             });
             const url = r?.url;
             if (!url) return toast.error("No se pudo generar link de pago");
@@ -118,7 +131,7 @@ export default function StudentAccountsDashboard() {
             const win = window.open(url, "_blank");
             if (!win) toast.error("Pop-up bloqueado. Habilita ventanas emergentes.");
         } catch (e) {
-            toast.error(formatApiError(e));
+            showApiError(e, "No se pudo generar el link de pago");
         }
     };
 
@@ -130,8 +143,14 @@ export default function StudentAccountsDashboard() {
                     <p className="text-sm text-gray-600">Cargos, pagos, morosidad y constancia</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={exportPdf} disabled={exporting}><FileText className="h-4 w-4 mr-2" aria-hidden="true" />{exporting ? "Generando…" : "PDF"}</Button>
-                    <Button onClick={payLink}><CreditCard className="h-4 w-4 mr-2" aria-hidden="true" />Generar link de pago</Button>
+                    <Button variant="outline" onClick={exportPdf} disabled={exporting}>
+                        <FileText className="h-4 w-4 mr-2" aria-hidden="true" />
+                        {exporting ? "Generando…" : "PDF"}
+                    </Button>
+                    <Button onClick={payLink}>
+                        <CreditCard className="h-4 w-4 mr-2" aria-hidden="true" />
+                        Generar link de pago
+                    </Button>
                 </div>
             </div>
 
@@ -144,7 +163,9 @@ export default function StudentAccountsDashboard() {
                     <div>
                         <Label>Tipo</Label>
                         <Select value={subjectType} onValueChange={setSubjectType}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="STUDENT">Alumno</SelectItem>
                                 <SelectItem value="APPLICANT">Postulante</SelectItem>
@@ -164,14 +185,29 @@ export default function StudentAccountsDashboard() {
             {statement && (
                 <>
                     <Card>
-                        <CardHeader><CardTitle>Resumen</CardTitle></CardHeader>
+                        <CardHeader>
+                            <CardTitle>Resumen</CardTitle>
+                        </CardHeader>
                         <CardContent className="flex flex-wrap gap-6 text-sm">
-                            <div><b>Estudiante:</b> {safeText(statement.subject_name)}</div>
-                            <div><b>Carrera:</b> {safeText(statement.career_name)}</div>
-                            <div><b>Cargos:</b> <Badge variant="outline">{fmtCurrency(totals.charges)}</Badge></div>
-                            <div><b>Pagos:</b> <Badge variant="outline">{fmtCurrency(totals.payments)}</Badge></div>
-                            <div><b>Saldo:</b> <Badge>{fmtCurrency(totals.balance)}</Badge></div>
-                            <div><b>Cuotas vencidas:</b> <Badge variant={totals.overdue > 0 ? "destructive" : "secondary"}>{totals.overdue}</Badge></div>
+                            <div>
+                                <b>Estudiante:</b> {safeText(statement.subject_name)}
+                            </div>
+                            <div>
+                                <b>Carrera:</b> {safeText(statement.career_name)}
+                            </div>
+                            <div>
+                                <b>Cargos:</b> <Badge variant="outline">{fmtCurrency(totals.charges)}</Badge>
+                            </div>
+                            <div>
+                                <b>Pagos:</b> <Badge variant="outline">{fmtCurrency(totals.payments)}</Badge>
+                            </div>
+                            <div>
+                                <b>Saldo:</b> <Badge>{fmtCurrency(totals.balance)}</Badge>
+                            </div>
+                            <div>
+                                <b>Cuotas vencidas:</b>{" "}
+                                <Badge variant={totals.overdue > 0 ? "destructive" : "secondary"}>{totals.overdue}</Badge>
+                            </div>
                         </CardContent>
                     </Card>
 
@@ -191,29 +227,53 @@ export default function StudentAccountsDashboard() {
                                             setCharge({
                                                 ...charge,
                                                 concept_id: v,
-                                                amount: charge.amount !== '' ? charge.amount : (c?.default_amount != null ? String(c.default_amount) : ''),
+                                                amount:
+                                                    charge.amount !== ""
+                                                        ? charge.amount
+                                                        : c?.default_amount != null
+                                                            ? String(c.default_amount)
+                                                            : "",
                                             });
-                                        }}>
-                                        <SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger>
+                                        }}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Seleccione..." />
+                                        </SelectTrigger>
                                         <SelectContent>
                                             {concepts.map((c) => {
                                                 const v = optVal(c.id);
                                                 if (!v) return null;
-                                                return <SelectItem key={v} value={String(v)}>{c.name} ({c.type})</SelectItem>;
+                                                return (
+                                                    <SelectItem key={v} value={String(v)}>
+                                                        {c.name} ({c.type})
+                                                    </SelectItem>
+                                                );
                                             })}
                                         </SelectContent>
                                     </Select>
                                 </div>
                                 <div>
                                     <Label>Monto</Label>
-                                    <Input type="number" step="0.01" value={charge.amount} onChange={(e) => setCharge({ ...charge, amount: e.target.value })} />
+                                    <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={charge.amount}
+                                        onChange={(e) => setCharge({ ...charge, amount: e.target.value })}
+                                    />
                                 </div>
                                 <div>
                                     <Label>Vence</Label>
-                                    <Input type="date" value={charge.due_date} onChange={(e) => setCharge({ ...charge, due_date: e.target.value })} />
+                                    <Input
+                                        type="date"
+                                        value={charge.due_date}
+                                        onChange={(e) => setCharge({ ...charge, due_date: e.target.value })}
+                                    />
                                 </div>
                                 <div className="md:col-span-2 flex items-end justify-end">
-                                    <Button onClick={createCharge}><Plus className="h-4 w-4 mr-2" aria-hidden="true" />Agregar cargo</Button>
+                                    <Button onClick={createCharge}>
+                                        <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
+                                        Agregar cargo
+                                    </Button>
                                 </div>
                             </CardContent>
                         </Card>
@@ -225,12 +285,19 @@ export default function StudentAccountsDashboard() {
                             <CardContent className="grid md:grid-cols-4 gap-3">
                                 <div>
                                     <Label>Monto</Label>
-                                    <Input type="number" step="0.01" value={payment.amount} onChange={(e) => setPayment({ ...payment, amount: e.target.value })} />
+                                    <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={payment.amount}
+                                        onChange={(e) => setPayment({ ...payment, amount: e.target.value })}
+                                    />
                                 </div>
                                 <div>
                                     <Label>Método</Label>
                                     <Select value={payment.method} onValueChange={(v) => setPayment({ ...payment, method: v })}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="CASH">Efectivo</SelectItem>
                                             <SelectItem value="CARD">Tarjeta</SelectItem>
@@ -240,14 +307,25 @@ export default function StudentAccountsDashboard() {
                                 </div>
                                 <div>
                                     <Label>Ref.</Label>
-                                    <Input value={payment.ref} onChange={(e) => setPayment({ ...payment, ref: e.target.value })} placeholder="operación / voucher" />
+                                    <Input
+                                        value={payment.ref}
+                                        onChange={(e) => setPayment({ ...payment, ref: e.target.value })}
+                                        placeholder="operación / voucher"
+                                    />
                                 </div>
                                 <div>
                                     <Label>Fecha</Label>
-                                    <Input type="date" value={payment.date} onChange={(e) => setPayment({ ...payment, date: e.target.value })} />
+                                    <Input
+                                        type="date"
+                                        value={payment.date}
+                                        onChange={(e) => setPayment({ ...payment, date: e.target.value })}
+                                    />
                                 </div>
                                 <div className="md:col-span-4 flex justify-end">
-                                    <Button onClick={registerPayment}><Save className="h-4 w-4 mr-2" aria-hidden="true" />Guardar pago</Button>
+                                    <Button onClick={registerPayment}>
+                                        <Save className="h-4 w-4 mr-2" aria-hidden="true" />
+                                        Guardar pago
+                                    </Button>
                                 </div>
                             </CardContent>
                         </Card>
@@ -263,11 +341,21 @@ export default function StudentAccountsDashboard() {
                                 <table className="w-full">
                                     <thead className="bg-gray-50 border-b">
                                         <tr>
-                                            <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">Fecha</th>
-                                            <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">Tipo</th>
-                                            <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">Detalle</th>
-                                            <th scope="col" className="px-4 py-2 text-right text-xs font-semibold">Monto</th>
-                                            <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">Estado</th>
+                                            <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">
+                                                Fecha
+                                            </th>
+                                            <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">
+                                                Tipo
+                                            </th>
+                                            <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">
+                                                Detalle
+                                            </th>
+                                            <th scope="col" className="px-4 py-2 text-right text-xs font-semibold">
+                                                Monto
+                                            </th>
+                                            <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">
+                                                Estado
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y">
@@ -281,7 +369,11 @@ export default function StudentAccountsDashboard() {
                                             </tr>
                                         ))}
                                         {(statement.ledger || []).length === 0 && (
-                                            <tr><td colSpan={5} className="text-center py-8 text-gray-500">Sin movimientos.</td></tr>
+                                            <tr>
+                                                <td colSpan={5} className="text-center py-8 text-gray-500">
+                                                    Sin movimientos.
+                                                </td>
+                                            </tr>
                                         )}
                                     </tbody>
                                 </table>

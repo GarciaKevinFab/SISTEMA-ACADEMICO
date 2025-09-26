@@ -1,6 +1,5 @@
-# acl/urls.py
 from rest_framework.routers import DefaultRouter
-from .views import RoleViewSet, PermissionViewSet
+from .views import RoleViewSet, PermissionViewSet  # <- desde .views
 
 router = DefaultRouter()
 router.register(r'roles', RoleViewSet, basename='acl-roles')

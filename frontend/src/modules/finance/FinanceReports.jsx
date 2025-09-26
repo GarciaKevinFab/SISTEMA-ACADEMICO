@@ -5,11 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../..
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
-import { toast } from "sonner";
+import { toast } from "../../utils/safeToast"; // <-- usa safeToast
 import { RefreshCw, Download } from "lucide-react";
 import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
 import { fmtCurrency, formatApiError, toLimaDate } from "../../utils/format";
 import { optVal } from "../../utils/ui";
+
+// helper de error consistente
+const showApiError = (e, fallback) => {
+    const msg = formatApiError(e, fallback);
+    toast.error(msg);
+};
 
 export default function FinanceReports() {
     const [dateFrom, setDateFrom] = useState("");
@@ -29,7 +35,9 @@ export default function FinanceReports() {
                 const [cs, cr] = await Promise.all([Concepts.list(), Careers.list()]);
                 setConcepts(cs?.items ?? cs ?? []);
                 setCareers(cr?.careers ?? cr ?? []);
-            } catch { }
+            } catch {
+                // silencioso en carga inicial
+            }
         })();
     }, []);
 
@@ -45,20 +53,18 @@ export default function FinanceReports() {
             const data = await FReports.income(params);
             setRows(data?.items ?? data ?? []);
         } catch (e) {
-            toast.error(formatApiError(e));
+            showApiError(e, "No se pudo cargar el reporte");
         } finally {
             setLoading(false);
         }
     }, [dateFrom, dateTo, conceptId, careerId]);
 
-    // Carga inicial (y se mantiene limpia para ESLint)
-    useEffect(() => {
-        load();
-    }, [load]);
+    useEffect(() => { load(); }, [load]);
 
     const totals = useMemo(() => {
-        const sum = (rows || []).reduce((a, r) => a + Number(r.amount || 0), 0);
-        return { amount: sum, count: (rows || []).length };
+        const list = Array.isArray(rows) ? rows : [];
+        const sum = list.reduce((a, r) => a + Number(r.amount || 0), 0);
+        return { amount: sum, count: list.length };
     }, [rows]);
 
     const exportPdf = async () => {
@@ -74,7 +80,7 @@ export default function FinanceReports() {
             if (res?.success) await downloadFile(res.downloadUrl, "reporte-ingresos.pdf");
             else toast.error("No se pudo generar el PDF");
         } catch (e) {
-            toast.error(formatApiError(e, "No se pudo exportar PDF"));
+            showApiError(e, "No se pudo exportar PDF");
         } finally {
             setExporting(false);
         }
@@ -199,9 +205,7 @@ export default function FinanceReports() {
                                     ))}
                                     {rows.length === 0 && (
                                         <tr>
-                                            <td colSpan={4} className="text-center py-8 text-gray-500">
-                                                Sin resultados.
-                                            </td>
+                                            <td colSpan={4} className="text-center py-8 text-gray-500">Sin resultados.</td>
                                         </tr>
                                     )}
                                 </tbody>

@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
-
-class MesaConfig(AppConfig):
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'mesa_partes'
+class MesaPartesConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "mesa_partes"
+    verbose_name = "Mesa de Partes"

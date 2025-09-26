@@ -31,10 +31,15 @@ export default function PublicProcedureIntake() {
     const submit = async (e) => {
         e.preventDefault();
         try {
-            const res = await PublicIntake.create({
+            const payload = {
                 ...form,
-                procedure_type_id: form.procedure_type_id ? Number(form.procedure_type_id) : null,
-            });
+                procedure_type: form.procedure_type_id
+                    ? Number(form.procedure_type_id)
+                    : null,
+            };
+            delete payload.procedure_type_id;
+            const res = await PublicIntake.create(payload);
+
             const proc = res?.procedure || res;
             setCreated(proc);
             toast.success("Trámite registrado correctamente");
@@ -42,6 +47,7 @@ export default function PublicProcedureIntake() {
             toast.error(err?.message || "No se pudo registrar el trámite");
         }
     };
+
 
     const uploadAll = async () => {
         if (!created?.tracking_code) return;

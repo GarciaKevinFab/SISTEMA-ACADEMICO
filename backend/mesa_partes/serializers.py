@@ -1,41 +1,54 @@
 from rest_framework import serializers
-from .models import *
+from .models import Office, ProcedureType, Procedure, ProcedureEvent, ProcedureFile
 
-class OfficeSerializer(serializers.ModelSerializer):
+class OfficeSer(serializers.ModelSerializer):
     class Meta:
         model = Office
-        fields = ['id','name','acronym','is_active']
+        fields = ["id", "name"]
 
-class ProcedureTypeSerializer(serializers.ModelSerializer):
+class ProcedureTypeSer(serializers.ModelSerializer):
     class Meta:
         model = ProcedureType
-        fields = ['id','name','code','is_active','meta']
+        fields = ["id","name","description","required_documents","processing_days","cost","is_active"]
 
-class ProcedureFileSerializer(serializers.ModelSerializer):
+class ProcedureFileSer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
+    filename = serializers.SerializerMethodField()
+
     class Meta:
         model = ProcedureFile
-        fields = ['id','doc_type','description','url','uploaded_at']
-    def get_url(self, obj):
-        try: return obj.file.url
-        except: return None
+        fields = ["id","url","filename","original_name","doc_type","size"]
 
-class ProcedureNoteSerializer(serializers.ModelSerializer):
-    author_name = serializers.SerializerMethodField()
+    def get_url(self, obj): return obj.file.url
+    def get_filename(self, obj): return obj.original_name or obj.file.name.split("/")[-1]
+
+class ProcedureEventSer(serializers.ModelSerializer):
+    actor_name = serializers.SerializerMethodField()
+
     class Meta:
-        model = ProcedureNote
-        fields = ['id','note','author','author_name','created_at']
-    def get_author_name(self, obj):
-        return getattr(obj.author, 'username', None)
+        model = ProcedureEvent
+        fields = ["at","type","description","actor_name"]
 
-class ProcedureRouteSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProcedureRoute
-        fields = ['id','from_office','to_office','assignee','note','deadline_at','created_at']
+    def get_actor_name(self, obj):
+        u = obj.actor
+        if not u: return None
+        return getattr(u, "get_full_name", lambda: None)() or getattr(u, "username", None)
 
-class ProcedureSerializer(serializers.ModelSerializer):
-    files = ProcedureFileSerializer(many=True, read_only=True)
+class ProcedureSer(serializers.ModelSerializer):
+    procedure_type_name = serializers.CharField(source="procedure_type.name", read_only=True)
+    current_office_name = serializers.CharField(source="current_office.name", read_only=True)
+    assignee_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Procedure
-        fields = ['id','tracking_code','code','type','subject','applicant_name','applicant_doc',
-                  'applicant_email','office','assignee','status','created_at','deadline_at','meta','files']
+        fields = [
+            "id","tracking_code","procedure_type","procedure_type_name",
+            "applicant_name","applicant_document","applicant_email","applicant_phone",
+            "description","status","current_office","current_office_name",
+            "assignee","assignee_name","deadline_at","created_at","updated_at"
+        ]
+
+    def get_assignee_name(self, obj):
+        u = obj.assignee
+        if not u: return None
+        return getattr(u, "get_full_name", lambda: None)() or getattr(u, "username", None)

@@ -31,7 +31,8 @@ export default function MesaPartesReports() {
     const load = async () => {
         try {
             const d = await ProcedureReports.summary(toApi(filters));
-            setSummary(d);
+            const s = d?.summary ?? d ?? null;
+            setSummary(s);
         } catch {
             toast.error("No se pudo cargar el resumen");
         }

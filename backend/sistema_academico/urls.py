@@ -3,7 +3,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.http import JsonResponse
-
+from audit.views import audit_list
 def health(_): return JsonResponse({'status':'healthy'})
 
 urlpatterns = [
@@ -26,4 +26,5 @@ urlpatterns = [
      path('api/minedu/', include('minedu.urls')),
      path('api/', include('notifications.urls')),
      path('api/', include('portal.urls')),
+     path('api/audit', audit_list),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

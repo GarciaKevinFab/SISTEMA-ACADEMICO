@@ -8,6 +8,7 @@ load_dotenv(BASE_DIR / '.env')
 SECRET_KEY = os.getenv('SECRET_KEY', 'change-me')
 DEBUG = os.getenv('DEBUG', '0') == '1'
 ALLOWED_HOSTS = ['*'] if DEBUG else ['localhost']
+APPEND_SLASH = False
 
 INSTALLED_APPS = [
     'django.contrib.admin','django.contrib.auth','django.contrib.contenttypes',
@@ -15,7 +16,7 @@ INSTALLED_APPS = [
     'rest_framework','corsheaders',
     
     'users','acl','catalogs','academic','admission','mesa_partes','finance',
-    'minedu','notifications','portal','reports','research','security_mfa',
+    'minedu','notifications','portal','reports','research','security_mfa','audit',
 ]
 
 MIDDLEWARE = [
@@ -23,6 +24,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'audit.middleware.RequestIdMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',

@@ -6,11 +6,17 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../../components/ui/dialog";
-import { toast } from "sonner";
+import { toast } from "../../utils/safeToast"; // <-- usa safeToast
 import { Plus, Save, Edit3, Trash2 } from "lucide-react";
 import { fmtCurrency, formatApiError } from "../../utils/format";
 
 const TYPES = ["ADMISION", "MATRICULA", "PENSION", "CERTIFICADO", "OTRO"];
+
+// helper de error consistente
+const showApiError = (e, fallback) => {
+    const msg = formatApiError(e, fallback);
+    toast.error(msg);
+};
 
 export default function ConceptsCatalog() {
     const [rows, setRows] = useState([]);
@@ -26,8 +32,10 @@ export default function ConceptsCatalog() {
             const data = await Concepts.list();
             setRows(data?.items ?? data ?? []);
         } catch (e) {
-            toast.error(formatApiError(e, "Error al cargar conceptos"));
-        } finally { setLoading(false); }
+            showApiError(e, "Error al cargar conceptos");
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => { load(); }, []);
@@ -52,7 +60,10 @@ export default function ConceptsCatalog() {
     const save = async (e) => {
         e.preventDefault();
         try {
-            const payload = { ...form, default_amount: form.default_amount === '' ? 0 : Number(form.default_amount) };
+            const payload = {
+                ...form,
+                default_amount: form.default_amount === "" ? 0 : Number(form.default_amount),
+            };
             if (editing) {
                 await Concepts.update(editing.id, payload);
                 toast.success("Concepto actualizado");
@@ -63,7 +74,7 @@ export default function ConceptsCatalog() {
             setOpen(false);
             load();
         } catch (e1) {
-            toast.error(formatApiError(e1, "No se pudo guardar"));
+            showApiError(e1, "No se pudo guardar");
         }
     };
 
@@ -74,7 +85,7 @@ export default function ConceptsCatalog() {
             toast.success("Concepto eliminado");
             load();
         } catch (e) {
-            toast.error(formatApiError(e, "No se pudo eliminar"));
+            showApiError(e, "No se pudo eliminar");
         }
     };
 
@@ -85,7 +96,10 @@ export default function ConceptsCatalog() {
                     <h2 className="text-2xl font-bold">Catálogo de conceptos</h2>
                     <p className="text-sm text-gray-600">Admisión, matrícula, pensiones, certificados, etc.</p>
                 </div>
-                <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" aria-hidden="true" />Nuevo</Button>
+                <Button onClick={openCreate}>
+                    <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
+                    Nuevo
+                </Button>
             </div>
 
             <Card>
@@ -119,14 +133,20 @@ export default function ConceptsCatalog() {
                                             <td className="px-4 py-2 text-right">{fmtCurrency(r.default_amount)}</td>
                                             <td className="px-4 py-2">
                                                 <div className="flex gap-2">
-                                                    <Button size="sm" variant="outline" onClick={() => openEdit(r)} aria-label="Editar"><Edit3 className="h-4 w-4" aria-hidden="true" /></Button>
-                                                    <Button size="sm" variant="outline" onClick={() => remove(r)} aria-label="Eliminar"><Trash2 className="h-4 w-4" aria-hidden="true" /></Button>
+                                                    <Button size="sm" variant="outline" onClick={() => openEdit(r)} aria-label="Editar">
+                                                        <Edit3 className="h-4 w-4" aria-hidden="true" />
+                                                    </Button>
+                                                    <Button size="sm" variant="outline" onClick={() => remove(r)} aria-label="Eliminar">
+                                                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                                                    </Button>
                                                 </div>
                                             </td>
                                         </tr>
                                     ))}
                                     {rows.length === 0 && (
-                                        <tr><td colSpan={5} className="text-center py-8 text-gray-500">Sin conceptos todavía.</td></tr>
+                                        <tr>
+                                            <td colSpan={5} className="text-center py-8 text-gray-500">Sin conceptos todavía.</td>
+                                        </tr>
                                     )}
                                 </tbody>
                             </table>
@@ -156,18 +176,27 @@ export default function ConceptsCatalog() {
                             <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    {TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                                    {TYPES.map((t) => (
+                                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
                         <div>
                             <Label>Monto por defecto</Label>
-                            <Input type="number" step="0.01" min="0" value={form.default_amount} onChange={(e) => setForm({ ...form, default_amount: e.target.value })} />
+                            <Input
+                                type="number" step="0.01" min="0"
+                                value={form.default_amount}
+                                onChange={(e) => setForm({ ...form, default_amount: e.target.value })}
+                            />
                         </div>
 
                         <div className="flex justify-end gap-2">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-                            <Button type="submit"><Save className="h-4 w-4 mr-2" aria-hidden="true" />Guardar</Button>
+                            <Button type="submit">
+                                <Save className="h-4 w-4 mr-2" aria-hidden="true" />
+                                Guardar
+                            </Button>
                         </div>
                     </form>
                 </DialogContent>

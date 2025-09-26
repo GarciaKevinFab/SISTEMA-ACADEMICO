@@ -1,3 +1,4 @@
+// src/modules/finance/CashBanksDashboard.jsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { CashBanks } from "../../services/finance.service";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
@@ -6,7 +7,8 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Badge } from "../../components/ui/badge";
-import { toast } from "sonner";
+// ⚠️ Usa el toast seguro, NO directamente de "sonner"
+import { toast } from "../../utils/safeToast";
 import { Plus, Save, RefreshCw } from "lucide-react";
 import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
 
@@ -57,6 +59,9 @@ const normType = (type) => {
     return { code, label, variant };
 };
 
+// Helper de error consistente (siempre string al toast)
+const showApiError = (e, fallbackMsg) => toast.error(formatApiError(e, fallbackMsg));
+
 export default function CashBanksDashboard() {
     const [sessions, setSessions] = useState([]);
     const [currentId, setCurrentId] = useState(undefined);
@@ -68,7 +73,10 @@ export default function CashBanksDashboard() {
     const [newMov, setNewMov] = useState({ type: "IN", amount: "", concept: "" });
     const [exporting, setExporting] = useState(false);
 
-    const current = useMemo(() => sessions.find((s) => String(s.id) === String(currentId)), [sessions, currentId]);
+    const current = useMemo(
+        () => sessions.find((s) => String(s.id) === String(currentId)),
+        [sessions, currentId]
+    );
 
     const totals = useMemo(() => {
         const ins = movs.filter((m) => normType(m.type).code === "IN").reduce((a, m) => a + Number(m.amount || 0), 0);
@@ -90,11 +98,13 @@ export default function CashBanksDashboard() {
             const initial = open?.id ?? firstValid?.id;
             setCurrentId(initial != null ? String(initial) : undefined);
         } catch (e) {
-            if (alive) toast.error(formatApiError(e, "No se pudieron cargar las sesiones"));
+            if (alive) showApiError(e, "No se pudieron cargar las sesiones");
         } finally {
             if (alive) setLoading(false);
         }
-        return () => { alive = false; };
+        return () => {
+            alive = false;
+        };
     }, []);
 
     const loadMovs = useCallback(async () => {
@@ -104,23 +114,37 @@ export default function CashBanksDashboard() {
             const d = await CashBanks.movements(myId); // sin castear a number
             setMovs((prev) => (currentId === myId ? (d?.items ?? d ?? []) : prev));
         } catch (e) {
-            toast.error(formatApiError(e, "No se pudieron cargar los movimientos"));
+            showApiError(e, "No se pudieron cargar los movimientos");
         }
     }, [currentId]);
 
-    useEffect(() => { let c; (async () => { c = await loadSessions(); })(); return () => { if (typeof c === 'function') c(); }; }, [loadSessions]);
-    useEffect(() => { loadMovs(); }, [loadMovs]);
+    useEffect(() => {
+        let c;
+        (async () => {
+            c = await loadSessions();
+        })();
+        return () => {
+            if (typeof c === "function") c();
+        };
+    }, [loadSessions]);
+
+    useEffect(() => {
+        loadMovs();
+    }, [loadMovs]);
 
     const openSession = async () => {
         try {
-            const payload = { opening_amount: Number(openForm.opening_amount || 0), note: openForm.note || undefined };
+            const payload = {
+                opening_amount: Number(openForm.opening_amount || 0),
+                note: openForm.note || undefined,
+            };
             const r = await CashBanks.openSession(payload);
             toast.success("Sesión abierta");
             setOpenForm({ opening_amount: "", note: "" });
             await loadSessions();
             if (r?.id) setCurrentId(String(r.id));
         } catch (e) {
-            toast.error(formatApiError(e, "No se pudo abrir la sesión"));
+            showApiError(e, "No se pudo abrir la sesión");
         }
     };
 
@@ -128,8 +152,8 @@ export default function CashBanksDashboard() {
         if (!current?.id) return toast.error("No hay sesión seleccionada");
         try {
             const payload = {
-                closing_amount: Number(closeForm.closing_amount === '' ? totals.balance : closeForm.closing_amount),
-                note: closeForm.note || undefined
+                closing_amount: Number(closeForm.closing_amount === "" ? totals.balance : closeForm.closing_amount),
+                note: closeForm.note || undefined,
             };
             await CashBanks.closeSession(current.id, payload);
             toast.success("Sesión cerrada");
@@ -137,7 +161,7 @@ export default function CashBanksDashboard() {
             await loadSessions();
             setMovs([]);
         } catch (e) {
-            toast.error(formatApiError(e, "No se pudo cerrar la sesión"));
+            showApiError(e, "No se pudo cerrar la sesión");
         }
     };
 
@@ -155,7 +179,7 @@ export default function CashBanksDashboard() {
             setNewMov({ type: "IN", amount: "", concept: "" });
             await loadMovs();
         } catch (e) {
-            toast.error(formatApiError(e, "No se pudo registrar el movimiento"));
+            showApiError(e, "No se pudo registrar el movimiento");
         }
     };
 
@@ -163,11 +187,15 @@ export default function CashBanksDashboard() {
         if (!current?.id) return toast.error("Selecciona una sesión");
         try {
             setExporting(true);
-            const r = await generatePDFWithPolling(`/finance/cashbanks/${current.id}/export`, {}, { testId: "cashbanks-session-pdf" });
+            const r = await generatePDFWithPolling(
+                `/finance/cashbanks/${current.id}/export`,
+                {},
+                { testId: "cashbanks-session-pdf" }
+            );
             if (r?.success) await downloadFile(r.downloadUrl, `caja-${current.id}.pdf`);
             else toast.error("No se pudo generar el PDF");
         } catch (e) {
-            toast.error(formatApiError(e, "No se pudo exportar PDF"));
+            showApiError(e, "No se pudo exportar PDF");
         } finally {
             setExporting(false);
         }
@@ -196,7 +224,14 @@ export default function CashBanksDashboard() {
                         Actualizar
                     </Button>
                     <Button onClick={exportPdf} disabled={exporting}>
-                        {exporting ? (<><RefreshCw className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />Generando…</>) : "Exportar PDF"}
+                        {exporting ? (
+                            <>
+                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+                                Generando…
+                            </>
+                        ) : (
+                            "Exportar PDF"
+                        )}
                     </Button>
                 </div>
             </div>
@@ -210,7 +245,9 @@ export default function CashBanksDashboard() {
                     <div className="md:col-span-2">
                         <Label>Sesión</Label>
                         <Select value={currentId ? String(currentId) : undefined} onValueChange={(v) => setCurrentId(v)}>
-                            <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Seleccionar" />
+                            </SelectTrigger>
                             <SelectContent>
                                 {sessions.map((s) => {
                                     const v = optVal(s.id);
@@ -269,11 +306,18 @@ export default function CashBanksDashboard() {
 
             {!current && (
                 <Card>
-                    <CardHeader><CardTitle>Abrir sesión</CardTitle></CardHeader>
+                    <CardHeader>
+                        <CardTitle>Abrir sesión</CardTitle>
+                    </CardHeader>
                     <CardContent className="grid md:grid-cols-3 gap-3">
                         <div>
                             <Label>Monto de apertura</Label>
-                            <Input type="number" step="0.01" value={openForm.opening_amount} onChange={(e) => setOpenForm({ ...openForm, opening_amount: e.target.value })} />
+                            <Input
+                                type="number"
+                                step="0.01"
+                                value={openForm.opening_amount}
+                                onChange={(e) => setOpenForm({ ...openForm, opening_amount: e.target.value })}
+                            />
                         </div>
                         <div className="md:col-span-2">
                             <Label>Nota</Label>
@@ -299,7 +343,9 @@ export default function CashBanksDashboard() {
                         <div>
                             <Label>Tipo</Label>
                             <Select value={newMov.type} onValueChange={(v) => setNewMov({ ...newMov, type: v })}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="IN">{TYPE_CFG.IN.label}</SelectItem>
                                     <SelectItem value="OUT">{TYPE_CFG.OUT.label}</SelectItem>
@@ -308,11 +354,20 @@ export default function CashBanksDashboard() {
                         </div>
                         <div>
                             <Label>Monto</Label>
-                            <Input type="number" step="0.01" value={newMov.amount} onChange={(e) => setNewMov({ ...newMov, amount: e.target.value })} />
+                            <Input
+                                type="number"
+                                step="0.01"
+                                value={newMov.amount}
+                                onChange={(e) => setNewMov({ ...newMov, amount: e.target.value })}
+                            />
                         </div>
                         <div className="md:col-span-2">
                             <Label>Concepto</Label>
-                            <Input value={newMov.concept} onChange={(e) => setNewMov({ ...newMov, concept: e.target.value })} placeholder="Ej. Arqueo, depósitos, etc." />
+                            <Input
+                                value={newMov.concept}
+                                onChange={(e) => setNewMov({ ...newMov, concept: e.target.value })}
+                                placeholder="Ej. Arqueo, depósitos, etc."
+                            />
                         </div>
                         <div className="md:col-span-4 flex justify-end">
                             <Button onClick={addMovement}>
@@ -349,14 +404,18 @@ export default function CashBanksDashboard() {
                                         return (
                                             <tr key={m.id}>
                                                 <td className="px-4 py-2 text-sm text-gray-600">{toLimaDateTime(m.date)}</td>
-                                                <td className="px-4 py-2"><Badge variant={tmeta.variant}>{tmeta.label}</Badge></td>
+                                                <td className="px-4 py-2">
+                                                    <Badge variant={tmeta.variant}>{tmeta.label}</Badge>
+                                                </td>
                                                 <td className="px-4 py-2">{safeText(m.concept)}</td>
                                                 <td className="px-4 py-2 text-right">{fmtCurrency(m.amount)}</td>
                                             </tr>
                                         );
                                     })}
                                     {movs.length === 0 && (
-                                        <tr><td colSpan={4} className="text-center py-8 text-gray-500">Sin movimientos.</td></tr>
+                                        <tr>
+                                            <td colSpan={4} className="text-center py-8 text-gray-500">Sin movimientos.</td>
+                                        </tr>
                                     )}
                                 </tbody>
                             </table>
@@ -367,7 +426,9 @@ export default function CashBanksDashboard() {
 
             {statusMeta.code === "OPEN" && current && (
                 <Card>
-                    <CardHeader><CardTitle>Cerrar sesión</CardTitle></CardHeader>
+                    <CardHeader>
+                        <CardTitle>Cerrar sesión</CardTitle>
+                    </CardHeader>
                     <CardContent className="grid md:grid-cols-3 gap-3">
                         <div>
                             <Label>Saldo de cierre</Label>
@@ -381,7 +442,10 @@ export default function CashBanksDashboard() {
                         </div>
                         <div className="md:col-span-2">
                             <Label>Nota</Label>
-                            <Input value={closeForm.note} onChange={(e) => setCloseForm({ ...closeForm, note: e.target.value })} />
+                            <Input
+                                value={closeForm.note}
+                                onChange={(e) => setCloseForm({ ...closeForm, note: e.target.value })}
+                            />
                         </div>
                         <div className="md:col-span-3 flex justify-end">
                             <Button onClick={closeSession}>

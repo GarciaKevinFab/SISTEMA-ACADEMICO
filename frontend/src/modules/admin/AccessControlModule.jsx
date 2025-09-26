@@ -440,38 +440,47 @@ const PermissionsTab = () => {
     const [selectedRole, setSelectedRole] = useState(null);
     const [selectedPerms, setSelectedPerms] = useState(new Set());
 
-    const load = async () => {
+    // 🚀 Carga única (renombrada a loadPerms para evitar choques)
+    const loadPerms = async () => {
         try {
             const [p, r] = await Promise.all([
                 ACLService.listPermissions(),
                 ACLService.listRoles(),
             ]);
-            const allPerms = p?.permissions ?? p ?? [];
+
+            // p ya viene como array de strings por la normalización del service
+            const allPerms = p ?? [];
             const allRoles = r?.roles ?? r ?? [];
             setPerms(allPerms);
             setRoles(allRoles);
+
             if (allRoles.length) {
-                setSelectedRole(allRoles[0]);
-                if (allRoles[0]?.permissions) {
-                    setSelectedPerms(new Set(allRoles[0].permissions));
-                }
+                const first = allRoles[0];
+                setSelectedRole(first);
+                const roleCodes =
+                    first.permissions ?? first.permissions_detail?.map((x) => x.code) ?? [];
+                setSelectedPerms(new Set(roleCodes));
             }
         } catch {
             toast.error("Error al cargar permisos/roles");
         }
     };
-    useEffect(() => { load(); }, []);
 
-    const toggle = (perm) => {
+    useEffect(() => { loadPerms(); }, []);
+
+    const toggle = (permCode) => {
         const copy = new Set(selectedPerms);
-        copy.has(perm) ? copy.delete(perm) : copy.add(perm);
+        copy.has(permCode) ? copy.delete(permCode) : copy.add(permCode);
         setSelectedPerms(copy);
     };
 
     const save = async () => {
         if (!selectedRole) return;
         try {
-            await ACLService.setRolePermissions(selectedRole.id || selectedRole.name, Array.from(selectedPerms));
+            await ACLService.setRolePermissions(
+                selectedRole.id || selectedRole.name,
+                Array.from(selectedPerms)
+            );
             toast.success("Permisos actualizados");
         } catch {
             toast.error("No se pudo actualizar");
@@ -485,13 +494,20 @@ const PermissionsTab = () => {
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="flex flex-wrap gap-2">
-                    {roles.map(r => (
+                    {roles.map((r) => (
                         <Button
                             key={r.id || r.name}
-                            variant={selectedRole && (r.id === selectedRole.id || r.name === selectedRole.name) ? "default" : "outline"}
+                            variant={
+                                selectedRole &&
+                                    (r.id === selectedRole.id || r.name === selectedRole.name)
+                                    ? "default"
+                                    : "outline"
+                            }
                             onClick={() => {
                                 setSelectedRole(r);
-                                setSelectedPerms(new Set(r.permissions || []));
+                                const roleCodes =
+                                    r.permissions ?? r.permissions_detail?.map((x) => x.code) ?? [];
+                                setSelectedPerms(new Set(roleCodes));
                             }}
                         >
                             {r.name}
@@ -500,17 +516,22 @@ const PermissionsTab = () => {
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-2">
-                    {perms.map(p => (
-                        <label key={p} className="flex items-center gap-2 p-2 border rounded">
-                            <input
-                                type="checkbox"
-                                checked={selectedPerms.has(p)}
-                                onChange={() => toggle(p)}
-                            />
-                            <span className="text-sm">{p}</span>
-                        </label>
-                    ))}
-                    {perms.length === 0 && <div className="text-sm text-gray-500">Sin permisos definidos</div>}
+                    {perms.map((p) => {
+                        const code = typeof p === "string" ? p : p?.code;
+                        return (
+                            <label key={code} className="flex items-center gap-2 p-2 border rounded">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedPerms.has(code)}
+                                    onChange={() => toggle(code)}
+                                />
+                                <span className="text-sm">{code}</span>
+                            </label>
+                        );
+                    })}
+                    {perms.length === 0 && (
+                        <div className="text-sm text-gray-500">Sin permisos definidos</div>
+                    )}
                 </div>
 
                 <div className="flex justify-end">

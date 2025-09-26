@@ -1,3 +1,5 @@
 from django.test import TestCase
 
-# Create your tests here.
+class Smoke(TestCase):
+    def test_ok(self):
+        self.assertTrue(True)

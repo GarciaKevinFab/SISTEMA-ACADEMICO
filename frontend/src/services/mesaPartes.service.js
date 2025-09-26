@@ -2,12 +2,29 @@
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem("token") || ""}` });
+// Usa el access de tu flujo actual (y cae a "token" si existiera)
+const getToken = () =>
+    localStorage.getItem("access") ||
+    localStorage.getItem("token") ||
+    "";
+
+const authHeaders = () => ({
+    Authorization: `Bearer ${getToken()}`,
+});
+
 const jsonHeaders = { "Content-Type": "application/json" };
 
+// Normaliza la URL para evitar dobles barras, pero sin forzar slash final
+function joinApi(url) {
+    return `${API}${url}`.replace(/([^:]\/)\/+/g, "$1");
+}
+
 async function http(method, url, body, { isJSON = true, isPublic = false } = {}) {
-    const headers = isJSON ? { ...(isPublic ? {} : authHeaders()), ...jsonHeaders } : (isPublic ? {} : authHeaders());
-    const resp = await fetch(`${API}${url}`, {
+    const headers = isJSON
+        ? { ...(isPublic ? {} : authHeaders()), ...jsonHeaders }
+        : (isPublic ? {} : authHeaders());
+
+    const resp = await fetch(joinApi(url), {
         method,
         headers,
         body: body ? (isJSON ? JSON.stringify(body) : body) : undefined,
@@ -15,9 +32,13 @@ async function http(method, url, body, { isJSON = true, isPublic = false } = {})
 
     if (!resp.ok) {
         let msg = "Error en la solicitud";
-        try { const e = await resp.json(); msg = e.detail || e.message || msg; } catch { }
+        try {
+            const e = await resp.json();
+            msg = e.detail || e.message || msg;
+        } catch { }
         throw new Error(msg);
     }
+
     const ct = resp.headers.get("content-type") || "";
     if (ct.includes("application/json")) return resp.json();
     return resp; // blobs/stream
@@ -25,10 +46,14 @@ async function http(method, url, body, { isJSON = true, isPublic = false } = {})
 
 /* ===== Catálogos ===== */
 export const Catalog = {
-    offices: () => http("GET", "/offices"),
-    users: (params) => {
+    offices: async () => {
+        const d = await http("GET", "/offices");
+        return Array.isArray(d?.offices) ? d.offices : (Array.isArray(d) ? d : []);
+    },
+    users: async (params) => {
         const q = new URLSearchParams(params || {}).toString();
-        return http("GET", `/users${q ? `?${q}` : ""}`);
+        const d = await http("GET", `/users${q ? `?${q}` : ""}`);
+        return Array.isArray(d?.users) ? d.users : (Array.isArray(d) ? d : []);
     },
 };
 
@@ -55,25 +80,27 @@ export const Procedures = {
         http("POST", `/procedures/${id}/route`, { to_office_id, assignee_id, note, deadline_at }),
 
     // Cambio de estado
-    setStatus: (id, { status, note }) => http("POST", `/procedures/${id}/status`, { status, note }),
+    setStatus: (id, { status, note }) =>
+        http("POST", `/procedures/${id}/status`, { status, note }),
 
     // Trazabilidad / notas
     timeline: (id) => http("GET", `/procedures/${id}/timeline`),
     addNote: (id, { note }) => http("POST", `/procedures/${id}/notes`, { note }),
 
-    // Notificaciones
-    notify: (id, { channels, subject, message }) =>
-        http("POST", `/procedures/${id}/notify`, { channels, subject, message }),
-
-    // PDFs (carátula y cargo). El UI usará pdfQrPolling, pero dejo endpoints directos si quieres fetch puro.
-    coverPDF: (id) => http("POST", `/procedures/${id}/cover/pdf`, {}),
-    cargoPDF: (id) => http("POST", `/procedures/${id}/cargo/pdf`, {}),
+    // PDFs (coinciden con tus @action: cover y cargo)
+    coverPDF: (id) => http("POST", `/procedures/${id}/cover`, {}),
+    cargoPDF: (id) => http("POST", `/procedures/${id}/cargo`, {}),
 };
 
 /* ===== Público ===== */
 export const PublicProcedures = {
     track: (code) =>
-        http("GET", `/public/procedures/track?code=${encodeURIComponent(code)}`, null, { isJSON: true, isPublic: true }),
+        http(
+            "GET",
+            `/public/procedures/track?code=${encodeURIComponent(code)}`,
+            null,
+            { isJSON: true, isPublic: true }
+        ),
 };
 
 /* ===== Archivos de trámite ===== */

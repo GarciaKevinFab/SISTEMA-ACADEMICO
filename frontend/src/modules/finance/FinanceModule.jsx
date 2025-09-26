@@ -1,3 +1,4 @@
+// src/modules/finance/FinanceModule.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext";
 import CashBanksDashboard from "../../components/finance/CashBanksDashboard";
@@ -9,7 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../..
 import { Button } from "../../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { Banknote, Receipt, Package, Truck, Users, BarChart3, AlertTriangle, TrendingUp, FileText, Coins } from "lucide-react";
-import { toast } from "sonner";
+// ✅ Importa el toast seguro (NO de "sonner" directo)
+import { toast } from "../../utils/safeToast";
 import ConceptsCatalog from "./ConceptsCatalog";
 import ReconciliationDashboard from "./ReconciliationDashboard";
 import StudentAccountsDashboard from "./StudentAccountsDashboard";
@@ -17,22 +19,34 @@ import FinanceReports from "./FinanceReports";
 import { fmtCurrency, formatApiError } from "../../utils/format";
 import { PERMS } from "../../auth/permissions";
 
+// ---- Helper seguro para toasts de error (sin tipos TS) ----
+const showApiError = (e, fallbackMsg) => {
+  const err = formatApiError(e, fallbackMsg);
+  // formatApiError siempre devuelve string con nuestro wrapper,
+  // pero si cambia en el futuro, esto evita pasar objetos al toast.
+  if (typeof err === "string") {
+    toast.error(err);
+  } else {
+    toast.error(err.title ?? (fallbackMsg || "Error"), { description: err.description });
+  }
+};
+
 const FinanceModule = () => {
-  const { user, api, hasPerm, hasAny } = useAuth();
+  const { user, api, hasAny } = useAuth();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [dashboardStats, setDashboardStats] = useState({});
   const [loading, setLoading] = useState(true);
 
   // ------- Permisos por funcionalidad (no por rol) -------
   const canCashBanks = hasAny([PERMS["fin.cashbanks.view"]]);           // Caja y bancos + boletas
-  const canReceipts = hasAny([PERMS["fin.cashbanks.view"]]);           // Reutilizo la misma vista
-  const canStdAccounts = hasAny([PERMS["fin.student.accounts.view"]]);    // Estados de cuenta
-  const canConcepts = hasAny([PERMS["fin.concepts.manage"]]);          // Catálogo de conceptos
+  const canReceipts = hasAny([PERMS["fin.cashbanks.view"]]);            // Reutilizo la misma vista
+  const canStdAccounts = hasAny([PERMS["fin.student.accounts.view"]]);  // Estados de cuenta
+  const canConcepts = hasAny([PERMS["fin.concepts.manage"]]);           // Catálogo de conceptos
   const canReconcile = hasAny([PERMS["fin.reconciliation.view"]]);      // Conciliación
-  const canReports = hasAny([PERMS["fin.reports.view"]]);             // Reportes fin.
+  const canReports = hasAny([PERMS["fin.reports.view"]]);               // Reportes fin.
   const canInventory = hasAny([PERMS["fin.inventory.view"]]);           // Inventario (adm.)
   const canLogistics = hasAny([PERMS["fin.logistics.view"]]);           // Logística (adm.)
-  const canHR = hasAny([PERMS["hr.view"]]);                      // RRHH (adm.)
+  const canHR = hasAny([PERMS["hr.view"]]);                             // RRHH (adm.)
 
   // etiqueta visible según el permiso principal del usuario (solo estética)
   const roleLabel = (() => {
@@ -51,7 +65,7 @@ const FinanceModule = () => {
       const { data } = await api.get("/dashboard/stats");
       if (alive) setDashboardStats(data?.stats ?? data ?? {});
     } catch (error) {
-      if (alive) toast.error(formatApiError(error, "No se pudieron cargar las estadísticas"));
+      if (alive) showApiError(error, "No se pudieron cargar las estadísticas");
     } finally {
       if (alive) setLoading(false);
     }
@@ -61,7 +75,7 @@ const FinanceModule = () => {
   useEffect(() => {
     let cleanup;
     (async () => { cleanup = await fetchDashboardStats(); })();
-    return () => { if (typeof cleanup === 'function') cleanup(); };
+    return () => { if (typeof cleanup === "function") cleanup(); };
   }, [fetchDashboardStats]);
 
   const renderMainDashboard = () => {

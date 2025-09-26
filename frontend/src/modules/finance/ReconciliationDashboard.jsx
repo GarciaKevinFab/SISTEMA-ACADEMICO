@@ -5,11 +5,14 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
-import { toast } from "sonner";
+import { toast } from "../../utils/safeToast"; // <- usa safeToast
 import { Save, RefreshCw } from "lucide-react";
 import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
 import { fmtCurrency, formatApiError, toLimaDate } from "../../utils/format";
 import { optVal, safeText } from "../../utils/ui";
+
+// helper de error consistente
+const showApiError = (e, fallback) => toast.error(formatApiError(e, fallback));
 
 export default function ReconciliationDashboard() {
     const [accounts, setAccounts] = useState([]);
@@ -26,14 +29,15 @@ export default function ReconciliationDashboard() {
                 const data = await Reconciliation.bankAccounts();
                 setAccounts(data?.items ?? data ?? []);
             } catch (e) {
-                toast.error(formatApiError(e));
+                showApiError(e, "No se pudieron cargar las cuentas");
             }
         })();
     }, []);
 
     const load = async () => {
         if (!form.account_id || !form.date_from || !form.date_to) {
-            toast.error("Seleccione cuenta y rango de fechas"); return;
+            toast.error("Seleccione cuenta y rango de fechas");
+            return;
         }
         try {
             setLoading(true);
@@ -41,13 +45,14 @@ export default function ReconciliationDashboard() {
             const list = data?.items ?? data ?? [];
             setRows(list.map((m) => ({ ...m, reconciled: Boolean(m.reconciled) })));
         } catch (e) {
-            toast.error(formatApiError(e));
-        } finally { setLoading(false); }
+            showApiError(e, "No se pudieron cargar los movimientos");
+        } finally {
+            setLoading(false);
+        }
     };
 
     const totalLedger = rows.reduce((acc, r) => acc + Number(r.amount || 0), 0);
-    const totalReconciled = rows.filter(r => r.reconciled).reduce((acc, r) => acc + Number(r.amount || 0), 0);
-    // Si tu backend expone opening_book_balance, reemplaza el cálculo.
+    const totalReconciled = rows.filter((r) => r.reconciled).reduce((acc, r) => acc + Number(r.amount || 0), 0);
     const diff = Number(statementBalance || 0) - totalReconciled;
 
     const save = async () => {
@@ -59,12 +64,14 @@ export default function ReconciliationDashboard() {
                 date_from: form.date_from,
                 date_to: form.date_to,
                 statement_balance: Number(statementBalance || 0),
-                items: rows.map(r => ({ movement_id: r.id, reconciled: !!r.reconciled })),
+                items: rows.map((r) => ({ movement_id: r.id, reconciled: !!r.reconciled })),
             });
             toast.success("Conciliación guardada");
         } catch (e) {
-            toast.error(formatApiError(e));
-        } finally { setSaving(false); }
+            showApiError(e, "No se pudo guardar la conciliación");
+        } finally {
+            setSaving(false);
+        }
     };
 
     const exportPdf = async () => {
@@ -78,8 +85,10 @@ export default function ReconciliationDashboard() {
             if (res?.success) await downloadFile(res.downloadUrl, `conciliacion-${form.account_id}.pdf`);
             else toast.error("No se pudo generar el PDF");
         } catch (e) {
-            toast.error(formatApiError(e, "No se pudo exportar PDF"));
-        } finally { setExporting(false); }
+            showApiError(e, "No se pudo exportar PDF");
+        } finally {
+            setExporting(false);
+        }
     };
 
     return (
@@ -90,8 +99,20 @@ export default function ReconciliationDashboard() {
                     <p className="text-sm text-gray-600">Marca movimientos conciliados y registra el saldo de extracto</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={load}><RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />Cargar</Button>
-                    <Button onClick={exportPdf} disabled={exporting}>{exporting ? (<><RefreshCw className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />Generando…</>) : "Exportar PDF"}</Button>
+                    <Button variant="outline" onClick={load}>
+                        <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
+                        Cargar
+                    </Button>
+                    <Button onClick={exportPdf} disabled={exporting}>
+                        {exporting ? (
+                            <>
+                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+                                Generando…
+                            </>
+                        ) : (
+                            "Exportar PDF"
+                        )}
+                    </Button>
                 </div>
             </div>
 
@@ -104,12 +125,18 @@ export default function ReconciliationDashboard() {
                     <div>
                         <Label>Cuenta</Label>
                         <Select value={form.account_id} onValueChange={(v) => setForm({ ...form, account_id: v })}>
-                            <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Seleccionar" />
+                            </SelectTrigger>
                             <SelectContent>
-                                {accounts.map(a => {
+                                {accounts.map((a) => {
                                     const v = optVal(a.id);
                                     if (!v) return null;
-                                    return <SelectItem key={v} value={String(v)}>{a.bank_name} {a.account_number}</SelectItem>;
+                                    return (
+                                        <SelectItem key={v} value={String(v)}>
+                                            {a.bank_name} {a.account_number}
+                                        </SelectItem>
+                                    );
                                 })}
                             </SelectContent>
                         </Select>
@@ -124,7 +151,12 @@ export default function ReconciliationDashboard() {
                     </div>
                     <div>
                         <Label>Saldo extracto</Label>
-                        <Input type="number" step="0.01" value={statementBalance} onChange={(e) => setStatementBalance(e.target.value)} />
+                        <Input
+                            type="number"
+                            step="0.01"
+                            value={statementBalance}
+                            onChange={(e) => setStatementBalance(e.target.value)}
+                        />
                     </div>
                 </CardContent>
             </Card>
@@ -144,10 +176,18 @@ export default function ReconciliationDashboard() {
                             <table className="w-full">
                                 <thead className="bg-gray-50 border-b">
                                     <tr>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">Fecha</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">Descripción</th>
-                                        <th scope="col" className="px-4 py-2 text-right text-xs font-semibold">Monto</th>
-                                        <th scope="col" className="px-4 py-2 text-center text-xs font-semibold">Conciliado</th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">
+                                            Fecha
+                                        </th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">
+                                            Descripción
+                                        </th>
+                                        <th scope="col" className="px-4 py-2 text-right text-xs font-semibold">
+                                            Monto
+                                        </th>
+                                        <th scope="col" className="px-4 py-2 text-center text-xs font-semibold">
+                                            Conciliado
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y">
@@ -162,7 +202,7 @@ export default function ReconciliationDashboard() {
                                                     checked={!!r.reconciled}
                                                     onChange={(e) => {
                                                         const checked = e.target.checked;
-                                                        setRows(prev => prev.map((x, i) => i === idx ? { ...x, reconciled: checked } : x));
+                                                        setRows((prev) => prev.map((x, i) => (i === idx ? { ...x, reconciled: checked } : x)));
                                                     }}
                                                     aria-label={`Conciliar movimiento ${r.id}`}
                                                 />
@@ -170,15 +210,23 @@ export default function ReconciliationDashboard() {
                                         </tr>
                                     ))}
                                     {rows.length === 0 && (
-                                        <tr><td colSpan={4} className="text-center py-8 text-gray-500">Sin movimientos en el rango.</td></tr>
+                                        <tr>
+                                            <td colSpan={4} className="text-center py-8 text-gray-500">
+                                                Sin movimientos en el rango.
+                                            </td>
+                                        </tr>
                                     )}
                                 </tbody>
                                 {rows.length > 0 && (
                                     <tfoot>
                                         <tr className="bg-gray-50">
-                                            <td className="px-4 py-2 font-semibold" colSpan={2}>Totales</td>
+                                            <td className="px-4 py-2 font-semibold" colSpan={2}>
+                                                Totales
+                                            </td>
                                             <td className="px-4 py-2 text-right font-semibold">
-                                                Libro: {fmtCurrency(totalLedger)}<br />Conciliados: {fmtCurrency(totalReconciled)}
+                                                Libro: {fmtCurrency(totalLedger)}
+                                                <br />
+                                                Conciliados: {fmtCurrency(totalReconciled)}
                                             </td>
                                             <td className="px-4 py-2 text-center">
                                                 <div className={`text-sm ${Math.abs(diff) < 0.01 ? "text-green-600" : "text-red-600"}`}>
@@ -194,7 +242,17 @@ export default function ReconciliationDashboard() {
 
                     <div className="p-4 flex justify-end">
                         <Button onClick={save} disabled={saving}>
-                            {saving ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />Guardando…</> : <><Save className="h-4 w-4 mr-2" aria-hidden="true" />Guardar conciliación</>}
+                            {saving ? (
+                                <>
+                                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+                                    Guardando…
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="h-4 w-4 mr-2" aria-hidden="true" />
+                                    Guardar conciliación
+                                </>
+                            )}
                         </Button>
                     </div>
                 </CardContent>
