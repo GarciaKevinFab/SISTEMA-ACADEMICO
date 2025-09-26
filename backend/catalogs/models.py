@@ -1,4 +1,4 @@
-from django.db import models
+from django.conf import settings
 
 # Create your models here.
 from django.db import models
@@ -31,13 +31,12 @@ class Classroom(models.Model):
     def __str__(self): return f"{self.campus.name} - {self.code}"
 
 class Teacher(models.Model):
-    user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True)
-    dni = models.CharField(max_length=12, unique=True)
-    full_name = models.CharField(max_length=150)
-    email = models.EmailField(blank=True, default='')
-    phone = models.CharField(max_length=30, blank=True, default='')
-
-    def __str__(self): return self.full_name
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='catalog_teachers',    # 👈 distinto al anterior
+        null=True, blank=True
+    )
 
 class InstitutionSetting(models.Model):
     # settings JSON + media referenciadas

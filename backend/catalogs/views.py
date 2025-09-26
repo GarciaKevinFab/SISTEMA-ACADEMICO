@@ -47,7 +47,8 @@ class ClassroomsViewSet(viewsets.ModelViewSet):
         return Response(self.serializer_class(qs, many=True).data)
 
 class TeachersViewSet(viewsets.ModelViewSet):
-    queryset = Teacher.objects.all().order_by('full_name')
+    queryset = Teacher.objects.select_related('user') \
+        .order_by('user__last_name', 'user__first_name')
     serializer_class = TeacherSerializer
     http_method_names = ['get','post','patch','delete']
 

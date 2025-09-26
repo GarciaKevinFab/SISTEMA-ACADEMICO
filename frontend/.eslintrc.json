@@ -1,0 +1,10 @@
+{
+    "extends": [
+        "react-app",
+        "react-app/jest"
+    ],
+    "rules": {
+        // opcional:
+        // "react-hooks/exhaustive-deps": "off"
+    }
+}

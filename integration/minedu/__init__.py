@@ -1,1 +1,0 @@
-# MINEDU Integration Package

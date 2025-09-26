@@ -6,6 +6,7 @@ const Login = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const { login } = useAuth();
+    // Si más adelante tu backend devuelve MFA, ya dejamos el estado listo:
     const [mfa, setMfa] = useState({ required: false, token: null, code: "" });
 
     const handleSubmit = async (e) => {
@@ -13,12 +14,12 @@ const Login = () => {
         setLoading(true);
         setError("");
         try {
-            await login(formData.username, formData.password);
-            const res = await login(formData.username, formData.password);
+            const res = await login(formData.username, formData.password); // <-- SOLO 1 llamada
             if (res?.mfa_required) {
                 setMfa({ required: true, token: res.mfa_token, code: "" });
-                return; // no navegues aún
+                return; // mostrar UI de MFA si aplica
             }
+            window.location.href = "/dashboard";
         } catch (err) {
             setError(err.message || "Error al iniciar sesión");
         } finally {
@@ -29,19 +30,6 @@ const Login = () => {
     const handleChange = (e) =>
         setFormData({ ...formData, [e.target.name]: e.target.value });
 
-    const handleMfa = async (e) => {
-        e.preventDefault();
-        setLoading(true); setError("");
-        try {
-            // si tu AuthContext expone completeMFA, úsalo. Si no, usa SecurityService.challenge:
-            // const session = await completeMFA(mfa.token, mfa.code);
-            const session = await SecurityService.challenge({ token: mfa.token, code: mfa.code });
-            // setSession en AuthContext si es necesario
-            window.location.href = "/dashboard";
-        } catch (err) {
-            setError("Código inválido");
-        } finally { setLoading(false); }
-    };
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-md w-full space-y-8">

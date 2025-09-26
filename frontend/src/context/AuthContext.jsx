@@ -1,8 +1,10 @@
-import React, { createContext, useState, useEffect, useContext } from "react";
+// src/context/AuthContext.jsx
+import React, { createContext, useState, useEffect, useContext, useRef } from "react";
 import { toast } from "sonner";
 import { api, attachToken } from "../lib/api";
+import { ROLE_POLICIES, PERM_ALIASES } from "../auth/permissions";
 
-export const AuthContext = createContext();
+export const AuthContext = createContext(null);
 
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
@@ -10,182 +12,186 @@ export const useAuth = () => {
   return ctx;
 };
 
-function formatApiError(err, fallback = "Ocurrió un error") {
-  const data = err?.response?.data;
-  if (data?.detail) {
-    const d = data.detail;
-    if (typeof d === "string") return d;
-    if (Array.isArray(d)) {
-      const msgs = d
-        .map((e) => {
-          const field = Array.isArray(e?.loc) ? e.loc.join(".") : e?.loc;
-          return e?.msg ? (field ? `${field}: ${e.msg}` : e.msg) : null;
-        })
-        .filter(Boolean);
-      if (msgs.length) return msgs.join(" | ");
-    }
-  }
-  if (typeof data?.error?.message === "string") return data.error.message;
-  if (typeof data?.message === "string") return data.message;
-  if (typeof data?.error === "string") return data.error;
-  if (typeof err?.message === "string") return err.message;
-  return fallback;
-}
-
-// Normaliza permisos a Set cualquiera sea el nombre del campo que envíe el backend
-const toPermSet = (u) => {
-  const raw =
-    u?.permissions ||
-    u?.perms ||
-    u?.scopes ||
-    [];
+// ---- helpers ----
+const toServerPermSet = (u) => {
+  const raw = u?.permissions || u?.perms || u?.scopes || [];
   return new Set(Array.isArray(raw) ? raw : []);
+};
+
+const expandPermsFromRoles = (roles = []) => {
+  const set = new Set();
+  (roles || []).forEach((r) => {
+    const bucket = ROLE_POLICIES[r] || [];
+    bucket.forEach((p) => set.add(p));
+  });
+  Object.entries(PERM_ALIASES || {}).forEach(([alias, real]) => {
+    if (set.has(real)) set.add(alias);
+  });
+  return set;
+};
+
+// ⚠️ NUEVO: normaliza roles a string[]
+const normalizeRoles = (roles) => {
+  if (!roles) return [];
+  if (Array.isArray(roles)) {
+    return roles.map((r) =>
+      typeof r === "string" ? r : (r?.name || r?.code || r?.id || "").toString()
+    ).filter(Boolean);
+  }
+  // si viniera un objeto único
+  if (typeof roles === "object") return [roles.name || roles.code].filter(Boolean);
+  return [];
+};
+
+// ⚠️ CAMBIO: unir permisos del backend + derivados de roles
+const enrichUser = (u) => {
+  if (!u) return u;
+  const roles = normalizeRoles(u.roles);
+  const full =
+    u.full_name ||
+    [u.first_name, u.last_name].filter(Boolean).join(" ").trim() ||
+    u.username ||
+    "";
+  const serverPerms = toServerPermSet(u);
+  const rolePerms = expandPermsFromRoles(roles);
+  const finalPerms = new Set([...serverPerms, ...rolePerms]); // ← unión
+
+  return {
+    ...u,
+    roles,                                   // ← normalizado
+    full_name: full,
+    permissions: Array.from(finalPerms),     // ← ya incluye alias y rol
+  };
 };
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem("token") || null);
+  const [access, setAccess] = useState(localStorage.getItem("access") || null);
+  const [refresh, setRefresh] = useState(localStorage.getItem("refresh") || null);
   const [loading, setLoading] = useState(true);
   const [permSet, setPermSet] = useState(new Set());
+  const refreshingRef = useRef(null);
+  const interceptorIdRef = useRef(null);
 
-  // Mantén el Authorization en la instancia compartida cuando cambie el token
+  useEffect(() => { attachToken(access, refresh); }, [access, refresh]);
+
   useEffect(() => {
-    attachToken(token);
-  }, [token]);
+    if (interceptorIdRef.current != null) {
+      api.interceptors.response.eject(interceptorIdRef.current);
+      interceptorIdRef.current = null;
+    }
+    if (!access || !refresh) return;
 
-  // Cargar perfil con /auth/me si hay token
+    const id = api.interceptors.response.use(
+      (res) => res,
+      async (err) => {
+        const original = err?.config;
+        if (err?.response?.status !== 401 || original?._retry) return Promise.reject(err);
+        original._retry = true;
+        try {
+          if (!refreshingRef.current) {
+            refreshingRef.current = (async () => {
+              const { data } = await api.post("/auth/token/refresh/", { refresh });
+              const newAccess = data?.access;
+              if (!newAccess) throw new Error("Refresh sin access token");
+              localStorage.setItem("access", newAccess);
+              setAccess(newAccess);
+              attachToken(newAccess, refresh);
+              return newAccess;
+            })().finally(() => { refreshingRef.current = null; });
+          }
+          const newAccess = await refreshingRef.current;
+          original.headers = { ...(original.headers || {}), Authorization: `Bearer ${newAccess}` };
+          return api.request(original);
+        } catch (e) {
+          logout();
+          return Promise.reject(e);
+        }
+      }
+    );
+    interceptorIdRef.current = id;
+    return () => api.interceptors.response.eject(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [access, refresh]);
+
   useEffect(() => {
     let mounted = true;
-
-    const run = async () => {
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+    const fetchProfile = async () => {
+      if (!access) { setLoading(false); return; }
       try {
-        const { data } = await api.get("/auth/me");
+        let profile = null;
+        try {
+          const { data } = await api.get("/auth/me");
+          profile = data ?? null;
+        } catch {
+          const u = localStorage.getItem("last_username");
+          if (u) {
+            const { data } = await api.get(`/users/search?q=${encodeURIComponent(u)}`);
+            profile = (Array.isArray(data) ? data.find((it) => it.username === u) : null)
+              ?? { username: u, roles: [] };
+          }
+        }
         if (!mounted) return;
-        const profile = data?.user ?? data ?? null;
-        setUser(profile);
-        setPermSet(toPermSet(profile));
+        setUser(enrichUser(profile));
       } catch {
-        if (!mounted) return;
-        setUser(null);
-        setPermSet(new Set());
-        localStorage.removeItem("token");
-        setToken(null);
-      } finally {
-        if (mounted) setLoading(false);
-      }
+        setUser(null); setAccess(null); setRefresh(null);
+        localStorage.removeItem("access"); localStorage.removeItem("refresh"); localStorage.removeItem("last_username");
+      } finally { if (mounted) setLoading(false); }
     };
+    fetchProfile();
+    return () => { mounted = false; };
+  }, [access]);
 
-    run();
-    return () => {
-      mounted = false;
-    };
-  }, [token]);
-
-  // Si cambia el user por cualquier motivo, recalcula permisos
-  useEffect(() => {
-    setPermSet(toPermSet(user));
-  }, [user]);
-
-  // Helpers de permisos
-  const hasPerm = (p) => permSet.has(p);
-  const hasAny = (arr = []) => arr.some((p) => permSet.has(p));
-  const hasAll = (arr = []) => arr.every((p) => permSet.has(p));
+  useEffect(() => { setPermSet(new Set(user?.permissions || [])); }, [user]);
 
   const login = async (username, password) => {
-    // Validaciones rápidas
-    if (username == null || password == null) {
-      const msg = "Falta usuario y/o contraseña";
-      toast.error(msg);
-      throw new Error(msg);
-    }
-    const u = String(username).trim();
-    const p = String(password).trim();
-    if (!u || !p) {
-      const msg = "Ingresa usuario y contraseña";
-      toast.error(msg);
-      throw new Error(msg);
-    }
-
+    const u = String(username || "").trim();
+    const p = String(password || "").trim();
+    if (!u || !p) { const msg = "Ingresa usuario y contraseña"; toast.error(msg); throw new Error(msg); }
     try {
-      // El backend espera exactamente { username, password }
-      const { data } = await api.post("/auth/login", { username: u, password: p });
+      const { data } = await api.post("/auth/token/", { username: u, password: p });
+      const acc = data?.access, ref = data?.refresh;
+      if (!acc || !ref) throw new Error("El backend no devolvió tokens JWT.");
+      localStorage.setItem("access", acc);
+      localStorage.setItem("refresh", ref);
+      localStorage.setItem("last_username", u);
+      setAccess(acc); setRefresh(ref); attachToken(acc, ref);
 
-      const access_token = data?.access_token || data?.token || data?.accessToken;
-      const profile = data?.user || data?.profile || data?.data?.user || null;
-
-      if (!access_token) throw new Error("El backend no devolvió token.");
-
-      localStorage.setItem("token", access_token);
-      setToken(access_token); // dispara attachToken() vía useEffect
-      setUser(profile);
-      setPermSet(toPermSet(profile));
-
+      let profile = null;
+      try { const { data: me } = await api.get("/auth/me"); profile = me ?? null; }
+      catch {
+        const { data: list } = await api.get(`/users/search?q=${encodeURIComponent(u)}`);
+        profile = (Array.isArray(list) ? list.find((it) => it.username === u) : null)
+          ?? { username: u, roles: [] };
+      }
+      setUser(enrichUser(profile));
       toast.success("¡Inicio de sesión exitoso!");
-      setTimeout(() => (window.location.href = "/dashboard"), 600);
       return true;
     } catch (err) {
-      const status = err?.response?.status;
-      if (status === 422) {
-        toast.error("El backend espera JSON: { username, password }");
-      } else if (status === 401) {
-        toast.error("Credenciales inválidas");
-      } else {
-        toast.error(formatApiError(err, "Error al iniciar sesión"));
-      }
+      toast.error(err?.response?.status === 401 ? "Credenciales inválidas" : "Error al iniciar sesión");
       throw err;
     }
   };
 
-  const register = async (userData) => {
-    try {
-      const { data } = await api.post("/auth/register", userData);
-
-      const access_token = data?.access_token || data?.token || data?.accessToken;
-      const profile = data?.user || null;
-
-      if (!access_token) throw new Error("Registro OK pero sin token.");
-
-      localStorage.setItem("token", access_token);
-      setToken(access_token);
-      setUser(profile);
-      setPermSet(toPermSet(profile));
-
-      toast.success("¡Registro exitoso!");
-      return true;
-    } catch (e) {
-      toast.error(formatApiError(e, "Error al registrarse"));
-      throw e;
-    }
-  };
-
   const logout = () => {
-    setUser(null);
-    setPermSet(new Set());
-    setToken(null);
-    localStorage.removeItem("token");
-    attachToken(null);
+    setUser(null); setPermSet(new Set()); setAccess(null); setRefresh(null);
+    localStorage.removeItem("access"); localStorage.removeItem("refresh"); localStorage.removeItem("last_username");
+    attachToken(null, null);
     toast.success("Sesión cerrada correctamente");
   };
+
+  const hasPerm = (p) => permSet.has(p);
+  const hasAny = (arr = []) => arr.some((p) => permSet.has(p));
+  const hasAll = (arr = []) => arr.every((p) => permSet.has(p));
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        token,
-        login,
-        register,
-        logout,
-        loading,
-        api,
-        // helpers
-        hasPerm,
-        hasAny,
-        hasAll,
-        // 👇 expón el listado plano para utilidades como <IfPerm/>
+        roles: user?.roles || [],          // ⚠️ NUEVO: roles normalizados expuestos
+        access, refresh,
+        loading, login, logout, api,
+        hasPerm, hasAny, hasAll,
         permissions: Array.from(permSet),
       }}
     >

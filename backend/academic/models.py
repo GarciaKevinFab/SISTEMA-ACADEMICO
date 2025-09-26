@@ -1,4 +1,4 @@
-from django.db import models
+from django.conf import settings
 
 # Create your models here.
 from django.db import models
@@ -32,8 +32,12 @@ class Classroom(models.Model):
     capacity = models.PositiveSmallIntegerField(default=30)
 
 class Teacher(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    acronym = models.CharField(max_length=10, blank=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='academic_teachers',   # 👈 nombre único
+        null=True, blank=True
+    )
 
 class Section(models.Model):
     plan_course = models.ForeignKey(PlanCourse, on_delete=models.CASCADE, related_name='sections')

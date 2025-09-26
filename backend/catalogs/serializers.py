@@ -17,9 +17,16 @@ class ClassroomSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class TeacherSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Teacher
-        fields = '__all__'
+        fields = ['id', 'user', 'full_name']  # agrega otros que uses
+
+    def get_full_name(self, obj):
+        if obj.user:
+            return f"{obj.user.last_name or ''} {obj.user.first_name or ''}".strip()
+        return ""
 
 class InstitutionSettingSerializer(serializers.ModelSerializer):
     class Meta:
