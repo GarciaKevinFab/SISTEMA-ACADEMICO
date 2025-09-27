@@ -1,160 +1,197 @@
-// src/services/research.service.js
 // Servicio de Investigación: proyectos, cronograma, productos, evaluación, reportes.
-// Ajusta BASE si tu backend usa otro prefijo.
 
-const BASE = process.env.REACT_APP_BACKEND_URL || "";
-const API = `${BASE}/api/research`;
+import api from "../lib/api";
 
-function headers(extra = {}) {
-    const t = localStorage.getItem("token");
-    const h = { "Content-Type": "application/json", ...extra };
-    if (t) h["Authorization"] = `Bearer ${t}`;
-    return h;
+const PREFIX = "/research";
+
+// Helper axios
+function request(method, path, { params, data, headers } = {}) {
+    const clean = String(path || "").replace(/^\/*/, "");
+    return api
+        .request({ url: `${PREFIX}/${clean}`, method, params, data, headers })
+        .then((r) => r.data);
 }
 
-async function http(method, path, body, { qs, hdrs } = {}) {
-    const url = new URL(`${API}${path}`);
-    if (qs && typeof qs === "object") {
-        for (const [k, v] of Object.entries(qs)) {
-            if (v !== undefined && v !== null && v !== "") url.searchParams.append(k, v);
-        }
-    }
-    const res = await fetch(url.toString(), {
-        method,
-        headers: headers(hdrs),
-        body: body ? JSON.stringify(body) : undefined,
-    });
-    let data = null;
-    try { data = await res.json(); } catch (_) { }
-    if (!res.ok) {
-        const msg = data?.detail || data?.message || `${res.status} ${res.statusText}`;
-        const err = new Error(msg);
-        err.response = { status: res.status, data };
-        throw err;
-    }
-    return data;
+// Normaliza payloads para DRF (evita 500 por FKs o fechas)
+function normalizeProjectPayload(p = {}) {
+    const out = { ...p };
+    if ("line_id" in out) { out.line = out.line_id; delete out.line_id; }
+    if (out.start_date) out.start_date = String(out.start_date).slice(0, 10);
+    if (out.end_date) out.end_date = String(out.end_date).slice(0, 10);
+    // Si manejas asesores M2M en tu UI:
+    if (Array.isArray(out.advisors)) out.advisors = out.advisors.map(Number);
+    return out;
 }
+
 
 /* --------- Catálogos --------- */
 export const Catalog = {
-    lines: () => http("GET", "/catalog/lines"),
-    advisors: () => http("GET", "/catalog/advisors"),
+    lines: () => request("GET", "catalog/lines"),
+    advisors: () => request("GET", "catalog/advisors"),
+
+    createLine: (payload) => request("POST", "catalog/lines", { data: payload }),
+    updateLine: (id, payload) =>
+        request("PATCH", `catalog/lines/${id}`, { data: payload }),
+    removeLine: (id) => request("DELETE", `catalog/lines/${id}`),
+
+    createAdvisor: (payload) =>
+        request("POST", "catalog/advisors", { data: payload }),
+    updateAdvisor: (id, payload) =>
+        request("PATCH", `catalog/advisors/${id}`, { data: payload }),
+    removeAdvisor: (id) => request("DELETE", `catalog/advisors/${id}`),
 };
 
 /* --------- Proyectos --------- */
 export const Projects = {
-    list: (params) => http("GET", "/projects", null, { qs: params }),
-    get: (id) => http("GET", `/projects/${id}`),
-    create: (payload) => http("POST", "/projects", payload),
-    update: (id, payload) => http("PATCH", `/projects/${id}`, payload),
-    remove: (id) => http("DELETE", `/projects/${id}`),
-    changeStatus: (id, status) => http("POST", `/projects/${id}/status`, { status }),
+    list: (params) => request("GET", "projects", { params }),
+    get: (id) => request("GET", `projects/${id}`),
+    create: (payload) =>
+        request("POST", "projects", { data: normalizeProjectPayload(payload) }),
+    update: (id, payload) =>
+        request("PATCH", `projects/${id}`, { data: normalizeProjectPayload(payload) }),
+    remove: (id) => request("DELETE", `projects/${id}`),
+    changeStatus: (id, status) =>
+        request("POST", `projects/${id}/status`, { data: { status } }),
 };
 
 /* --------- Cronograma --------- */
 export const Schedule = {
-    list: (projectId) => http("GET", `/projects/${projectId}/schedule`),
+    list: (projectId) => request("GET", `projects/${projectId}/schedule`),
     saveBulk: (projectId, items) =>
-        http("POST", `/projects/${projectId}/schedule/bulk`, { items }),
+        request("POST", `projects/${projectId}/schedule/bulk`, { data: { items } }),
 };
 
 /* --------- Entregables --------- */
 export const Deliverables = {
-    list: (projectId) => http("GET", `/projects/${projectId}/deliverables`),
+    list: (projectId) => request("GET", `projects/${projectId}/deliverables`),
     create: (projectId, payload) =>
-        http("POST", `/projects/${projectId}/deliverables`, payload),
+        request("POST", `projects/${projectId}/deliverables`, { data: payload }),
     update: (deliverableId, payload) =>
-        http("PATCH", `/deliverables/${deliverableId}`, payload),
+        request("PATCH", `deliverables/${deliverableId}`, { data: payload }),
 };
 
 /* --------- Evaluaciones --------- */
 export const Evaluations = {
-    list: (projectId) => http("GET", `/projects/${projectId}/evaluations`),
+    list: (projectId) => request("GET", `projects/${projectId}/evaluations`),
     save: (projectId, payload) =>
-        http("POST", `/projects/${projectId}/evaluations`, payload),
+        request("POST", `projects/${projectId}/evaluations`, { data: payload }),
 };
 
 /* --------- Reportes --------- */
 export const Reports = {
     summary: ({ year, status } = {}) =>
-        http("GET", "/reports/summary", null, { qs: { year, status } }),
-    // Export PDF se hace vía utils/pdfQrPolling a /research/reports/summary/export
+        request("GET", "reports/summary", { params: { year, status } }),
+    exportSummary: ({ year, status } = {}) =>
+        request("POST", "reports/summary/export", { data: { year, status } }),
 };
 
-/* --------- Equipo de Proyecto --------- */
+/* --------- Equipo --------- */
 export const Team = {
-    list: (projectId) => http("GET", `/projects/${projectId}/team`),
-    add: (projectId, payload) => http("POST", `/projects/${projectId}/team`, payload), // { full_name, role, dedication_pct, email, orcid }
-    update: (projectId, memberId, payload) => http("PATCH", `/projects/${projectId}/team/${memberId}`, payload),
-    remove: (projectId, memberId) => http("DELETE", `/projects/${projectId}/team/${memberId}`),
+    list: (projectId) => request("GET", `projects/${projectId}/team`),
+    add: (projectId, payload) =>
+        request("POST", `projects/${projectId}/team`, { data: payload }),
+    update: (projectId, memberId, payload) =>
+        request("PATCH", `projects/${projectId}/team/${memberId}`, { data: payload }),
+    remove: (projectId, memberId) =>
+        request("DELETE", `projects/${projectId}/team/${memberId}`),
 };
 
-/* --------- Presupuesto & Ejecución --------- */
+/* --------- Presupuesto --------- */
 export const Budget = {
-    list: (projectId) => http("GET", `/projects/${projectId}/budget`), // items + summary
-    createItem: (projectId, payload) => http("POST", `/projects/${projectId}/budget/items`, payload),
-    updateItem: (projectId, itemId, payload) => http("PATCH", `/projects/${projectId}/budget/items/${itemId}`, payload),
-    removeItem: (projectId, itemId) => http("DELETE", `/projects/${projectId}/budget/items/${itemId}`),
+    list: (projectId) => request("GET", `projects/${projectId}/budget`),
+    createItem: (projectId, payload) =>
+        request("POST", `projects/${projectId}/budget/items`, { data: payload }),
+    updateItem: (projectId, itemId, payload) =>
+        request("PATCH", `projects/${projectId}/budget/items/${itemId}`, {
+            data: payload,
+        }),
+    removeItem: (projectId, itemId) =>
+        request("DELETE", `projects/${projectId}/budget/items/${itemId}`),
+
     uploadReceipt: async (projectId, itemId, file) => {
-        const fd = new FormData(); fd.append("file", file);
-        const url = new URL(`${API}/projects/${projectId}/budget/items/${itemId}/receipt`);
-        const res = await fetch(url.toString(), { method: "POST", headers: { Authorization: `Bearer ${localStorage.getItem("token") || ""}` }, body: fd });
-        const data = await res.json().catch(() => null);
-        if (!res.ok) { const msg = data?.detail || res.statusText; const err = new Error(msg); err.response = { status: res.status, data }; throw err; }
+        const fd = new FormData();
+        fd.append("file", file);
+        const { data } = await api.post(
+            `${PREFIX}/projects/${projectId}/budget/items/${itemId}/receipt`,
+            fd,
+            { headers: { "Content-Type": "multipart/form-data" } }
+        );
         return data;
     },
-    exportXlsx: (projectId, qs = {}) => http("GET", `/projects/${projectId}/budget/export`, null, { qs }), // devuelve blob en tu backend
+
+    exportXlsx: (projectId, params = {}) =>
+        request("GET", `projects/${projectId}/budget/export`, { params }),
 };
 
 /* --------- Ética & Propiedad Intelectual --------- */
 export const EthicsIP = {
-    get: (projectId) => http("GET", `/projects/${projectId}/ethics-ip`),
-    setEthics: (projectId, payload) => http("PUT", `/projects/${projectId}/ethics`, payload), // { status, committee, approval_code, approval_date }
+    get: (projectId) => request("GET", `projects/${projectId}/ethics-ip`),
+    setEthics: (projectId, payload) =>
+        request("PUT", `projects/${projectId}/ethics`, { data: payload }),
     uploadEthicsDoc: async (projectId, file) => {
-        const fd = new FormData(); fd.append("file", file);
-        const url = new URL(`${API}/projects/${projectId}/ethics/doc`);
-        const res = await fetch(url.toString(), { method: "POST", headers: { Authorization: `Bearer ${localStorage.getItem("token") || ""}` }, body: fd });
-        const data = await res.json().catch(() => null);
-        if (!res.ok) { const msg = data?.detail || res.statusText; const err = new Error(msg); err.response = { status: res.status, data }; throw err; }
+        const fd = new FormData();
+        fd.append("file", file);
+        const { data } = await api.post(
+            `${PREFIX}/projects/${projectId}/ethics/doc`,
+            fd,
+            { headers: { "Content-Type": "multipart/form-data" } }
+        );
         return data;
     },
-    setIP: (projectId, payload) => http("PUT", `/projects/${projectId}/ip`, payload), // { status, type, registry_code, holder }
+    setIP: (projectId, payload) =>
+        request("PUT", `projects/${projectId}/ip`, { data: payload }),
     uploadIPDoc: async (projectId, file) => {
-        const fd = new FormData(); fd.append("file", file);
-        const url = new URL(`${API}/projects/${projectId}/ip/doc`);
-        const res = await fetch(url.toString(), { method: "POST", headers: { Authorization: `Bearer ${localStorage.getItem("token") || ""}` }, body: fd });
-        const data = await res.json().catch(() => null);
-        if (!res.ok) { const msg = data?.detail || res.statusText; const err = new Error(msg); err.response = { status: res.status, data }; throw err; }
+        const fd = new FormData();
+        fd.append("file", file);
+        const { data } = await api.post(
+            `${PREFIX}/projects/${projectId}/ip/doc`,
+            fd,
+            { headers: { "Content-Type": "multipart/form-data" } }
+        );
         return data;
     },
 };
 
-/* --------- Publicaciones / Productos científicos --------- */
+/* --------- Publicaciones --------- */
 export const Publications = {
-    list: (projectId) => http("GET", `/projects/${projectId}/publications`),
-    create: (projectId, payload) => http("POST", `/projects/${projectId}/publications`, payload), // { type, title, journal, year, doi, link, indexed }
-    update: (projectId, pubId, payload) => http("PATCH", `/projects/${projectId}/publications/${pubId}`, payload),
-    remove: (projectId, pubId) => http("DELETE", `/projects/${projectId}/publications/${pubId}`),
+    list: (projectId) => request("GET", `projects/${projectId}/publications`),
+    create: (projectId, payload) =>
+        request("POST", `projects/${projectId}/publications`, { data: payload }),
+    update: (projectId, pubId, payload) =>
+        request("PATCH", `projects/${projectId}/publications/${pubId}`, {
+            data: payload,
+        }),
+    remove: (projectId, pubId) =>
+        request("DELETE", `projects/${projectId}/publications/${pubId}`),
 };
 
-/* --------- Convocatorias / Postulaciones / Revisión --------- */
+/* --------- Convocatorias / Revisión --------- */
 export const Calls = {
-    list: (qs) => http("GET", `/calls`, null, { qs }),
-    create: (payload) => http("POST", `/calls`, payload), // { code, title, start_date, end_date, budget_cap, description }
-    update: (id, payload) => http("PATCH", `/calls/${id}`, payload),
-    remove: (id) => http("DELETE", `/calls/${id}`),
+    list: (params) => request("GET", `calls`, { params }),
+    create: (payload) => request("POST", `calls`, { data: payload }),
+    update: (id, payload) => request("PATCH", `calls/${id}`, { data: payload }),
+    remove: (id) => request("DELETE", `calls/${id}`),
 };
 
 export const Proposals = {
-    list: (callId) => http("GET", `/calls/${callId}/proposals`),
-    create: (callId, payload) => http("POST", `/calls/${callId}/proposals`, payload), // { title, line_id, team, summary, budget }
-    submit: (callId, proposalId) => http("POST", `/calls/${callId}/proposals/${proposalId}/submit`),
+    list: (callId) => request("GET", `calls/${callId}/proposals`),
+    create: (callId, payload) =>
+        request("POST", `calls/${callId}/proposals`, { data: payload }),
+    submit: (callId, proposalId) =>
+        request("POST", `calls/${callId}/proposals/${proposalId}/submit`),
 };
 
 export const Reviews = {
-    assign: (callId, proposalId, reviewerId) => http("POST", `/calls/${callId}/proposals/${proposalId}/assign`, { reviewer_id: reviewerId }),
-    rubric: (callId, proposalId) => http("GET", `/calls/${callId}/proposals/${proposalId}/rubric`),
-    save: (callId, proposalId, payload) => http("POST", `/calls/${callId}/proposals/${proposalId}/review`, payload), // { scores, comment, total }
-    ranking: (callId) => http("GET", `/calls/${callId}/ranking`),
-    exportResults: (callId) => http("GET", `/calls/${callId}/ranking/export`),
+    assign: (callId, proposalId, reviewerId) =>
+        request("POST", `calls/${callId}/proposals/${proposalId}/assign`, {
+            data: { reviewer_id: reviewerId },
+        }),
+    rubric: (callId, proposalId) =>
+        request("GET", `calls/${callId}/proposals/${proposalId}/rubric`),
+    save: (callId, proposalId, payload) =>
+        request("POST", `calls/${callId}/proposals/${proposalId}/review`, {
+            data: payload,
+        }),
+    ranking: (callId) => request("GET", `calls/${callId}/ranking`),
+    exportResults: (callId) => request("GET", `calls/${callId}/ranking/export`),
 };

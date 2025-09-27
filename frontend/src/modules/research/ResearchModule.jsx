@@ -1007,10 +1007,255 @@ const StatTile = ({ icon: Icon, title, value, color }) => (
 );
 
 /* =========================================================
+   CATÁLOGOS – CRUD de líneas y asesores
+========================================================= */
+const CatalogsTab = () => {
+    const [lines, setLines] = useState([]);
+    const [advisors, setAdvisors] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // formularios Líneas
+    const [openLineForm, setOpenLineForm] = useState(false);
+    const [lineEditing, setLineEditing] = useState(null);
+    const [lineForm, setLineForm] = useState({ name: "" });
+
+    // formularios Asesores
+    const [openAdvisorForm, setOpenAdvisorForm] = useState(false);
+    const [advisorEditing, setAdvisorEditing] = useState(null);
+    const [advisorForm, setAdvisorForm] = useState({ full_name: "", email: "", orcid: "" });
+
+    const load = useCallback(async () => {
+        try {
+            setLoading(true);
+            const [ls, adv] = await Promise.all([Catalog.lines(), Catalog.advisors()]);
+            setLines(ls?.items ?? ls ?? []);
+            setAdvisors(adv?.items ?? adv ?? []);
+        } catch (e) {
+            toast.error(formatApiError(e, "Error cargando catálogos"));
+        } finally { setLoading(false); }
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    // --- Líneas
+    const openCreateLine = () => { setLineEditing(null); setLineForm({ name: "" }); setOpenLineForm(true); };
+    const openEditLine = (l) => { setLineEditing(l); setLineForm({ name: l.name || "" }); setOpenLineForm(true); };
+
+    const saveLine = async (e) => {
+        e.preventDefault();
+        try {
+            if (lineEditing) {
+                await Catalog.updateLine(lineEditing.id, { name: lineForm.name });
+                toast.success("Línea actualizada");
+            } else {
+                await Catalog.createLine({ name: lineForm.name });
+                toast.success("Línea creada");
+            }
+            setOpenLineForm(false);
+            load();
+        } catch (e2) {
+            toast.error(formatApiError(e2, "No se pudo guardar la línea"));
+        }
+    };
+
+    const removeLine = async (l) => {
+        if (!window.confirm(`¿Eliminar la línea "${l.name}"?`)) return;
+        try {
+            await Catalog.removeLine(l.id);
+            toast.success("Línea eliminada");
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e, "No se pudo eliminar"));
+        }
+    };
+
+    // --- Asesores
+    const openCreateAdvisor = () => { setAdvisorEditing(null); setAdvisorForm({ full_name: "", email: "", orcid: "" }); setOpenAdvisorForm(true); };
+    const openEditAdvisor = (a) => { setAdvisorEditing(a); setAdvisorForm({ full_name: a.full_name || "", email: a.email || "", orcid: a.orcid || "" }); setOpenAdvisorForm(true); };
+
+    const saveAdvisor = async (e) => {
+        e.preventDefault();
+        try {
+            if (advisorEditing) {
+                await Catalog.updateAdvisor(advisorEditing.id, advisorForm);
+                toast.success("Asesor actualizado");
+            } else {
+                await Catalog.createAdvisor(advisorForm);
+                toast.success("Asesor creado");
+            }
+            setOpenAdvisorForm(false);
+            load();
+        } catch (e2) {
+            toast.error(formatApiError(e2, "No se pudo guardar el asesor"));
+        }
+    };
+
+    const removeAdvisor = async (a) => {
+        if (!window.confirm(`¿Eliminar al asesor "${a.full_name}"?`)) return;
+        try {
+            await Catalog.removeAdvisor(a.id);
+            toast.success("Asesor eliminado");
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e, "No se pudo eliminar"));
+        }
+    };
+
+    return (
+        <div className="space-y-6">
+            {/* LÍNEAS */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h3 className="text-xl font-semibold">Líneas de investigación</h3>
+                    <p className="text-sm text-gray-600">Base para clasificar proyectos</p>
+                </div>
+                <Button onClick={openCreateLine}><Plus className="h-4 w-4 mr-2" />Nueva línea</Button>
+            </div>
+
+            <Card>
+                <CardContent className="p-0">
+                    {loading ? (
+                        <div className="flex items-center justify-center h-36">
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50 border-b">
+                                    <tr>
+                                        <th className="p-2 text-left">Nombre</th>
+                                        <th className="p-2 text-left w-32">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {lines.map(l => (
+                                        <tr key={l.id}>
+                                            <td className="p-2">{l.name}</td>
+                                            <td className="p-2">
+                                                <div className="flex gap-2">
+                                                    <Button size="sm" variant="outline" onClick={() => openEditLine(l)}>
+                                                        <Edit3 className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button size="sm" variant="outline" onClick={() => removeLine(l)}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {lines.length === 0 && <tr><td className="p-4 text-center text-gray-500" colSpan={2}>Sin líneas</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* DIALOG LÍNEA */}
+            <Dialog open={openLineForm} onOpenChange={setOpenLineForm}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>{lineEditing ? "Editar línea" : "Nueva línea"}</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={saveLine} className="space-y-3">
+                        <div>
+                            <Label>Nombre</Label>
+                            <Input value={lineForm.name} onChange={(e) => setLineForm({ name: e.target.value })} required />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <Button type="button" variant="outline" onClick={() => setOpenLineForm(false)}>Cancelar</Button>
+                            <Button type="submit"><Save className="h-4 w-4 mr-2" />Guardar</Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* ASESORES */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h3 className="text-xl font-semibold">Asesores</h3>
+                    <p className="text-sm text-gray-600">Docentes/investigadores que asesoran proyectos</p>
+                </div>
+                <Button onClick={openCreateAdvisor}><Plus className="h-4 w-4 mr-2" />Nuevo asesor</Button>
+            </div>
+
+            <Card>
+                <CardContent className="p-0">
+                    {loading ? (
+                        <div className="flex items-center justify-center h-36">
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50 border-b">
+                                    <tr>
+                                        <th className="p-2 text-left">Nombre</th>
+                                        <th className="p-2 text-left">Email</th>
+                                        <th className="p-2 text-left">ORCID</th>
+                                        <th className="p-2 text-left w-32">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {advisors.map(a => (
+                                        <tr key={a.id}>
+                                            <td className="p-2">{a.full_name}</td>
+                                            <td className="p-2">{a.email || "-"}</td>
+                                            <td className="p-2">{a.orcid || "-"}</td>
+                                            <td className="p-2">
+                                                <div className="flex gap-2">
+                                                    <Button size="sm" variant="outline" onClick={() => openEditAdvisor(a)}>
+                                                        <Edit3 className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button size="sm" variant="outline" onClick={() => removeAdvisor(a)}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {advisors.length === 0 && <tr><td className="p-4 text-center text-gray-500" colSpan={4}>Sin asesores</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* DIALOG ASESOR */}
+            <Dialog open={openAdvisorForm} onOpenChange={setOpenAdvisorForm}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>{advisorEditing ? "Editar asesor" : "Nuevo asesor"}</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={saveAdvisor} className="space-y-3">
+                        <div>
+                            <Label>Nombre completo</Label>
+                            <Input value={advisorForm.full_name} onChange={(e) => setAdvisorForm({ ...advisorForm, full_name: e.target.value })} required />
+                        </div>
+                        <div>
+                            <Label>Email</Label>
+                            <Input type="email" value={advisorForm.email} onChange={(e) => setAdvisorForm({ ...advisorForm, email: e.target.value })} />
+                        </div>
+                        <div>
+                            <Label>ORCID</Label>
+                            <Input value={advisorForm.orcid} onChange={(e) => setAdvisorForm({ ...advisorForm, orcid: e.target.value })} />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <Button type="button" variant="outline" onClick={() => setOpenAdvisorForm(false)}>Cancelar</Button>
+                            <Button type="submit"><Save className="h-4 w-4 mr-2" />Guardar</Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+};
+
+/* =========================================================
    CONVOCATORIAS (Calls) — placeholder funcional
 ========================================================= */
 const CallsModule = () => {
-    // Mínimo viable para que compile. Cablea a tu API cuando la tengas.
     const [items, setItems] = useState([]);
     return (
         <div className="space-y-4">
@@ -1042,23 +1287,7 @@ const ResearchModule = () => {
 
                 <TabsContent value="projects"><ProjectsManagement /></TabsContent>
                 <TabsContent value="reports"><ReportsModule /></TabsContent>
-
-                <TabsContent value="catalogs">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Catálogos</CardTitle>
-                            <CardDescription>Gestión base: líneas de investigación y asesores</CardDescription>
-                        </CardHeader>
-                        <CardContent className="text-sm text-gray-600">
-                            Estos catálogos se administran desde el backend/DB. El frontend los consume vía
-                            <code className="mx-1 px-1 bg-gray-100 rounded"> GET /api/research/catalog/lines </code>
-                            y
-                            <code className="mx-1 px-1 bg-gray-100 rounded"> GET /api/research/catalog/advisors</code>.
-                            Si necesitas un CRUD aquí, te lo agrego en otro tab.
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
+                <TabsContent value="catalogs"><CatalogsTab /></TabsContent>
                 <TabsContent value="calls"><CallsModule /></TabsContent>
             </Tabs>
         </div>

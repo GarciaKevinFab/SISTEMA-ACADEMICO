@@ -1,34 +1,52 @@
 // src/lib/api.js
 import axios from "axios";
+import { API_BASE } from "../utils/config";
 
-// Permite sobreescribir por .env (REACT_APP_API_URL) o usa localhost
-const BASE_URL =
-    process.env.REACT_APP_API_URL?.replace(/\/+$/, "") || "http://localhost:8000/api";
-
+// ============ Axios base ============
 export const api = axios.create({
-    baseURL: BASE_URL,
+    baseURL: API_BASE, // ej: http://127.0.0.1:8000/api
 });
 
 // ============================
-// Manejo de tokens en memoria
+// Tokens en memoria + helpers
 // ============================
 let accessToken = null;
 let refreshToken = null;
 let isRefreshing = false;
 let pendingRequests = [];
 
-/**
- * Adjunta/actualiza los tokens usados por la instancia axios.
- * Guárdalos también en localStorage desde tu AuthContext.
- */
+// -- API pública para setear/limpiar tokens --
 export function attachToken(access, refresh) {
     accessToken = access || null;
     refreshToken = refresh || null;
+    try {
+        if (access) localStorage.setItem("access", access);
+        else localStorage.removeItem("access");
+        if (refresh) localStorage.setItem("refresh", refresh);
+        else localStorage.removeItem("refresh");
+    } catch (_) { }
 }
 
-// -----------------------------
-// Request: agrega Authorization
-// -----------------------------
+export function clearTokens() {
+    accessToken = null;
+    refreshToken = null;
+    try {
+        localStorage.removeItem("access");
+        localStorage.removeItem("refresh");
+    } catch (_) { }
+}
+
+// Cargar desde localStorage si existían
+try {
+    const a = localStorage.getItem("access");
+    const r = localStorage.getItem("refresh");
+    if (a || r) {
+        accessToken = a || null;
+        refreshToken = r || null;
+    }
+} catch (_) { }
+
+// ----- Request: Authorization -----
 api.interceptors.request.use((config) => {
     if (accessToken) {
         config.headers = config.headers || {};
@@ -37,39 +55,28 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// -----------------------------
-// Helper: refrescar access token
-// -----------------------------
+// ----- Refresh helper -----
 async function doRefresh() {
-    const url = `${BASE_URL}/auth/token/refresh/`;
+    // Ajusta la URL del refresh al endpoint de tu backend (DRF SimpleJWT por defecto)
+    const url = `${API_BASE}/auth/token/refresh/`;
     const { data } = await axios.post(url, { refresh: refreshToken });
     return data?.access;
 }
 
-// -----------------------------
-// Response: 401 -> refresh cola
-// -----------------------------
+// ----- Response: 401 -> cola de refresh -----
 api.interceptors.response.use(
     (r) => r,
     async (error) => {
+        const status = error?.response?.status;
         const original = error?.config;
 
-        // Si no hay respuesta (network error), no intentes refresh
-        const status = error?.response?.status;
-        if (!status) return Promise.reject(error);
-
-        // Si no es 401, no tocamos nada (403 = permisos insuficientes)
-        if (status !== 401 || !refreshToken) {
-            return Promise.reject(error);
-        }
-
-        // Evitar bucles de reintento
-        if (original?._retry) {
-            return Promise.reject(error);
-        }
+        if (!status || !original) return Promise.reject(error);
+        // No intentes refrescar si el 401 viene del propio endpoint de refresh
+        if (original.url?.includes("/auth/token/refresh/")) return Promise.reject(error);
+        if (status !== 401 || !refreshToken) return Promise.reject(error);
+        if (original._retry) return Promise.reject(error);
         original._retry = true;
 
-        // Si ya hay un refresh en curso, encola y reintenta cuando termine
         if (isRefreshing) {
             return new Promise((resolve, reject) => {
                 pendingRequests.push({ resolve, reject });
@@ -82,39 +89,50 @@ api.interceptors.response.use(
             });
         }
 
-        // Ejecutar refresh
         isRefreshing = true;
         try {
             const newAccess = await doRefresh();
             if (!newAccess) throw new Error("Refresh sin access token");
-
-            // Actualiza memoria y localStorage (útil si la app recarga)
             accessToken = newAccess;
             try {
                 localStorage.setItem("access", newAccess);
             } catch (_) { }
 
-            // Resuelve a los que estaban esperando
             pendingRequests.forEach((p) => p.resolve(newAccess));
             pendingRequests = [];
             isRefreshing = false;
 
-            // Reintenta request original con el nuevo token
             original.headers = {
                 ...(original.headers || {}),
                 Authorization: `Bearer ${newAccess}`,
             };
             return api(original);
         } catch (e) {
-            // Falla de refresh: rechaza todas las esperas
             pendingRequests.forEach((p) => p.reject(e));
             pendingRequests = [];
             isRefreshing = false;
-
-            // No hacemos logout aquí; que lo maneje AuthContext al recibir el error.
+            // En este punto podrías limpiar tokens si quieres forzar re-login:
+            // clearTokens();
             return Promise.reject(e);
         }
     }
 );
+
+// (Opcional) Precalentado: si solo tienes refresh, obtén access al arrancar
+export async function ensureFreshToken() {
+    if (!accessToken && refreshToken) {
+        try {
+            const newAccess = await doRefresh();
+            if (newAccess) {
+                accessToken = newAccess;
+                try {
+                    localStorage.setItem("access", newAccess);
+                } catch (_) { }
+            }
+        } catch (_) {
+            // Silencioso; el primer request se encargará de refrescar igualmente.
+        }
+    }
+}
 
 export default api;

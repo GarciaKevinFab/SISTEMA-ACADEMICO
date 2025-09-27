@@ -1,57 +1,61 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from .views import *
-
-router = DefaultRouter()
-# Convocatorias
-router.register(r'admission-calls', AdmissionCallViewSet, basename='admission-calls')
-# Applicants
-router.register(r'applicants', ApplicantViewSet, basename='applicants')
-# Applications
-router.register(r'applications', ApplicationViewSet, basename='applications')
-# Payments admin
-router.register(r'admission-payments', AdmissionPaymentsViewSet, basename='admission-payments')
-
-# Nested manual para documentos
-application_docs_patterns = [
-    path('', ApplicationDocumentsViewSet.as_view({'get':'list','post':'create'})),
-    path('<int:pk>/review', ApplicationDocumentsViewSet.as_view({'post':'review'})),
-]
+# backend/admission/urls.py
+from django.urls import path
+from . import views as v
 
 urlpatterns = [
     # Dashboard
-    path('admission/dashboard', admission_dashboard),
+    path("admission/dashboard", v.admission_dashboard),
 
-    # Routers
-    path('', include(router.urls)),
+    # Convocatorias
+    path("admission-calls/public", v.calls_list_public),
+    path("admission-calls", v.calls_collection),
+    path("admission-calls/<int:call_id>/schedule", v.call_schedule_collection),
+    path("admission-calls/<int:call_id>/schedule/<int:item_id>", v.call_schedule_detail),
 
-    # Payment por aplicación
-    path('applications/<int:application_id>/payment', application_payment_start),
-    path('applications/<int:application_id>/payment/status', application_payment_status),
+    # Carreras (sin importaciones extra y sin duplicados)
+    path("careers", v.careers_collection),                       # GET lista / POST crea
+    path("careers/<int:career_id>", v.career_detail),            # GET detalle / PUT edita / DELETE elimina
+    path("careers/<int:career_id>/toggle", v.career_toggle_active),  # POST alterna activo
 
-    # Documentos de aplicación
-    path('applications/<int:application_id>/documents/', include((application_docs_patterns, 'application-docs'))),
+    # Postulaciones
+    path("applications", v.applications_collection),
+    path("applications/me", v.applications_me),
+
+    # Documentos del postulante
+    path("applications/<int:application_id>/documents", v.application_docs_collection),
+    path("applications/<int:application_id>/documents/<int:document_id>/review", v.application_doc_review),
+
+    # Pago
+    path("applications/<int:application_id>/payment", v.application_payment_start),
+    path("applications/<int:application_id>/payment/status", v.application_payment_status),
 
     # Evaluación
-    path('evaluation/applications', evaluation_list_for_scoring),
-    path('evaluation/<int:application_id>/scores', evaluation_save_scores),
-    path('evaluation/compute', evaluation_bulk_compute),
+    path("evaluation/applications", v.eval_list_for_scoring),
+    path("evaluation/<int:application_id>/scores", v.eval_save_scores),
+    path("evaluation/compute", v.eval_bulk_compute),
 
     # Resultados
-    path('results', results_list),
-    path('results/publish', results_publish),
-    path('results/close', results_close),
-    path('results/acta.pdf', results_acta_pdf),
+    path("results", v.results_list),
+    path("results/publish", v.results_publish),
+    path("results/close", v.results_close),
+    path("results/acta.pdf", v.results_acta_pdf),
 
     # Reportes
-    path('reports/admission.xlsx', reports_admission_excel),
-    path('reports/admission/summary', reports_admission_summary),
-    path('reports/admission/ranking.xlsx', reports_ranking_excel),
-    path('reports/admission/vacants-vs.xlsx', reports_vacants_vs_excel),
+    path("reports/admission.xlsx", v.reports_admission_xlsx),
+    path("reports/admission/summary", v.reports_admission_summary),
+    path("reports/admission/ranking.xlsx", v.reports_ranking_xlsx),
+    path("reports/admission/vacants-vs.xlsx", v.reports_vacants_vs_xlsx),
 
     # Parámetros
-    path('admission/params', admission_params),
+    path("admission/params", v.admission_params),
 
-    # Perfil postulante (/applicants/me ya está como action en ApplicantViewSet SI QUISIERAS duplicar):
-    path('applicants/me', applicant_me),   # alias explícito
+    # Perfil postulante
+    path("applicants/me", v.applicant_me),
+    path("applicants", v.applicant_create),
+
+    # Pagos (bandeja admin)
+    path("admission-payments", v.payments_list),
+    path("admission-payments/<int:payment_id>/confirm", v.payment_confirm),
+    path("admission-payments/<int:payment_id>/void", v.payment_void),
+    path("admission-payments/<int:payment_id>/receipt.pdf", v.payment_receipt_pdf),
 ]

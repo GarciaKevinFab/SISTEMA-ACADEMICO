@@ -58,39 +58,121 @@ const toIntOr = (v, def = null) => (Number.isFinite(+v) ? +v : def);
 /* --------- Careers (inline) --------- */
 const CareersManagement = () => {
   const { api } = useAuth();
+
   const [careers, setCareers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
+
+  // create
+  const [openCreate, setOpenCreate] = useState(false);
   const [form, setForm] = useState({
     name: "", code: "", description: "",
     duration_semesters: 10, degree_type: "BACHELOR", modality: "PRESENCIAL",
     vacancies: 25, is_active: true
   });
 
+  // view
+  const [openView, setOpenView] = useState(false);
+  const [viewRow, setViewRow] = useState(null);
+
+  // edit
+  const [openEdit, setOpenEdit] = useState(false);
+  const [editRow, setEditRow] = useState(null);
+  const [editForm, setEditForm] = useState(form);
+
+  const toIntOr = (v, def = 0) => (Number.isFinite(+v) ? +v : def);
+
   const load = async () => {
     try {
       const { data } = await api.get("/careers");
-      setCareers(data?.careers ?? data ?? []);
+      // backend devuelve lista simple
+      setCareers(Array.isArray(data) ? data : (data?.careers ?? []));
     } catch (e) {
       toast.error(formatApiError(e, "Error al cargar carreras"));
     } finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
 
-  const submit = async (e) => {
+  const resetCreate = () =>
+    setForm({ name: "", code: "", description: "", duration_semesters: 10, degree_type: "BACHELOR", modality: "PRESENCIAL", vacancies: 25, is_active: true });
+
+  const submitCreate = async (e) => {
     e.preventDefault();
     try {
       await api.post("/careers", {
         ...form,
         duration_semesters: toIntOr(form.duration_semesters, 0),
-        vacancies: toIntOr(form.vacancies, 0)
+        vacancies: toIntOr(form.vacancies, 0),
       });
       toast.success("Carrera creada");
-      setOpen(false);
-      setForm({ name: "", code: "", description: "", duration_semesters: 10, degree_type: "BACHELOR", modality: "PRESENCIAL", vacancies: 25, is_active: true });
+      setOpenCreate(false);
+      resetCreate();
       load();
     } catch (e) {
       toast.error(formatApiError(e, "Error al crear carrera"));
+    }
+  };
+
+  const openDetails = (row) => {
+    setViewRow(row);
+    setOpenView(true);
+  };
+
+  const openEditor = async (row) => {
+    try {
+      const { data } = await api.get(`/careers/${row.id}`);
+      setEditRow(data);
+      setEditForm({
+        name: data.name ?? "",
+        code: data.code ?? "",
+        description: data.description ?? "",
+        duration_semesters: data.duration_semesters ?? 0,
+        degree_type: data.degree_type ?? "BACHELOR",
+        modality: data.modality ?? "PRESENCIAL",
+        vacancies: data.vacancies ?? 0,
+        is_active: !!data.is_active,
+      });
+      setOpenEdit(true);
+    } catch (e) {
+      toast.error(formatApiError(e, "No se pudo abrir el editor"));
+    }
+  };
+
+  const submitEdit = async (e) => {
+    e.preventDefault();
+    if (!editRow) return;
+    try {
+      await api.put(`/careers/${editRow.id}`, {
+        ...editForm,
+        duration_semesters: toIntOr(editForm.duration_semesters, 0),
+        vacancies: toIntOr(editForm.vacancies, 0),
+      });
+      toast.success("Carrera actualizada");
+      setOpenEdit(false);
+      setEditRow(null);
+      load();
+    } catch (e) {
+      toast.error(formatApiError(e, "Error al actualizar"));
+    }
+  };
+
+  const toggleActive = async (row) => {
+    try {
+      const { data } = await api.post(`/careers/${row.id}/toggle`);
+      setCareers((prev) => prev.map((c) => (c.id === row.id ? data : c)));
+      toast.success(`Carrera ${data.is_active ? "activada" : "inactivada"}`);
+    } catch (e) {
+      toast.error(formatApiError(e, "No se pudo cambiar el estado"));
+    }
+  };
+
+  const removeCareer = async (row) => {
+    if (!window.confirm(`Eliminar "${row.name}"? Esta acción no se puede deshacer.`)) return;
+    try {
+      await api.delete(`/careers/${row.id}`);
+      toast.success("Carrera eliminada");
+      setCareers((prev) => prev.filter((c) => c.id !== row.id));
+    } catch (e) {
+      toast.error(formatApiError(e, "No se pudo eliminar"));
     }
   };
 
@@ -104,14 +186,15 @@ const CareersManagement = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Gestión de Carreras Profesionales</h2>
-        <Button onClick={() => setOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+        <Button onClick={() => setOpenCreate(true)} className="bg-blue-600 hover:bg-blue-700">
           <Plus className="h-4 w-4 mr-2" /> Nueva Carrera
         </Button>
       </div>
 
-      {open && (
+      {/* Crear */}
+      {openCreate && (
         <Card className="p-4">
-          <form onSubmit={submit} className="space-y-4">
+          <form onSubmit={submitCreate} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div><Label>Nombre *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></div>
               <div><Label>Código *</Label><Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} required /></div>
@@ -119,7 +202,7 @@ const CareersManagement = () => {
             <div><Label>Descripción</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
             <div className="grid grid-cols-4 gap-4">
               <div><Label>Duración (sem.) *</Label><Input type="number" min="1" max="20" value={form.duration_semesters} onChange={e => setForm({ ...form, duration_semesters: e.target.value })} /></div>
-              <div><Label>Vacantes *</Label><Input type="number" min="1" value={form.vacancies} onChange={e => setForm({ ...form, vacancies: e.target.value })} /></div>
+              <div><Label>Vacantes *</Label><Input type="number" min="0" value={form.vacancies} onChange={e => setForm({ ...form, vacancies: e.target.value })} /></div>
               <div>
                 <Label>Tipo de Grado *</Label>
                 <Select value={form.degree_type} onValueChange={(v) => setForm({ ...form, degree_type: v })}>
@@ -144,13 +227,14 @@ const CareersManagement = () => {
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+              <Button type="button" variant="outline" onClick={() => setOpenCreate(false)}>Cancelar</Button>
               <Button type="submit" className="bg-blue-600 hover:bg-blue-700">Crear</Button>
             </div>
           </form>
         </Card>
       )}
 
+      {/* Tabla */}
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -162,7 +246,7 @@ const CareersManagement = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duración</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vacantes</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-                  <th className="px-6 py-3"></th>
+                  <th className="px-6 py-3" />
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -174,14 +258,26 @@ const CareersManagement = () => {
                     </td>
                     <td className="px-6 py-4 text-sm">{c.code}</td>
                     <td className="px-6 py-4 text-sm">{c.duration_semesters} semestres</td>
-                    <td className="px-6 py-4 text-sm">{c.vacancies ?? "N/A"}</td>
+                    <td className="px-6 py-4 text-sm">{c.vacancies ?? 0}</td>
                     <td className="px-6 py-4">
-                      <Badge variant={c.is_active ? "default" : "secondary"}>{c.is_active ? "Activa" : "Inactiva"}</Badge>
+                      <Badge variant={c.is_active ? "default" : "secondary"}>
+                        {c.is_active ? "Activa" : "Inactiva"}
+                      </Badge>
                     </td>
                     <td className="px-6 py-4 text-sm">
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="sm"><Edit className="h-4 w-4" /></Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" size="sm" onClick={() => openDetails(c)}>
+                          <Eye className="h-4 w-4 mr-2" /> Ver
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => openEditor(c)}>
+                          <Edit className="h-4 w-4 mr-2" /> Editar
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => toggleActive(c)}>
+                          {c.is_active ? "Desactivar" : "Activar"}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => removeCareer(c)}>
+                          Eliminar
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -194,26 +290,186 @@ const CareersManagement = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Ver detalle */}
+      <Dialog open={openView} onOpenChange={setOpenView}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Detalle de carrera</DialogTitle>
+            <DialogDescription>Información completa</DialogDescription>
+          </DialogHeader>
+          {viewRow && (
+            <div className="space-y-2 text-sm">
+              <div className="text-lg font-semibold">{viewRow.name}</div>
+              <div className="text-gray-600">{viewRow.description || "—"}</div>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div><span className="font-medium">Código:</span> {viewRow.code}</div>
+                <div><span className="font-medium">Modalidad:</span> {viewRow.modality}</div>
+                <div><span className="font-medium">Tipo de grado:</span> {viewRow.degree_type}</div>
+                <div><span className="font-medium">Duración:</span> {viewRow.duration_semesters} sem.</div>
+                <div><span className="font-medium">Vacantes:</span> {viewRow.vacancies ?? 0}</div>
+                <div><span className="font-medium">Estado:</span> {viewRow.is_active ? "Activa" : "Inactiva"}</div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Editar */}
+      <Dialog open={openEdit} onOpenChange={setOpenEdit}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar carrera</DialogTitle>
+          </DialogHeader>
+
+          {editRow && (
+            <form onSubmit={submitEdit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div><Label>Nombre *</Label><Input value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} required /></div>
+                <div><Label>Código *</Label><Input value={editForm.code} onChange={e => setEditForm({ ...editForm, code: e.target.value })} required /></div>
+              </div>
+              <div><Label>Descripción</Label><Textarea value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} /></div>
+              <div className="grid grid-cols-4 gap-4">
+                <div><Label>Duración (sem.) *</Label><Input type="number" min="1" max="20" value={editForm.duration_semesters} onChange={e => setEditForm({ ...editForm, duration_semesters: e.target.value })} /></div>
+                <div><Label>Vacantes *</Label><Input type="number" min="0" value={editForm.vacancies} onChange={e => setEditForm({ ...editForm, vacancies: e.target.value })} /></div>
+                <div>
+                  <Label>Tipo de Grado *</Label>
+                  <Select value={editForm.degree_type} onValueChange={(v) => setEditForm({ ...editForm, degree_type: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BACHELOR">Bachiller</SelectItem>
+                      <SelectItem value="TECHNICAL">Técnico</SelectItem>
+                      <SelectItem value="PROFESSIONAL">Profesional</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Modalidad *</Label>
+                  <Select value={editForm.modality} onValueChange={(v) => setEditForm({ ...editForm, modality: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PRESENCIAL">Presencial</SelectItem>
+                      <SelectItem value="VIRTUAL">Virtual</SelectItem>
+                      <SelectItem value="SEMIPRESENCIAL">Semipresencial</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input id="car_is_active" type="checkbox" checked={!!editForm.is_active} onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })} />
+                <Label htmlFor="car_is_active">Activa</Label>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setOpenEdit(false)}>Cancelar</Button>
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">Guardar cambios</Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
+
 /* --------- Applicants (inline) --------- */
 const ApplicantsManagement = () => {
   const { api } = useAuth();
+
   const [rows, setRows] = useState([]);
+  const [calls, setCalls] = useState([]);
+  const [careers, setCareers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await api.get("/applications");
-        setRows(data?.applications ?? data ?? []);
-      } catch (e) {
-        toast.error(formatApiError(e, "Error al cargar datos"));
-      } finally { setLoading(false); }
-    })();
-  }, [api]);
+  // filtros
+  const [callFilter, setCallFilter] = useState("");
+  const [careerFilter, setCareerFilter] = useState("");
+
+  // crear
+  const [openCreate, setOpenCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({ call_id: "", career_id: "" });
+
+  // ver detalle
+  const [openView, setOpenView] = useState(false);
+  const [viewRow, setViewRow] = useState(null);
+
+  const callName = (id) => calls.find(c => String(c.id) === String(id))?.name ?? `Convocatoria ${id ?? "—"}`;
+  const careerName = (id) => careers.find(c => String(c.id) === String(id))?.name ?? `Carrera ${id ?? "—"}`;
+
+  const fetchAll = async () => {
+    try {
+      const [appsRes, callsRes, careersRes] = await Promise.all([
+        api.get(`/applications${buildQuery()}`),
+        api.get("/admission-calls"),
+        api.get("/careers"),
+      ]);
+
+      const apps = appsRes?.data?.applications ?? appsRes?.data ?? [];
+      const nCalls = Array.isArray(callsRes?.data) ? callsRes.data : (callsRes?.data?.calls ?? callsRes?.data ?? []);
+      const nCareers = Array.isArray(careersRes?.data) ? careersRes.data : (careersRes?.data?.careers ?? careersRes?.data ?? []);
+
+      setRows(apps);
+      setCalls(nCalls);
+      setCareers(nCareers);
+    } catch (e) {
+      toast.error(formatApiError(e, "Error al cargar postulantes"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const buildQuery = () => {
+    const params = new URLSearchParams();
+    if (callFilter) params.set("call_id", callFilter);
+    if (careerFilter) params.set("career_id", careerFilter);
+    const q = params.toString();
+    return q ? `?${q}` : "";
+  };
+
+  useEffect(() => { fetchAll(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { setLoading(true); fetchAll(); /* eslint-disable-next-line */ }, [callFilter, careerFilter]);
+
+  const openDetails = (row) => {
+    setViewRow(row);
+    setOpenView(true);
+  };
+
+  const submitCreate = async (e) => {
+    e.preventDefault();
+    if (!createForm.call_id || !createForm.career_id) {
+      toast.error("Selecciona convocatoria y carrera");
+      return;
+    }
+    try {
+      await api.post("/applications", {
+        call_id: Number(createForm.call_id),
+        career_id: Number(createForm.career_id),
+      });
+      toast.success("Postulación creada");
+      setOpenCreate(false);
+      setCreateForm({ call_id: "", career_id: "" });
+      setLoading(true);
+      fetchAll();
+    } catch (e) {
+      toast.error(formatApiError(e, "No se pudo crear la postulación"));
+    }
+  };
+
+  const exportXlsx = async () => {
+    try {
+      const { data } = await api.get("/reports/admission.xlsx", { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([data]));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "admission.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error(formatApiError(e, "No se pudo exportar"));
+    }
+  };
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -223,21 +479,77 @@ const ApplicantsManagement = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Header + acciones */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <h2 className="text-2xl font-bold">Gestión de Postulantes</h2>
-        <div className="flex gap-2">
-          <Button variant="outline"><Download className="h-4 w-4 mr-2" />Exportar</Button>
-          <Button className="bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4 mr-2" />Nuevo</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={exportXlsx}>
+            <Download className="h-4 w-4 mr-2" />Exportar
+          </Button>
+          <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setOpenCreate(true)}>
+            <Plus className="h-4 w-4 mr-2" />Nuevo
+          </Button>
         </div>
       </div>
 
+      {/* Filtros */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label>Convocatoria</Label>
+              <Select
+                value={callFilter || "__all__"}
+                onValueChange={(v) => setCallFilter(v === "__all__" ? "" : v)}
+              >
+                <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todas</SelectItem>
+                  {calls
+                    .filter(c => c?.id != null)
+                    .map(c => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+
+            </div>
+            <div>
+              <Label>Carrera</Label>
+              <Select
+                value={careerFilter || "__all__"}
+                onValueChange={(v) => setCareerFilter(v === "__all__" ? "" : v)}
+              >
+                <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todas</SelectItem>
+                  {careers
+                    .filter(c => c?.id != null)
+                    .map(c => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+
+            </div>
+            <div className="flex items-end">
+              <Button variant="outline" onClick={() => { setCallFilter(""); setCareerFilter(""); }}>
+                Limpiar filtros
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tabla */}
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Postulante</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Convocatoria</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Carrera</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
@@ -247,30 +559,96 @@ const ApplicantsManagement = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {rows.map(r => (
                   <tr key={r.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium">{r.applicant_name}</div>
-                      <div className="text-xs text-gray-500">{r.document_number}</div>
-                    </td>
-                    <td className="px-6 py-4 text-sm">{r.career_name ?? r.career?.name ?? "N/A"}</td>
-                    <td className="px-6 py-4"><Badge variant="default">{r.status ?? "Registrado"}</Badge></td>
-                    <td className="px-6 py-4 text-sm">{r.created_at ? new Date(r.created_at).toLocaleDateString() : "-"}</td>
+                    <td className="px-6 py-4 text-sm font-medium">#{r.id}</td>
+                    <td className="px-6 py-4 text-sm">{callName(r.call_id)}</td>
+                    <td className="px-6 py-4 text-sm">{careerName(r.career_id)}</td>
+                    <td className="px-6 py-4"><Badge variant="default">{r.status ?? "CREATED"}</Badge></td>
+                    <td className="px-6 py-4 text-sm">{r.created_at ? new Date(r.created_at).toLocaleString() : "-"}</td>
                     <td className="px-6 py-4 text-sm">
                       <div className="flex gap-2">
-                        <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="sm"><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="sm" onClick={() => openDetails(r)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        {/* Si luego agregas edición de aplicación, activa este botón */}
+                        {/* <Button variant="ghost" size="sm"><Edit className="h-4 w-4" /></Button> */}
                       </div>
                     </td>
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td className="px-6 py-6 text-center text-sm text-gray-500" colSpan={5}>Sin registros</td></tr>}
+                {rows.length === 0 && <tr><td className="px-6 py-6 text-center text-sm text-gray-500" colSpan={6}>Sin registros</td></tr>}
               </tbody>
             </table>
           </div>
         </CardContent>
       </Card>
+
+      {/* Crear postulación */}
+      <Dialog open={openCreate} onOpenChange={setOpenCreate}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Nueva Postulación</DialogTitle>
+            <DialogDescription>Selecciona convocatoria y carrera</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitCreate} className="space-y-4">
+            <div>
+              <Label>Convocatoria *</Label>
+              <Select
+                value={createForm.call_id}
+                onValueChange={(v) => setCreateForm(f => ({ ...f, call_id: v }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccione" /></SelectTrigger>
+                <SelectContent>
+                  {calls.map(c => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Carrera *</Label>
+              <Select
+                value={createForm.career_id}
+                onValueChange={(v) => setCreateForm(f => ({ ...f, career_id: v }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccione" /></SelectTrigger>
+                <SelectContent>
+                  {careers.map(c => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setOpenCreate(false)}>Cancelar</Button>
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700">Crear</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ver detalle */}
+      <Dialog open={openView} onOpenChange={setOpenView}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Detalle de Postulación</DialogTitle>
+          </DialogHeader>
+          {viewRow && (
+            <div className="space-y-2 text-sm">
+              <div><span className="font-medium">ID:</span> #{viewRow.id}</div>
+              <div><span className="font-medium">Convocatoria:</span> {callName(viewRow.call_id)}</div>
+              <div><span className="font-medium">Carrera:</span> {careerName(viewRow.career_id)}</div>
+              <div><span className="font-medium">Estado:</span> {viewRow.status ?? "CREATED"}</div>
+              <div><span className="font-medium">Fecha:</span> {viewRow.created_at ? new Date(viewRow.created_at).toLocaleString() : "—"}</div>
+              <div><span className="font-medium">Total:</span> {Number.isFinite(viewRow.total) ? viewRow.total : "—"}</div>
+              <div><span className="font-medium">Admitido:</span> {viewRow.admitted ? "Sí" : "No"}</div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
+
 
 /* --------- Contenedor principal con tabs sincronizadas en URL --------- */
 export default function CompleteAdmissionModule() {

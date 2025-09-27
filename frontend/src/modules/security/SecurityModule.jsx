@@ -1,4 +1,3 @@
-// src/modules/security/SecurityModule.jsx
 import React, { useState } from "react";
 import { SecurityService } from "../../services/security.service";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
@@ -8,7 +7,7 @@ import { Label } from "../../components/ui/label";
 import { toast } from "sonner";
 
 const SecurityModule = () => {
-    const [qr, setQr] = useState(null);       // otpauth_url -> muéstralo como <img src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qr)}`} />
+    const [qr, setQr] = useState(null);
     const [secret, setSecret] = useState(null);
     const [code, setCode] = useState("");
 
@@ -17,12 +16,15 @@ const SecurityModule = () => {
         setQr(data.otpauth_url);
         setSecret(data.secret);
     };
+
     const verify = async () => {
         try {
             await SecurityService.verifyMFASetup(code);
             toast.success("2FA activado");
             setQr(null); setSecret(null); setCode("");
-        } catch { toast.error("Código inválido"); }
+        } catch {
+            toast.error("Código inválido");
+        }
     };
 
     return (

@@ -1,34 +1,154 @@
 // src/services/admission.service.js
-import api from "../lib/api"; // tu instancia axios (baseURL + interceptores)
+import api from "../lib/api";
 
-// Dashboard
+/* ------------------------------------------
+   Helpers
+-------------------------------------------*/
+/**
+ * Convierte valores provenientes de inputs type=datetime-local a ISO.
+ * Acepta ISO, Date o strings 'YYYY-MM-DDTHH:MM[:SS]'.
+ * Devuelve null si no se puede parsear.
+ */
+export const toISO = (v) => {
+    if (!v) return null;
+    if (v instanceof Date && !isNaN(v.getTime())) return v.toISOString();
+
+    const s = String(v).trim();
+    // Compatibilidad con datetime-local (sin zona)
+    // 'YYYY-MM-DDTHH:MM' o 'YYYY-MM-DDTHH:MM:SS'
+    const m = s.match(
+        /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::(\d{2}))?$/
+    );
+    if (m) {
+        const secs = m[3] ? `:${m[3]}` : ":00";
+        // Interpretamos como hora local del navegador
+        const d = new Date(`${m[1]}T${m[2]}${secs}`);
+        return isNaN(d.getTime()) ? null : d.toISOString();
+    }
+    // ISO nativo
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+};
+
+/* ------------------------------------------
+   Dashboard
+-------------------------------------------*/
 export const getAdmissionDashboardStats = async () =>
     (await api.get("/admission/dashboard")).data;
 
-// Convocatorias
+/* ------------------------------------------
+   Convocatorias
+-------------------------------------------*/
+const normalizeCall = (c) => {
+    const careers = (c?.careers ?? []).map((x) => ({
+        id: x.id ?? x.career_id,
+        career_id: x.career_id ?? x.id,
+        name: x.name ?? x.career_name ?? x.title ?? `Carrera ${x.id ?? x.career_id}`,
+        vacancies: x.vacancies ?? x.quota ?? x.slots ?? 0,
+    }));
+    return {
+        id: c.id,
+        name: c.name,
+        description: c.description ?? "",
+        academic_year: c.academic_year ?? c.year ?? null,
+        academic_period: c.academic_period ?? c.period ?? null,
+        registration_start: c.registration_start ?? c.start_date ?? null,
+        registration_end: c.registration_end ?? c.end_date ?? null,
+        exam_date: c.exam_date ?? c.exam_at ?? null,
+        results_date: c.results_date ?? c.results_at ?? null,
+        application_fee: c.application_fee ?? c.fee ?? 0,
+        max_applications_per_career: c.max_applications_per_career ?? c.max_choices ?? 1,
+        careers,
+        total_applications: c.total_applications ?? c.applications_count ?? 0,
+        status: c.status ?? c.state ?? "OPEN",
+    };
+};
+
 export const listAdmissionCalls = async () =>
     (await api.get("/admission-calls")).data;
-export const createAdmissionCall = async (payload) =>
-    (await api.post("/admission-calls", payload)).data;
+
+/**
+ * Crea una convocatoria; enviamos nombres oficiales y sinónimos
+ * para que calce con el backend stub o con uno real.
+ */
+export const createAdmissionCall = async (form) => {
+    const careersArray = (form.available_careers || []).map((id) => ({
+        id,
+        career_id: id,
+        vacancies: form.career_vacancies?.[id] ?? 0,
+    }));
+
+    const payload = {
+        // nombres usados por el FE
+        name: form.name,
+        description: form.description || "",
+        academic_year: form.academic_year,
+        academic_period: form.academic_period,
+        registration_start: toISO(form.registration_start),
+        registration_end: toISO(form.registration_end),
+        exam_date: toISO(form.exam_date),
+        results_date: toISO(form.results_date),
+        application_fee: Number(form.application_fee || 0),
+        max_applications_per_career: Number(form.max_applications_per_career || 1),
+        careers: careersArray,
+        minimum_age: Number(form.minimum_age || 0),
+        maximum_age: Number(form.maximum_age || 0),
+        required_documents: form.required_documents || [],
+
+        // sinónimos frecuentes
+        year: form.academic_year,
+        period: form.academic_period,
+        start_date: toISO(form.registration_start),
+        end_date: toISO(form.registration_end),
+        fee: Number(form.application_fee || 0),
+        max_choices: Number(form.max_applications_per_career || 1),
+    };
+
+    return (await api.post("/admission-calls", payload)).data;
+};
 
 export const AdmissionCalls = {
     listPublic: async () => (await api.get("/admission-calls/public")).data,
-    listAdmin: async () => (await api.get("/admission-calls")).data,
+    listAdmin: async () => {
+        const { data } = await api.get("/admission-calls");
+        const raw =
+            (Array.isArray(data) && data) ||
+            data?.items ||
+            data?.results ||
+            data?.admission_calls ||
+            data?.calls ||
+            [];
+        return raw.map(normalizeCall);
+    },
 };
 
-// Carreras
+/* ------------------------------------------
+   Carreras
+-------------------------------------------*/
 export const listCareers = async () => (await api.get("/careers")).data;
-export const createCareer = async (payload) => (await api.post("/careers", payload)).data;
+export const createCareer = async (payload) =>
+    (await api.post("/careers", payload)).data;
 
-// Postulaciones
+/* ------------------------------------------
+   Postulaciones
+-------------------------------------------*/
 export const Applications = {
     create: async (payload) => (await api.post("/applications", payload)).data,
     my: async () => (await api.get("/applications/me")).data,
-    list: async (q = {}) => (await api.get("/applications", { params: q })).data,
+    list: async (q = {}) => {
+        const { data } = await api.get("/applications", { params: q });
+        // Garantizar array
+        return Array.isArray(data) ? data : data?.applications || [];
+    },
+    // Si en el futuro agregas endpoint para estado:
+    // setStatus: async (application_id, status) =>
+    //   (await api.post(`/applications/${application_id}/status`, { status })).data,
 };
-export const listMyApplications = async () => (await Applications.my());
+export const listMyApplications = async () => Applications.my();
 
-// Pago
+/* ------------------------------------------
+   Pago
+-------------------------------------------*/
 export const ApplicationPayment = {
     start: async (application_id, method) =>
         (await api.post(`/applications/${application_id}/payment`, { method })).data,
@@ -36,7 +156,9 @@ export const ApplicationPayment = {
         (await api.get(`/applications/${application_id}/payment/status`)).data,
 };
 
-// Evaluación
+/* ------------------------------------------
+   Evaluación
+-------------------------------------------*/
 export const Evaluation = {
     listForScoring: async (params) =>
         (await api.get("/evaluation/applications", { params })).data,
@@ -46,7 +168,9 @@ export const Evaluation = {
         (await api.post(`/evaluation/compute`, { call_id })).data,
 };
 
-// Resultados
+/* ------------------------------------------
+   Resultados
+-------------------------------------------*/
 export const Results = {
     list: async (params) => (await api.get("/results", { params })).data,
     publish: async (payload) => (await api.post("/results/publish", payload)).data,
@@ -55,62 +179,101 @@ export const Results = {
         await api.get("/results/acta.pdf", { params, responseType: "blob" }),
 };
 
-// Reportes
+/* ------------------------------------------
+   Reportes
+-------------------------------------------*/
 export const AdmissionReports = {
     exportExcel: async (range) =>
-        await api.get("/reports/admission.xlsx", { params: range, responseType: "blob" }),
+        await api.get("/reports/admission.xlsx", {
+            params: range,
+            responseType: "blob",
+        }),
     summary: async (range) =>
         (await api.get("/reports/admission/summary", { params: range })).data,
-    // opcionales:
     ranking: async (params) =>
-        await api.get("/reports/admission/ranking.xlsx", { params, responseType: "blob" }),
+        await api.get("/reports/admission/ranking.xlsx", {
+            params,
+            responseType: "blob",
+        }),
     vacantsVs: async (params) =>
-        await api.get("/reports/admission/vacants-vs.xlsx", { params, responseType: "blob" }),
+        await api.get("/reports/admission/vacants-vs.xlsx", {
+            params,
+            responseType: "blob",
+        }),
 };
 
-// Parámetros
+/* ------------------------------------------
+   Parámetros
+-------------------------------------------*/
 export const AdmissionParams = {
     get: async () => (await api.get("/admission/params")).data,
     save: async (payload) => (await api.post("/admission/params", payload)).data,
 };
 
-// Perfil postulante
+/* ------------------------------------------
+   Perfil postulante
+-------------------------------------------*/
 export const getApplicantMe = async () => (await api.get("/applicants/me")).data;
 export const createApplicant = async (payload) =>
     (await api.post("/applicants", payload)).data;
 
+/* ------------------------------------------
+   Documentos de postulante
+-------------------------------------------*/
+const normalizeDoc = (d) => ({
+    id: d.id,
+    document_type: d.document_type,
+    url: d.file_url || d.url,
+    review_status: d.status || "UPLOADED",
+    observations: d.observations || "",
+});
 
-// --- NUEVO: Revisión admin de documentos ---
 export const ApplicantDocs = {
-    listMine: async (application_id) =>
-        (await api.get(`/applications/${application_id}/documents`)).data,
-    upload: async (application_id, document_type, file) => {
-        const fd = new FormData();
-        fd.append("document_type", document_type);
-        fd.append("file", file);
-        return (await api.post(`/applications/${application_id}/documents`, fd, {
-            headers: { "Content-Type": "multipart/form-data" },
-        })).data;
+    async list(applicationId) {
+        const { data } = await api.get(`/applications/${applicationId}/documents`);
+        const arr = Array.isArray(data?.documents) ? data.documents : (Array.isArray(data) ? data : []);
+        return arr.map(normalizeDoc);
     },
-    // nuevo: revisar
-    review: async (application_id, document_id, payload) =>
-        (await api.post(`/applications/${application_id}/documents/${document_id}/review`, payload)).data,
+
+    async review(applicationId, documentId, { review_status, observations }) {
+        const { data } = await api.post(
+            `/applications/${applicationId}/documents/${documentId}/review`,
+            { status: review_status, observations }
+        );
+        return normalizeDoc(data);
+    },
 };
 
-// --- NUEVO: Cronograma por convocatoria ---
+// Alias por compatibilidad con código previo
+ApplicantDocs.listMine = (applicationId) => ApplicantDocs.list(applicationId);
+
+/* ------------------------------------------
+   Cronograma por convocatoria
+-------------------------------------------*/
 export const AdmissionSchedule = {
-    list: async (call_id) => (await api.get(`/admission-calls/${call_id}/schedule`)).data,
-    create: async (call_id, payload) => (await api.post(`/admission-calls/${call_id}/schedule`, payload)).data,
-    update: async (call_id, item_id, payload) => (await api.put(`/admission-calls/${call_id}/schedule/${item_id}`, payload)).data,
-    remove: async (call_id, item_id) => (await api.delete(`/admission-calls/${call_id}/schedule/${item_id}`)).data,
+    list: async (call_id) =>
+        (await api.get(`/admission-calls/${call_id}/schedule`)).data,
+    create: async (call_id, payload) =>
+        (await api.post(`/admission-calls/${call_id}/schedule`, payload)).data,
+    update: async (call_id, item_id, payload) =>
+        (await api.put(`/admission-calls/${call_id}/schedule/${item_id}`, payload))
+            .data,
+    remove: async (call_id, item_id) =>
+        (await api.delete(`/admission-calls/${call_id}/schedule/${item_id}`)).data,
 };
 
-// --- NUEVO: Pagos (bandeja admin) ---
+/* ------------------------------------------
+   Pagos (admin)
+-------------------------------------------*/
 export const Payments = {
-    list: async (params) => (await api.get(`/admission-payments`, { params })).data,
-    confirm: async (payment_id) => (await api.post(`/admission-payments/${payment_id}/confirm`)).data,
-    void: async (payment_id) => (await api.post(`/admission-payments/${payment_id}/void`)).data,
+    list: async (params) =>
+        (await api.get(`/admission-payments`, { params })).data,
+    confirm: async (payment_id) =>
+        (await api.post(`/admission-payments/${payment_id}/confirm`)).data,
+    void: async (payment_id) =>
+        (await api.post(`/admission-payments/${payment_id}/void`)).data,
     receiptPdf: async (payment_id) =>
-        await api.get(`/admission-payments/${payment_id}/receipt.pdf`, { responseType: "blob" }),
+        await api.get(`/admission-payments/${payment_id}/receipt.pdf`, {
+            responseType: "blob",
+        }),
 };
-

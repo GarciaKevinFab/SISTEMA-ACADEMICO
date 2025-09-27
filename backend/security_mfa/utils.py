@@ -2,12 +2,12 @@ import hashlib
 import os
 import string
 import secrets
+import base64
 
 ALPHABET = string.ascii_uppercase + string.digits
 
 def gen_secret_base32():
     # 20 bytes -> base32 para TOTP
-    import base64
     return base64.b32encode(os.urandom(20)).decode('utf-8').replace('=', '')
 
 def gen_backup_codes(n=10, length=10):

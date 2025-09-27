@@ -43,8 +43,8 @@ export default function DocumentReview() {
 
     const loadDocs = async () => {
         if (!current?.id) return;
-        const d = await ApplicantDocs.listMine(current.id); // mismo endpoint sirve para admin
-        setDocs(d?.documents || d || []);
+        const d = await ApplicantDocs.list(current.id);
+        setDocs(d || []);
     };
     useEffect(() => { loadDocs(); }, [current?.id]);
 
@@ -62,15 +62,13 @@ export default function DocumentReview() {
     };
 
     const markComplete = async () => {
-        // opcional: endpoint backend para mover estado a DOCUMENTS_COMPLETE si todo está OK
-        try {
-            await Applications.setStatus(current.id, "DOCUMENTS_COMPLETE");
-            toast.success("Expediente marcado como completo");
-            loadApplications();
-            loadDocs();
-        } catch {
-            toast.error("No se pudo actualizar el estado del expediente");
+        const allApproved = docs.length > 0 && docs.every(d => d.review_status === "APPROVED");
+        if (!allApproved) {
+            toast.error("Aún hay documentos pendientes/observados/rechazados.");
+            return;
         }
+        // No hay endpoint en el backend stub: dejamos un éxito local.
+        toast.success("Expediente validado (sincronización pendiente con backend real).");
     };
 
     return (

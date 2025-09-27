@@ -1,277 +1,601 @@
-from django.shortcuts import render
-
-# Create your views here.
+from datetime import datetime
+import os
+from django.conf import settings
 from django.http import HttpResponse
-from django.db.models import Q, Count
-from rest_framework import viewsets, mixins, status
-from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
 
-from .models import *
-from .serializers import *
+# =========================================================
+# Helpers (archivos en /media/tmp)
+# =========================================================
+def _ensure_media_tmp():
+    tmpdir = os.path.join(settings.MEDIA_ROOT, "tmp")
+    os.makedirs(tmpdir, exist_ok=True)
+    return tmpdir
 
-# ===== Dashboard =====
-@api_view(['GET'])
+def _write_stub_pdf(abs_path: str, title="Documento", subtitle=""):
+    try:
+        from reportlab.pdfgen import canvas  # type: ignore
+        from reportlab.lib.pagesizes import A4  # type: ignore
+        c = canvas.Canvas(abs_path, pagesize=A4)
+        w, h = A4
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(72, h - 72, title)
+        c.setFont("Helvetica", 12)
+        if subtitle:
+            c.drawString(72, h - 100, subtitle)
+        c.drawString(72, h - 130, "Generado automáticamente (stub).")
+        c.showPage()
+        c.save()
+    except Exception:
+        minimal_pdf = b"""%PDF-1.4
+1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj
+2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj
+3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>endobj
+4 0 obj<< /Length 62 >>stream
+BT /F1 18 Tf 72 720 Td (Acta de resultados) Tj ET
+endstream
+endobj
+5 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj
+xref
+0 6
+0000000000 65535 f 
+0000000010 00000 n 
+0000000061 00000 n 
+0000000116 00000 n 
+0000000236 00000 n 
+0000000404 00000 n 
+trailer<< /Size 6 /Root 1 0 R >>
+startxref
+500
+%%EOF
+"""
+        with open(abs_path, "wb") as f:
+            f.write(minimal_pdf)
+
+# =========================================================
+# Almacenamiento en memoria (solo dev)
+# =========================================================
+_COUNTERS = {"call": 1, "career": 1, "app": 1, "doc": 1, "sched": 1, "pay": 1}
+_CALLS = {}           # id -> {id, name, status, ...}
+_CAREERS = {}         # id -> {id, name, code, description, ...}
+_APPLICATIONS = {}    # id -> {id, applicant_user_id, call_id, career_id, status, rubric,total}
+_DOCS = {}            # doc_id -> {id, application_id, document_type, file_url, status, observations}
+_SCHEDULE = {}        # call_id -> [ {id, title, start,end} ]
+_PAYMENTS = {}        # id -> {id, application_id, status}
+_PARAMS = {"exam_weight": 0.7, "merit_weight": 0.3}
+_RESULTS = {"published": False, "closed": False}
+
+def _next(key):
+    _COUNTERS[key] += 1
+    return _COUNTERS[key] - 1
+
+# ---------------------------------------------------------
+# Normalizadores para convocatorias
+# ---------------------------------------------------------
+def _to_iso(dt_value):
+    """
+    Acepta: str (datetime-local 'YYYY-MM-DDTHH:MM' o ISO), datetime, None.
+    Devuelve: cadena ISO o None.
+    """
+    if not dt_value:
+        return None
+    if isinstance(dt_value, datetime):
+        return dt_value.isoformat()
+    s = str(dt_value).strip()
+    for fmt, cut in (("%Y-%m-%dT%H:%M:%S", 19), ("%Y-%m-%dT%H:%M", 16)):
+        try:
+            return datetime.strptime(s[:cut], fmt).isoformat()
+        except Exception:
+            pass
+    try:
+        _ = datetime.fromisoformat(s.replace("Z", ""))
+        return s
+    except Exception:
+        return None
+
+def _build_call_row(cid, payload):
+    """
+    Construye el dict completo de convocatoria desde el payload del FE,
+    aceptando sinónimos. También resuelve carreras con vacantes.
+    """
+    year = payload.get("academic_year", payload.get("year", datetime.utcnow().year))
+    period = payload.get("academic_period", payload.get("period"))
+
+    reg_start = _to_iso(payload.get("registration_start", payload.get("start_date")))
+    reg_end = _to_iso(payload.get("registration_end", payload.get("end_date")))
+    exam = _to_iso(payload.get("exam_date", payload.get("exam_at")))
+    results = _to_iso(payload.get("results_date", payload.get("results_at")))
+
+    fee = float(payload.get("application_fee", payload.get("fee", 0)) or 0)
+    max_choices = int(payload.get("max_applications_per_career", payload.get("max_choices", 1)) or 1)
+
+    # carreras desde arreglo o desde available_careers + career_vacancies
+    careers = []
+    if payload.get("careers"):
+        for it in payload["careers"]:
+            cid_ = it.get("career_id", it.get("id"))
+            if not cid_:
+                continue
+            name_ = it.get("name") or it.get("career_name") or _CAREERS.get(cid_, {}).get("name", f"Carrera {cid_}")
+            vac_ = int(it.get("vacancies", it.get("quota", it.get("slots", 0)) or 0))
+            careers.append({"id": cid_, "career_id": cid_, "name": name_, "vacancies": vac_})
+    else:
+        ids = payload.get("available_careers") or []
+        vacs = payload.get("career_vacancies") or {}
+        for cid_ in ids:
+            name_ = _CAREERS.get(cid_, {}).get("name", f"Carrera {cid_}")
+            vac_ = int(vacs.get(cid_, 0) or 0)
+            careers.append({"id": cid_, "career_id": cid_, "name": name_, "vacancies": vac_})
+
+    row = {
+        "id": cid,
+        "name": payload.get("name", f"Convocatoria {cid}"),
+        "description": payload.get("description", ""),
+        "academic_year": year,
+        "academic_period": period,
+        "registration_start": reg_start,
+        "registration_end": reg_end,
+        "exam_date": exam,
+        "results_date": results,
+        "application_fee": fee,
+        "max_applications_per_career": max_choices,
+        "minimum_age": int(payload.get("minimum_age", 0) or 0),
+        "maximum_age": int(payload.get("maximum_age", 0) or 0),
+        "required_documents": payload.get("required_documents", []),
+        "careers": careers,
+        "public": bool(payload.get("public", True)),
+        "status": payload.get("status", "OPEN"),
+        # sinónimos
+        "year": year,
+        "period": period,
+        "start_date": reg_start,
+        "end_date": reg_end,
+        "fee": fee,
+        "max_choices": max_choices,
+        # métrica
+        "total_applications": 0,
+    }
+    return row
+
+# =========================================================
+# Dashboard
+# =========================================================
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def admission_dashboard(request):
-    stats = {
-        "calls": AdmissionCall.objects.count(),
-        "applications": Application.objects.count(),
-        "paid": Payment.objects.filter(status='CONFIRMED').count(),
+    total_applicants = len({a["applicant_user_id"] for a in _APPLICATIONS.values()})
+    total_applications = len(_APPLICATIONS)
+    total_evaluated = len([a for a in _APPLICATIONS.values() if a.get("total") is not None])
+    total_admitted = len([a for a in _APPLICATIONS.values() if a.get("admitted")])
+    return Response({
+        "total_applicants": total_applicants,
+        "total_applications": total_applications,
+        "total_evaluated": total_evaluated,
+        "total_admitted": total_admitted,
+    })
+
+# =========================================================
+# Convocatorias
+# =========================================================
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def calls_list_public(request):
+    rows = [c for c in _CALLS.values() if c.get("public", True)]
+    return Response(rows)
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def calls_collection(request):
+    if request.method == "GET":
+        # añade total_applications por convocatoria
+        by_call = {}
+        for a in _APPLICATIONS.values():
+            k = a.get("call_id")
+            if k:
+                by_call[k] = by_call.get(k, 0) + 1
+        rows = []
+        for c in _CALLS.values():
+            c2 = dict(c)
+            c2["total_applications"] = by_call.get(c2["id"], 0)
+            rows.append(c2)
+        return Response(rows)
+
+    payload = request.data or {}
+    cid = _next("call")
+    row = _build_call_row(cid, payload)
+    _CALLS[cid] = row
+    return Response(row, status=201)
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def call_schedule_collection(request, call_id: int):
+    if request.method == "GET":
+        return Response(_SCHEDULE.get(call_id, []))
+    it = request.data or {}
+    sid = _next("sched")
+    item = {
+        "id": sid,
+        "title": it.get("title", f"Hito {sid}"),
+        "start": it.get("start"),
+        "end": it.get("end"),
     }
-    return Response(stats)
+    _SCHEDULE.setdefault(call_id, []).append(item)
+    return Response(item, status=201)
 
-# ===== Convocatorias =====
-class AdmissionCallViewSet(viewsets.ModelViewSet):
-    queryset = AdmissionCall.objects.all().order_by('-id')
-    serializer_class = AdmissionCallSerializer
+@api_view(["PUT", "DELETE"])
+@permission_classes([IsAuthenticated])
+def call_schedule_detail(request, call_id: int, item_id: int):
+    items = _SCHEDULE.get(call_id, [])
+    idx = next((i for i, x in enumerate(items) if x["id"] == item_id), -1)
+    if idx < 0:
+        return Response({"detail": "Not found"}, status=404)
+    if request.method == "PUT":
+        data = request.data or {}
+        items[idx].update({k: v for k, v in data.items() if k in ("title","start","end")})
+        return Response(items[idx])
+    items.pop(idx)
+    return Response(status=204)
 
-    def get_permissions(self):
-        if self.action in ('list_public',):
-            return [AllowAny()]
-        if self.request.method in ('GET',):
-            return [IsAuthenticated()]
-        return [IsAdminUser()]  # crear/editar/borrar solo admin
+# =========================================================
+# Carreras (completo)
+# =========================================================
+def _career_defaults(payload):
+    now = datetime.utcnow().isoformat()
+    return {
+        "name": payload.get("name", ""),
+        "code": payload.get("code", ""),
+        "description": payload.get("description", ""),
+        "duration_semesters": int(payload.get("duration_semesters") or 0),
+        "vacancies": int(payload.get("vacancies") or 0),
+        "degree_type": payload.get("degree_type", "BACHELOR"),
+        "modality": payload.get("modality", "PRESENCIAL"),
+        "is_active": bool(payload.get("is_active", True)),
+        "created_at": now,
+        "updated_at": now,
+    }
 
-    # GET /admission-calls/public
-    @action(detail=False, methods=['get'], url_path='public', permission_classes=[AllowAny])
-    def list_public(self, request):
-        qs = AdmissionCall.objects.filter(published=True).order_by('-id')
-        return Response(AdmissionCallSerializer(qs, many=True).data)
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def careers_collection(request):
+    if request.method == "GET":
+        return Response(list(_CAREERS.values()))
 
-    # --- Schedule por convocatoria ---
-    # GET /admission-calls/{id}/schedule
-    @action(detail=True, methods=['get'], url_path='schedule')
-    def schedule_list(self, request, pk=None):
-        qs = AdmissionScheduleItem.objects.filter(call_id=pk).order_by('start')
-        return Response(AdmissionScheduleItemSerializer(qs, many=True).data)
+    payload = request.data or {}
+    cid = _next("career")
+    row = {"id": cid, **_career_defaults(payload)}
+    _CAREERS[cid] = row
+    return Response(row, status=201)
 
-    # POST /admission-calls/{id}/schedule
-    @action(detail=True, methods=['post'], url_path='schedule', permission_classes=[IsAdminUser])
-    def schedule_create(self, request, pk=None):
-        data = request.data.copy(); data['call'] = pk
-        ser = AdmissionScheduleItemSerializer(data=data); ser.is_valid(raise_exception=True); ser.save()
-        return Response(ser.data, status=201)
+@api_view(["GET", "PUT", "DELETE"])
+@permission_classes([IsAuthenticated])
+def career_detail(request, career_id: int):
+    row = _CAREERS.get(career_id)
+    if not row:
+        return Response({"detail": "Not found"}, status=404)
 
-    # PUT /admission-calls/{id}/schedule/{item_id}
-    @action(detail=True, methods=['put'], url_path=r'schedule/(?P<item_id>\d+)', permission_classes=[IsAdminUser])
-    def schedule_update(self, request, pk=None, item_id=None):
-        item = AdmissionScheduleItem.objects.get(call_id=pk, id=item_id)
-        ser = AdmissionScheduleItemSerializer(item, data=request.data, partial=True); ser.is_valid(raise_exception=True); ser.save()
-        return Response(ser.data)
+    if request.method == "GET":
+        return Response(row)
 
-    # DELETE /admission-calls/{id}/schedule/{item_id}
-    @action(detail=True, methods=['delete'], url_path=r'schedule/(?P<item_id>\d+)', permission_classes=[IsAdminUser])
-    def schedule_delete(self, request, pk=None, item_id=None):
-        AdmissionScheduleItem.objects.filter(call_id=pk, id=item_id).delete()
-        return Response(status=204)
+    if request.method == "PUT":
+        data = request.data or {}
+        allowed = {
+            "name", "code", "description", "duration_semesters", "vacancies",
+            "degree_type", "modality", "is_active"
+        }
+        for k, v in data.items():
+            if k in allowed:
+                if k in ("duration_semesters", "vacancies"):
+                    try:
+                        row[k] = int(v)
+                    except Exception:
+                        row[k] = 0
+                elif k == "is_active":
+                    row[k] = bool(v)
+                else:
+                    row[k] = v
+        row["updated_at"] = datetime.utcnow().isoformat()
+        _CAREERS[career_id] = row
+        return Response(row)
 
-# ===== Applicants =====
-class ApplicantViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
-    queryset = Applicant.objects.all()
-    serializer_class = ApplicantSerializer
+    # DELETE
+    del _CAREERS[career_id]
+    return Response(status=204)
 
-    # GET /applicants/me
-    @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
-    def me(self, request):
-        app = Applicant.objects.filter(user=request.user).first()
-        return Response(ApplicantSerializer(app).data if app else None)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def career_toggle_active(request, career_id: int):
+    row = _CAREERS.get(career_id)
+    if not row:
+        return Response({"detail": "Not found"}, status=404)
+    row["is_active"] = not bool(row.get("is_active"))
+    row["updated_at"] = datetime.utcnow().isoformat()
+    return Response(row)
 
-# ===== Applications =====
-class ApplicationViewSet(viewsets.ModelViewSet):
-    queryset = Application.objects.all().order_by('-id')
-    serializer_class = ApplicationSerializer
+# =========================================================
+# Postulaciones
+# =========================================================
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def applications_collection(request):
+    if request.method == "GET":
+        call_id = request.query_params.get("call_id")
+        career_id = request.query_params.get("career_id")
+        rows = list(_APPLICATIONS.values())
+        if call_id:
+            rows = [r for r in rows if str(r.get("call_id")) == str(call_id)]
+        if career_id:
+            rows = [r for r in rows if str(r.get("career_id")) == str(career_id)]
+        return Response(rows)
+    p = request.data or {}
+    aid = _next("app")
+    row = {
+        "id": aid,
+        "applicant_user_id": request.user.id,
+        "call_id": p.get("call_id"),
+        "career_id": p.get("career_id"),
+        "status": "CREATED",
+        "created_at": datetime.utcnow().isoformat(),
+        "rubric": None,
+        "total": None,
+        "admitted": False,
+    }
+    _APPLICATIONS[aid] = row
+    return Response(row, status=201)
 
-    def get_permissions(self):
-        if self.action in ('me', 'list', 'retrieve'):
-            return [IsAuthenticated()]
-        return [IsAuthenticated()]  # crea/edita: ajusta si quieres solo applicant
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def applications_me(request):
+    rows = [a for a in _APPLICATIONS.values() if a["applicant_user_id"] == request.user.id]
+    return Response(rows)
 
-    # GET /applications/me
-    @action(detail=False, methods=['get'], url_path='me')
-    def me(self, request):
-        apps = Application.objects.filter(applicant__user=request.user).order_by('-id')
-        return Response(ApplicationSerializer(apps, many=True).data)
+# =========================================================
+# Documentos por postulante
+# =========================================================
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def application_docs_collection(request, application_id: int):
+    if application_id not in _APPLICATIONS:
+        return Response({"detail":"application not found"}, status=404)
+    if request.method == "GET":
+        rows = [d for d in _DOCS.values() if d["application_id"] == application_id]
+        return Response(rows)
+    f = request.FILES.get("file")
+    doc_type = request.data.get("document_type", "OTHER")
+    if not f:
+        return Response({"detail":"file requerido"}, status=400)
+    tmpdir = _ensure_media_tmp()
+    doc_id = _next("doc")
+    filename = f"app{application_id}-doc{doc_id}-{f.name}"
+    abs_path = os.path.join(tmpdir, filename)
+    with open(abs_path, "wb") as out:
+        for chunk in f.chunks():
+            out.write(chunk)
+    row = {
+        "id": doc_id,
+        "application_id": application_id,
+        "document_type": doc_type,
+        "file_url": f"/media/tmp/{filename}",
+        "status": "UPLOADED",
+        "observations": "",
+    }
+    _DOCS[doc_id] = row
+    return Response(row, status=201)
 
-# ===== Pago de postulaciones =====
-@api_view(['POST'])
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def application_doc_review(request, application_id: int, document_id: int):
+    row = _DOCS.get(document_id)
+    if not row or row["application_id"] != application_id:
+        return Response({"detail":"Not found"}, status=404)
+    data = request.data or {}
+    row["status"] = data.get("status", row["status"])
+    row["observations"] = data.get("observations", row.get("observations",""))
+    return Response(row)
+
+# =========================================================
+# Pago
+# =========================================================
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def application_payment_start(request, application_id: int):
-    method = request.data.get('method', 'EFECTIVO')
-    app = Application.objects.get(pk=application_id)
-    pay, _ = Payment.objects.get_or_create(application=app, defaults={'method': method, 'status': 'STARTED'})
-    pay.method = method
-    pay.status = 'STARTED'
-    pay.save()
-    return Response({"status":"STARTED","payment_id": pay.id})
+    if application_id not in _APPLICATIONS:
+        return Response({"detail":"application not found"}, status=404)
+    pid = _next("pay")
+    _PAYMENTS[pid] = {"id": pid, "application_id": application_id, "status": "PENDING"}
+    return Response({"payment_id": pid, "status": "PENDING"})
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def application_payment_status(request, application_id: int):
-    try:
-        pay = Payment.objects.get(application_id=application_id)
-        return Response({"status": pay.status, "method": pay.method, "amount": str(pay.amount)})
-    except Payment.DoesNotExist:
-        return Response({"status":"NONE"})
+    pay = next((p for p in _PAYMENTS.values() if p["application_id"] == application_id), None)
+    if not pay:
+        return Response({"detail":"payment not found"}, status=404)
+    return Response(pay)
 
-# ===== Evaluación =====
-@api_view(['GET'])
+# =========================================================
+# Evaluación
+# =========================================================
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def evaluation_list_for_scoring(request):
-    # filtros por params (call_id, estado, etc.)
-    call_id = request.query_params.get('call_id')
-    qs = Application.objects.all()
-    if call_id: qs = qs.filter(call_id=call_id)
-    data = ApplicationSerializer(qs, many=True).data
-    return Response(data)
+def eval_list_for_scoring(request):
+    rows = [a for a in _APPLICATIONS.values() if a.get("total") is None]
+    return Response(rows)
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def evaluation_save_scores(request, application_id: int):
+def eval_save_scores(request, application_id: int):
+    a = _APPLICATIONS.get(application_id)
+    if not a:
+        return Response({"detail":"application not found"}, status=404)
     rubric = request.data or {}
-    total = sum([float(v) for v in rubric.values() if isinstance(v, (int, float, str))])
-    obj, _ = EvaluationScore.objects.update_or_create(
-        application_id=application_id, defaults={'rubric': rubric, 'total': total}
-    )
-    return Response({"ok": True, "total": total})
+    a["rubric"] = rubric
+    a["total"] = float(rubric.get("total", 0))
+    a["admitted"] = bool(rubric.get("admitted", False))
+    a["status"] = "EVALUATED"
+    return Response(a)
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def evaluation_bulk_compute(request):
-    call_id = request.data.get('call_id')
-    # TODO: computar ranking real. por ahora OK
-    return Response({"ok": True, "call_id": call_id})
+def eval_bulk_compute(request):
+    call_id = request.data.get("call_id")
+    affected = 0
+    for a in _APPLICATIONS.values():
+        if call_id and str(a.get("call_id")) != str(call_id):
+            continue
+        if a.get("total") is not None:
+            a["admitted"] = a["total"] >= 14
+            affected += 1
+    return Response({"ok": True, "affected": affected})
 
-# ===== Resultados =====
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
+# =========================================================
+# Resultados
+# =========================================================
+@api_view(["GET"])
+@permission_classes([AllowAny])
 def results_list(request):
-    params = dict(request.query_params)
-    # TODO: query real de resultados
-    return Response({"items": [], "params": params})
+    call_id = request.query_params.get("call_id")
+    rows = [a for a in _APPLICATIONS.values() if a.get("admitted")]
+    if call_id:
+        rows = [r for r in rows if str(r.get("call_id")) == str(call_id)]
+    return Response(rows)
 
-@api_view(['POST'])
-@permission_classes([IsAdminUser])
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def results_publish(request):
-    call_id = request.data.get('call_id')
-    pub, _ = ResultPublication.objects.get_or_create(call_id=call_id)
-    pub.published = True; pub.payload = request.data.get('payload', {}); pub.save()
-    return Response({"ok": True})
+    _RESULTS["published"] = True
+    return Response({"ok": True, "published": True})
 
-@api_view(['POST'])
-@permission_classes([IsAdminUser])
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def results_close(request):
-    call_id = request.data.get('call_id')
-    pub, _ = ResultPublication.objects.get_or_create(call_id=call_id)
-    pub.published = False; pub.save()
-    return Response({"ok": True})
+    _RESULTS["closed"] = True
+    return Response({"ok": True, "closed": True})
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def results_acta_pdf(request):
-    # devuelve PDF vacío (placeholder) con content-disposition
-    resp = HttpResponse(b"%PDF-1.4\n%...\n", content_type='application/pdf')
-    resp['Content-Disposition'] = 'attachment; filename="acta.pdf"'
+    call_id = request.query_params.get("call_id") or "all"
+    tmpdir = _ensure_media_tmp()
+    filename = f"acta-call-{call_id}.pdf"
+    abs_path = os.path.join(tmpdir, filename)
+    _write_stub_pdf(abs_path, title="Acta de Resultados", subtitle=f"Convocatoria: {call_id}")
+    with open(abs_path, "rb") as f:
+        data = f.read()
+    resp = HttpResponse(data, content_type="application/pdf")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
 
-# ===== Reportes =====
-@api_view(['GET'])
+# =========================================================
+# Reportes
+# =========================================================
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def reports_admission_excel(request):
-    resp = HttpResponse(b'', content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    resp['Content-Disposition'] = 'attachment; filename="admission.xlsx"'
+def reports_admission_xlsx(request):
+    resp = HttpResponse(b"", content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = 'attachment; filename="admission.xlsx"'
     return resp
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def reports_admission_summary(request):
-    # TODO: resumen real
-    return Response({"summary": {}})
+    by_career = {}
+    for a in _APPLICATIONS.values():
+        c = a.get("career_id") or 0
+        by_career[c] = by_career.get(c, 0) + 1
+    return Response({
+        "total_applications": len(_APPLICATIONS),
+        "by_career": [{"career_id": k, "count": v} for k, v in by_career.items()],
+    })
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def reports_ranking_excel(request):
-    resp = HttpResponse(b'', content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    resp['Content-Disposition'] = 'attachment; filename="ranking.xlsx"'
+def reports_ranking_xlsx(request):
+    resp = HttpResponse(b"", content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = 'attachment; filename="ranking.xlsx"'
     return resp
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def reports_vacants_vs_excel(request):
-    resp = HttpResponse(b'', content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    resp['Content-Disposition'] = 'attachment; filename="vacants-vs.xlsx"'
+def reports_vacants_vs_xlsx(request):
+    resp = HttpResponse(b"", content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = 'attachment; filename="vacants-vs.xlsx"'
     return resp
 
-# ===== Parámetros =====
-@api_view(['GET','POST'])
+# =========================================================
+# Parámetros
+# =========================================================
+@api_view(["GET","POST"])
 @permission_classes([IsAuthenticated])
 def admission_params(request):
-    obj, _ = AdmissionParam.objects.get_or_create(pk=1)
-    if request.method == 'GET':
-        return Response(AdmissionParamSerializer(obj).data['data'])
-    obj.data = request.data or {}
-    obj.save(update_fields=['data'])
-    return Response({"ok": True})
+    global _PARAMS
+    if request.method == "GET":
+        return Response(_PARAMS)
+    _PARAMS.update(request.data or {})
+    return Response(_PARAMS)
 
-# ===== Perfil postulante =====
-@api_view(['GET'])
+# =========================================================
+# Perfil postulante
+# =========================================================
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def applicant_me(request):
-    app = Applicant.objects.filter(user=request.user).first()
-    return Response(ApplicantSerializer(app).data if app else None)
+    return Response({
+        "user_id": request.user.id,
+        "fullname": getattr(request.user, "get_full_name", lambda: request.user.username)(),
+        "email": getattr(request.user, "email", ""),
+    })
 
-# ===== Documentos del postulante =====
-class ApplicationDocumentsViewSet(viewsets.ViewSet):
-    parser_classes = [MultiPartParser, FormParser]
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def applicant_create(request):
+    data = request.data or {}
+    data["user_id"] = request.user.id
+    return Response(data, status=201)
 
-    # GET /applications/{application_id}/documents
-    def list(self, request, application_id=None):
-        qs = ApplicationDocument.objects.filter(application_id=application_id)
-        return Response(ApplicationDocumentSerializer(qs, many=True).data)
+# =========================================================
+# Pagos - bandeja admin
+# =========================================================
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def payments_list(request):
+    status = request.query_params.get("status")
+    rows = list(_PAYMENTS.values())
+    if status:
+        rows = [r for r in rows if r.get("status") == status]
+    return Response(rows)
 
-    # POST /applications/{application_id}/documents
-    def create(self, request, application_id=None):
-        file = request.data.get('file'); document_type = request.data.get('document_type')
-        if not file or not document_type:
-            return Response({"detail":"file y document_type requeridos"}, status=400)
-        obj = ApplicationDocument.objects.create(application_id=application_id, file=file, document_type=document_type)
-        return Response(ApplicationDocumentSerializer(obj).data, status=201)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def payment_confirm(request, payment_id: int):
+    p = _PAYMENTS.get(payment_id)
+    if not p:
+        return Response({"detail":"Not found"}, status=404)
+    p["status"] = "CONFIRMED"
+    return Response(p)
 
-    # POST /applications/{application_id}/documents/{document_id}/review
-    @action(detail=True, methods=['post'], url_path='review')
-    def review(self, request, pk=None, application_id=None):
-        status_val = request.data.get('status')  # APPROVED / REJECTED
-        note = request.data.get('note','')
-        ApplicationDocument.objects.filter(application_id=application_id, id=pk)\
-            .update(status=status_val or 'PENDING', note=note)
-        return Response({"ok": True})
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def payment_void(request, payment_id: int):
+    p = _PAYMENTS.get(payment_id)
+    if not p:
+        return Response({"detail":"Not found"}, status=404)
+    p["status"] = "VOID"
+    return Response(p)
 
-# ===== Pagos (bandeja admin) =====
-class AdmissionPaymentsViewSet(viewsets.ViewSet):
-    # GET /admission-payments
-    def list(self, request):
-        qs = Payment.objects.all().order_by('-created_at')
-        data = [{"id": p.id, "application_id": p.application_id, "status": p.status,
-                 "method": p.method, "amount": str(p.amount)} for p in qs]
-        return Response({"items": data, "total": len(data)})
-
-    # POST /admission-payments/{payment_id}/confirm
-    @action(detail=True, methods=['post'], url_path='confirm')
-    def confirm(self, request, pk=None):
-        Payment.objects.filter(id=pk).update(status='CONFIRMED')
-        return Response({"ok": True})
-
-    # POST /admission-payments/{payment_id}/void
-    @action(detail=True, methods=['post'], url_path='void')
-    def void(self, request, pk=None):
-        Payment.objects.filter(id=pk).update(status='VOID')
-        return Response({"ok": True})
-
-    # GET /admission-payments/{payment_id}/receipt.pdf
-    @action(detail=True, methods=['get'], url_path='receipt\.pdf')
-    def receipt_pdf(self, request, pk=None):
-        resp = HttpResponse(b"%PDF-1.4\n%...\n", content_type='application/pdf')
-        resp['Content-Disposition'] = 'attachment; filename="receipt.pdf"'
-        return resp
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def payment_receipt_pdf(request, payment_id: int):
+    p = _PAYMENTS.get(payment_id)
+    if not p:
+        return Response({"detail":"Not found"}, status=404)
+    tmpdir = _ensure_media_tmp()
+    filename = f"receipt-{payment_id}.pdf"
+    abs_path = os.path.join(tmpdir, filename)
+    _write_stub_pdf(abs_path, title="Recibo de Pago", subtitle=f"Pago #{payment_id} – estado: {p['status']}")
+    with open(abs_path, "rb") as f:
+        data = f.read()
+    resp = HttpResponse(data, content_type="application/pdf")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp

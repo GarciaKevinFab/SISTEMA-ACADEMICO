@@ -1,7 +1,5 @@
 from django.urls import path
-from .views import (
-    mfa_setup, mfa_verify, mfa_disable, mfa_backup_codes, mfa_challenge
-)
+from .views import mfa_setup, mfa_verify, mfa_disable, mfa_backup_codes, mfa_challenge
 
 urlpatterns = [
     path('auth/mfa/setup', mfa_setup),
