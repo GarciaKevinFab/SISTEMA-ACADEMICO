@@ -1,6 +1,6 @@
 // src/components/NotificationsModule.jsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { toast } from "sonner";
+import { toast } from "../../utils/safeToast";
 import {
     Card, CardHeader, CardTitle, CardDescription, CardContent,
 } from "../../components/ui/card";

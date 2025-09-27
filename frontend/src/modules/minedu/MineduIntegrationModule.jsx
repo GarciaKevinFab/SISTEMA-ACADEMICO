@@ -13,7 +13,7 @@ import {
   FileSpreadsheet, Eye, Shield, Users, BookOpen, Award, TrendingUp, Settings2, ListChecks,
   Play, Pause, Edit, Terminal, RotateCcw, Search
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "../../utils/safeToast";
 
 /* shadcn select */
 import {
@@ -622,12 +622,12 @@ const MappingsModule = () => {
                           <div className="text-xs text-gray-500">{it.code || it.ident || it.document || ""}</div>
                         </td>
                         <td className="px-4 py-2">
-                          <Select value={mappedCode} onValueChange={(v) => setCurrentMap((m) => ({ ...m, [it.id]: v }))}>
+                          <Select value={mappedCode} onValueChange={(v) => setCurrentMap((m) => ({ ...m, [it.id]: v === "UNLINKED" ? "" : v }))}>
                             <SelectTrigger className="w-80">
                               <SelectValue placeholder="Seleccione código" />
                             </SelectTrigger>
                             <SelectContent className="max-h-72">
-                              <SelectItem value="">— Sin vincular —</SelectItem>
+                              <SelectItem value="UNLINKED">— Sin vincular —</SelectItem>
                               {remoteOptions.map((opt) => (
                                 <SelectItem key={opt.code} value={String(opt.code)}>
                                   {opt.code} — {opt.label}

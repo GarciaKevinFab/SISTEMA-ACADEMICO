@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { toast } from 'sonner';
+import { toast } from '../../utils/safeToast'; // ← cambio 1
 import {
   Plus,
   Users,
@@ -652,7 +652,7 @@ const HRDashboard = () => {
                         </SelectTrigger>
                         <SelectContent>
                           {employees.filter(e => e.status === 'ACTIVE').map((employee) => (
-                            <SelectItem key={employee.id} value={employee.id}>
+                            <SelectItem key={employee.id} value={String(employee.id)}>
                               {employee.first_name} {employee.last_name} - {employee.position}
                             </SelectItem>
                           ))}

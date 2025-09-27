@@ -1,6 +1,6 @@
 // src/components/ConfigCatalogsModule.jsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "../utils/safeToast";
 import { useAuth } from "../../context/AuthContext";
 import {
     Card, CardHeader, CardTitle, CardDescription, CardContent,
