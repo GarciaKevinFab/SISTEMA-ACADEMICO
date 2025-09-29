@@ -1,18 +1,19 @@
 // src/modules/admin/AccessControlModule.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import {
-    Card, CardContent, CardHeader, CardTitle, CardDescription
+  Card, CardContent, CardHeader, CardTitle, CardDescription
 } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Badge } from "../../components/ui/badge";
 import {
-    Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger
 } from "../../components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
-import { Users, Shield, Plus, Edit, Trash2, KeyRound } from "lucide-react";
+import { Users, Shield, Plus, Edit, Trash2, KeyRound, Search, RefreshCw, Check, AlertTriangle } from "lucide-react";
+import { motion } from "framer-motion";
 
 import { UsersService } from "../../services/users.service";
 import { ACLService } from "../../services/acl.service";
@@ -21,525 +22,568 @@ import AuditTab from "./AuditTab";
 import { useAuth } from "../../context/AuthContext";
 import { PERMS } from "../../auth/permissions";
 
+/* ---------- Animations ---------- */
+const fade = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.25 } };
+const scaleIn = { initial: { opacity: 0, scale: 0.98 }, animate: { opacity: 1, scale: 1 }, transition: { duration: 0.2 } };
+
+/* ---------- Debounce ---------- */
+const useDebounce = (value, delay = 400) => {
+  const [v, setV] = useState(value);
+  useEffect(() => { const t = setTimeout(() => setV(value), delay); return () => clearTimeout(t); }, [value, delay]);
+  return v;
+};
+
+const DebouncedSearch = ({ value, onChange, placeholder = "Buscar..." }) => (
+  <div className="relative flex-1">
+    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-60" aria-hidden />
+    <Input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+      placeholder={placeholder}
+      className="pl-9 rounded-xl"
+      aria-label="Buscar"
+    />
+  </div>
+);
+
+/* ---------- Confirm Dialog ---------- */
+const ConfirmDialog = ({ open, onOpenChange, title, description, confirmText = "Confirmar", onConfirm, confirmVariant = "default" }) => (
+  <Dialog open={open} onOpenChange={onOpenChange}>
+    <DialogContent className="max-w-sm backdrop-blur-md bg-white/80 dark:bg-neutral-900/80 border border-white/40 dark:border-white/10 rounded-2xl">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <AlertTriangle className="h-5 w-5 text-amber-500" /> {title}
+        </DialogTitle>
+        {description && <DialogDescription>{description}</DialogDescription>}
+      </DialogHeader>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl">Cancelar</Button>
+        <Button variant={confirmVariant} onClick={onConfirm} className="rounded-xl">{confirmText}</Button>
+      </div>
+    </DialogContent>
+  </Dialog>
+);
+
+/* ======================== ROOT ======================== */
 const AccessControlModule = () => {
-    const { hasPerm } = useAuth();
-    const canManage = hasPerm(PERMS["admin.access.manage"]);
-    const canAudit = hasPerm(PERMS["admin.audit.view"]);
+  const { hasPerm } = useAuth();
+  const canManage = hasPerm(PERMS["admin.access.manage"]);
+  const canAudit = hasPerm(PERMS["admin.audit.view"]);
+  const defaultTab = canManage ? "users" : canAudit ? "audit" : "users";
 
-    // define la primera pestaña disponible
-    const defaultTab = canManage ? "users" : canAudit ? "audit" : "users";
-
-    return (
-        <div className="p-6 space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold">Administración</h1>
-                    <p className="text-gray-600">Usuarios, Roles, Permisos y Auditoría</p>
-                </div>
-            </div>
-
-            <Tabs defaultValue={defaultTab} className="space-y-6">
-                <TabsList>
-                    {canManage && <TabsTrigger value="users">Usuarios</TabsTrigger>}
-                    {canManage && <TabsTrigger value="roles">Roles</TabsTrigger>}
-                    {canManage && <TabsTrigger value="permissions">Permisos</TabsTrigger>}
-                    {canAudit && <TabsTrigger value="audit">Auditoría</TabsTrigger>}
-                </TabsList>
-
-                {canManage && (
-                    <TabsContent value="users">
-                        <UsersTab />
-                    </TabsContent>
-                )}
-
-                {canManage && (
-                    <TabsContent value="roles">
-                        <RolesTab />
-                    </TabsContent>
-                )}
-
-                {canManage && (
-                    <TabsContent value="permissions">
-                        <PermissionsTab />
-                    </TabsContent>
-                )}
-
-                {canAudit && (
-                    <TabsContent value="audit">
-                        <AuditTab />
-                    </TabsContent>
-                )}
-            </Tabs>
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header sin subtítulo global */}
+      <motion.div {...fade} className="rounded-2xl p-[1px] bg-gradient-to-r from-blue-500/30 via-purple-500/30 to-fuchsia-500/30">
+        <div className="rounded-2xl bg-white/70 dark:bg-neutral-900/60 backdrop-blur-md px-5 py-4 border border-white/50 dark:border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.06)]">
+          <h1 className="text-2xl font-bold tracking-tight">Administración</h1>
         </div>
-    );
+      </motion.div>
+
+      <Tabs defaultValue={defaultTab} className="space-y-6">
+        {/* Tabs con color por apartado */}
+        <TabsList className="sticky top-0 z-10 mx-auto w-fit rounded-2xl bg-white/70 dark:bg-neutral-900/60 backdrop-blur border border-white/50 dark:border-white/10 shadow-sm">
+          {canManage && (
+            <TabsTrigger value="users" className="gap-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition">
+              <Users className="h-4 w-4" /> Usuarios
+            </TabsTrigger>
+          )}
+          {canManage && (
+            <TabsTrigger value="roles" className="gap-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-600 data-[state=active]:to-fuchsia-600 data-[state=active]:text-white">
+              <Shield className="h-4 w-4" /> Roles
+            </TabsTrigger>
+          )}
+          {canManage && (
+            <TabsTrigger value="permissions" className="gap-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-teal-600 data-[state=active]:text-white">
+              <KeyRound className="h-4 w-4" /> Permisos
+            </TabsTrigger>
+          )}
+          {canAudit && <TabsTrigger value="audit" className="rounded-xl">Auditoría</TabsTrigger>}
+        </TabsList>
+
+        {canManage && (
+          <TabsContent value="users" asChild>
+            <motion.div {...fade}><UsersTab /></motion.div>
+          </TabsContent>
+        )}
+        {canManage && (
+          <TabsContent value="roles" asChild>
+            <motion.div {...fade}><RolesTab /></motion.div>
+          </TabsContent>
+        )}
+        {canManage && (
+          <TabsContent value="permissions" asChild>
+            <motion.div {...fade}><PermissionsTab /></motion.div>
+          </TabsContent>
+        )}
+        {canAudit && (
+          <TabsContent value="audit" asChild>
+            <motion.div {...fade}><AuditTab /></motion.div>
+          </TabsContent>
+        )}
+      </Tabs>
+    </div>
+  );
 };
 
-/* ------------------------ Usuarios ------------------------ */
+/* ------------------------ Usuarios (azul) ------------------------ */
 const UsersTab = () => {
-    const [list, setList] = useState([]);
-    const [q, setQ] = useState("");
-    const [loading, setLoading] = useState(true);
-    const [openCreate, setOpenCreate] = useState(false);
-    const [openEdit, setOpenEdit] = useState(false);
-    const [editing, setEditing] = useState(null);
-    const [editForm, setEditForm] = useState({
-        full_name: "",
-        email: "",
-        roles: [],
-    });
+  const [list, setList] = useState([]);
+  const [q, setQ] = useState("");
+  const debouncedQ = useDebounce(q, 450);
 
-    const [form, setForm] = useState({
-        full_name: "",
-        email: "",
-        username: "",
-        password: "",
-        roles: ["STUDENT"], // por defecto
-    });
+  const [loading, setLoading] = useState(true);
+  const [openCreate, setOpenCreate] = useState(false);
+  const [openEdit, setOpenEdit] = useState(false);
+  const [confirm, setConfirm] = useState({ open: false, action: null, id: null });
 
-    const pwdFeedback = validatePassword(form.password || "");
+  const [editing, setEditing] = useState(null);
+  const [editForm, setEditForm] = useState({ full_name: "", email: "", roles: [] });
 
-    const fetchUsers = async () => {
-        try {
-            setLoading(true);
-            const data = await UsersService.list(q ? { q } : undefined);
-            setList(data?.users ?? data ?? []);
-        } catch (e) {
-            toast.error("Error al cargar usuarios");
-        } finally {
-            setLoading(false);
-        }
-    };
+  const [form, setForm] = useState({
+    full_name: "",
+    email: "",
+    username: "",
+    password: "",
+    roles: ["STUDENT"],
+  });
 
-    useEffect(() => { fetchUsers(); }, []); // cargamos al entrar
+  const pwdFeedback = validatePassword(form.password || "");
 
-    const handleCreate = async (e) => {
-        e.preventDefault();
-        try {
-            await UsersService.create(form);
-            toast.success("Usuario creado");
-            setOpenCreate(false);
-            setForm({ full_name: "", email: "", username: "", password: "", roles: ["STUDENT"] });
-            fetchUsers();
-        } catch (e) {
-            toast.error(e?.response?.data?.detail || "Error al crear usuario");
-        }
-    };
+  const fetchUsers = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await UsersService.list(debouncedQ ? { q: debouncedQ } : undefined);
+      setList(data?.users ?? data ?? []);
+    } catch { toast.error("Error al cargar usuarios"); }
+    finally { setLoading(false); }
+  }, [debouncedQ]);
 
-    const handleDeactivate = async (id) => {
-        try {
-            await UsersService.deactivate(id);
-            toast.success("Usuario desactivado");
-            fetchUsers();
-        } catch (e) {
-            toast.error("No se pudo desactivar");
-        }
-    };
+  useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-    const handleResetPass = async (id) => {
-        try {
-            await UsersService.resetPassword(id);
-            toast.success("Contraseña reiniciada");
-        } catch {
-            toast.error("No se pudo reiniciar la contraseña");
-        }
-    };
+  const resetCreate = () => setForm({ full_name: "", email: "", username: "", password: "", roles: ["STUDENT"] });
 
-    const handleActivate = async (id) => {
-        try {
-            await UsersService.activate(id);
-            toast.success("Usuario reactivado");
-            fetchUsers();
-        } catch {
-            toast.error("No se pudo reactivar");
-        }
-    };
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    try {
+      await UsersService.create(form);
+      toast.success("Usuario creado");
+      setOpenCreate(false);
+      resetCreate();
+      fetchUsers();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Error al crear usuario");
+    }
+  };
 
-    const openEditUser = (u) => {
-        setEditing(u);
-        setEditForm({
-            full_name: u.full_name || "",
-            email: u.email || "",
-            roles: Array.isArray(u.roles) ? u.roles : [],
-        });
-        setOpenEdit(true);
-    };
+  const handleDeactivate = async (id) => { try { await UsersService.deactivate(id); toast.success("Usuario desactivado"); fetchUsers(); } catch { toast.error("No se pudo desactivar"); } };
+  const handleResetPass = async (id) => { try { await UsersService.resetPassword(id); toast.success("Contraseña reiniciada"); } catch { toast.error("No se pudo reiniciar la contraseña"); } };
+  const handleActivate = async (id) => { try { await UsersService.activate(id); toast.success("Usuario reactivado"); fetchUsers(); } catch { toast.error("No se pudo reactivar"); } };
 
-    const submitEdit = async (e) => {
-        e.preventDefault();
-        if (!editing) return;
-        try {
-            await UsersService.update(editing.id, {
-                full_name: editForm.full_name,
-                email: editForm.email,
-            });
-            await UsersService.assignRoles(editing.id, editForm.roles);
-            toast.success("Usuario actualizado");
-            setOpenEdit(false);
-            setEditing(null);
-            fetchUsers();
-        } catch {
-            toast.error("No se pudo actualizar");
-        }
-    };
+  const openEditUser = (u) => {
+    setEditing(u);
+    setEditForm({ full_name: u.full_name || "", email: u.email || "", roles: Array.isArray(u.roles) ? u.roles : [] });
+    setOpenEdit(true);
+  };
 
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <Users className="h-5 w-5" /> Usuarios
-                </CardTitle>
-                <CardDescription>Alta, edición, baja, asignación de roles</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="flex items-center gap-2">
-                    <Input placeholder="Buscar por nombre/usuario/email" value={q} onChange={(e) => setQ(e.target.value)} />
-                    <Button variant="outline" onClick={fetchUsers}>Buscar</Button>
-                    <Dialog open={openCreate} onOpenChange={setOpenCreate}>
-                        <DialogTrigger asChild>
-                            <Button className="bg-blue-600 hover:bg-blue-700">
-                                <Plus className="h-4 w-4 mr-2" /> Nuevo Usuario
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-xl">
-                            <DialogHeader>
-                                <DialogTitle>Crear Usuario</DialogTitle>
-                                <DialogDescription>Complete los datos básicos</DialogDescription>
-                            </DialogHeader>
-                            <form onSubmit={handleCreate} className="space-y-3">
-                                <div>
-                                    <Label>Nombre completo</Label>
-                                    <Input value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} required />
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <Label>Usuario</Label>
-                                        <Input value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} required />
-                                    </div>
-                                    <div>
-                                        <Label>Email</Label>
-                                        <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
-                                    </div>
-                                </div>
-                                <div>
-                                    <Label>Contraseña</Label>
-                                    <Input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required />
-                                    {!pwdFeedback.valid && (
-                                        <ul className="mt-1 text-xs text-red-600 list-disc list-inside">
-                                            {pwdFeedback.errors.map((er, i) => <li key={i}>{er}</li>)}
-                                        </ul>
-                                    )}
-                                </div>
-                                <div>
-                                    <Label>Roles (coma separados)</Label>
-                                    <Input
-                                        value={form.roles.join(",")}
-                                        onChange={(e) => setForm({ ...form, roles: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1">Ej: ADMIN,REGISTRAR,TEACHER,STUDENT</p>
-                                </div>
-                                <div className="flex justify-end gap-2">
-                                    <Button type="button" variant="outline" onClick={() => setOpenCreate(false)}>Cancelar</Button>
-                                    <Button type="submit" className="bg-blue-600 hover:bg-blue-700">Crear</Button>
-                                </div>
-                            </form>
-                        </DialogContent>
-                    </Dialog>
-                </div>
+  const submitEdit = async (e) => {
+    e.preventDefault();
+    if (!editing) return;
+    try {
+      await UsersService.update(editing.id, { full_name: editForm.full_name, email: editForm.email });
+      await UsersService.assignRoles(editing.id, editForm.roles);
+      toast.success("Usuario actualizado");
+      setOpenEdit(false); setEditing(null); fetchUsers();
+    } catch { toast.error("No se pudo actualizar"); }
+  };
 
-                <div className="border rounded-lg overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="p-3 text-left">Nombre</th>
-                                <th className="p-3 text-left">Usuario</th>
-                                <th className="p-3 text-left">Email</th>
-                                <th className="p-3 text-left">Roles</th>
-                                <th className="p-3 text-left">Estado</th>
-                                <th className="p-3 text-right">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {!loading && list.map(u => (
-                                <tr key={u.id} className="border-t">
-                                    <td className="p-3">{u.full_name}</td>
-                                    <td className="p-3">{u.username}</td>
-                                    <td className="p-3">{u.email}</td>
-                                    <td className="p-3">
-                                        <div className="flex flex-wrap gap-1">
-                                            {(u.roles || []).map(r => <Badge key={r} variant="outline">{r}</Badge>)}
-                                        </div>
-                                    </td>
-                                    <td className="p-3">{u.is_active ? <Badge>Activo</Badge> : <Badge variant="secondary">Inactivo</Badge>}</td>
-                                    <td className="p-3">
-                                        <div className="flex justify-end gap-2">
-                                            <Button size="sm" variant="outline" onClick={() => handleResetPass(u.id)}>
-                                                <KeyRound className="h-4 w-4 mr-1" /> Reset
-                                            </Button>
-                                            <Button size="sm" variant="outline" onClick={() => openEditUser(u)}>
-                                                <Edit className="h-4 w-4 mr-1" /> Editar
-                                            </Button>
-                                            {u.is_active ? (
-                                                <Button size="sm" variant="outline" onClick={() => handleDeactivate(u.id)}>
-                                                    <Trash2 className="h-4 w-4 mr-1" /> Baja
-                                                </Button>
-                                            ) : (
-                                                <Button size="sm" variant="outline" onClick={() => handleActivate(u.id)}>
-                                                    Activar
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                            {(!loading && list.length === 0) && (
-                                <tr><td className="p-4 text-center text-gray-500" colSpan={6}>Sin resultados</td></tr>
-                            )}
-                            {loading && (
-                                <tr><td className="p-4 text-center text-gray-500" colSpan={6}>Cargando...</td></tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-                <Dialog open={openEdit} onOpenChange={setOpenEdit}>
-                    <DialogContent className="max-w-xl">
-                        <DialogHeader>
-                            <DialogTitle>Editar Usuario</DialogTitle>
-                            <DialogDescription>Actualiza los datos y roles</DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={submitEdit} className="space-y-3">
-                            <div>
-                                <Label>Nombre completo</Label>
-                                <Input value={editForm.full_name} onChange={e => setEditForm({ ...editForm, full_name: e.target.value })} required />
-                            </div>
-                            <div>
-                                <Label>Email</Label>
-                                <Input type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} required />
-                            </div>
-                            <div>
-                                <Label>Roles (coma separados)</Label>
-                                <Input
-                                    value={editForm.roles.join(",")}
-                                    onChange={(e) =>
-                                        setEditForm({
-                                            ...editForm,
-                                            roles: e.target.value.split(",").map(s => s.trim()).filter(Boolean),
-                                        })
-                                    }
-                                />
-                            </div>
-                            <div className="flex justify-end gap-2">
-                                <Button type="button" variant="outline" onClick={() => setOpenEdit(false)}>Cancelar</Button>
-                                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">Guardar</Button>
-                            </div>
-                        </form>
-                    </DialogContent>
-                </Dialog>
-            </CardContent>
-        </Card>
-    );
-};
+  const onConfirmAction = async () => { if (!confirm.action || !confirm.id) return; await confirm.action(confirm.id); setConfirm({ open: false, action: null, id: null }); };
 
-/* ------------------------ Roles ------------------------ */
-const RolesTab = () => {
-    const [roles, setRoles] = useState([]);
-    const [open, setOpen] = useState(false);
-    const [form, setForm] = useState({ name: "", description: "" });
+  const hasData = !loading && list.length > 0;
 
-    const fetch = async () => {
-        try {
-            const data = await ACLService.listRoles();
-            setRoles(data?.roles ?? data ?? []);
-        } catch {
-            toast.error("Error al cargar roles");
-        }
-    };
-    useEffect(() => { fetch(); }, []);
+  return (
+    <Card className="rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] border-t-4 border-t-blue-600 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-md">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> Usuarios</CardTitle>
+        <CardDescription>Gestiona altas, ediciones, bajas y roles de usuarios.</CardDescription>
+      </CardHeader>
 
-    const create = async (e) => {
-        e.preventDefault();
-        try {
-            await ACLService.createRole(form);
-            toast.success("Rol creado");
-            setOpen(false);
-            setForm({ name: "", description: "" });
-            fetch();
-        } catch {
-            toast.error("No se pudo crear el rol");
-        }
-    };
+      <CardContent className="space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center rounded-xl p-2 bg-gradient-to-r from-slate-100 to-white dark:from-neutral-800 dark:to-neutral-900 border border-white/50 dark:border-white/10">
+          <DebouncedSearch value={q} onChange={setQ} placeholder="Buscar por nombre, usuario o email" />
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={fetchUsers} className="gap-2 rounded-xl hover:shadow-md transition">
+              <RefreshCw className="h-4 w-4" /> Buscar
+            </Button>
+            <Dialog open={openCreate} onOpenChange={setOpenCreate}>
+              <DialogTrigger asChild>
+                <Button className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow-md transition gap-2">
+                  <Plus className="h-4 w-4" /> Nuevo Usuario
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-xl backdrop-blur-md bg-white/85 dark:bg-neutral-900/85 border border-white/50 dark:border-white/10 rounded-2xl">
+                <DialogHeader>
+                  <DialogTitle>Crear Usuario</DialogTitle>
+                  <DialogDescription>Complete los datos básicos</DialogDescription>
+                </DialogHeader>
 
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <Shield className="h-5 w-5" /> Roles
-                </CardTitle>
-                <CardDescription>Definición de roles del sistema</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="flex justify-between">
-                    <div />
-                    <Dialog open={open} onOpenChange={setOpen}>
-                        <DialogTrigger asChild>
-                            <Button className="bg-blue-600 hover:bg-blue-700">
-                                <Plus className="h-4 w-4 mr-2" /> Nuevo Rol
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-md">
-                            <DialogHeader>
-                                <DialogTitle>Crear Rol</DialogTitle>
-                            </DialogHeader>
-                            <form onSubmit={create} className="space-y-3">
-                                <div>
-                                    <Label>Nombre</Label>
-                                    <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-                                </div>
-                                <div>
-                                    <Label>Descripción</Label>
-                                    <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-                                </div>
-                                <div className="flex justify-end gap-2">
-                                    <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-                                    <Button type="submit" className="bg-blue-600 hover:bg-blue-700">Crear</Button>
-                                </div>
-                            </form>
-                        </DialogContent>
-                    </Dialog>
-                </div>
+                <motion.form {...scaleIn} onSubmit={handleCreate} className="space-y-4">
+                  <div className="grid gap-3">
+                    <div>
+                      <Label htmlFor="full_name">Nombre completo</Label>
+                      <Input id="full_name" className="rounded-xl" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} required />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <Label htmlFor="username">Usuario</Label>
+                        <Input id="username" className="rounded-xl" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} required />
+                      </div>
+                      <div>
+                        <Label htmlFor="email">Email</Label>
+                        <Input id="email" type="email" className="rounded-xl" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="password">Contraseña</Label>
+                      <Input id="password" type="password" className="rounded-xl" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required />
+                      <PasswordHints feedback={pwdFeedback} />
+                    </div>
+                    <div>
+                      <Label htmlFor="roles">Roles (separados por coma)</Label>
+                      <Input
+                        id="roles"
+                        className="rounded-xl"
+                        value={form.roles.join(",")}
+                        onChange={(e) => setForm({ ...form, roles: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
+                        placeholder="ADMIN,REGISTRAR,TEACHER,STUDENT"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Ejemplo: ADMIN,REGISTRAR,TEACHER,STUDENT</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={() => setOpenCreate(false)} className="rounded-xl">Cancelar</Button>
+                    <Button type="submit" className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 gap-2">
+                      <Check className="h-4 w-4" /> Crear
+                    </Button>
+                  </div>
+                </motion.form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
 
-                <div className="border rounded-lg overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="p-3 text-left">Rol</th>
-                                <th className="p-3 text-left">Descripción</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {roles.map(r => (
-                                <tr key={r.id || r.name} className="border-t">
-                                    <td className="p-3 font-medium">{r.name}</td>
-                                    <td className="p-3">{r.description}</td>
-                                </tr>
-                            ))}
-                            {roles.length === 0 && (
-                                <tr><td className="p-4 text-center text-gray-500" colSpan={2}>Sin roles</td></tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </CardContent>
-        </Card>
-    );
-};
-
-/* --------------------- Permisos --------------------- */
-const PermissionsTab = () => {
-    const [perms, setPerms] = useState([]);
-    const [roles, setRoles] = useState([]);
-    const [selectedRole, setSelectedRole] = useState(null);
-    const [selectedPerms, setSelectedPerms] = useState(new Set());
-
-    // 🚀 Carga única (renombrada a loadPerms para evitar choques)
-    const loadPerms = async () => {
-        try {
-            const [p, r] = await Promise.all([
-                ACLService.listPermissions(),
-                ACLService.listRoles(),
-            ]);
-
-            // p ya viene como array de strings por la normalización del service
-            const allPerms = p ?? [];
-            const allRoles = r?.roles ?? r ?? [];
-            setPerms(allPerms);
-            setRoles(allRoles);
-
-            if (allRoles.length) {
-                const first = allRoles[0];
-                setSelectedRole(first);
-                const roleCodes =
-                    first.permissions ?? first.permissions_detail?.map((x) => x.code) ?? [];
-                setSelectedPerms(new Set(roleCodes));
-            }
-        } catch {
-            toast.error("Error al cargar permisos/roles");
-        }
-    };
-
-    useEffect(() => { loadPerms(); }, []);
-
-    const toggle = (permCode) => {
-        const copy = new Set(selectedPerms);
-        copy.has(permCode) ? copy.delete(permCode) : copy.add(permCode);
-        setSelectedPerms(copy);
-    };
-
-    const save = async () => {
-        if (!selectedRole) return;
-        try {
-            await ACLService.setRolePermissions(
-                selectedRole.id || selectedRole.name,
-                Array.from(selectedPerms)
-            );
-            toast.success("Permisos actualizados");
-        } catch {
-            toast.error("No se pudo actualizar");
-        }
-    };
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Permisos por Rol</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                    {roles.map((r) => (
-                        <Button
-                            key={r.id || r.name}
-                            variant={
-                                selectedRole &&
-                                    (r.id === selectedRole.id || r.name === selectedRole.name)
-                                    ? "default"
-                                    : "outline"
-                            }
-                            onClick={() => {
-                                setSelectedRole(r);
-                                const roleCodes =
-                                    r.permissions ?? r.permissions_detail?.map((x) => x.code) ?? [];
-                                setSelectedPerms(new Set(roleCodes));
-                            }}
-                        >
-                            {r.name}
+        {/* Tabla */}
+        <div className="rounded-2xl border border-white/50 dark:border-white/10 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50/80 dark:bg-neutral-800/80 backdrop-blur sticky top-0 z-10">
+              <tr className="[&>th]:p-3 [&>th]:text-left">
+                <th>Nombre</th>
+                <th>Usuario</th>
+                <th>Email</th>
+                <th>Roles</th>
+                <th>Estado</th>
+                <th className="text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && Array.from({ length: 6 }).map((_, idx) => (
+                <tr key={`sk-${idx}`} className="border-t border-white/50 dark:border-white/10">
+                  <td className="p-3"><div className="h-4 w-40 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
+                  <td className="p-3"><div className="h-4 w-28 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
+                  <td className="p-3"><div className="h-4 w-56 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
+                  <td className="p-3"><div className="h-5 w-24 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
+                  <td className="p-3"><div className="h-5 w-16 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
+                  <td className="p-3 text-right"><div className="h-8 w-28 rounded bg-gray-200 dark:bg-white/10 animate-pulse ml-auto" /></td>
+                </tr>
+              ))}
+              {!loading && hasData && list.map(u => (
+                <motion.tr
+                  key={u.id}
+                  {...fade}
+                  className="border-t border-white/40 dark:border-white/10 even:bg-white/65 dark:even:bg-neutral-900/40 hover:bg-blue-50/70 dark:hover:bg-blue-900/20 transition-colors"
+                >
+                  <td className="p-3">{u.full_name}</td>
+                  <td className="p-3">{u.username}</td>
+                  <td className="p-3">{u.email}</td>
+                  <td className="p-3">
+                    <div className="flex flex-wrap gap-1">
+                      {(u.roles || []).map(r => (
+                        <span key={r} className="rounded-full px-2.5 py-1 text-xs border border-blue-200/60 dark:border-blue-800/50 bg-blue-50/60 dark:bg-blue-900/20">{r}</span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="p-3">
+                    {u.is_active
+                      ? <span className="inline-flex items-center rounded-full bg-emerald-600 text-white text-xs px-2.5 py-1">Activo</span>
+                      : <span className="inline-flex items-center rounded-full bg-gray-200 text-gray-700 text-xs px-2.5 py-1 dark:bg-neutral-700 dark:text-neutral-200">Inactivo</span>}
+                  </td>
+                  <td className="p-3">
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="outline" onClick={() => handleResetPass(u.id)} className="gap-1 rounded-xl hover:shadow-sm" title="Reiniciar contraseña">
+                        <KeyRound className="h-4 w-4" /> Reset
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => openEditUser(u)} className="gap-1 rounded-xl hover:shadow-sm" title="Editar usuario">
+                        <Edit className="h-4 w-4" /> Editar
+                      </Button>
+                      {u.is_active ? (
+                        <Button size="sm" variant="outline" onClick={() => setConfirm({ open: true, action: handleDeactivate, id: u.id })} className="gap-1 rounded-xl hover:shadow-sm" title="Dar de baja">
+                          <Trash2 className="h-4 w-4" /> Baja
                         </Button>
-                    ))}
-                </div>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => setConfirm({ open: true, action: handleActivate, id: u.id })} className="gap-1 rounded-xl hover:shadow-sm" title="Reactivar">
+                          Activar
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </motion.tr>
+              ))}
+              {!loading && !hasData && (
+                <tr><td className="p-6 text-center text-muted-foreground" colSpan={6}>No hay resultados con ese filtro.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-                <div className="grid md:grid-cols-3 gap-2">
-                    {perms.map((p) => {
-                        const code = typeof p === "string" ? p : p?.code;
-                        return (
-                            <label key={code} className="flex items-center gap-2 p-2 border rounded">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedPerms.has(code)}
-                                    onChange={() => toggle(code)}
-                                />
-                                <span className="text-sm">{code}</span>
-                            </label>
-                        );
-                    })}
-                    {perms.length === 0 && (
-                        <div className="text-sm text-gray-500">Sin permisos definidos</div>
-                    )}
+        {/* Editar */}
+        <Dialog open={openEdit} onOpenChange={setOpenEdit}>
+          <DialogContent className="max-w-xl backdrop-blur-md bg-white/85 dark:bg-neutral-900/85 border border-white/50 dark:border-white/10 rounded-2xl">
+            <DialogHeader>
+              <DialogTitle>Editar Usuario</DialogTitle>
+              <DialogDescription>Actualiza los datos y roles</DialogDescription>
+            </DialogHeader>
+            <motion.form {...scaleIn} onSubmit={submitEdit} className="space-y-4">
+              <div className="grid gap-3">
+                <div>
+                  <Label htmlFor="edit_fullname">Nombre completo</Label>
+                  <Input id="edit_fullname" className="rounded-xl" value={editForm.full_name} onChange={e => setEditForm({ ...editForm, full_name: e.target.value })} required />
                 </div>
+                <div>
+                  <Label htmlFor="edit_email">Email</Label>
+                  <Input id="edit_email" type="email" className="rounded-xl" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} required />
+                </div>
+                <div>
+                  <Label htmlFor="edit_roles">Roles (separados por coma)</Label>
+                  <Input id="edit_roles" className="rounded-xl" value={editForm.roles.join(",")} onChange={(e) => setEditForm({ ...editForm, roles: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })} />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setOpenEdit(false)} className="rounded-xl">Cancelar</Button>
+                <Button type="submit" className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">Guardar</Button>
+              </div>
+            </motion.form>
+          </DialogContent>
+        </Dialog>
 
-                <div className="flex justify-end">
-                    <Button onClick={save}>Guardar</Button>
+        <ConfirmDialog
+          open={confirm.open}
+          onOpenChange={(open) => setConfirm((s) => ({ ...s, open }))}
+          title="¿Estás seguro?"
+          description="Podrás revertirlo luego si es necesario."
+          confirmText="Sí, continuar"
+          confirmVariant="destructive"
+          onConfirm={onConfirmAction}
+        />
+      </CardContent>
+    </Card>
+  );
+};
+
+/* ---------- Password Hints ---------- */
+const PasswordHints = ({ feedback }) => {
+  if (!feedback) return null;
+  const { valid, errors } = feedback;
+  if (valid) return <p className="mt-1 text-xs text-emerald-600">La contraseña cumple la política.</p>;
+  return <ul className="mt-1 text-xs text-red-600 list-disc list-inside">{errors.map((er, i) => <li key={i}>{er}</li>)}</ul>;
+};
+
+/* ------------------------ Roles (violeta, scroll propio) ------------------------ */
+const RolesTab = () => {
+  const [roles, setRoles] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", description: "" });
+  const [loading, setLoading] = useState(true);
+
+  const fetch = async () => {
+    try { setLoading(true); const data = await ACLService.listRoles(); setRoles(data?.roles ?? data ?? []); }
+    catch { toast.error("Error al cargar roles"); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { fetch(); }, []);
+
+  const create = async (e) => {
+    e.preventDefault();
+    try { await ACLService.createRole(form); toast.success("Rol creado"); setOpen(false); setForm({ name: "", description: "" }); fetch(); }
+    catch { toast.error("No se pudo crear el rol"); }
+  };
+
+  return (
+    <Card className="rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] border-t-4 border-t-violet-600 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-md">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" /> Roles</CardTitle>
+        <CardDescription>Define perfiles del sistema y su propósito.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex justify-between">
+          <div />
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 shadow-sm hover:shadow-md transition gap-2">
+                <Plus className="h-4 w-4" /> Nuevo Rol
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md backdrop-blur-md bg-white/85 dark:bg-neutral-900/85 border border-white/50 dark:border-white/10 rounded-2xl">
+              <DialogHeader><DialogTitle>Crear Rol</DialogTitle></DialogHeader>
+              <motion.form {...scaleIn} onSubmit={create} className="space-y-4">
+                <div>
+                  <Label htmlFor="role_name">Nombre</Label>
+                  <Input id="role_name" className="rounded-xl" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
                 </div>
-            </CardContent>
-        </Card>
-    );
+                <div>
+                  <Label htmlFor="role_desc">Descripción</Label>
+                  <Input id="role_desc" className="rounded-xl" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setOpen(false)} className="rounded-xl">Cancelar</Button>
+                  <Button type="submit" className="rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700">Crear</Button>
+                </div>
+              </motion.form>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* ⚠️ Scroll propio SOLO para la lista de roles */}
+        <div className="rounded-2xl border border-white/50 dark:border-white/10 overflow-hidden">
+          <div className="max-h-[480px] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50/80 dark:bg-neutral-800/80 backdrop-blur sticky top-0 z-10">
+                <tr>
+                  <th className="p-3 text-left">Rol</th>
+                  <th className="p-3 text-left">Descripción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && Array.from({ length: 10 }).map((_, i) => (
+                  <tr key={`skl-${i}`} className="border-t border-white/50 dark:border-white/10">
+                    <td className="p-3"><div className="h-4 w-32 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
+                    <td className="p-3"><div className="h-4 w-64 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
+                  </tr>
+                ))}
+                {!loading && roles.map(r => (
+                  <tr key={r.id || r.name} className="border-t border-white/40 dark:border-white/10 even:bg-white/65 dark:even:bg-neutral-900/40 hover:bg-violet-50/60 dark:hover:bg-violet-900/20 transition">
+                    <td className="p-3 font-medium">{r.name}</td>
+                    <td className="p-3 text-muted-foreground">{r.description}</td>
+                  </tr>
+                ))}
+                {!loading && roles.length === 0 && (
+                  <tr><td className="p-6 text-center text-muted-foreground" colSpan={2}>Sin roles</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+/* --------------------- Permisos (verde) --------------------- */
+const PermissionsTab = () => {
+  const [perms, setPerms] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [selectedRole, setSelectedRole] = useState(null);
+  const [selectedPerms, setSelectedPerms] = useState(new Set());
+  const [loading, setLoading] = useState(true);
+
+  const loadPerms = async () => {
+    try {
+      setLoading(true);
+      const [p, r] = await Promise.all([ACLService.listPermissions(), ACLService.listRoles()]);
+      const allPerms = p ?? [];
+      const allRoles = r?.roles ?? r ?? [];
+      setPerms(allPerms); setRoles(allRoles);
+      if (allRoles.length) {
+        const first = allRoles[0];
+        setSelectedRole(first);
+        const roleCodes = first.permissions ?? first.permissions_detail?.map((x) => x.code) ?? [];
+        setSelectedPerms(new Set(roleCodes));
+      }
+    } catch { toast.error("Error al cargar permisos/roles"); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { loadPerms(); }, []);
+
+  const toggle = (permCode) => {
+    const copy = new Set(selectedPerms);
+    copy.has(permCode) ? copy.delete(permCode) : copy.add(permCode);
+    setSelectedPerms(copy);
+  };
+
+  const save = async () => {
+    if (!selectedRole) return;
+    try { await ACLService.setRolePermissions(selectedRole.id || selectedRole.name, Array.from(selectedPerms)); toast.success("Permisos actualizados"); }
+    catch { toast.error("No se pudo actualizar"); }
+  };
+
+  return (
+    <Card className="rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] border-t-4 border-t-emerald-600 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-md">
+      <CardHeader className="pb-3">
+        <CardTitle>Permisos por Rol</CardTitle>
+        <CardDescription>Asigna o revoca permisos de manera granular.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {roles.map((r) => {
+            const isActive = selectedRole && (r.id === selectedRole.id || r.name === selectedRole.name);
+            return (
+              <Button
+                key={r.id || r.name}
+                variant={isActive ? "default" : "outline"}
+                className={`rounded-full ${isActive ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700" : ""}`}
+                onClick={() => {
+                  setSelectedRole(r);
+                  const roleCodes = r.permissions ?? r.permissions_detail?.map((x) => x.code) ?? [];
+                  setSelectedPerms(new Set(roleCodes));
+                }}
+              >
+                {r.name}
+              </Button>
+            );
+          })}
+          {!loading && roles.length === 0 && <span className="text-sm text-muted-foreground">No hay roles disponibles.</span>}
+        </div>
+
+        <div className="rounded-2xl border border-white/50 dark:border-white/10 p-3">
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-[420px] overflow-auto">
+            {loading && Array.from({ length: 12 }).map((_, i) => (
+              <div key={`perm-sk-${i}`} className="h-9 rounded bg-gray-200 dark:bg-white/10 animate-pulse" />
+            ))}
+            {!loading && perms.map((p) => {
+              const code = typeof p === "string" ? p : p?.code;
+              const checked = selectedPerms.has(code);
+              return (
+                <label
+                  key={code}
+                  className={`flex items-center gap-2 p-2 rounded-xl border transition ${checked ? "bg-emerald-50/80 dark:bg-emerald-900/20 border-emerald-200/70" : "hover:bg-muted/40"}`}
+                >
+                  <input type="checkbox" className="accent-emerald-600" checked={checked} onChange={() => toggle(code)} aria-label={`Permiso ${code}`} />
+                  <span className="text-sm">{code}</span>
+                </label>
+              );
+            })}
+            {!loading && perms.length === 0 && <div className="text-sm text-muted-foreground">Sin permisos definidos</div>}
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <Button onClick={save} className="gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700">
+            <Check className="h-4 w-4" /> Guardar
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
 };
 
 export default AccessControlModule;
