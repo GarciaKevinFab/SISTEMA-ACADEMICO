@@ -5,6 +5,9 @@ from django.http import HttpResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from django.db import models  # si usarás annotate más adelante
+from .models import Career, AdmissionCall, Application
+from .serializers import CareerSerializer, AdmissionCallSerializer
 
 # =========================================================
 # Helpers (archivos en /media/tmp)
@@ -13,6 +16,55 @@ def _ensure_media_tmp():
     tmpdir = os.path.join(settings.MEDIA_ROOT, "tmp")
     os.makedirs(tmpdir, exist_ok=True)
     return tmpdir
+
+def _fe_to_call(payload):
+    """Mapea el JSON del front a tu modelo AdmissionCall."""
+    year = payload.get("academic_year")
+    period = payload.get("academic_period")
+    return {
+        "title": payload.get("name") or payload.get("title") or "Convocatoria",
+        "period": f"{year}-{period}" if year and period else payload.get("period") or "",
+        "published": payload.get("status", "OPEN") != "OPEN",
+        "vacants_total": sum(int((c.get("vacancies") or 0)) for c in (payload.get("careers") or [])),
+        "meta": {
+            "academic_year": year,
+            "academic_period": period,
+            "registration_start": payload.get("registration_start"),
+            "registration_end": payload.get("registration_end"),
+            "exam_date": payload.get("exam_date"),
+            "results_date": payload.get("results_date"),
+            "application_fee": payload.get("application_fee"),
+            "max_applications_per_career": payload.get("max_applications_per_career"),
+            "minimum_age": payload.get("minimum_age"),
+            "maximum_age": payload.get("maximum_age"),
+            "required_documents": payload.get("required_documents") or [],
+            "careers": payload.get("careers") or [],  # guardamos tal cual
+        },
+    }
+
+def _call_to_fe(obj):
+    """Proyecta tu modelo → shape que usa el front."""
+    m = obj.meta or {}
+    careers = m.get("careers") or []
+    return {
+        "id": obj.id,
+        "name": obj.title,
+        "description": m.get("description",""),
+        "academic_year": m.get("academic_year"),
+        "academic_period": m.get("academic_period"),
+        "registration_start": m.get("registration_start"),
+        "registration_end": m.get("registration_end"),
+        "exam_date": m.get("exam_date"),
+        "results_date": m.get("results_date"),
+        "application_fee": m.get("application_fee", 0),
+        "max_applications_per_career": m.get("max_applications_per_career", 1),
+        "minimum_age": m.get("minimum_age"),
+        "maximum_age": m.get("maximum_age"),
+        "required_documents": m.get("required_documents", []),
+        "careers": careers,
+        "total_applications": getattr(obj, "applications_count", 0),
+        "status": "OPEN" if not obj.published else "PUBLISHED",
+    }
 
 def _write_stub_pdf(abs_path: str, title="Documento", subtitle=""):
     try:
@@ -599,3 +651,63 @@ def payment_receipt_pdf(request, payment_id: int):
     resp = HttpResponse(data, content_type="application/pdf")
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def careers_collection(request):
+    if request.method == "GET":
+        qs = Career.objects.all().order_by("id")
+        return Response(CareerSerializer(qs, many=True).data)
+
+    s = CareerSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    obj = s.save()
+    return Response(CareerSerializer(obj).data, status=201)
+
+@api_view(["GET", "PUT", "DELETE"])
+@permission_classes([IsAuthenticated])
+def career_detail(request, career_id: int):
+    try:
+        row = Career.objects.get(pk=career_id)
+    except Career.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+
+    if request.method == "GET":
+        return Response(CareerSerializer(row).data)
+
+    if request.method == "PUT":
+        s = CareerSerializer(row, data=request.data, partial=True)
+        s.is_valid(raise_exception=True)
+        obj = s.save()
+        return Response(CareerSerializer(obj).data)
+
+    row.delete()
+    return Response(status=204)
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def career_toggle_active(request, career_id: int):
+    try:
+        row = Career.objects.get(pk=career_id)
+    except Career.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    row.is_active = not bool(row.is_active)
+    row.save(update_fields=["is_active", "updated_at"])
+    return Response(CareerSerializer(row).data)
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def calls_collection(request):
+    if request.method == "GET":
+        qs = AdmissionCall.objects.all().order_by("id")
+        # si quieres contar postulaciones:
+        qs = qs.annotate(applications_count=models.Count("applications"))
+        data = [_call_to_fe(o) for o in qs]
+        return Response(data)
+
+    payload = request.data or {}
+    mapped = _fe_to_call(payload)
+    s = AdmissionCallSerializer(data=mapped)
+    s.is_valid(raise_exception=True)
+    obj = s.save()
+    return Response(_call_to_fe(obj), status=201)

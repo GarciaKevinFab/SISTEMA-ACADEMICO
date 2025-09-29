@@ -1,278 +1,391 @@
-from django.shortcuts import render
-
-# Create your views here.
-from django.db.models import Q
+# backend/academic/views.py
+from datetime import datetime
+from io import BytesIO
 from django.http import FileResponse, HttpResponse
-from rest_framework import viewsets, mixins, status
-from rest_framework.decorators import action, api_view
+from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.views import APIView
+from rest_framework.decorators import action
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from .models import *
-from .serializers import *
+# ───────────────────────── Helpers ─────────────────────────
+def ok(data=None, **extra):
+    if data is None: data = {}
+    data.update(extra)
+    return Response(data)
 
-# ====== Catálogos ======
-class CareersViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
-    queryset = Career.objects.all().order_by('name')
-    serializer_class = CareerSerializer
+def parse_int(val, default=None):
+    try:
+        return int(val)
+    except Exception:
+        return default
 
-# ====== Planes (con nested actions) ======
-class PlansViewSet(viewsets.ModelViewSet):
-    queryset = Plan.objects.all().order_by('-year','name')
-    serializer_class = PlanSerializer
-
-    # GET /academic/plans/{id}/courses
-    @action(detail=True, methods=['get'], url_path='courses')
-    def list_courses(self, request, pk=None):
-        qs = PlanCourse.objects.filter(plan_id=pk).select_related('course')
-        return Response(PlanCourseSerializer(qs, many=True).data)
-
-    # POST /academic/plans/{id}/courses
-    @action(detail=True, methods=['post'], url_path='courses')
-    def add_course(self, request, pk=None):
-        data = request.data.copy()
-        data['plan'] = pk
-        ser = PlanCourseSerializer(data=data)
-        ser.is_valid(raise_exception=True)
-        ser.save()
-        return Response(ser.data, status=201)
-
-    # PUT /academic/plans/{id}/courses/{courseId}
-    @action(detail=True, methods=['put'], url_path=r'courses/(?P<course_id>\d+)')
-    def update_course(self, request, pk=None, course_id=None):
-        pc = PlanCourse.objects.get(plan_id=pk, id=course_id)
-        ser = PlanCourseSerializer(pc, data=request.data, partial=True)
-        ser.is_valid(raise_exception=True); ser.save()
-        return Response(ser.data)
-
-    # DELETE /academic/plans/{id}/courses/{courseId}
-    @action(detail=True, methods=['delete'], url_path=r'courses/(?P<course_id>\d+)')
-    def remove_course(self, request, pk=None, course_id=None):
-        PlanCourse.objects.filter(plan_id=pk, id=course_id).delete()
-        return Response(status=204)
-
-    # GET /academic/plans/{id}/courses/{courseId}/prereqs
-    @action(detail=True, methods=['get'], url_path=r'courses/(?P<course_id>\d+)/prereqs')
-    def list_prereqs(self, request, pk=None, course_id=None):
-        qs = CoursePrereq.objects.filter(plan_course_id=course_id)
-        return Response([p.prerequisite_id for p in qs])
-
-    # PUT /academic/plans/{id}/courses/{courseId}/prereqs
-    @action(detail=True, methods=['put'], url_path=r'courses/(?P<course_id>\d+)/prereqs')
-    def set_prereqs(self, request, pk=None, course_id=None):
-        ids = request.data.get('prerequisites', [])
-        CoursePrereq.objects.filter(plan_course_id=course_id).delete()
-        bulk = [CoursePrereq(plan_course_id=course_id, prerequisite_id=i) for i in ids]
-        CoursePrereq.objects.bulk_create(bulk, ignore_conflicts=True)
-        return Response({"ok": True, "count": len(ids)})
-
-# ====== Secciones ======
-class SectionsViewSet(viewsets.ModelViewSet):
-    queryset = Section.objects.all().order_by('id')
-    serializer_class = SectionSerializer
-
-    # GET /sections?something=...
-    def list(self, request, *args, **kwargs):
-        qs = self.queryset
-        plan = request.query_params.get('plan')
-        if plan: qs = qs.filter(plan_course__plan_id=plan)
-        return Response(self.serializer_class(qs, many=True).data)
-
-    # GET /sections/{id}/schedule
-    @action(detail=True, methods=['get'], url_path='schedule')
-    def list_schedule(self, request, pk=None):
-        qs = SectionScheduleSlot.objects.filter(section_id=pk)
-        return Response(ScheduleSlotSerializer(qs, many=True).data)
-
-    # PUT /sections/{id}/schedule  {slots:[{weekday,start,end},...]}
-    @action(detail=True, methods=['put'], url_path='schedule')
-    def set_schedule(self, request, pk=None):
-        slots = request.data.get('slots', [])
-        SectionScheduleSlot.objects.filter(section_id=pk).delete()
-        bulk = [SectionScheduleSlot(section_id=pk, **s) for s in slots]
-        SectionScheduleSlot.objects.bulk_create(bulk)
-        return Response({"ok": True, "count": len(slots)})
-
-    # POST /sections/schedule/conflicts
-    @action(detail=False, methods=['post'], url_path='schedule/conflicts')
-    def check_conflicts(self, request):
-        # TODO: implementar reglas reales; por ahora siempre "sin conflictos"
-        return Response({"conflicts": []})
-
-    # GET /sections/{id}/syllabus
-    @action(detail=True, methods=['get'], url_path='syllabus')
-    def get_syllabus(self, request, pk=None):
-        try:
-            return Response(SyllabusSerializer(Syllabus.objects.get(section_id=pk)).data)
-        except Syllabus.DoesNotExist:
-            return Response(None)
-
-    # POST /sections/{id}/syllabus  (file)
-    @action(detail=True, methods=['post'], url_path='syllabus', parser_classes=[MultiPartParser, FormParser])
-    def upload_syllabus(self, request, pk=None):
-        file = request.data.get('file')
-        if not file: return Response({"detail":"file requerido"}, status=400)
-        obj, _ = Syllabus.objects.update_or_create(section_id=pk, defaults={'file': file})
-        return Response(SyllabusSerializer(obj).data, status=201)
-
-    # DELETE /sections/{id}/syllabus
-    @action(detail=True, methods=['delete'], url_path='syllabus')
-    def delete_syllabus(self, request, pk=None):
-        Syllabus.objects.filter(section_id=pk).delete()
-        return Response(status=204)
-
-    # GET /sections/{id}/evaluation
-    @action(detail=True, methods=['get'], url_path='evaluation')
-    def get_eval(self, request, pk=None):
-        obj, _ = EvaluationConfig.objects.get_or_create(section_id=pk, defaults={'config': []})
-        return Response(EvaluationConfigSerializer(obj).data)
-
-    # PUT /sections/{id}/evaluation
-    @action(detail=True, methods=['put'], url_path='evaluation')
-    def set_eval(self, request, pk=None):
-        config = request.data
-        obj, _ = EvaluationConfig.objects.get_or_create(section_id=pk)
-        obj.config = config; obj.save(update_fields=['config'])
-        return Response(EvaluationConfigSerializer(obj).data)
-
-    # ===== Asistencia =====
-    # POST /sections/{id}/attendance/sessions
-    @action(detail=True, methods=['post'], url_path='attendance/sessions')
-    def create_session(self, request, pk=None):
-        s = AttendanceSession.objects.create(section_id=pk)
-        return Response(AttendanceSessionSerializer(s).data, status=201)
-
-    # GET /sections/{id}/attendance/sessions
-    @action(detail=True, methods=['get'], url_path='attendance/sessions')
-    def list_sessions(self, request, pk=None):
-        qs = AttendanceSession.objects.filter(section_id=pk).order_by('-id')
-        return Response(AttendanceSessionSerializer(qs, many=True).data)
-
-    # POST /sections/{id}/attendance/sessions/{sid}/close
-    @action(detail=True, methods=['post'], url_path=r'attendance/sessions/(?P<sid>\d+)/close')
-    def close_session(self, request, pk=None, sid=None):
-        AttendanceSession.objects.filter(section_id=pk, id=sid).update(closed=True)
-        return Response({"ok": True})
-
-    # PUT /sections/{id}/attendance/sessions/{sid}   {rows:[{student_id,status},...]}
-    @action(detail=True, methods=['put'], url_path=r'attendance/sessions/(?P<sid>\d+)')
-    def set_attendance(self, request, pk=None, sid=None):
-        rows = request.data.get('rows', [])
-        AttendanceRow.objects.filter(session_id=sid).delete()
-        bulk = [AttendanceRow(session_id=sid, **r) for r in rows]
-        AttendanceRow.objects.bulk_create(bulk)
-        return Response({"ok": True, "count": len(rows)})
-
-# ===== Rooms & Teachers (para combos) =====
-class ClassroomsViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
-    queryset = Classroom.objects.all().order_by('code')
-    serializer_class = ClassroomSerializer
-
-class TeachersViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
-    queryset = Teacher.objects.select_related('user').all().order_by('user__first_name')
-    serializer_class = TeacherSerializer
-
-# ===== Periodos =====
-class PeriodsViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
-    queryset = AcademicPeriod.objects.all().order_by('-start')
-    serializer_class = AcademicPeriodSerializer
-
-# ===== Enrollment suggestions =====
-@api_view(['POST'])
-def enrollment_suggestions(request):
-    # TODO: lógica real; devolver estructura que espera el front
-    payload = request.data
-    return Response({"suggestions": [], "input": payload})
-
-# ===== Kardex =====
-@api_view(['GET'])
-def kardex_of_student(request, student_id: int):
-    # TODO: devolver cursos/notas reales
-    return Response({"student_id": student_id, "records": []})
-
-@api_view(['POST'])
-def kardex_boleta_pdf(request, student_id: int):
-    # Devuelve PDF placeholder (content-type correcto)
-    return HttpResponse(b"%PDF-1.4\n%...\n", content_type="application/pdf")
-
-@api_view(['POST'])
-def kardex_constancia_pdf(request, student_id: int):
-    return HttpResponse(b"%PDF-1.4\n%...\n", content_type="application/pdf")
-
-# ===== Procesos académicos =====
-@api_view(['POST'])
-def process_withdraw(request):       return Response({"ok": True, "kind":"withdraw", "payload": request.data})
-@api_view(['POST'])
-def process_reservation(request):    return Response({"ok": True, "kind":"reservation", "payload": request.data})
-@api_view(['POST'])
-def process_validation(request):     return Response({"ok": True, "kind":"validation", "payload": request.data})
-@api_view(['POST'])
-def process_transfer(request):       return Response({"ok": True, "kind":"transfer", "payload": request.data})
-@api_view(['POST'])
-def process_rejoin(request):         return Response({"ok": True, "kind":"rejoin", "payload": request.data})
-
-# ===== Archivos de proceso =====
-class ProcessFilesViewSet(viewsets.ViewSet):
-    parser_classes = [MultiPartParser, FormParser]
-
-    # GET /processes/{id}/files
-    def list(self, request, process_pk=None):
-        qs = ProcessFile.objects.filter(process_id=process_pk)
-        return Response([{"id": f.id, "note": f.note, "file": f.file.url if f.file else None} for f in qs])
-
-    # POST /processes/{id}/files
-    def create(self, request, process_pk=None):
-        file = request.data.get('file'); note = request.data.get('note', '')
-        if not file: return Response({"detail":"file requerido"}, status=400)
-        obj = ProcessFile.objects.create(process_id=process_pk, file=file, note=note)
-        return Response({"id": obj.id, "note": obj.note, "file": obj.file.url}, status=201)
-
-    # DELETE /processes/{id}/files/{fileId}
-    def destroy(self, request, pk=None, process_pk=None):
-        ProcessFile.objects.filter(process_id=process_pk, id=pk).delete()
-        return Response(status=204)
-
-# ===== Bandeja de procesos =====
-class ProcessesInboxViewSet(viewsets.ViewSet):
-    # GET /processes/my
-    @action(detail=False, methods=['get'], url_path='my')
-    def my_requests(self, request):
-        # TODO: filtrar por request.user
-        return Response({"items": [], "total": 0})
-
-    # GET /processes
+# ─────────────────────── Catálogos base ───────────────────────
+class TeachersViewSet(viewsets.ReadOnlyModelViewSet):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = []  # stub
     def list(self, request):
-        return Response({"items": [], "total": 0})
+        return ok(teachers=[
+            {"id": 1, "full_name": "Ana Docente"},
+            {"id": 2, "full_name": "Luis Profesor"},
+        ])
 
-    # GET /processes/{id}
-    def retrieve(self, request, pk=None):
-        return Response({"id": pk, "status": "PENDIENTE"})
+class ClassroomsViewSet(viewsets.ReadOnlyModelViewSet):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = []
+    def list(self, request):
+        return ok(classrooms=[
+            {"id": 10, "name": "A-101", "capacity": 40},
+            {"id": 11, "name": "B-202", "capacity": 30},
+        ])
 
-    # POST /processes/{id}/status
-    @action(detail=True, methods=['post'], url_path='status')
-    def set_status(self, request, pk=None):
-        return Response({"id": pk, "status": request.data.get("status"), "note": request.data.get("note","")})
+# ───────────────────────── Plans / Mallas ─────────────────────────
+class PlansViewSet(viewsets.ViewSet):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
 
-    # POST /processes/{id}/notify
-    @action(detail=True, methods=['post'], url_path='notify')
-    def notify(self, request, pk=None):
-        return Response({"id": pk, "notified": True, "payload": request.data})
+    # almacenamiento en memoria para stub
+    PLANS = []
+    COURSES = {}        # {plan_id: [ {id, code, name, credits, weekly_hours, semester, type, prerequisites: [{id}]} ] }
+    _pid = 1
+    _cid = 1
 
-# ===== Reportes académicos =====
-@api_view(['GET'])
-def academic_reports_summary(request):
-    return Response({"summary": {}})
+    def list(self, request):
+        return ok(plans=self.PLANS)
 
-@api_view(['GET'])
-def academic_reports_performance(request):
-    # content-type Excel (placeholder vacío)
-    resp = HttpResponse(b'', content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    resp['Content-Disposition'] = 'attachment; filename="performance.xlsx"'
+    def create(self, request):
+        body = request.data or {}
+        plan = {
+            "id": self._pid,
+            "name": body.get("name"),
+            "career_id": body.get("career_id"),
+            "career_name": "Carrera X",  # opcional
+            "start_year": body.get("start_year", datetime.now().year),
+            "semesters": body.get("semesters", 10),
+            "description": body.get("description", ""),
+        }
+        self.PLANS.append(plan)
+        self.COURSES[plan["id"]] = []
+        self.__class__._pid += 1
+        return ok(plan=plan)
+
+    @action(detail=True, methods=["get"], url_path="courses")
+    def list_courses(self, request, pk=None):
+        pid = parse_int(pk)
+        return ok(courses=self.COURSES.get(pid, []))
+
+    @action(detail=True, methods=["post"], url_path="courses")
+    def add_course(self, request, pk=None):
+        pid = parse_int(pk)
+        c = request.data or {}
+        course = {
+            "id": self._cid,
+            "code": c.get("code"),
+            "name": c.get("name"),
+            "credits": c.get("credits", 3),
+            "weekly_hours": c.get("weekly_hours", 3),
+            "semester": c.get("semester", 1),
+            "type": c.get("type", "MANDATORY"),
+            "prerequisites": [],
+        }
+        self.COURSES.setdefault(pid, []).append(course)
+        self.__class__._cid += 1
+        return ok(course=course)
+
+    @action(detail=True, methods=["put"], url_path=r"courses/(?P<course_id>\d+)/prereqs")
+    def set_prereqs(self, request, pk=None, course_id=None):
+        pid = parse_int(pk)
+        cid = parse_int(course_id)
+        ids = request.data.get("prerequisites", [])
+        rows = self.COURSES.get(pid, [])
+        for c in rows:
+            if c["id"] == cid:
+                c["prerequisites"] = [{"id": i} for i in ids]
+                break
+        return ok(success=True)
+
+# ─────────────────────── Secciones / Horarios ───────────────────────
+class SectionsViewSet(viewsets.ViewSet):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    SECTIONS = []
+    _sid = 1
+
+    def list(self, request):
+        period = request.query_params.get("period")
+        data = self.SECTIONS
+        if period:
+            data = [s for s in data if s.get("period") == period]
+        return ok(sections=data)
+
+    def create(self, request):
+        body = request.data or {}
+        s = {
+            "id": self._sid,
+            "course_code": body.get("course_code"),
+            "course_name": body.get("course_name"),
+            "teacher_id": body.get("teacher_id"),
+            "teacher_name": "Docente #" + str(body.get("teacher_id") or ""),
+            "room_id": body.get("room_id"),
+            "room_name": "Aula #" + str(body.get("room_id") or ""),
+            "capacity": body.get("capacity", 30),
+            "period": body.get("period", "2025-I"),
+            "slots": body.get("slots", []),  # [{day,start,end}]
+        }
+        self.SECTIONS.append(s)
+        self.__class__._sid += 1
+        return ok(section=s)
+
+# Conflictos de horario/aforo
+class SectionsScheduleConflictsView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        payload = request.data or {}
+        slots = payload.get("slots", [])
+        conflicts = []
+        # stub: si hay dos slots con el mismo día & misma franja → conflicto
+        seen = set()
+        for sl in slots:
+            key = (sl.get("day"), sl.get("start"), sl.get("end"))
+            if key in seen:
+                conflicts.append({"message": f"Conflicto en {key[0]} {key[1]}-{key[2]}"})
+            seen.add(key)
+        return ok(conflicts=conflicts)
+
+# ─────────────────────── Attendance ───────────────────────
+_ATT_SESSIONS = {}  # {section_id: [ {id, date, closed:bool, rows:[{student_id,status}], ...} ]}
+_asid = 1
+
+class AttendanceSessionsView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, section_id):
+        return ok(sessions=_ATT_SESSIONS.get(section_id, []))
+
+    def post(self, request, section_id):
+        global _asid
+        sess = {"id": _asid, "date": datetime.now().isoformat(), "closed": False, "rows": []}
+        _ATT_SESSIONS.setdefault(section_id, []).append(sess)
+        _asid += 1
+        return ok(session=sess)
+
+class AttendanceSessionCloseView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, section_id, session_id):
+        rows = _ATT_SESSIONS.get(section_id, [])
+        for s in rows:
+            if s["id"] == int(session_id):
+                s["closed"] = True
+        return ok(success=True)
+
+class AttendanceSessionSetView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def put(self, request, section_id, session_id):
+        body = request.data or {}
+        rows = _ATT_SESSIONS.get(section_id, [])
+        for s in rows:
+            if s["id"] == int(session_id):
+                s["rows"] = body.get("rows", [])
+        return ok(success=True)
+
+# ─────────────────────── Syllabus & Evaluación ───────────────────────
+_SYLLABUS = {}     # {section_id: {"filename": "..."}}
+_EVALCFG = {}      # {section_id: [{code,label,weight}]}
+
+class SyllabusView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, section_id):
+        return ok(syllabus=_SYLLABUS.get(section_id))
+
+    def post(self, request, section_id):
+        # archivo en request.FILES['file']
+        f = request.FILES.get("file")
+        if not f:
+            return Response({"detail": "Archivo requerido"}, status=status.HTTP_400_BAD_REQUEST)
+        _SYLLABUS[section_id] = {"filename": f.name, "size": f.size}
+        return ok(syllabus=_SYLLABUS[section_id])
+
+    def delete(self, request, section_id):
+        _SYLLABUS.pop(section_id, None)
+        return ok(success=True)
+
+class EvaluationConfigView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, section_id):
+        return ok(config=_EVALCFG.get(section_id, []))
+
+    def put(self, request, section_id):
+        cfg = request.data if isinstance(request.data, list) else request.data.get("config", [])
+        _EVALCFG[section_id] = cfg
+        return ok(config=cfg)
+
+# ─────────────────────────── Kardex ───────────────────────────
+class KardexView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, student_id):
+        return ok(
+            student_id=student_id,
+            student_name="Estudiante Demo",
+            career_name="Ingeniería",
+            credits_earned=96,
+            gpa=14.2,
+        )
+
+def _dummy_pdf_response(filename="documento.pdf"):
+    buf = BytesIO(b"%PDF-1.4\n% Dummy PDF\n")
+    return FileResponse(buf, as_attachment=True, filename=filename)
+
+class KardexBoletaPDFView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, student_id):
+        # El FE puede usar polling: devuelve 200 y un ID; para el stub devolvemos el PDF directo
+        return _dummy_pdf_response(f"boleta-{student_id}.pdf")
+
+class KardexConstanciaPDFView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, student_id):
+        return _dummy_pdf_response(f"constancia-{student_id}.pdf")
+
+# ───────────────────── Procesos académicos ─────────────────────
+_PROCESSES = []    # [{id,type,status,student_id,period,reason,created_at}]
+_pid = 1
+_PFILES = {}       # {pid: [{id, name, size}]}
+_pfid = 1
+
+class ProcessesCreateView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, ptype=None):
+        global _pid
+        body = request.data or {}
+        row = {
+            "id": _pid,
+            "type": ptype,
+            "status": "PENDIENTE",
+            "student_id": body.get("student_id"),
+            "period": body.get("period"),
+            "reason": body.get("reason", ""),
+            "extra": body.get("extra", ""),
+            "created_at": datetime.now().isoformat(),
+        }
+        _PROCESSES.append(row)
+        _pid += 1
+        return ok(process=row)
+
+class ProcessesListView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        return ok(processes=_PROCESSES)
+
+class ProcessesMineView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        # stub: todos son "míos"
+        return ok(processes=_PROCESSES)
+
+class ProcessDetailView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request, pid):
+        row = next((p for p in _PROCESSES if p["id"] == int(pid)), None)
+        if not row:
+            return Response({"detail": "No encontrado"}, status=404)
+        return ok(process=row)
+
+class ProcessStatusView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    def post(self, request, pid):
+        body = request.data or {}
+        status_ = body.get("status")
+        note = body.get("note")
+        for p in _PROCESSES:
+            if p["id"] == int(pid):
+                p["status"] = status_
+                p["note"] = note
+        return ok(success=True)
+
+class ProcessNotifyView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    def post(self, request, pid):
+        # channels, subject, message
+        return ok(sent=True)
+
+class ProcessFilesListView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request, pid):
+        return ok(files=_PFILES.get(pid, []))
+
+class ProcessFileUploadView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    def post(self, request, pid):
+        global _pfid
+        f = request.FILES.get("file")
+        if not f:
+            return Response({"detail": "Archivo requerido"}, status=400)
+        row = {"id": _pfid, "name": f.name, "size": f.size}
+        _PFILES.setdefault(pid, []).append(row)
+        _pfid += 1
+        return ok(file=row)
+
+class ProcessFileDeleteView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    def delete(self, request, pid, file_id):
+        files = _PFILES.get(pid, [])
+        _PFILES[pid] = [x for x in files if x["id"] != int(file_id)]
+        return ok(success=True)
+
+# ───────────────────── Reportes académicos ─────────────────────
+class AcademicReportsSummaryView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        return ok(summary={
+            "students": 1200, "sections": 80, "teachers": 110,
+            "occupancy": 0.76, "avg_gpa": 13.4
+        })
+
+def _xlsx_response(filename="reporte.xlsx"):
+    content = b"Dummy,Excel\n1,2\n"
+    resp = HttpResponse(content, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
 
-@api_view(['GET'])
-def academic_reports_occupancy(request):
-    resp = HttpResponse(b'', content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    resp['Content-Disposition'] = 'attachment; filename="occupancy.xlsx"'
-    return resp
+class AcademicReportPerformanceXlsxView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        return _xlsx_response("performance.xlsx")
 
+class AcademicReportOccupancyXlsxView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        return _xlsx_response("occupancy.xlsx")

@@ -40,3 +40,13 @@ class AdmissionParamSerializer(serializers.ModelSerializer):
     class Meta:
         model = AdmissionParam
         fields = ['id','data']
+
+class CareerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Career
+        fields = "__all__"
+
+class AdmissionCallSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AdmissionCall
+        fields = "__all__"

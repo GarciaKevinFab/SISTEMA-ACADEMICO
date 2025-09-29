@@ -5,51 +5,83 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Label } from "../../components/ui/label";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
-import { toast } from "sonner";
 
 const ALL_DOCS = ["BIRTH_CERTIFICATE", "STUDY_CERTIFICATE", "PHOTO", "DNI_COPY", "CONADIS_COPY"];
 
-export default function AdmissionParamsModule() {
-    const [params, setParams] = useState({ min_age: 16, max_age: 35, required_documents: ["BIRTH_CERTIFICATE", "STUDY_CERTIFICATE", "PHOTO", "DNI_COPY"] });
+const DEFAULT_PARAMS = {
+    min_age: 16,
+    max_age: 35,
+    required_documents: ["BIRTH_CERTIFICATE", "STUDY_CERTIFICATE", "PHOTO", "DNI_COPY"],
+};
 
-    useEffect(() => { AdmissionParams.get().then(d => setParams(d || params)); /* eslint-disable-next-line */ }, []);
+const normalize = (raw) => {
+    const rd = Array.isArray(raw?.required_documents) ? raw.required_documents : DEFAULT_PARAMS.required_documents;
+    return {
+        ...DEFAULT_PARAMS,
+        ...raw,
+        required_documents: rd,
+    };
+};
+
+export default function AdmissionParamsModule() {
+    const [params, setParams] = useState(DEFAULT_PARAMS);
+
+    useEffect(() => {
+        AdmissionParams.get()
+            .then((d) => setParams((prev) => normalize({ ...prev, ...(d || {}) })))
+            .catch(() => setParams((prev) => normalize(prev)));
+        // eslint-disable-next-line
+    }, []);
 
     const toggleDoc = (d) => {
-        setParams(p => ({
-            ...p,
-            required_documents: p.required_documents.includes(d)
-                ? p.required_documents.filter(x => x !== d)
-                : [...p.required_documents, d]
-        }));
+        setParams((p) => {
+            const list = Array.isArray(p?.required_documents) ? p.required_documents : [];
+            return {
+                ...p,
+                required_documents: list.includes(d) ? list.filter((x) => x !== d) : [...list, d],
+            };
+        });
     };
 
     const save = async () => {
-        await AdmissionParams.save(params);
-        toast.success("Parámetros guardados");
+        await AdmissionParams.save(normalize(params));
+        // usa tu propio toast si quieres; lo quité para que el snippet quede autocontenible
+        // toast.success("Parámetros guardados");
     };
+
+    const reqDocs = Array.isArray(params?.required_documents) ? params.required_documents : [];
 
     return (
         <Card>
-            <CardHeader><CardTitle>Parámetros de Admisión</CardTitle></CardHeader>
+            <CardHeader>
+                <CardTitle>Parámetros de Admisión</CardTitle>
+            </CardHeader>
             <CardContent className="space-y-4">
                 <div className="grid md:grid-cols-2 gap-3">
                     <div>
                         <Label>Edad mínima</Label>
-                        <Input type="number" value={params.min_age} onChange={e => setParams({ ...params, min_age: parseInt(e.target.value) || 0 })} />
+                        <Input
+                            type="number"
+                            value={params?.min_age ?? DEFAULT_PARAMS.min_age}
+                            onChange={(e) => setParams((p) => ({ ...p, min_age: parseInt(e.target.value) || 0 }))}
+                        />
                     </div>
                     <div>
                         <Label>Edad máxima</Label>
-                        <Input type="number" value={params.max_age} onChange={e => setParams({ ...params, max_age: parseInt(e.target.value) || 0 })} />
+                        <Input
+                            type="number"
+                            value={params?.max_age ?? DEFAULT_PARAMS.max_age}
+                            onChange={(e) => setParams((p) => ({ ...p, max_age: parseInt(e.target.value) || 0 }))}
+                        />
                     </div>
                 </div>
 
                 <div>
                     <Label>Documentos requeridos (plantilla)</Label>
                     <div className="grid md:grid-cols-2 gap-2 mt-2">
-                        {ALL_DOCS.map(d => (
+                        {ALL_DOCS.map((d) => (
                             <label key={d} className="border rounded p-2 flex items-center gap-2 text-sm">
-                                <input type="checkbox" checked={params.required_documents.includes(d)} onChange={() => toggleDoc(d)} />
+                                <input type="checkbox" checked={reqDocs.includes(d)} onChange={() => toggleDoc(d)} />
                                 {d}
                             </label>
                         ))}

@@ -1,12 +1,28 @@
 from django.db import models
-
-# Create your models here.
-from django.db import models
 from django.contrib.auth import get_user_model
 User = get_user_model()
 
 class AdmissionParam(models.Model):
     data = models.JSONField(default=dict)  # parámetros globales de admisión (configs)
+
+class Career(models.Model):
+    DEGREE_CHOICES = [("BACHELOR","Bachiller"),
+                      ("TECHNICAL","Técnico"),
+                      ("PROFESSIONAL","Profesional")]
+    MODALITY_CHOICES = [("PRESENCIAL","Presencial"),
+                        ("VIRTUAL","Virtual"),
+                        ("SEMIPRESENCIAL","Semipresencial")]
+
+    name = models.CharField(max_length=150)
+    code = models.CharField(max_length=50, unique=True)
+    description = models.TextField(blank=True, default="")
+    duration_semesters = models.PositiveIntegerField(default=0)
+    vacancies = models.PositiveIntegerField(default=0)
+    degree_type = models.CharField(max_length=20, choices=DEGREE_CHOICES, default="BACHELOR")
+    modality = models.CharField(max_length=20, choices=MODALITY_CHOICES, default="PRESENCIAL")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
 class AdmissionCall(models.Model):
     title = models.CharField(max_length=160)
