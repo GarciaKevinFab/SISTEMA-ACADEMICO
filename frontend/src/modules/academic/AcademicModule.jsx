@@ -26,7 +26,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
-  Plus, Save, Calendar, Users, Clock, FileText, AlertTriangle, CheckCircle,
+  Plus, Save, Calendar, Users, Clock, FileText, CheckCircle,
   Search as SearchIcon, BookOpen, GraduationCap, BarChart3, Inbox, LayoutGrid, ClipboardList, LibraryBig,
 } from "lucide-react";
 
@@ -72,8 +72,8 @@ const REQS = {
   syllabus: [PERMS["academic.syllabus.upload"], PERMS["academic.syllabus.delete"], PERMS["academic.evaluation.config"]],
   kardex: [PERMS["academic.kardex.view"]],
   reports: [PERMS["academic.reports.view"]],
-  procInbox: [PERMS["academic.reports.view"]],   // Bandeja de procesos académicos (REGISTRAR/ADMIN_ACADEMIC)
-  processes: [PERMS["academic.reports.view"]],   // Registro de procesos (puede ajustarse si agregas perms específicos)
+  procInbox: [PERMS["academic.reports.view"]],
+  processes: [PERMS["academic.reports.view"]],
 };
 
 /* ------------- ACCIONES RÁPIDAS (respetan permisos) ------------- */
@@ -439,7 +439,7 @@ function PlansAndCurricula() {
 /* ------------- CARGA LECTIVA / HORARIOS ------------- */
 function LoadAndSchedules() {
   const { hasAny } = useAuth();
-  if (!hasAny(REQS.load)) return null;
+  const allowed = hasAny(REQS.load);
 
   const [teachers, setTeachers] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -487,6 +487,7 @@ function LoadAndSchedules() {
     } catch (e) { toast.error(e.message); }
   };
 
+  if (!allowed) return null;
   return (
     <div className="space-y-6">
       <Card className="border-0 shadow-none">
@@ -557,7 +558,7 @@ function LoadAndSchedules() {
           </div>
 
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={check} className="gap-2"><AlertTriangle className="h-4 w-4" />Verificar conflictos</Button>
+            <Button variant="outline" onClick={check} className="gap-2"><Plus className="h-4 w-4 rotate-45" />Verificar conflictos</Button>
             <Button onClick={createSection} className="gap-2"><Save className="h-4 w-4" />Crear sección</Button>
           </div>
 
@@ -607,7 +608,7 @@ function LoadAndSchedules() {
 /* ------------- KÁRDEX / CONSTANCIAS ------------- */
 function KardexAndCertificates() {
   const { hasAny } = useAuth();
-  if (!hasAny(REQS.kardex)) return null;
+  const allowed = hasAny(REQS.kardex);
 
   const [studentId, setStudentId] = useState("");
   const [period, setPeriod] = useState("2025-I");
@@ -637,6 +638,7 @@ function KardexAndCertificates() {
     } catch { toast.error("Error al generar constancia"); }
   };
 
+  if (!allowed) return null;
   return (
     <div className="space-y-4">
       <Card>
@@ -672,7 +674,7 @@ function KardexAndCertificates() {
 /* ------------- PROCESOS ------------- */
 function AcademicProcesses() {
   const { hasAny } = useAuth();
-  if (!hasAny(REQS.processes)) return null;
+  const allowed = hasAny(REQS.processes);
 
   const [type, setType] = useState("RETIRO");
   const [form, setForm] = useState({ student_id: "", period: "2025-I", reason: "", extra: "" });
@@ -692,6 +694,7 @@ function AcademicProcesses() {
     } catch (e) { toast.error(e.message); }
   };
 
+  if (!allowed) return null;
   return (
     <Card>
       <CardHeader>{sectionHeader({ title: "Procesos académicos", Icon: Clock })}</CardHeader>
@@ -747,9 +750,8 @@ export default function AcademicModule() {
   const { hasAny } = useAuth();
   const [tab, setTab] = useState("dashboard");
 
-  // tabs permitidos según permisos del usuario
   const tabs = useMemo(() => ([
-    { key: "dashboard", label: "Dashboard", need: [] }, // siempre
+    { key: "dashboard", label: "Dashboard", need: [] },
     { key: "plans", label: "Mallas", need: REQS.plans },
     { key: "load", label: "Carga & Horarios", need: REQS.load },
     { key: "enroll", label: "Matrícula", need: REQS.enroll },
@@ -761,7 +763,6 @@ export default function AcademicModule() {
     { key: "processes", label: "Procesos", need: REQS.processes },
   ].filter(t => t.need.length === 0 || hasAny(t.need))), [hasAny]);
 
-  // si el tab actual no está permitido, muévete al primero visible
   useEffect(() => {
     if (!tabs.find(t => t.key === tab)) setTab(tabs[0]?.key ?? "dashboard");
   }, [tabs, tab]);

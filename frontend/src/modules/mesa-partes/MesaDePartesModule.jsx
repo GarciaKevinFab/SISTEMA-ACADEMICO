@@ -891,8 +891,7 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                               channels: e.target.checked
                                 ? [...f.channels, ch]
                                 : f.channels.filter(x => x !== ch)
-                            }))
-                          }
+                            }))}
                           disabled={!canResolve}
                         />
                         {ch}
@@ -957,7 +956,6 @@ const ProceduresManagement = forwardRef((props, ref) => {
     urgency_level: "NORMAL",
   });
 
-  // Exponer acciones al padre
   useImperativeHandle(ref, () => ({
     openCreate: () => setIsCreateModalOpen(true),
     focusSearch: () => {
@@ -1006,8 +1004,6 @@ const ProceduresManagement = forwardRef((props, ref) => {
           : null,
       };
       delete payload.procedure_type_id;
-      // Si tu serializer de Procedure no define urgency_level:
-      // delete payload.urgency_level;
 
       await api.post("/procedures", payload);
 
@@ -1071,12 +1067,10 @@ const ProceduresManagement = forwardRef((props, ref) => {
     }
   };
 
-  // NUEVO: Generar QR desde acciones de la tabla
   const handleGenerateQR = async (proc) => {
     const id = proc?.id;
     if (!id) return toast.error("No se pudo obtener el ID del trámite");
     try {
-      // Si tu backend devuelve PNG, reemplaza el helper por una simple descarga de blob.
       const result = await generatePDFWithPolling(`/procedures/${id}/qr`, {}, { testId: "procedure-qr" });
       if (result?.success) {
         await downloadFile(result.downloadUrl, `qr-${proc.tracking_code || id}.pdf`);
@@ -1090,7 +1084,6 @@ const ProceduresManagement = forwardRef((props, ref) => {
     }
   };
 
-  // (opcional) Verificación vía web pública
   const handleVerifyQR = (proc) => {
     const url = `${BACKEND_URL}/verify?code=${encodeURIComponent(proc.tracking_code || proc.id)}`;
     window.open(url, "_blank", "noopener,noreferrer");
@@ -1319,16 +1312,10 @@ const ProceduresManagement = forwardRef((props, ref) => {
                         >
                           <QrCode className="h-4 w-4" />
                         </Button>
-                        {/* Si quieres mantener verificación pública, deja este botón adicional:
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleVerifyQR(procedure)}
-                          title="Verificar en portal"
-                        >
+                        {/* Verificar público opcional */}
+                        {/* <Button variant="ghost" size="sm" onClick={() => handleVerifyQR(procedure)} title="Verificar en portal">
                           <ExternalLink className="h-4 w-4" />
-                        </Button>
-                        */}
+                        </Button> */}
                       </div>
                     </td>
                   </tr>
@@ -1358,15 +1345,14 @@ const ProceduresManagement = forwardRef((props, ref) => {
 /* ===================== MAIN ===================== */
 const MesaDePartesModule = () => {
   const { user, hasAny } = useAuth();
-  if (!user) return <div>Acceso no autorizado</div>;
 
-  // Tabs disponibles según permisos
+  // Tabs disponibles según permisos (evalúa hasAny solo si hay user)
   const tabs = [
     { key: "dashboard", label: "Dashboard", need: [PERMS["mpv.processes.review"], PERMS["mpv.reports.view"]] },
     { key: "types", label: "Tipos de Trámite", need: [PERMS["mpv.processes.resolve"]] },
     { key: "procedures", label: "Trámites", need: [PERMS["mpv.processes.review"]] },
     { key: "reports", label: "Reportes", need: [PERMS["mpv.reports.view"]] },
-  ].filter(t => hasAny(t.need));
+  ].filter(t => (user ? hasAny(t.need) : false));
 
   const defaultTab = tabs[0]?.key || "dashboard";
   const [activeTab, setActiveTab] = useState(defaultTab);
@@ -1393,6 +1379,7 @@ const MesaDePartesModule = () => {
     }
   };
 
+  if (!user) return <div>Acceso no autorizado</div>;
   return (
     <div className="p-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
