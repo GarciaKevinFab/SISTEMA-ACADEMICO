@@ -2,5 +2,6 @@ from django.apps import AppConfig
 
 
 class MineduConfig(AppConfig):
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'minedu'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "minedu"
+    verbose_name = "Integración MINEDU"

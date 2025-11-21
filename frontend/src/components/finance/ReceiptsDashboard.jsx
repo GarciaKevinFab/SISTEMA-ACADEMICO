@@ -4,25 +4,31 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Textarea } from '../ui/textarea';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from '../ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { toast } from 'sonner';
+import { toast } from '../../utils/safeToast';
 import {
   Plus,
   Receipt,
   QrCode,
   Download,
-  Eye,
   CreditCard,
   X,
   CheckCircle,
-  Search,
-  Filter,
   FileText
 } from 'lucide-react';
+
+const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
 
 const ReceiptsDashboard = () => {
   const { user } = useContext(AuthContext);
@@ -61,31 +67,29 @@ const ReceiptsDashboard = () => {
     idempotency_key: ''
   });
 
-  const [selectedReceipt, setSelectedReceipt] = useState(null);
-
   const receiptConcepts = {
-    'ENROLLMENT': 'Matrícula',
-    'TUITION': 'Pensión',
-    'CERTIFICATE': 'Constancia/Certificado',
-    'PROCEDURE': 'Trámite',
-    'ACADEMIC_SERVICES': 'Servicios Académicos',
-    'OTHER': 'Otros'
+    ENROLLMENT: 'Matrícula',
+    TUITION: 'Pensión',
+    CERTIFICATE: 'Constancia/Certificado',
+    PROCEDURE: 'Trámite',
+    ACADEMIC_SERVICES: 'Servicios Académicos',
+    OTHER: 'Otros'
   };
 
   const paymentMethods = {
-    'CASH': 'Efectivo',
-    'BANK_DEPOSIT': 'Depósito Bancario',
-    'BANK_TRANSFER': 'Transferencia Bancaria',
-    'CHECK': 'Cheque',
-    'DEBIT_CARD': 'Tarjeta de Débito',
-    'CREDIT_CARD': 'Tarjeta de Crédito'
+    CASH: 'Efectivo',
+    BANK_DEPOSIT: 'Depósito Bancario',
+    BANK_TRANSFER: 'Transferencia Bancaria',
+    CHECK: 'Cheque',
+    DEBIT_CARD: 'Tarjeta de Débito',
+    CREDIT_CARD: 'Tarjeta de Crédito'
   };
 
   const receiptStatuses = {
-    'PENDING': { label: 'Pendiente', color: 'bg-yellow-500' },
-    'PAID': { label: 'Pagado', color: 'bg-green-500' },
-    'CANCELLED': { label: 'Anulado', color: 'bg-red-500' },
-    'REFUNDED': { label: 'Reembolsado', color: 'bg-blue-500' }
+    PENDING: { label: 'Pendiente', color: 'bg-yellow-500' },
+    PAID: { label: 'Pagado', color: 'bg-green-500' },
+    CANCELLED: { label: 'Anulado', color: 'bg-red-500' },
+    REFUNDED: { label: 'Reembolsado', color: 'bg-blue-500' }
   };
 
   useEffect(() => {
@@ -99,12 +103,11 @@ const ReceiptsDashboard = () => {
   const fetchReceipts = async () => {
     try {
       setLoading(true);
-      const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
 
       const response = await fetch(`${backendUrl}/api/finance/receipts`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -113,18 +116,14 @@ const ReceiptsDashboard = () => {
         const data = await response.json();
         setReceipts(data.receipts || []);
       } else {
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar las boletas",
-          variant: "destructive"
+        toast.error('Error', {
+          description: 'No se pudieron cargar las boletas'
         });
       }
     } catch (error) {
       console.error('Error fetching receipts:', error);
-      toast({
-        title: "Error",
-        description: "Error de conexión",
-        variant: "destructive"
+      toast.error('Error', {
+        description: 'Error de conexión'
       });
     } finally {
       setLoading(false);
@@ -135,28 +134,28 @@ const ReceiptsDashboard = () => {
     let filtered = receipts;
 
     if (filters.status) {
-      filtered = filtered.filter(r => r.status === filters.status);
+      filtered = filtered.filter((r) => r.status === filters.status);
     }
 
     if (filters.concept) {
-      filtered = filtered.filter(r => r.concept === filters.concept);
+      filtered = filtered.filter((r) => r.concept === filters.concept);
     }
 
     if (filters.customer_document) {
-      filtered = filtered.filter(r =>
+      filtered = filtered.filter((r) =>
         r.customer_document.includes(filters.customer_document)
       );
     }
 
     if (filters.date_from) {
-      filtered = filtered.filter(r =>
-        new Date(r.issued_at) >= new Date(filters.date_from)
+      filtered = filtered.filter(
+        (r) => new Date(r.issued_at) >= new Date(filters.date_from)
       );
     }
 
     if (filters.date_to) {
-      filtered = filtered.filter(r =>
-        new Date(r.issued_at) <= new Date(filters.date_to)
+      filtered = filtered.filter(
+        (r) => new Date(r.issued_at) <= new Date(filters.date_to)
       );
     }
 
@@ -165,13 +164,12 @@ const ReceiptsDashboard = () => {
 
   const createReceipt = async () => {
     try {
-      const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
 
       const response = await fetch(`${backendUrl}/api/finance/receipts`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -183,11 +181,10 @@ const ReceiptsDashboard = () => {
 
       if (response.ok) {
         const data = await response.json();
-        toast({
-          title: "Éxito",
+        toast.success('Éxito', {
           description: `Boleta ${data.receipt.receipt_number} creada correctamente`
         });
-        setOpenDialogs({ ...openDialogs, newReceipt: false });
+        setOpenDialogs((prev) => ({ ...prev, newReceipt: false }));
         setNewReceipt({
           concept: 'ENROLLMENT',
           description: '',
@@ -200,48 +197,46 @@ const ReceiptsDashboard = () => {
         fetchReceipts();
       } else {
         const error = await response.json();
-        toast({
-          title: "Error",
-          description: error.detail || "No se pudo crear la boleta",
-          variant: "destructive"
+        toast.error('Error', {
+          description: error.detail || 'No se pudo crear la boleta'
         });
       }
     } catch (error) {
       console.error('Error creating receipt:', error);
-      toast({
-        title: "Error",
-        description: "Error de conexión",
-        variant: "destructive"
+      toast.error('Error', {
+        description: 'Error de conexión'
       });
     }
   };
 
   const payReceipt = async () => {
     try {
-      const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
 
-      const idempotencyKey = paymentData.idempotency_key || `payment_${Date.now()}_${Math.random()}`;
+      const idempotencyKey =
+        paymentData.idempotency_key || `payment_${Date.now()}_${Math.random()}`;
 
-      const response = await fetch(`${backendUrl}/api/finance/receipts/${paymentData.receipt_id}/pay`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Idempotency-Key': idempotencyKey
-        },
-        body: JSON.stringify({
-          payment_method: paymentData.payment_method,
-          payment_reference: paymentData.payment_reference || null
-        })
-      });
+      const response = await fetch(
+        `${backendUrl}/api/finance/receipts/${paymentData.receipt_id}/pay`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKey
+          },
+          body: JSON.stringify({
+            payment_method: paymentData.payment_method,
+            payment_reference: paymentData.payment_reference || null
+          })
+        }
+      );
 
       if (response.ok) {
-        toast({
-          title: "Éxito",
-          description: "Pago registrado correctamente"
+        toast.success('Éxito', {
+          description: 'Pago registrado correctamente'
         });
-        setOpenDialogs({ ...openDialogs, payReceipt: false });
+        setOpenDialogs((prev) => ({ ...prev, payReceipt: false }));
         setPaymentData({
           receipt_id: '',
           payment_method: 'CASH',
@@ -251,70 +246,65 @@ const ReceiptsDashboard = () => {
         fetchReceipts();
       } else {
         const error = await response.json();
-        toast({
-          title: "Error",
-          description: error.detail || "No se pudo registrar el pago",
-          variant: "destructive"
+        toast.error('Error', {
+          description: error.detail || 'No se pudo registrar el pago'
         });
       }
     } catch (error) {
       console.error('Error processing payment:', error);
-      toast({
-        title: "Error",
-        description: "Error de conexión",
-        variant: "destructive"
+      toast.error('Error', {
+        description: 'Error de conexión'
       });
     }
   };
 
   const cancelReceipt = async (receiptId, reason) => {
     try {
-      const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
 
-      const response = await fetch(`${backendUrl}/api/finance/receipts/${receiptId}/cancel`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ reason })
-      });
+      const response = await fetch(
+        `${backendUrl}/api/finance/receipts/${receiptId}/cancel`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ reason })
+        }
+      );
 
       if (response.ok) {
-        toast({
-          title: "Éxito",
-          description: "Boleta anulada correctamente"
+        toast.success('Éxito', {
+          description: 'Boleta anulada correctamente'
         });
         fetchReceipts();
       } else {
         const error = await response.json();
-        toast({
-          title: "Error",
-          description: error.detail || "No se pudo anular la boleta",
-          variant: "destructive"
+        toast.error('Error', {
+          description: error.detail || 'No se pudo anular la boleta'
         });
       }
     } catch (error) {
       console.error('Error canceling receipt:', error);
-      toast({
-        title: "Error",
-        description: "Error de conexión",
-        variant: "destructive"
+      toast.error('Error', {
+        description: 'Error de conexión'
       });
     }
   };
 
   const downloadReceiptPDF = async (receiptId, receiptNumber) => {
     try {
-      const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
       const token = localStorage.getItem('token');
 
-      const response = await fetch(`${backendUrl}/api/finance/receipts/${receiptId}/pdf`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
+      const response = await fetch(
+        `${backendUrl}/api/finance/receipts/${receiptId}/pdf`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
         }
-      });
+      );
 
       if (response.ok) {
         const blob = await response.blob();
@@ -327,29 +317,23 @@ const ReceiptsDashboard = () => {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
 
-        toast({
-          title: "Éxito",
-          description: "PDF descargado correctamente"
+        toast.success('Éxito', {
+          description: 'PDF descargado correctamente'
         });
       } else {
-        toast({
-          title: "Error",
-          description: "No se pudo descargar el PDF",
-          variant: "destructive"
+        toast.error('Error', {
+          description: 'No se pudo descargar el PDF'
         });
       }
     } catch (error) {
       console.error('Error downloading PDF:', error);
-      toast({
-        title: "Error",
-        description: "Error de conexión",
-        variant: "destructive"
+      toast.error('Error', {
+        description: 'Error de conexión'
       });
     }
   };
 
   const openVerificationUrl = (receiptId) => {
-    const backendUrl = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
     const verificationUrl = `${backendUrl}/api/verificar/${receiptId}`;
     window.open(verificationUrl, '_blank');
   };
@@ -382,7 +366,7 @@ const ReceiptsDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">
-              {receipts.filter(r => r.status === 'PENDING').length}
+              {receipts.filter((r) => r.status === 'PENDING').length}
             </div>
           </CardContent>
         </Card>
@@ -393,7 +377,7 @@ const ReceiptsDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {receipts.filter(r => r.status === 'PAID').length}
+              {receipts.filter((r) => r.status === 'PAID').length}
             </div>
           </CardContent>
         </Card>
@@ -404,11 +388,16 @@ const ReceiptsDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              S/. {receipts
-                .filter(r => r.status === 'PAID' && new Date(r.issued_at).toDateString() === new Date().toDateString())
+              S/.{' '}
+              {receipts
+                .filter(
+                  (r) =>
+                    r.status === 'PAID' &&
+                    new Date(r.issued_at).toDateString() ===
+                    new Date().toDateString()
+                )
                 .reduce((sum, r) => sum + r.amount, 0)
-                .toFixed(2)
-              }
+                .toFixed(2)}
             </div>
           </CardContent>
         </Card>
@@ -419,12 +408,16 @@ const ReceiptsDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-purple-600">
-              S/. {receipts
-                .filter(r => r.status === 'PAID' &&
-                  new Date(r.issued_at).getMonth() === new Date().getMonth())
+              S/.{' '}
+              {receipts
+                .filter(
+                  (r) =>
+                    r.status === 'PAID' &&
+                    new Date(r.issued_at).getMonth() ===
+                    new Date().getMonth()
+                )
                 .reduce((sum, r) => sum + r.amount, 0)
-                .toFixed(2)
-              }
+                .toFixed(2)}
             </div>
           </CardContent>
         </Card>
@@ -441,11 +434,15 @@ const ReceiptsDashboard = () => {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>Gestión de Boletas Internas</CardTitle>
-                <CardDescription>Emisión y control de boletas no tributarias</CardDescription>
+                <CardDescription>
+                  Emisión y control de boletas no tributarias
+                </CardDescription>
               </div>
               <Dialog
                 open={openDialogs.newReceipt}
-                onOpenChange={(open) => setOpenDialogs({ ...openDialogs, newReceipt: open })}
+                onOpenChange={(open) =>
+                  setOpenDialogs((prev) => ({ ...prev, newReceipt: open }))
+                }
               >
                 <DialogTrigger asChild>
                   <Button>
@@ -465,15 +462,21 @@ const ReceiptsDashboard = () => {
                       <Label htmlFor="concept">Concepto *</Label>
                       <Select
                         value={newReceipt.concept}
-                        onValueChange={(value) => setNewReceipt({ ...newReceipt, concept: value })}
+                        onValueChange={(value) =>
+                          setNewReceipt((prev) => ({ ...prev, concept: value }))
+                        }
                       >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {Object.entries(receiptConcepts).map(([key, label]) => (
-                            <SelectItem key={key} value={key}>{label}</SelectItem>
-                          ))}
+                          {Object.entries(receiptConcepts).map(
+                            ([key, label]) => (
+                              <SelectItem key={key} value={key}>
+                                {label}
+                              </SelectItem>
+                            )
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -482,7 +485,12 @@ const ReceiptsDashboard = () => {
                       <Input
                         id="description"
                         value={newReceipt.description}
-                        onChange={(e) => setNewReceipt({ ...newReceipt, description: e.target.value })}
+                        onChange={(e) =>
+                          setNewReceipt((prev) => ({
+                            ...prev,
+                            description: e.target.value
+                          }))
+                        }
                         placeholder="Descripción del servicio"
                       />
                     </div>
@@ -493,16 +501,28 @@ const ReceiptsDashboard = () => {
                         type="number"
                         step="0.01"
                         value={newReceipt.amount}
-                        onChange={(e) => setNewReceipt({ ...newReceipt, amount: e.target.value })}
+                        onChange={(e) =>
+                          setNewReceipt((prev) => ({
+                            ...prev,
+                            amount: e.target.value
+                          }))
+                        }
                         placeholder="0.00"
                       />
                     </div>
                     <div>
-                      <Label htmlFor="customer_name">Nombre del Cliente *</Label>
+                      <Label htmlFor="customer_name">
+                        Nombre del Cliente *
+                      </Label>
                       <Input
                         id="customer_name"
                         value={newReceipt.customer_name}
-                        onChange={(e) => setNewReceipt({ ...newReceipt, customer_name: e.target.value })}
+                        onChange={(e) =>
+                          setNewReceipt((prev) => ({
+                            ...prev,
+                            customer_name: e.target.value
+                          }))
+                        }
                         placeholder="Nombre completo"
                       />
                     </div>
@@ -511,7 +531,12 @@ const ReceiptsDashboard = () => {
                       <Input
                         id="customer_document"
                         value={newReceipt.customer_document}
-                        onChange={(e) => setNewReceipt({ ...newReceipt, customer_document: e.target.value })}
+                        onChange={(e) =>
+                          setNewReceipt((prev) => ({
+                            ...prev,
+                            customer_document: e.target.value
+                          }))
+                        }
                         placeholder="DNI o RUC"
                         maxLength={11}
                       />
@@ -522,7 +547,12 @@ const ReceiptsDashboard = () => {
                         id="customer_email"
                         type="email"
                         value={newReceipt.customer_email}
-                        onChange={(e) => setNewReceipt({ ...newReceipt, customer_email: e.target.value })}
+                        onChange={(e) =>
+                          setNewReceipt((prev) => ({
+                            ...prev,
+                            customer_email: e.target.value
+                          }))
+                        }
                         placeholder="cliente@email.com"
                       />
                     </div>
@@ -532,14 +562,24 @@ const ReceiptsDashboard = () => {
                         id="due_date"
                         type="date"
                         value={newReceipt.due_date}
-                        onChange={(e) => setNewReceipt({ ...newReceipt, due_date: e.target.value })}
+                        onChange={(e) =>
+                          setNewReceipt((prev) => ({
+                            ...prev,
+                            due_date: e.target.value
+                          }))
+                        }
                       />
                     </div>
                   </div>
                   <DialogFooter>
                     <Button
                       onClick={createReceipt}
-                      disabled={!newReceipt.description || !newReceipt.amount || !newReceipt.customer_name || !newReceipt.customer_document}
+                      disabled={
+                        !newReceipt.description ||
+                        !newReceipt.amount ||
+                        !newReceipt.customer_name ||
+                        !newReceipt.customer_document
+                      }
                     >
                       Crear Boleta
                     </Button>
@@ -560,29 +600,53 @@ const ReceiptsDashboard = () => {
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   <div>
                     <Label>Estado</Label>
-                    <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
+                    <Select
+                      value={filters.status || 'ALL'}
+                      onValueChange={(value) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          status: value === 'ALL' ? '' : value
+                        }))
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Todos" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Todos</SelectItem>
-                        {Object.entries(receiptStatuses).map(([key, { label }]) => (
-                          <SelectItem key={key} value={key}>{label}</SelectItem>
-                        ))}
+                        <SelectItem value="ALL">Todos</SelectItem>
+                        {Object.entries(receiptStatuses).map(
+                          ([key, { label }]) => (
+                            <SelectItem key={key} value={key}>
+                              {label}
+                            </SelectItem>
+                          )
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
                     <Label>Concepto</Label>
-                    <Select value={filters.concept} onValueChange={(value) => setFilters({ ...filters, concept: value })}>
+                    <Select
+                      value={filters.concept || 'ALL'}
+                      onValueChange={(value) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          concept: value === 'ALL' ? '' : value
+                        }))
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Todos" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Todos</SelectItem>
-                        {Object.entries(receiptConcepts).map(([key, label]) => (
-                          <SelectItem key={key} value={key}>{label}</SelectItem>
-                        ))}
+                        <SelectItem value="ALL">Todos</SelectItem>
+                        {Object.entries(receiptConcepts).map(
+                          ([key, label]) => (
+                            <SelectItem key={key} value={key}>
+                              {label}
+                            </SelectItem>
+                          )
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -590,7 +654,12 @@ const ReceiptsDashboard = () => {
                     <Label>Documento</Label>
                     <Input
                       value={filters.customer_document}
-                      onChange={(e) => setFilters({ ...filters, customer_document: e.target.value })}
+                      onChange={(e) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          customer_document: e.target.value
+                        }))
+                      }
                       placeholder="DNI/RUC"
                     />
                   </div>
@@ -599,7 +668,12 @@ const ReceiptsDashboard = () => {
                     <Input
                       type="date"
                       value={filters.date_from}
-                      onChange={(e) => setFilters({ ...filters, date_from: e.target.value })}
+                      onChange={(e) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          date_from: e.target.value
+                        }))
+                      }
                     />
                   </div>
                   <div>
@@ -607,7 +681,12 @@ const ReceiptsDashboard = () => {
                     <Input
                       type="date"
                       value={filters.date_to}
-                      onChange={(e) => setFilters({ ...filters, date_to: e.target.value })}
+                      onChange={(e) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          date_to: e.target.value
+                        }))
+                      }
                     />
                   </div>
                 </div>
@@ -621,21 +700,34 @@ const ReceiptsDashboard = () => {
                   </div>
                 ) : (
                   filteredReceipts.map((receipt) => (
-                    <div key={receipt.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                    <div
+                      key={receipt.id}
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                    >
                       <div className="flex items-center space-x-4">
                         <Receipt className="h-8 w-8 text-blue-500" />
                         <div>
-                          <p className="font-semibold">{receipt.receipt_number}</p>
-                          <p className="text-sm text-gray-600">{receiptConcepts[receipt.concept]}</p>
-                          <p className="text-xs text-gray-500">{receipt.customer_name}</p>
+                          <p className="font-semibold">
+                            {receipt.receipt_number}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {receiptConcepts[receipt.concept]}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {receipt.customer_name}
+                          </p>
                         </div>
                       </div>
 
                       <div className="flex items-center space-x-4">
                         <div className="text-right">
-                          <p className="font-semibold">S/. {receipt.amount.toFixed(2)}</p>
+                          <p className="font-semibold">
+                            S/. {receipt.amount.toFixed(2)}
+                          </p>
                           <p className="text-xs text-gray-500">
-                            {new Date(receipt.issued_at).toLocaleDateString()}
+                            {new Date(
+                              receipt.issued_at
+                            ).toLocaleDateString()}
                           </p>
                         </div>
 
@@ -651,8 +743,14 @@ const ReceiptsDashboard = () => {
                               size="sm"
                               variant="outline"
                               onClick={() => {
-                                setPaymentData({ ...paymentData, receipt_id: receipt.id });
-                                setOpenDialogs({ ...openDialogs, payReceipt: true });
+                                setPaymentData((prev) => ({
+                                  ...prev,
+                                  receipt_id: receipt.id
+                                }));
+                                setOpenDialogs((prev) => ({
+                                  ...prev,
+                                  payReceipt: true
+                                }));
                               }}
                             >
                               <CreditCard className="h-4 w-4" />
@@ -663,7 +761,12 @@ const ReceiptsDashboard = () => {
                             data-testid="receipt-view"
                             size="sm"
                             variant="outline"
-                            onClick={() => downloadReceiptPDF(receipt.id, receipt.receipt_number)}
+                            onClick={() =>
+                              downloadReceiptPDF(
+                                receipt.id,
+                                receipt.receipt_number
+                              )
+                            }
                           >
                             <Download className="h-4 w-4" />
                           </Button>
@@ -677,20 +780,22 @@ const ReceiptsDashboard = () => {
                             <QrCode className="h-4 w-4" />
                           </Button>
 
-                          {user?.role === 'FINANCE_ADMIN' && receipt.status !== 'CANCELLED' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                const reason = prompt('Motivo de anulación:');
-                                if (reason) {
-                                  cancelReceipt(receipt.id, reason);
-                                }
-                              }}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          )}
+                          {user?.role === 'FINANCE_ADMIN' &&
+                            receipt.status !== 'CANCELLED' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  const reason =
+                                    prompt('Motivo de anulación:');
+                                  if (reason) {
+                                    cancelReceipt(receipt.id, reason);
+                                  }
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            )}
                         </div>
                       </div>
                     </div>
@@ -762,28 +867,35 @@ const ReceiptsDashboard = () => {
       {/* Payment Dialog */}
       <Dialog
         open={openDialogs.payReceipt}
-        onOpenChange={(open) => setOpenDialogs({ ...openDialogs, payReceipt: open })}
+        onOpenChange={(open) =>
+          setOpenDialogs((prev) => ({ ...prev, payReceipt: open }))
+        }
       >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Registrar Pago</DialogTitle>
-            <DialogDescription>
-              Confirme el pago de la boleta
-            </DialogDescription>
+            <DialogDescription>Confirme el pago de la boleta</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
               <Label htmlFor="payment_method">Método de Pago *</Label>
               <Select
                 value={paymentData.payment_method}
-                onValueChange={(value) => setPaymentData({ ...paymentData, payment_method: value })}
+                onValueChange={(value) =>
+                  setPaymentData((prev) => ({
+                    ...prev,
+                    payment_method: value
+                  }))
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {Object.entries(paymentMethods).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                    <SelectItem key={key} value={key}>
+                      {label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -793,7 +905,12 @@ const ReceiptsDashboard = () => {
               <Input
                 id="payment_reference"
                 value={paymentData.payment_reference}
-                onChange={(e) => setPaymentData({ ...paymentData, payment_reference: e.target.value })}
+                onChange={(e) =>
+                  setPaymentData((prev) => ({
+                    ...prev,
+                    payment_reference: e.target.value
+                  }))
+                }
                 placeholder="Número de operación, voucher, etc."
               />
             </div>

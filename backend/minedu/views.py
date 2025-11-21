@@ -1,188 +1,395 @@
-from django.shortcuts import render
-
-# Create your views here.
-from datetime import datetime
-from django.utils.timezone import now
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from rest_framework.response import Response
+from django.utils import timezone
+from django.db.models import Count, Q
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.generics import ListAPIView, ListCreateAPIView, UpdateAPIView
 
-from .models import *
-from .serializers import *
+from .models import (
+    MineduExportBatch,
+    MineduCatalogMapping,
+    MineduJob,
+    MineduJobRun,
+    MineduJobLog,
+)
+from .serializers import (
+    MineduExportBatchSerializer,
+    MineduJobSerializer,
+    MineduJobRunSerializer,
+    MineduJobLogSerializer,
+)
 
-# ---------- Stats / Dashboard ----------
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def dashboard_stats(request):
-    data = {
-        "exports_total": MineduExport.objects.count(),
-        "exports_queued": MineduExport.objects.filter(status='QUEUED').count(),
-        "exports_error": MineduExport.objects.filter(status='ERROR').count(),
-        "jobs": IntegrationJob.objects.count(),
-        "last_export": MineduExport.objects.order_by('-updated_at').values('type','status','updated_at').first(),
-    }
-    return Response(data)
 
-# ---------- Exports ----------
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def export_enqueue_enrollments(request):
-    obj = MineduExport.objects.create(type='ENROLLMENTS', payload=request.data or {}, status='QUEUED')
-    return Response(MineduExportSerializer(obj).data, status=201)
+# =================================
+# Dashboard / Estadísticas MINEDU
+# =================================
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def export_enqueue_grades(request):
-    obj = MineduExport.objects.create(type='GRADES', payload=request.data or {}, status='QUEUED')
-    return Response(MineduExportSerializer(obj).data, status=201)
+class DashboardStatsView(APIView):
+    permission_classes = [IsAuthenticated]
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def exports_list(request):
-    qs = MineduExport.objects.all().order_by('-created_at')[:200]
-    return Response(MineduExportSerializer(qs, many=True).data)
+    def get(self, request):
+        qs = MineduExportBatch.objects.all()
+        total = qs.count()
+        completed = qs.filter(status="COMPLETED").count()
+        failed = qs.filter(status="FAILED").count()
+        pending = qs.filter(status__in=["PENDING", "PROCESSING", "RETRYING"]).count()
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def export_retry(request, exportId: int):
-    try:
-        obj = MineduExport.objects.get(pk=exportId)
-    except MineduExport.DoesNotExist:
-        return Response({"detail":"Not found"}, status=404)
-    obj.status = 'RETRY'; obj.tries = obj.tries + 1; obj.save(update_fields=['status','tries','updated_at'])
-    return Response({"ok": True, "id": obj.id, "status": obj.status, "tries": obj.tries})
+        # desglose por tipo
+        counts_by_type = qs.values("data_type").annotate(c=Count("id"))
+        breakdown = {
+            "enrollment_exports": 0,
+            "grades_exports": 0,
+            "students_exports": 0,
+        }
+        for row in counts_by_type:
+            if row["data_type"] == "ENROLLMENT":
+                breakdown["enrollment_exports"] = row["c"]
+            elif row["data_type"] == "GRADES":
+                breakdown["grades_exports"] = row["c"]
+            elif row["data_type"] == "STUDENTS":
+                breakdown["students_exports"] = row["c"]
 
-# ---------- Validation ----------
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def validation_integrity(request):
-    # TODO: aquí corres chequeos reales de integridad (alumnos sin plan, notas sin curso, etc.)
-    issues = []
-    return Response({"ok": True, "issues": issues})
+        success_rate = 0.0
+        if total > 0:
+            success_rate = (completed / total) * 100.0
 
-# ---------- Catalogs ----------
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def catalogs_remote(request):
-    # Simula respuesta del MINEDU según 'type'
-    t = request.query_params.get('type') or ''
-    sample = {
-        "CAREER": [{"code":"EDU-01","name":"Educación Inicial"}, {"code":"EDU-02","name":"Educación Primaria"}],
-        "COURSE": [{"code":"MAT101","name":"Matemática I"}, {"code":"COM101","name":"Comunicación I"}],
-        "CAMPUS": [{"code":"MAIN","name":"Sede Central"}],
-    }
-    return Response(sample.get(t.upper(), []))
+        data = {
+            "stats": {
+                "pending_exports": pending,
+                "completed_exports": completed,
+                "failed_exports": failed,
+                "success_rate": success_rate,
+            },
+            "data_breakdown": breakdown,
+        }
+        return Response(data)
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def catalogs_local(request):
-    t = (request.query_params.get('type') or '').upper()
-    params = dict(request.query_params)
-    # MVP: devolvemos los mappings como "catálogo local" cuando existan
-    items = list(Mapping.objects.filter(type=t).values('local_code','remote_code','label'))
-    return Response(items)
 
-# ---------- Mapping ----------
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def mappings_list(request):
-    t = request.query_params.get('type')
-    qs = Mapping.objects.all()
-    if t: qs = qs.filter(type=t)
-    return Response(MappingSerializer(qs, many=True).data)
+# =============================
+# Exportaciones (enqueue)
+# =============================
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def mappings_bulk_save(request):
-    t = request.data.get('type')
-    mappings = request.data.get('mappings', [])
-    if not t or not isinstance(mappings, list):
-        return Response({"detail":"type y mappings[] requeridos"}, status=400)
-    # reescribe todo por tipo (MVP)
-    Mapping.objects.filter(type=t).delete()
-    objs = [Mapping(type=t,
-                    local_code=m.get('local_code',''),
-                    remote_code=m.get('remote_code',''),
-                    label=m.get('label','')) for m in mappings]
-    Mapping.objects.bulk_create(objs)
-    return Response({"ok": True, "count": len(objs)})
+class EnqueueEnrollmentsExportView(APIView):
+    permission_classes = [IsAuthenticated]
 
-# ---------- Jobs ----------
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def jobs_list(request):
-    qs = IntegrationJob.objects.all().order_by('-id')
-    return Response(IntegrationJobSerializer(qs, many=True).data)
+    def post(self, request):
+        academic_year = int(request.data.get("academic_year", 0))
+        academic_period = request.data.get("academic_period", "")
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def jobs_create(request):
-    ser = IntegrationJobSerializer(data=request.data)
-    ser.is_valid(raise_exception=True)
-    job = ser.save()
-    return Response(IntegrationJobSerializer(job).data, status=201)
+        batch = MineduExportBatch.objects.create(
+            data_type="ENROLLMENT",
+            academic_year=academic_year,
+            academic_period=academic_period,
+            status="PENDING",
+            total_records=0,
+            record_data={
+                "academic_year": academic_year,
+                "academic_period": academic_period,
+            },
+        )
+        ser = MineduExportBatchSerializer(batch)
+        return Response(ser.data, status=status.HTTP_201_CREATED)
 
-@api_view(['PATCH'])
-@permission_classes([IsAuthenticated])
-def jobs_update(request, id: int):
-    try:
-        job = IntegrationJob.objects.get(pk=id)
-    except IntegrationJob.DoesNotExist:
-        return Response({"detail":"Not found"}, status=404)
-    ser = IntegrationJobSerializer(job, data=request.data, partial=True)
-    ser.is_valid(raise_exception=True)
-    ser.save()
-    return Response(IntegrationJobSerializer(job).data)
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def jobs_run_now(request, id: int):
-    try:
-        job = IntegrationJob.objects.get(pk=id)
-    except IntegrationJob.DoesNotExist:
-        return Response({"detail":"Not found"}, status=404)
-    run = JobRun.objects.create(job=job, status='RUNNING', meta={'manual': True})
-    RunLog.objects.create(run=run, level='INFO', message='Run disparado manualmente', meta={})
-    # Simular finalización inmediata
-    run.status = 'SUCCESS'; run.ended_at = now(); run.save(update_fields=['status','ended_at'])
-    RunLog.objects.create(run=run, level='INFO', message='Run finalizado OK', meta={})
-    return Response({"ok": True, "run_id": run.id})
+class EnqueueGradesExportView(APIView):
+    permission_classes = [IsAuthenticated]
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def jobs_pause(request, id: int):
-    IntegrationJob.objects.filter(pk=id).update(enabled=False)
-    return Response({"ok": True})
+    def post(self, request):
+        academic_year = int(request.data.get("academic_year", 0))
+        academic_period = request.data.get("academic_period", "")
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def jobs_resume(request, id: int):
-    IntegrationJob.objects.filter(pk=id).update(enabled=True)
-    return Response({"ok": True})
+        batch = MineduExportBatch.objects.create(
+            data_type="GRADES",
+            academic_year=academic_year,
+            academic_period=academic_period,
+            status="PENDING",
+            total_records=0,
+            record_data={
+                "academic_year": academic_year,
+                "academic_period": academic_period,
+            },
+        )
+        ser = MineduExportBatchSerializer(batch)
+        return Response(ser.data, status=status.HTTP_201_CREATED)
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def jobs_runs(request, id: int):
-    qs = JobRun.objects.filter(job_id=id).order_by('-started_at')[:200]
-    return Response(JobRunSerializer(qs, many=True).data)
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def jobs_retry_run(request, runId: int):
-    try:
-        run = JobRun.objects.get(pk=runId)
-    except JobRun.DoesNotExist:
-        return Response({"detail":"Not found"}, status=404)
-    new_run = JobRun.objects.create(job=run.job, status='RUNNING', meta={'retry_of': run.id})
-    RunLog.objects.create(run=new_run, level='INFO', message=f"Retry de run {run.id}", meta={})
-    new_run.status = 'SUCCESS'; new_run.ended_at = now(); new_run.save(update_fields=['status','ended_at'])
-    RunLog.objects.create(run=new_run, level='INFO', message="Retry finalizado OK", meta={})
-    return Response({"ok": True, "run_id": new_run.id})
+class ExportBatchListView(ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = MineduExportBatchSerializer
 
-# ---------- Logs ----------
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def logs_for_run(request, runId: int):
-    qs = RunLog.objects.filter(run_id=runId).order_by('timestamp')
-    return Response(RunLogSerializer(qs, many=True).data)
+    def get_queryset(self):
+        return MineduExportBatch.objects.all().order_by("-created_at")
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        # frontend usa data?.exports ?? data ?? []
+        return Response({"exports": response.data})
+
+
+class ExportBatchRetryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            batch = MineduExportBatch.objects.get(pk=pk)
+        except MineduExportBatch.DoesNotExist:
+            return Response({"detail": "Export batch not found"}, status=404)
+
+        # Simple: lo marcamos como RETRYING
+        batch.status = "RETRYING"
+        batch.save(update_fields=["status", "updated_at"])
+        return Response({"detail": "Retry enqueued"})
+
+
+# =============================
+# Validación de integridad
+# =============================
+
+class DataIntegrityValidationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """
+        Stub simple. Ajusta esto para validar realmente tus datos.
+        """
+        total_exports = MineduExportBatch.objects.count()
+        failed_exports = MineduExportBatch.objects.filter(status="FAILED").count()
+
+        valid = failed_exports == 0
+        data = {
+            "valid": valid,
+            "stats": {
+                "total_exports": total_exports,
+                "failed_exports": failed_exports,
+            },
+            "errors": [] if valid else ["Existen exportaciones fallidas"],
+            "warnings": [],
+        }
+        return Response(data)
+
+
+# =============================
+# Catálogos (local & remoto)
+# =============================
+
+class RemoteCatalogView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        catalog_type = request.query_params.get("type")
+        items = []
+
+        # OJO: aquí puedes conectar a un servicio real de MINEDU.
+        # Por ahora devolvemos unos ejemplos para que el front funcione.
+        if catalog_type == "INSTITUTION":
+            items = [
+                {"code": "IE12345", "label": "IE 12345 - Nuestra Señora de Guadalupe"},
+                {"code": "IE67890", "label": "IE 67890 - San Juan"},
+            ]
+        elif catalog_type == "CAREER":
+            items = [
+                {"code": "MINEDU-SIS", "label": "Ing. de Sistemas"},
+                {"code": "MINEDU-ADM", "label": "Administración"},
+            ]
+        elif catalog_type == "STUDY_PLAN":
+            items = [
+                {"code": "PLAN-2024-A", "label": "Plan 2024 A"},
+                {"code": "PLAN-2023-B", "label": "Plan 2023 B"},
+            ]
+        elif catalog_type == "STUDENT":
+            items = [
+                {"code": "STU-0001", "label": "Alumno 0001"},
+                {"code": "STU-0002", "label": "Alumno 0002"},
+            ]
+
+        return Response({"items": items})
+
+
+class LocalCatalogView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        catalog_type = request.query_params.get("type")
+        # TODO: aquí deberías usar tus modelos reales (Career, Student, etc.)
+        # De momento devolvemos ejemplos para que no truene el front.
+
+        items = []
+        if catalog_type == "CAREER":
+            items = [
+                {"id": 1, "name": "Ing. de Sistemas", "code": "SIS"},
+                {"id": 2, "name": "Administración", "code": "ADM"},
+            ]
+        elif catalog_type == "INSTITUTION":
+            items = [
+                {"id": 1, "name": "IE Local 1", "code": "LOC-IE1"},
+            ]
+        elif catalog_type == "STUDY_PLAN":
+            items = [
+                {"id": 10, "name": "Plan 2024 Sistemas", "code": "PL-SIS-2024"},
+            ]
+        elif catalog_type == "STUDENT":
+            items = [
+                {"id": 100, "name": "Juan Pérez", "ident": "71234567"},
+                {"id": 101, "name": "María López", "ident": "71234568"},
+            ]
+
+        return Response({"items": items})
+
+
+# =============================
+# Mapeos
+# =============================
+
+class CatalogMappingsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        catalog_type = request.query_params.get("type")
+        qs = MineduCatalogMapping.objects.all()
+        if catalog_type:
+            qs = qs.filter(type=catalog_type)
+
+        mappings = [
+            {"local_id": m.local_id, "minedu_code": m.minedu_code or ""}
+            for m in qs
+        ]
+        return Response({"mappings": mappings})
+
+
+class CatalogMappingsBulkSaveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        catalog_type = request.data.get("type")
+        mappings = request.data.get("mappings", [])
+
+        if not catalog_type:
+            return Response({"detail": "type requerido"}, status=400)
+
+        for item in mappings:
+            local_id = int(item.get("local_id"))
+            code = item.get("minedu_code") or None
+            obj, _ = MineduCatalogMapping.objects.get_or_create(
+                type=catalog_type,
+                local_id=local_id,
+                defaults={"minedu_code": code},
+            )
+            if not _:
+                obj.minedu_code = code
+                obj.save(update_fields=["minedu_code", "updated_at"])
+
+        return Response({"saved": len(mappings)})
+
+
+# =============================
+# Jobs
+# =============================
+
+class JobListCreateView(ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = MineduJobSerializer
+    queryset = MineduJob.objects.all().order_by("id")
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        # frontend usa data?.jobs ?? data ?? []
+        return Response({"jobs": response.data})
+
+
+class JobUpdateView(UpdateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = MineduJobSerializer
+    queryset = MineduJob.objects.all()
+    http_method_names = ["patch"]
+
+
+class JobRunNowView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            job = MineduJob.objects.get(pk=pk)
+        except MineduJob.DoesNotExist:
+            return Response({"detail": "Job no encontrado"}, status=404)
+
+        run = MineduJobRun.objects.create(
+            job=job,
+            status="PENDING",
+            meta={"trigger": "run_now", "user_id": request.user.id},
+        )
+        job.last_run_at = timezone.now()
+        job.save(update_fields=["last_run_at", "updated_at"])
+
+        ser = MineduJobRunSerializer(run)
+        return Response(ser.data, status=201)
+
+
+class JobPauseView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            job = MineduJob.objects.get(pk=pk)
+        except MineduJob.DoesNotExist:
+            return Response({"detail": "Job no encontrado"}, status=404)
+
+        job.enabled = False
+        job.save(update_fields=["enabled", "updated_at"])
+        return Response({"detail": "Job pausado"})
+
+
+class JobResumeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            job = MineduJob.objects.get(pk=pk)
+        except MineduJob.DoesNotExist:
+            return Response({"detail": "Job no encontrado"}, status=404)
+
+        job.enabled = True
+        job.save(update_fields=["enabled", "updated_at"])
+        return Response({"detail": "Job reanudado"})
+
+
+class JobRunsListView(ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = MineduJobRunSerializer
+
+    def get_queryset(self):
+        job_id = self.kwargs["pk"]
+        return MineduJobRun.objects.filter(job_id=job_id).order_by("-started_at")
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        return Response({"runs": response.data})
+
+
+class JobRunRetryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, run_id):
+        try:
+            run = MineduJobRun.objects.get(pk=run_id)
+        except MineduJobRun.DoesNotExist:
+            return Response({"detail": "Run no encontrado"}, status=404)
+
+        run.status = "PENDING"
+        run.meta["retry_at"] = timezone.now().isoformat()
+        run.save(update_fields=["status", "meta", "updated_at"])
+        return Response({"detail": "Run marcado para reintento"})
+
+
+class JobRunLogsView(ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = MineduJobLogSerializer
+
+    def get_queryset(self):
+        run_id = self.kwargs["run_id"]
+        return MineduJobLog.objects.filter(run_id=run_id).order_by("timestamp")
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        # frontend usa data?.logs ?? data ?? []
+        return Response({"logs": response.data})

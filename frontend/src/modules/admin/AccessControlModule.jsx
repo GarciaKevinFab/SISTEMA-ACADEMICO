@@ -521,9 +521,20 @@ const PermissionsTab = () => {
   };
 
   const save = async () => {
-    if (!selectedRole) return;
-    try { await ACLService.setRolePermissions(selectedRole.id || selectedRole.name, Array.from(selectedPerms)); toast.success("Permisos actualizados"); }
-    catch { toast.error("No se pudo actualizar"); }
+    if (!selectedRole?.id) {
+      toast.error("Rol inválido");
+      return;
+    }
+
+    try {
+      await ACLService.setRolePermissions(
+        selectedRole.id,
+        Array.from(selectedPerms)
+      );
+      toast.success("Permisos actualizados");
+    } catch {
+      toast.error("No se pudo actualizar");
+    }
   };
 
   return (
