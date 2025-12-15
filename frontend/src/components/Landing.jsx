@@ -9,11 +9,11 @@ const Landing = () => {
                     <div className="flex justify-between items-center py-6">
                         <div className="flex items-center">
                             <div className="flex-shrink-0">
-                                <div className="h-12 w-12 bg-blue-600 rounded-lg flex items-center justify-center">
-                                    <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                                    </svg>
-                                </div>
+                                <img
+                                    className="h-12 w-12"
+                                    src="/logo.png" // Ruta de la imagen del logo
+                                    alt="Logo del Instituto"
+                                />
                             </div>
                             <div className="ml-4">
                                 <h1 className="text-2xl font-bold text-white">IESPP Gustavo Allende Llavería</h1>
@@ -32,41 +32,46 @@ const Landing = () => {
             </header>
 
             {/* Hero */}
-            <section id="inicio" className="bg-gradient-to-r from-blue-600 to-indigo-700">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-                    <div className="text-center">
-                        <h1 className="text-4xl tracking-tight font-extrabold text-white sm:text-5xl md:text-6xl">
-                            <span className="block">Formando</span>
-                            <span className="block text-indigo-200">Educadores de Excelencia</span>
-                        </h1>
-                        <p className="mt-3 max-w-md mx-auto text-base text-indigo-200 sm:text-lg md:mt-5 md:text-xl md:max-w-3xl">
-                            Instituto de Educación Superior Pedagógico Público "Gustavo Allende Llavería" -
-                            Comprometidos con la formación integral de futuros docentes.
-                        </p>
-                        <div className="mt-5 max-w-md mx-auto sm:flex sm:justify-center md:mt-8">
-                            <div className="rounded-md shadow">
-                                <a
-                                    href="/public/admission"
-                                    className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-indigo-700 bg-white hover:bg-indigo-50 md:py-4 md:text-lg md:px-10"
-                                >
-                                    Ver Convocatorias
-                                </a>
-                            </div>
-                            <div className="mt-3 rounded-md shadow sm:mt-0 sm:ml-3">
-                                <a
-                                    href="/login"
-                                    className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 md:py-4 md:text-lg md:px-10"
-                                >
-                                    Acceso al Sistema
-                                </a>
-                            </div>
+            <section
+                id="inicio"
+                className="bg-cover bg-center relative h-[500px] flex items-center justify-center"
+                style={{
+                    backgroundImage: "url('/gustavo_portada.png')", // Ruta de la imagen de fondo
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    backgroundRepeat: "no-repeat",
+                }}
+            >
+                <div className="absolute inset-0 bg-black opacity-40 z-0"></div> {/* Filtro oscuro para mejorar contraste */}
+                <div className="z-10 text-center text-white">
+                    <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight">
+                        <span className="block">Formando</span>
+                        <span className="block text-indigo-200">Educadores de Excelencia</span>
+                    </h1>
+                    <p className="mt-3 max-w-md mx-auto text-base text-indigo-200 sm:text-lg md:mt-5 md:text-xl md:max-w-3xl">
+                        Instituto de Educación Superior Pedagógico Público "Gustavo Allende Llavería" -
+                        Comprometidos con la formación integral de futuros docentes.
+                    </p>
+                    <div className="mt-5 max-w-md mx-auto sm:flex sm:justify-center md:mt-8">
+                        <div className="rounded-md shadow">
+                            <a
+                                href="/public/admission"
+                                className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-indigo-700 bg-white hover:bg-indigo-50 md:py-4 md:text-lg md:px-10"
+                            >
+                                Ver Convocatorias
+                            </a>
+                        </div>
+                        <div className="mt-3 rounded-md shadow sm:mt-0 sm:ml-3">
+                            <a
+                                href="/login"
+                                className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 md:py-4 md:text-lg md:px-10"
+                            >
+                                Acceso al Sistema
+                            </a>
                         </div>
                     </div>
                 </div>
             </section>
-
-            {/* Secciones tal cual las tenías */}
-            {/* ... Nosotros, Carreras, CTA, Footer (idéntico) ... */}
 
             {/* Careers */}
             <section id="carreras" className="py-12 bg-gray-50">

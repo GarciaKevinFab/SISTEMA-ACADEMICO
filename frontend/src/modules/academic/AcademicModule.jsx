@@ -1,9 +1,10 @@
-// src/modules/academic/AcademicModule.jsx
+import './styles.css'; // Asegúrate de que la ruta sea la correcta
+import { pageStyle, buttonStyle, buttonHoverStyle, cardStyle, cardHeaderStyle, sectionHeaderStyle } from './styles';
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { PERMS } from "@/auth/permissions";
 import IfPerm from "@/components/auth/IfPerm";
-
+import "./styles.css";
 import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from "@/components/ui/tabs";
@@ -43,27 +44,26 @@ import SectionSyllabusEvaluation from "./SectionSyllabusEvaluation";
 import AcademicProcessesInbox from "./AcademicProcessesInbox";
 import AcademicReportsPage from "./AcademicReports";
 
-/* ----------------------------- THEME HELPERS ----------------------------- */
-const tileBase =
-  "group h-24 rounded-2xl border bg-gradient-to-br from-muted/40 to-background hover:from-background hover:to-muted/40 transition-all duration-200 flex flex-col items-center justify-center gap-2 shadow-sm hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
-
-const statCard = "relative overflow-hidden rounded-2xl border bg-card hover:bg-accent/10 transition-colors";
-
+/* ----------------------------- ESTILOS MODIFICADOS ----------------------------- */
+/* Encabezado de sección */
 const sectionHeader = ({ title, description, Icon }) => (
   <div className="flex items-start justify-between">
     <div>
       <div className="flex items-center gap-2">
-        {Icon ? <Icon className="h-5 w-5 text-primary" /> : null}
-        <CardTitle>{title}</CardTitle>
+        {Icon ? <Icon className="h-5 w-5 text-[#2196F3]" /> : null}
+        <CardTitle className="text-[#2196F3]">{title}</CardTitle>
       </div>
       {description ? (
-        <CardDescription className="mt-1">{description}</CardDescription>
+        <CardDescription className="mt-1 text-[#1976D2]">{description}</CardDescription>
       ) : null}
     </div>
   </div>
 );
 
-/* ------------------- PERMISSION KEYS POR TAB/ACCIÓN ------------------- */
+const statCard = "relative overflow-hidden rounded-2xl border bg-white hover:bg-[#E3F2FD] transition-colors";
+
+
+
 const REQS = {
   plans: [PERMS["academic.plans.view"], PERMS["academic.plans.edit"]],
   load: [PERMS["academic.sections.view"], PERMS["academic.sections.create"], PERMS["academic.sections.conflicts"]],
@@ -98,7 +98,9 @@ function AcademicQuickActions({ go }) {
 
   return (
     <Card className="border-0 shadow-none">
-      <CardHeader className="px-0 pt-0">{sectionHeader({ title: "Acciones Rápidas", Icon: LayoutGrid })}</CardHeader>
+      <CardHeader className="px-0 pt-0" style={cardHeaderStyle}>
+        {sectionHeader({ title: "Acciones Rápidas", Icon: LayoutGrid })}
+      </CardHeader>
       <CardContent className="px-0">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {primary.map(({ key, label, Icon }) => (
@@ -107,7 +109,8 @@ function AcademicQuickActions({ go }) {
                 <TooltipTrigger asChild>
                   <Button
                     variant="outline"
-                    className={tileBase}
+                    className="group h-24 rounded-2xl border bg-gradient-to-br from-muted/40 to-background hover:from-background hover:to-muted/40 transition-all duration-200 flex flex-col items-center justify-center gap-2 shadow-sm hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    style={buttonStyle}
                     onClick={() => go(key)}
                   >
                     <Icon className="h-6 w-6 transition-transform duration-200 group-hover:scale-110" />
@@ -122,7 +125,7 @@ function AcademicQuickActions({ go }) {
           {more.length > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className={tileBase}>
+                <Button variant="outline" className="group h-24 rounded-2xl border bg-gradient-to-br from-muted/40 to-background hover:from-background hover:to-muted/40 transition-all duration-200 flex flex-col items-center justify-center gap-2 shadow-sm hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" style={buttonStyle}>
                   <LayoutGrid className="h-6 w-6" />
                   <span className="text-xs font-medium">Más</span>
                 </Button>
@@ -157,7 +160,7 @@ function SmallAcademicDashboard() {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {items.map((k, i) => (
-        <Card key={i} className={statCard}>
+        <Card key={i} className={statCard} style={cardStyle}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">{k.label}</CardTitle>
             <k.Icon className="h-4 w-4 text-primary" />
@@ -243,8 +246,8 @@ function PlansAndCurricula() {
 
   return (
     <IfPerm any={REQS.plans}>
-      <div className="space-y-6">
-        <Card className="border-0 shadow-none">
+    <div className="page-container space-y-6">
+      <Card className="border-0 shadow-none"> 
           <CardHeader className="px-0 pt-0">
             {sectionHeader({ title: "Planes/Mallas Curriculares", description: "Define planes por carrera y sus cursos", Icon: LibraryBig })}
           </CardHeader>
@@ -750,7 +753,7 @@ export default function AcademicModule() {
   const { hasAny } = useAuth();
   const [tab, setTab] = useState("dashboard");
 
-  const tabs = useMemo(() => ([
+  const tabs = useMemo(() => ([ 
     { key: "dashboard", label: "Dashboard", need: [] },
     { key: "plans", label: "Mallas", need: REQS.plans },
     { key: "load", label: "Carga & Horarios", need: REQS.load },
@@ -768,57 +771,62 @@ export default function AcademicModule() {
   }, [tabs, tab]);
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="rounded-3xl border bg-gradient-to-br from-muted/30 to-background p-4 md:p-6">
-        <div className="flex items-center gap-2">
-          <GraduationCap className="h-6 w-6 text-primary" />
-          <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Módulo Académico</h1>
-        </div>
-        <p className="text-sm text-muted-foreground mt-1">
-          Gestión integral de planes, secciones, matrícula, notas y procesos
-        </p>
-        <Separator className="my-4" />
+    // Aquí aplicas el estilo de fondo
+<div style={pageStyle} className="p-6">
+  {/* CONTENEDOR TRANSLÚCIDO COMO FINANZAS */}
+  <div className="rounded-3xl bg-slate-200/45 backdrop-blur-md border border-white/20 shadow-xl p-6 space-y-6">
 
-        <div className="sticky top-0 z-10 backdrop-blur supports-[backdrop-filter]:bg-background/60 rounded-2xl">
-          <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-            <TabsList className="w-full flex gap-2 overflow-x-auto no-scrollbar">
-              {tabs.map(t => (
-                <IconTab key={t.key} value={t.key} label={t.label} Icon={tabIcon(t.key)} />
-              ))}
-            </TabsList>
 
-            <TabsContent value="dashboard">
-              <div className="space-y-6">
-                <AcademicQuickActions go={setTab} />
-                <SmallAcademicDashboard />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="plans"><PlansAndCurricula /></TabsContent>
-            <TabsContent value="load"><LoadAndSchedules /></TabsContent>
-            <TabsContent value="enroll">
-              <IfPerm any={REQS.enroll}><EnrollmentComponent /></IfPerm>
-            </TabsContent>
-            <TabsContent value="grades">
-              <IfPerm any={REQS.grades}><GradesAttendanceComponent /></IfPerm>
-            </TabsContent>
-            <TabsContent value="syllabus">
-              <IfPerm any={REQS.syllabus}><SectionSyllabusEvaluation /></IfPerm>
-            </TabsContent>
-            <TabsContent value="kardex"><KardexAndCertificates /></TabsContent>
-            <TabsContent value="reports">
-              <IfPerm any={REQS.reports}><AcademicReportsPage /></IfPerm>
-            </TabsContent>
-            <TabsContent value="proc-inbox">
-              <IfPerm any={REQS.procInbox}><AcademicProcessesInbox /></IfPerm>
-            </TabsContent>
-            <TabsContent value="processes"><AcademicProcesses /></TabsContent>
-          </Tabs>
-        </div>
+    {/* HEADER */}
+    <div>
+      <div className="flex items-center gap-2">
+        <GraduationCap className="h-6 w-6 text-primary" />
+        <h1 className="text-2xl font-semibold text-black">
+          Módulo Académico
+        </h1>
       </div>
+      <p className="text-sm text-gray-700 mt-1">
+        Gestión integral de planes, secciones, matrícula, notas y procesos
+      </p>
     </div>
+
+    <Separator />
+
+    {/* TABS */}
+    <Tabs value={tab} onValueChange={setTab} className="space-y-6">
+      <TabsList className="w-full flex gap-2 overflow-x-auto no-scrollbar bg-white/55 backdrop-blur-md border border-white/30 rounded-2xl p-2 shadow-sm">
+        {tabs.map(t => (
+          <IconTab
+            key={t.key}
+            value={t.key}
+            label={t.label}
+            Icon={tabIcon(t.key)}
+          />
+        ))}
+      </TabsList>
+
+      <TabsContent value="dashboard">
+        <AcademicQuickActions go={setTab} />
+        <SmallAcademicDashboard />
+      </TabsContent>
+
+      <TabsContent value="plans"><PlansAndCurricula /></TabsContent>
+      <TabsContent value="load"><LoadAndSchedules /></TabsContent>
+      <TabsContent value="enroll"><EnrollmentComponent /></TabsContent>
+      <TabsContent value="grades"><GradesAttendanceComponent /></TabsContent>
+      <TabsContent value="syllabus"><SectionSyllabusEvaluation /></TabsContent>
+      <TabsContent value="kardex"><KardexAndCertificates /></TabsContent>
+      <TabsContent value="reports"><AcademicReportsPage /></TabsContent>
+      <TabsContent value="proc-inbox"><AcademicProcessesInbox /></TabsContent>
+      <TabsContent value="processes"><AcademicProcesses /></TabsContent>
+    </Tabs>
+
+  </div>
+</div>
+
   );
 }
+
 
 function IconTab({ value, label, Icon }) {
   return (

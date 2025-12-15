@@ -292,89 +292,195 @@ const FinanceModule = () => {
 
   if (!user) return <div className="text-center py-12">Acceso no autorizado</div>;
 
-  return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Tesorería y Administración</h1>
-        <p className="text-gray-600 mt-2">Sistema integral — {roleLabel}</p>
+  // REEMPLAZA TODO TU return(...) POR ESTE:
+
+return (
+  <div className="p-6">
+    {/* CONTENEDOR ESTILO "MÓDULO ACADÉMICO" */}
+    <div className="rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10">
+      <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)]">
+
+        {/* HEADER */}
+        <div className="px-6 pt-5">
+          <h1 className="text-xl font-bold text-slate-900">Tesorería y Administración</h1>
+          <p className="text-sm text-slate-700">Sistema integral — {roleLabel}</p>
+          <div className="mt-3 h-px w-full bg-white/60" />
+        </div>
+
+        {/* BODY */}
+        <div className="px-6 pb-6 pt-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+
+            {/* BARRA DE TABS (igual a los otros módulos) */}
+            <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
+              <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2">
+
+                <TabsTrigger
+                  value="dashboard"
+                  className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" aria-hidden="true" />
+                    Dashboard
+                  </span>
+                </TabsTrigger>
+
+                {canCashBanks && (
+                  <>
+                    <TabsTrigger
+                      value="cash-banks"
+                      className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <Banknote className="h-4 w-4" aria-hidden="true" />
+                        Caja y Bancos
+                      </span>
+                    </TabsTrigger>
+
+                    <TabsTrigger
+                      value="receipts"
+                      className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <Receipt className="h-4 w-4" aria-hidden="true" />
+                        Boletas
+                      </span>
+                    </TabsTrigger>
+                  </>
+                )}
+
+                {canStdAccounts && (
+                  <TabsTrigger
+                    value="student-accounts"
+                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Coins className="h-4 w-4" aria-hidden="true" />
+                      Estados de Cuenta
+                    </span>
+                  </TabsTrigger>
+                )}
+
+                {canConcepts && (
+                  <TabsTrigger
+                    value="concepts"
+                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <FileText className="h-4 w-4" aria-hidden="true" />
+                      Conceptos
+                    </span>
+                  </TabsTrigger>
+                )}
+
+                {canReconcile && (
+                  <TabsTrigger
+                    value="reconciliation"
+                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Banknote className="h-4 w-4" aria-hidden="true" />
+                      Conciliación
+                    </span>
+                  </TabsTrigger>
+                )}
+
+                {canReports && (
+                  <TabsTrigger
+                    value="reports"
+                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4" aria-hidden="true" />
+                      Reportes
+                    </span>
+                  </TabsTrigger>
+                )}
+
+                {canInventory && (
+                  <TabsTrigger
+                    value="inventory"
+                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Package className="h-4 w-4" aria-hidden="true" />
+                      Inventario
+                    </span>
+                  </TabsTrigger>
+                )}
+
+                {canLogistics && (
+                  <TabsTrigger
+                    value="logistics"
+                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Truck className="h-4 w-4" aria-hidden="true" />
+                      Logística
+                    </span>
+                  </TabsTrigger>
+                )}
+
+                {canHR && (
+                  <TabsTrigger
+                    value="hr"
+                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Users className="h-4 w-4" aria-hidden="true" />
+                      RRHH
+                    </span>
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </div>
+
+            {/* CONTENIDOS (igual que Académico: TabsContent por pestaña) */}
+            <TabsContent value="dashboard">{renderMainDashboard()}</TabsContent>
+
+            <TabsContent value="cash-banks">
+              {canCashBanks ? <CashBanksDashboard /> : <div className="text-center py-8">No tienes permisos para acceder a esta sección</div>}
+            </TabsContent>
+
+            <TabsContent value="receipts">
+              {canReceipts ? <ReceiptsDashboard /> : <div className="text-center py-8">No tienes permisos para acceder a esta sección</div>}
+            </TabsContent>
+
+            <TabsContent value="student-accounts">
+              {canStdAccounts ? <StudentAccountsDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
+            </TabsContent>
+
+            <TabsContent value="concepts">
+              {canConcepts ? <ConceptsCatalog /> : <div className="text-center py-8">No tienes permisos…</div>}
+            </TabsContent>
+
+            <TabsContent value="reconciliation">
+              {canReconcile ? <ReconciliationDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
+            </TabsContent>
+
+            <TabsContent value="reports">
+              {canReports ? <FinanceReports /> : <div className="text-center py-8">No tienes permisos…</div>}
+            </TabsContent>
+
+            <TabsContent value="inventory">
+              {canInventory ? <InventoryDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
+            </TabsContent>
+
+            <TabsContent value="logistics">
+              {canLogistics ? <LogisticsDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
+            </TabsContent>
+
+            <TabsContent value="hr">
+              {canHR ? <HRDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
+            </TabsContent>
+
+          </Tabs>
+        </div>
       </div>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-10">
-          <TabsTrigger value="dashboard" className="flex items-center space-x-2">
-            <BarChart3 className="h-4 w-4" aria-hidden="true" />
-            <span>Dashboard</span>
-          </TabsTrigger>
-
-          {canCashBanks && (
-            <>
-              <TabsTrigger value="cash-banks" className="flex items-center space-x-2">
-                <Banknote className="h-4 w-4" aria-hidden="true" />
-                <span>Caja y Bancos</span>
-              </TabsTrigger>
-              <TabsTrigger value="receipts" className="flex items-center space-x-2">
-                <Receipt className="h-4 w-4" aria-hidden="true" />
-                <span>Boletas</span>
-              </TabsTrigger>
-            </>
-          )}
-
-          {canStdAccounts && (
-            <TabsTrigger value="student-accounts" className="flex items-center space-x-2">
-              <Coins className="h-4 w-4" aria-hidden="true" />
-              <span>Estados de Cuenta</span>
-            </TabsTrigger>
-          )}
-
-          {canConcepts && (
-            <TabsTrigger value="concepts" className="flex items-center space-x-2">
-              <FileText className="h-4 w-4" aria-hidden="true" />
-              <span>Conceptos</span>
-            </TabsTrigger>
-          )}
-
-          {canReconcile && (
-            <TabsTrigger value="reconciliation" className="flex items-center space-x-2">
-              <Banknote className="h-4 w-4" aria-hidden="true" />
-              <span>Conciliación</span>
-            </TabsTrigger>
-          )}
-
-          {canReports && (
-            <TabsTrigger value="reports" className="flex items-center space-x-2">
-              <BarChart3 className="h-4 w-4" aria-hidden="true" />
-              <span>Reportes</span>
-            </TabsTrigger>
-          )}
-
-          {canInventory && (
-            <TabsTrigger value="inventory" className="flex items-center space-x-2">
-              <Package className="h-4 w-4" aria-hidden="true" />
-              <span>Inventario</span>
-            </TabsTrigger>
-          )}
-
-          {canLogistics && (
-            <TabsTrigger value="logistics" className="flex items-center space-x-2">
-              <Truck className="h-4 w-4" aria-hidden="true" />
-              <span>Logística</span>
-            </TabsTrigger>
-          )}
-
-          {canHR && (
-            <TabsTrigger value="hr" className="flex items-center space-x-2">
-              <Users className="h-4 w-4" aria-hidden="true" />
-              <span>RRHH</span>
-            </TabsTrigger>
-          )}
-        </TabsList>
-
-        <TabsContent value={activeTab} className="mt-6">
-          {renderTabContent()}
-        </TabsContent>
-      </Tabs>
     </div>
-  );
+  </div>
+);
+
 };
 
 export default FinanceModule;

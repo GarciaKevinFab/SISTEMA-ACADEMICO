@@ -53,20 +53,27 @@ const SideNav = () => {
     "finance.dashboard.view",
   ]) || hasRole("ADMIN_SYSTEM", "FINANCE_ADMIN", "ACCOUNTANT", "CASHIER");
 
-  const canMinedu = hasAny([PERMS["minedu.integration.view"], PERMS["minedu.integration.export"], PERMS["minedu.integration.validate"]])
-    || hasRole("ADMIN_SYSTEM", "MINEDU_INTEGRATION");
-  const canResearch = hasAny([PERMS["research.calls.view"], PERMS["research.calls.manage"], PERMS["research.projects.view"], PERMS["research.projects.edit"], PERMS["research.tabs.reports"]])
-    || hasRole("ADMIN_SYSTEM", "RESEARCH_COORDINATOR", "TEACHER_RESEARCHER");
+  const canMinedu = hasAny([
+    PERMS["minedu.integration.view"],
+    PERMS["minedu.integration.export"],
+    PERMS["minedu.integration.validate"]
+  ]) || hasRole("ADMIN_SYSTEM", "MINEDU_INTEGRATION");
 
-  const isActive = (path) => path === "/dashboard"
-    ? location.pathname === "/dashboard"
-    : location.pathname.startsWith(path);
+  const canResearch = hasAny([
+    PERMS["research.calls.view"], PERMS["research.calls.manage"],
+    PERMS["research.projects.view"], PERMS["research.projects.edit"],
+    PERMS["research.tabs.reports"]
+  ]) || hasRole("ADMIN_SYSTEM", "RESEARCH_COORDINATOR", "TEACHER_RESEARCHER");
+
+  const isActive = (path) =>
+    path === "/dashboard"
+      ? location.pathname === "/dashboard"
+      : location.pathname.startsWith(path);
 
   const menuItems = [
     { id: "dashboard", title: "Dashboard", path: "/dashboard", icon: BarChart3, show: !!user },
     { id: "security", title: "Seguridad", path: "/dashboard/security", icon: Shield, show: canSecurity },
     { id: "admin", title: "Administración", path: "/dashboard/admin", icon: Building, show: canAdmin },
-    // ⚠️ si los permisos aún no están listos, deja pasar por rol:
     {
       id: "academic", title: "Académico", path: "/dashboard/academic", icon: BookOpen,
       show: permsReady ? canAcademic : hasRole("ADMIN_SYSTEM", "ADMIN_ACADEMIC", "REGISTRAR", "TEACHER")
@@ -80,14 +87,26 @@ const SideNav = () => {
 
   return (
     <div className="bg-gray-800 text-white w-64 min-h-screen flex flex-col">
+      
+      {/* Encabezado con logo institucional */}
       <div className="p-4 border-b border-gray-700">
         <div className="flex items-center space-x-3">
-          <div className="p-2 bg-blue-600 rounded-lg"><GraduationCap className="h-6 w-6 text-white" /></div>
+          
+          <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center overflow-hidden">
+            <img
+              src="/logo.png"
+              alt="Logo IESPP"
+              className="h-12 w-12 object-contain"
+            />
+          </div>
+
           <div>
             <h1 className="text-lg font-bold">IESPP</h1>
             <p className="text-xs text-gray-400">"Gustavo Allende Llavería"</p>
           </div>
         </div>
+
+        {/* Información del usuario */}
         {user && (
           <div className="mt-4 p-3 bg-gray-700 rounded-lg">
             <div className="flex items-center space-x-2">
@@ -97,7 +116,10 @@ const SideNav = () => {
                 <div className="text-xs text-gray-400 truncate">{user.email}</div>
                 <div className="text-xs text-blue-400 truncate">{roles.join(" · ")}</div>
               </div>
-              <span title={permissions.join(", ")} className="ml-2 text-[10px] bg-blue-600/70 px-2 py-[2px] rounded">
+              <span
+                title={permissions.join(", ")}
+                className="ml-2 text-[10px] bg-blue-600/70 px-2 py-[2px] rounded"
+              >
                 perms: {permissions.length}
               </span>
             </div>
@@ -105,6 +127,7 @@ const SideNav = () => {
         )}
       </div>
 
+      {/* Navegación */}
       <nav className="flex-1 p-4">
         <ul className="space-y-2">
           {menuItems.filter((m) => m.show).map((item) => {
@@ -113,8 +136,11 @@ const SideNav = () => {
               <li key={item.id}>
                 <Link
                   to={item.path}
-                  className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors ${isActive(item.path) ? "bg-blue-600 text-white" : "text-gray-300 hover:bg-gray-700 hover:text-white"
-                    }`}
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors ${
+                    isActive(item.path)
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-300 hover:bg-gray-700 hover:text-white"
+                  }`}
                 >
                   <Icon className="h-5 w-5 flex-shrink-0" />
                   <span className="truncate">{item.title}</span>
@@ -125,8 +151,12 @@ const SideNav = () => {
         </ul>
       </nav>
 
+      {/* Logout */}
       <div className="p-4 border-t border-gray-700">
-        <button onClick={logout} className="w-full flex items-center justify-center space-x-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors">
+        <button
+          onClick={logout}
+          className="w-full flex items-center justify-center space-x-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors"
+        >
           <LogOut className="h-4 w-4" />
           <span>Cerrar Sesión</span>
         </button>

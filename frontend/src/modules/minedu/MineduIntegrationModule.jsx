@@ -124,12 +124,12 @@ const MineduDashboard = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">
-            Integración MINEDU
-          </h2>
-          <p className="text-muted-foreground">
+  <div className="flex justify-between items-center">
+    <div>
+      <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+        Integración MINEDU
+      </h2>
+      <p className="text-slate-600">
             SIA/SIAGIE – exportación, validación y monitoreo
           </p>
         </div>
@@ -1537,9 +1537,19 @@ const MineduIntegrationModule = () => {
   }
 
   return (
-    <div className="p-6">
+  <div className="p-6">
+    <div
+      className="
+        bg-white/70
+        backdrop-blur-md
+        border border-white/40
+        rounded-xl
+        p-6
+        shadow-md
+      "
+    >
       <Tabs defaultValue="dashboard" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-6 bg-white/60">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="mappings">Mapeos</TabsTrigger>
           <TabsTrigger value="export">Exportar</TabsTrigger>
@@ -1568,7 +1578,9 @@ const MineduIntegrationModule = () => {
         </TabsContent>
       </Tabs>
     </div>
-  );
+  </div>
+);
+
 };
 
 export default MineduIntegrationModule;

@@ -41,7 +41,6 @@ export default function AdmissionDashboard() {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-gray-900">Dashboard de Admisión</h2>
                 <Badge variant="outline" className="text-sm">
                     {user?.role}
                 </Badge>

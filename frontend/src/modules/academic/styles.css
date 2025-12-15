@@ -1,0 +1,92 @@
+/* Fondo de la parte principal (debajo de los botones) */
+main {
+  background-color: #1C2A44 !important; /* Azul marino */
+  color: #FFFFFF !important; /* Texto blanco */
+  padding: 0;
+  margin: 0;
+}
+
+/* Fondo de las tarjetas (donde se muestran las estadísticas) */
+.card {
+  background-color: #1C2A44 !important; /* Azul marino */
+  color: #1C2A44 !important; /* Texto blanco */
+  border: 1px solid #1C2A44 !important; /* Bordes más claros para un buen contraste */
+}
+
+/* Fondo de las tablas y otras secciones */
+table {
+  background-color: #1C2A44 !important; /* Azul marino */
+  color: #FFFFFF !important; /* Texto blanco */
+}
+
+table th, table td {
+  border: 1px solid #1C2A44 !important; /* Bordes claros para las celdas */
+}
+
+/* Fondo de las secciones de botones y contenedores */
+button, .button {
+  background-color: #d9dbe0 !important; /* Azul claro para los botones */
+  color: #1C2A44 !important; /* Texto blanco */
+  border-radius: 10px;
+  transition: background-color 0.3s;
+}
+
+/* Fondo de hover para los botones */
+button:hover, .button:hover {
+  background-color: #d9dbe0 !important; /* Azul más oscuro */
+}
+
+/* Fondo de los encabezados */
+header {
+  background-color: #1C2A44 !important; /* Azul marino */
+  color: #FFFFFF !important; /* Texto blanco */
+}
+
+/* Estilo para los campos de entrada */
+input, textarea, select {
+  background-color: #d9dbe0 !important;  /* Fondo azul marino */
+  border: 2px solid #1C2A44 !important;  /* Borde azul marino */
+  border-radius: 5px !important;  /* Bordes redondeados */
+  padding: 10px !important;  /* Espaciado dentro de los campos */
+  color: #FFFFFF !important;  /* Texto blanco para los campos */
+  font-size: 14px !important;  /* Tamaño de letra para mayor legibilidad */
+}
+
+/* Enfoque en el campo */
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border: 2px solid #2196F3 !important;  /* Borde azul brillante al hacer foco */
+  background-color: #f1f1f1 !important;  /* Fondo gris suave al enfocar */
+}
+
+/* Borde azul marino en los campos de texto desde el principio */
+input, select, textarea {
+  border: 2px solid #1C2A44 !important;  /* Borde azul marino */
+  padding: 8px !important; /* Espaciado dentro del campo */
+  border-radius: 5px !important; /* Bordes redondeados */
+  background-color: #FFFFFF !important;  /* Fondo azul marino */
+  color: #FFFFFF !important;  /* Texto blanco */
+}
+
+/* Modificar cuando el campo está enfocado */
+input:focus, select:focus, textarea:focus {
+  border: 2px solid #1C2A44 !important;  /* Borde azul más brillante cuando el campo está enfocado */
+  outline: none !important; /* Eliminar el contorno por defecto del navegador */
+}
+
+/* Estilo para los campos de entrada (se aplicará el borde azul marino desde el principio) */
+input, textarea, select {
+  background-color: #ffffff !important;  /* Fondo blanco para visibilidad */
+  border: 2px solid #1C2A44 !important;  /* Borde azul marino visible desde el inicio */
+  border-radius: 5px !important;  /* Bordes redondeados */
+  padding: 10px !important;  /* Espaciado dentro de los campos */
+  color: #000000 !important;  /* Texto negro para mejor contraste */
+  font-size: 14px !important;  /* Tamaño de letra para mayor legibilidad */
+}
+
+/* Enfoque en el campo (borde azul brillante cuando el campo esté enfocado) */
+input:focus, textarea:focus, select:focus {
+  outline: none !important;  /* Eliminar el contorno por defecto del navegador */
+  border: 2px solid #2196F3 !important;  /* Borde azul brillante al hacer foco */
+  background-color: #f1f1f1 !important;  /* Fondo gris suave al enfocar */
+}

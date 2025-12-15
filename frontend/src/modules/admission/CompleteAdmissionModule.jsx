@@ -667,41 +667,135 @@ export default function CompleteAdmissionModule() {
   if (!user) return <div>Acceso no autorizado</div>;
 
   return (
-    <div className="p-6">
-      <Tabs value={active} onValueChange={onTabChange} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-12">
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="careers">Carreras</TabsTrigger>
-          <TabsTrigger value="calls">Convocatorias</TabsTrigger>
-          <TabsTrigger value="applicants">Postulantes</TabsTrigger>
-          <TabsTrigger value="apply">Postulación</TabsTrigger>
-          <TabsTrigger value="docs">Documentos</TabsTrigger>
-          <TabsTrigger value="doc-review">Revisión Docs</TabsTrigger>
-          <TabsTrigger value="eval">Evaluación</TabsTrigger>
-          <TabsTrigger value="results">Resultados</TabsTrigger>
-          <TabsTrigger value="schedule">Cronograma</TabsTrigger>
-          <TabsTrigger value="certificates">Constancias</TabsTrigger>
-          <TabsTrigger value="reports">Reportes</TabsTrigger>
-          <TabsTrigger value="payments">Pagos</TabsTrigger>
-          <TabsTrigger value="params">Parámetros</TabsTrigger>
-        </TabsList>
+  <div className="p-6">
+    {/* CONTENEDOR estilo MÓDULO ACADÉMICO */}
+    <div className="rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10">
+      <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)]">
+        {/* HEADER */}
+        <div className="px-6 pt-5">
+          <h1 className="text-xl font-bold text-slate-900">
+            Módulo Admisión
+          </h1>
+          <p className="text-sm text-slate-700">
+            Gestión de convocatorias, postulantes, documentos, evaluación y resultados.
+          </p>
 
-        <TabsContent value="dashboard"><AdmissionDashboard /></TabsContent>
-        <TabsContent value="careers"><CareersManagement /></TabsContent>
-        <TabsContent value="calls"><AdmissionCallsManagement /></TabsContent>
-        <TabsContent value="applicants"><ApplicantsManagement /></TabsContent>
-        <TabsContent value="doc-review"><DocumentReview /></TabsContent>
+          {/* línea separadora como Académico */}
+          <div className="mt-3 h-px w-full bg-white/60" />
+        </div>
 
-        <TabsContent value="apply"><ApplicationWizard /></TabsContent>
-        <TabsContent value="docs"><ApplicantDocuments /></TabsContent>
-        <TabsContent value="eval"><EvaluationBoard /></TabsContent>
-        <TabsContent value="results"><ResultsPublication /></TabsContent>
-        <TabsContent value="schedule"><AdmissionScheduleModule /></TabsContent>
-        <TabsContent value="payments"><PaymentsManagement /></TabsContent>
-        <TabsContent value="certificates"><AdmissionCertificates /></TabsContent>
-        <TabsContent value="reports"><AdmissionReportsModule /></TabsContent>
-        <TabsContent value="params"><AdmissionParamsModule /></TabsContent>
-      </Tabs>
+        <Tabs value={active} onValueChange={onTabChange} className="space-y-6 px-6 pb-6 pt-4">
+          {/* BARRA DE TABS estilo Académico */}
+          <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
+            <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2">
+              <TabsTrigger
+                value="dashboard"
+                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                Dashboard
+              </TabsTrigger>
+              <TabsTrigger
+                value="careers"
+                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                Carreras
+              </TabsTrigger>
+              <TabsTrigger
+                value="calls"
+                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                Convocatorias
+              </TabsTrigger>
+              <TabsTrigger
+                value="applicants"
+                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                Postulantes
+              </TabsTrigger>
+              <TabsTrigger
+                value="apply"
+                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                Postulación
+              </TabsTrigger>
+              <TabsTrigger
+                value="docs"
+                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                Documentos
+              </TabsTrigger>
+              <TabsTrigger
+                value="doc-review"
+                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                Revisión Docs
+              </TabsTrigger>
+              <TabsTrigger
+                value="eval"
+                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                Evaluación
+              </TabsTrigger>
+              <TabsTrigger
+                value="results"
+                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                Resultados
+              </TabsTrigger>
+              <TabsTrigger
+                value="schedule"
+                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                Cronograma
+              </TabsTrigger>
+              <TabsTrigger
+                value="certificates"
+                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                Constancias
+              </TabsTrigger>
+              <TabsTrigger
+                value="reports"
+                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                Reportes
+              </TabsTrigger>
+              <TabsTrigger
+                value="payments"
+                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                Pagos
+              </TabsTrigger>
+              <TabsTrigger
+                value="params"
+                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                Parámetros
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          {/* CONTENIDO (NO CAMBIA) */}
+          <TabsContent value="dashboard"><AdmissionDashboard /></TabsContent>
+          <TabsContent value="careers"><CareersManagement /></TabsContent>
+          <TabsContent value="calls"><AdmissionCallsManagement /></TabsContent>
+          <TabsContent value="applicants"><ApplicantsManagement /></TabsContent>
+          <TabsContent value="doc-review"><DocumentReview /></TabsContent>
+
+          <TabsContent value="apply"><ApplicationWizard /></TabsContent>
+          <TabsContent value="docs"><ApplicantDocuments /></TabsContent>
+          <TabsContent value="eval"><EvaluationBoard /></TabsContent>
+          <TabsContent value="results"><ResultsPublication /></TabsContent>
+          <TabsContent value="schedule"><AdmissionScheduleModule /></TabsContent>
+          <TabsContent value="payments"><PaymentsManagement /></TabsContent>
+          <TabsContent value="certificates"><AdmissionCertificates /></TabsContent>
+          <TabsContent value="reports"><AdmissionReportsModule /></TabsContent>
+          <TabsContent value="params"><AdmissionParamsModule /></TabsContent>
+        </Tabs>
+      </div>
     </div>
-  );
+  </div>
+);
+
+
 }

@@ -1380,46 +1380,74 @@ const MesaDePartesModule = () => {
   };
 
   if (!user) return <div>Acceso no autorizado</div>;
-  return (
-    <div className="p-6">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className={`grid w-full ${tabs.length ? `grid-cols-${Math.min(tabs.length, 4)}` : "grid-cols-1"}`}>
-          {tabs.map(t => (
-            <TabsTrigger key={t.key} value={t.key}>{t.label}</TabsTrigger>
-          ))}
-        </TabsList>
 
-        {tabs.some(t => t.key === "dashboard") && (
-          <TabsContent value="dashboard">
-            <MesaDePartesDashboard
-              onNew={handleQuickNew}
-              onSearch={handleQuickSearch}
-              onQR={handleQuickQR}
-              onReports={goReports}
-            />
-          </TabsContent>
-        )}
+return (
+  <div className="p-6">
+    {/* CONTENEDOR estilo "MÓDULO ACADÉMICO" */}
+    <div className="rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10">
+      <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)]">
 
-        {tabs.some(t => t.key === "types") && (
-          <TabsContent value="types">
-            <ProcedureTypesManagement />
-          </TabsContent>
-        )}
+        {/* HEADER */}
+        <div className="px-6 pt-5">
+          <h1 className="text-xl font-bold text-slate-900">Mesa de Partes Digital</h1>
+          <p className="text-sm text-slate-700">Sistema de gestión de trámites documentarios</p>
+          <div className="mt-3 h-px w-full bg-white/60" />
+        </div>
 
-        {tabs.some(t => t.key === "procedures") && (
-          <TabsContent value="procedures">
-            <ProceduresManagement ref={procRef} />
-          </TabsContent>
-        )}
+        {/* CONTENIDO */}
+        <div className="px-6 pb-6 pt-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
 
-        {tabs.some(t => t.key === "reports") && (
-          <TabsContent value="reports">
-            <MesaPartesReports />
-          </TabsContent>
-        )}
-      </Tabs>
+            {/* BARRA DE TABS estilo modelo Académico */}
+            <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
+              <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2">
+                {tabs.map((t) => (
+                  <TabsTrigger
+                    key={t.key}
+                    value={t.key}
+                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                  >
+                    {t.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+
+            {tabs.some((t) => t.key === "dashboard") && (
+              <TabsContent value="dashboard">
+                <MesaDePartesDashboard
+                  onNew={handleQuickNew}
+                  onSearch={handleQuickSearch}
+                  onQR={handleQuickQR}
+                  onReports={goReports}
+                />
+              </TabsContent>
+            )}
+
+            {tabs.some((t) => t.key === "types") && (
+              <TabsContent value="types">
+                <ProcedureTypesManagement />
+              </TabsContent>
+            )}
+
+            {tabs.some((t) => t.key === "procedures") && (
+              <TabsContent value="procedures">
+                <ProceduresManagement ref={procRef} />
+              </TabsContent>
+            )}
+
+            {tabs.some((t) => t.key === "reports") && (
+              <TabsContent value="reports">
+                <MesaPartesReports />
+              </TabsContent>
+            )}
+          </Tabs>
+        </div>
+      </div>
     </div>
-  );
+  </div>
+);
+
 };
 
 export default MesaDePartesModule;

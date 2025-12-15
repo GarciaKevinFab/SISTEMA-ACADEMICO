@@ -17,37 +17,56 @@ const Layout = ({ children }) => {
   return (
     <div className="flex min-h-screen bg-gray-100">
       <SideNav />
+
       <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="bg-white shadow-sm border-b border-gray-200">
-          <div className="px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Sistema Académico Integral
-                </h1>
-                <p className="text-sm text-gray-600">
-                  Bienvenido, {user.full_name} - {user.role}
-                </p>
+
+        {/* HEADER MEJORADO */}
+        <header className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500 shadow-md border-b border-white/10">
+          <div className="px-6 py-4 flex items-center justify-between">
+
+            {/* Izquierda: título + subtítulo */}
+            <div>
+              <h1 className="text-xl font-semibold text-white tracking-tight">
+                Sistema Académico
+              </h1>
+              <p className="text-sm text-blue-100 mt-1">
+                Bienvenido,&nbsp;
+                <span className="font-medium text-white">
+                  {user.full_name}
+                </span>
+              </p>
+            </div>
+
+            {/* Derecha: Fecha + iniciales */}
+            <div className="flex items-center space-x-4">
+              <div className="text-sm text-blue-100 hidden sm:block">
+                {new Date().toLocaleDateString('es-PE', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
               </div>
-              <div className="flex items-center space-x-4">
-                <div className="text-sm text-gray-500">
-                  {new Date().toLocaleDateString('es-PE', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
-                </div>
+
+              {/* Avatar */}
+              <div className="h-10 w-10 rounded-full bg-white/90 flex items-center justify-center text-blue-700 font-bold shadow">
+                {user.full_name
+                  .split(' ')
+                  .map(n => n[0])
+                  .join('')
+                  .slice(0, 2)
+                  .toUpperCase()}
               </div>
             </div>
+
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-auto">
+        {/* CONTENIDO PRINCIPAL */}
+        <main className="flex-1 overflow-auto p-4">
           {children || <Outlet />}
         </main>
+
       </div>
     </div>
   );
