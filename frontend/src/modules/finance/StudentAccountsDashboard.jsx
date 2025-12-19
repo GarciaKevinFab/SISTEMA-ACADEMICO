@@ -99,21 +99,35 @@ export default function StudentAccountsDashboard() {
     };
 
     const exportPdf = async () => {
+        if (!subjectId) return toast.error("Ingrese ID/DNI");
+
         try {
             setExporting(true);
-            const res = await generatePDFWithPolling(
-                "/finance/accounts/statement/pdf",
-                { subject_id: subjectId, subject_type: subjectType },
-                { testId: "statement-pdf" }
-            );
-            if (res?.success) await downloadFile(res.downloadUrl, `estado-cuenta-${subjectId}.pdf`);
-            else toast.error("No se pudo generar el PDF");
+
+            const res = await Accounts.statementPdf({
+                subject_id: subjectId,
+                subject_type: subjectType,
+            });
+
+            const blob = new Blob([res.data], { type: "application/pdf" });
+            const url = window.URL.createObjectURL(blob);
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `estado-cuenta-${subjectId}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+
+            window.URL.revokeObjectURL(url);
+            toast.success("PDF descargado");
         } catch (e) {
             showApiError(e, "No se pudo exportar PDF");
         } finally {
             setExporting(false);
         }
     };
+
 
     const payLink = async () => {
         try {

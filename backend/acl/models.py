@@ -14,14 +14,6 @@ class Role(models.Model):
     name = models.CharField(max_length=64, unique=True)
     description = models.CharField(max_length=200, blank=True, default="")  # <-- NUEVO
 
-    # Relación con usuarios
-    users = models.ManyToManyField(
-        settings.AUTH_USER_MODEL,
-        through='UserRole',
-        related_name='roles',
-        blank=True,
-    )
-
     # Relación con permisos (mantén el through si lo usas en migraciones/API)
     permissions = models.ManyToManyField(              # <-- asegúrate de tenerlo
         Permission,

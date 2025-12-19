@@ -5,7 +5,11 @@ def _default_list():
     return []
 
 class UserMFA(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='mfa')
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="mfa",
+    )
     enabled = models.BooleanField(default=False)
     secret = models.CharField(max_length=64, blank=True, default="")
     backup_codes = models.JSONField(default=_default_list, blank=True)  # hashes sha256

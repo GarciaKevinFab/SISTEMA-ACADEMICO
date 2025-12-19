@@ -28,7 +28,8 @@ import {
   FileText
 } from 'lucide-react';
 
-const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
+import api from '../../lib/api';
+import { Receipts } from '../../services/finance.service';
 
 const ReceiptsDashboard = () => {
   const { user } = useContext(AuthContext);
@@ -103,28 +104,11 @@ const ReceiptsDashboard = () => {
   const fetchReceipts = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-
-      const response = await fetch(`${backendUrl}/api/finance/receipts`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setReceipts(data.receipts || []);
-      } else {
-        toast.error('Error', {
-          description: 'No se pudieron cargar las boletas'
-        });
-      }
+      const data = await Receipts.list();
+      setReceipts(data.receipts || []);
     } catch (error) {
       console.error('Error fetching receipts:', error);
-      toast.error('Error', {
-        description: 'Error de conexión'
-      });
+      toast.error('Error', { description: 'No se pudieron cargar las boletas' });
     } finally {
       setLoading(false);
     }
@@ -143,7 +127,7 @@ const ReceiptsDashboard = () => {
 
     if (filters.customer_document) {
       filtered = filtered.filter((r) =>
-        r.customer_document.includes(filters.customer_document)
+        (r.customer_document || '').includes(filters.customer_document)
       );
     }
 
@@ -164,177 +148,120 @@ const ReceiptsDashboard = () => {
 
   const createReceipt = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const payload = {
+        ...newReceipt,
+        amount: Number(newReceipt.amount),
+        due_date: newReceipt.due_date || null
+      };
 
-      const response = await fetch(`${backendUrl}/api/finance/receipts`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          ...newReceipt,
-          amount: parseFloat(newReceipt.amount),
-          due_date: newReceipt.due_date || null
-        })
+      const data = await Receipts.create(payload);
+
+      toast.success('Éxito', {
+        description: `Boleta ${data.receipt.receipt_number} creada correctamente`
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        toast.success('Éxito', {
-          description: `Boleta ${data.receipt.receipt_number} creada correctamente`
-        });
-        setOpenDialogs((prev) => ({ ...prev, newReceipt: false }));
-        setNewReceipt({
-          concept: 'ENROLLMENT',
-          description: '',
-          amount: '',
-          customer_name: '',
-          customer_document: '',
-          customer_email: '',
-          due_date: ''
-        });
-        fetchReceipts();
-      } else {
-        const error = await response.json();
-        toast.error('Error', {
-          description: error.detail || 'No se pudo crear la boleta'
-        });
-      }
+      setOpenDialogs((prev) => ({ ...prev, newReceipt: false }));
+      setNewReceipt({
+        concept: 'ENROLLMENT',
+        description: '',
+        amount: '',
+        customer_name: '',
+        customer_document: '',
+        customer_email: '',
+        due_date: ''
+      });
+
+      fetchReceipts();
     } catch (error) {
       console.error('Error creating receipt:', error);
-      toast.error('Error', {
-        description: 'Error de conexión'
-      });
+      const msg =
+        error?.response?.data?.detail ||
+        error?.message ||
+        'No se pudo crear la boleta';
+      toast.error('Error', { description: msg });
     }
   };
 
   const payReceipt = async () => {
     try {
-      const token = localStorage.getItem('token');
-
       const idempotencyKey =
-        paymentData.idempotency_key || `payment_${Date.now()}_${Math.random()}`;
+        paymentData.idempotency_key ||
+        `payment_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
-      const response = await fetch(
-        `${backendUrl}/api/finance/receipts/${paymentData.receipt_id}/pay`,
+      await Receipts.pay(
+        paymentData.receipt_id,
         {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            'Idempotency-Key': idempotencyKey
-          },
-          body: JSON.stringify({
-            payment_method: paymentData.payment_method,
-            payment_reference: paymentData.payment_reference || null
-          })
-        }
+          payment_method: paymentData.payment_method,
+          payment_reference: paymentData.payment_reference || null
+        },
+        { 'Idempotency-Key': idempotencyKey }
       );
 
-      if (response.ok) {
-        toast.success('Éxito', {
-          description: 'Pago registrado correctamente'
-        });
-        setOpenDialogs((prev) => ({ ...prev, payReceipt: false }));
-        setPaymentData({
-          receipt_id: '',
-          payment_method: 'CASH',
-          payment_reference: '',
-          idempotency_key: ''
-        });
-        fetchReceipts();
-      } else {
-        const error = await response.json();
-        toast.error('Error', {
-          description: error.detail || 'No se pudo registrar el pago'
-        });
-      }
+      toast.success('Éxito', { description: 'Pago registrado correctamente' });
+
+      setOpenDialogs((prev) => ({ ...prev, payReceipt: false }));
+      setPaymentData({
+        receipt_id: '',
+        payment_method: 'CASH',
+        payment_reference: '',
+        idempotency_key: ''
+      });
+
+      fetchReceipts();
     } catch (error) {
       console.error('Error processing payment:', error);
-      toast.error('Error', {
-        description: 'Error de conexión'
-      });
+      const msg =
+        error?.response?.data?.detail ||
+        error?.message ||
+        'No se pudo registrar el pago';
+      toast.error('Error', { description: msg });
     }
   };
 
   const cancelReceipt = async (receiptId, reason) => {
     try {
-      const token = localStorage.getItem('token');
+      await Receipts.cancel(receiptId, { reason });
 
-      const response = await fetch(
-        `${backendUrl}/api/finance/receipts/${receiptId}/cancel`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ reason })
-        }
-      );
-
-      if (response.ok) {
-        toast.success('Éxito', {
-          description: 'Boleta anulada correctamente'
-        });
-        fetchReceipts();
-      } else {
-        const error = await response.json();
-        toast.error('Error', {
-          description: error.detail || 'No se pudo anular la boleta'
-        });
-      }
+      toast.success('Éxito', { description: 'Boleta anulada correctamente' });
+      fetchReceipts();
     } catch (error) {
       console.error('Error canceling receipt:', error);
-      toast.error('Error', {
-        description: 'Error de conexión'
-      });
+      const msg =
+        error?.response?.data?.detail ||
+        error?.message ||
+        'No se pudo anular la boleta';
+      toast.error('Error', { description: msg });
     }
   };
 
   const downloadReceiptPDF = async (receiptId, receiptNumber) => {
     try {
-      const token = localStorage.getItem('token');
+      // IMPORTANTE: esto baja el PDF como blob
+      const res = await api.get(`/finance/receipts/${receiptId}/pdf`, {
+        responseType: 'blob'
+      });
 
-      const response = await fetch(
-        `${backendUrl}/api/finance/receipts/${receiptId}/pdf`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
 
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `boleta_${receiptNumber}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `boleta_${receiptNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
 
-        toast.success('Éxito', {
-          description: 'PDF descargado correctamente'
-        });
-      } else {
-        toast.error('Error', {
-          description: 'No se pudo descargar el PDF'
-        });
-      }
+      toast.success('Éxito', { description: 'PDF descargado correctamente' });
     } catch (error) {
       console.error('Error downloading PDF:', error);
-      toast.error('Error', {
-        description: 'Error de conexión'
-      });
+      toast.error('Error', { description: 'No se pudo descargar el PDF' });
     }
   };
 
   const openVerificationUrl = (receiptId) => {
-    const verificationUrl = `${backendUrl}/api/verificar/${receiptId}`;
+    // si luego haces /api/verificar/<id>, aquí quedará OK.
+    const verificationUrl = `${api.defaults.baseURL.replace(/\/api\/?$/, '')}/api/verificar/${receiptId}`;
     window.open(verificationUrl, '_blank');
   };
 
@@ -393,10 +320,9 @@ const ReceiptsDashboard = () => {
                 .filter(
                   (r) =>
                     r.status === 'PAID' &&
-                    new Date(r.issued_at).toDateString() ===
-                    new Date().toDateString()
+                    new Date(r.issued_at).toDateString() === new Date().toDateString()
                 )
-                .reduce((sum, r) => sum + r.amount, 0)
+                .reduce((sum, r) => sum + Number(r.amount || 0), 0)
                 .toFixed(2)}
             </div>
           </CardContent>
@@ -413,10 +339,9 @@ const ReceiptsDashboard = () => {
                 .filter(
                   (r) =>
                     r.status === 'PAID' &&
-                    new Date(r.issued_at).getMonth() ===
-                    new Date().getMonth()
+                    new Date(r.issued_at).getMonth() === new Date().getMonth()
                 )
-                .reduce((sum, r) => sum + r.amount, 0)
+                .reduce((sum, r) => sum + Number(r.amount || 0), 0)
                 .toFixed(2)}
             </div>
           </CardContent>
@@ -434,10 +359,9 @@ const ReceiptsDashboard = () => {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>Gestión de Boletas Internas</CardTitle>
-                <CardDescription>
-                  Emisión y control de boletas no tributarias
-                </CardDescription>
+                <CardDescription>Emisión y control de boletas no tributarias</CardDescription>
               </div>
+
               <Dialog
                 open={openDialogs.newReceipt}
                 onOpenChange={(open) =>
@@ -450,6 +374,7 @@ const ReceiptsDashboard = () => {
                     Nueva Boleta
                   </Button>
                 </DialogTrigger>
+
                 <DialogContent className="max-w-md">
                   <DialogHeader>
                     <DialogTitle>Crear Nueva Boleta</DialogTitle>
@@ -457,6 +382,7 @@ const ReceiptsDashboard = () => {
                       Complete los datos para generar una boleta interna
                     </DialogDescription>
                   </DialogHeader>
+
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="concept">Concepto *</Label>
@@ -470,16 +396,15 @@ const ReceiptsDashboard = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {Object.entries(receiptConcepts).map(
-                            ([key, label]) => (
-                              <SelectItem key={key} value={key}>
-                                {label}
-                              </SelectItem>
-                            )
-                          )}
+                          {Object.entries(receiptConcepts).map(([key, label]) => (
+                            <SelectItem key={key} value={key}>
+                              {label}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
+
                     <div>
                       <Label htmlFor="description">Descripción *</Label>
                       <Input
@@ -494,6 +419,7 @@ const ReceiptsDashboard = () => {
                         placeholder="Descripción del servicio"
                       />
                     </div>
+
                     <div>
                       <Label htmlFor="amount">Monto *</Label>
                       <Input
@@ -510,10 +436,9 @@ const ReceiptsDashboard = () => {
                         placeholder="0.00"
                       />
                     </div>
+
                     <div>
-                      <Label htmlFor="customer_name">
-                        Nombre del Cliente *
-                      </Label>
+                      <Label htmlFor="customer_name">Nombre del Cliente *</Label>
                       <Input
                         id="customer_name"
                         value={newReceipt.customer_name}
@@ -526,6 +451,7 @@ const ReceiptsDashboard = () => {
                         placeholder="Nombre completo"
                       />
                     </div>
+
                     <div>
                       <Label htmlFor="customer_document">Documento *</Label>
                       <Input
@@ -541,6 +467,7 @@ const ReceiptsDashboard = () => {
                         maxLength={11}
                       />
                     </div>
+
                     <div>
                       <Label htmlFor="customer_email">Email</Label>
                       <Input
@@ -556,6 +483,7 @@ const ReceiptsDashboard = () => {
                         placeholder="cliente@email.com"
                       />
                     </div>
+
                     <div>
                       <Label htmlFor="due_date">Fecha de Vencimiento</Label>
                       <Input
@@ -571,6 +499,7 @@ const ReceiptsDashboard = () => {
                       />
                     </div>
                   </div>
+
                   <DialogFooter>
                     <Button
                       onClick={createReceipt}
@@ -597,6 +526,7 @@ const ReceiptsDashboard = () => {
                     Limpiar
                   </Button>
                 </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   <div>
                     <Label>Estado</Label>
@@ -614,16 +544,15 @@ const ReceiptsDashboard = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="ALL">Todos</SelectItem>
-                        {Object.entries(receiptStatuses).map(
-                          ([key, { label }]) => (
-                            <SelectItem key={key} value={key}>
-                              {label}
-                            </SelectItem>
-                          )
-                        )}
+                        {Object.entries(receiptStatuses).map(([key, { label }]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
+
                   <div>
                     <Label>Concepto</Label>
                     <Select
@@ -640,16 +569,15 @@ const ReceiptsDashboard = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="ALL">Todos</SelectItem>
-                        {Object.entries(receiptConcepts).map(
-                          ([key, label]) => (
-                            <SelectItem key={key} value={key}>
-                              {label}
-                            </SelectItem>
-                          )
-                        )}
+                        {Object.entries(receiptConcepts).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
+
                   <div>
                     <Label>Documento</Label>
                     <Input
@@ -663,6 +591,7 @@ const ReceiptsDashboard = () => {
                       placeholder="DNI/RUC"
                     />
                   </div>
+
                   <div>
                     <Label>Fecha Desde</Label>
                     <Input
@@ -676,6 +605,7 @@ const ReceiptsDashboard = () => {
                       }
                     />
                   </div>
+
                   <div>
                     <Label>Fecha Hasta</Label>
                     <Input
@@ -707,33 +637,23 @@ const ReceiptsDashboard = () => {
                       <div className="flex items-center space-x-4">
                         <Receipt className="h-8 w-8 text-blue-500" />
                         <div>
-                          <p className="font-semibold">
-                            {receipt.receipt_number}
-                          </p>
+                          <p className="font-semibold">{receipt.receipt_number}</p>
                           <p className="text-sm text-gray-600">
                             {receiptConcepts[receipt.concept]}
                           </p>
-                          <p className="text-xs text-gray-500">
-                            {receipt.customer_name}
-                          </p>
+                          <p className="text-xs text-gray-500">{receipt.customer_name}</p>
                         </div>
                       </div>
 
                       <div className="flex items-center space-x-4">
                         <div className="text-right">
-                          <p className="font-semibold">
-                            S/. {receipt.amount.toFixed(2)}
-                          </p>
+                          <p className="font-semibold">S/. {Number(receipt.amount).toFixed(2)}</p>
                           <p className="text-xs text-gray-500">
-                            {new Date(
-                              receipt.issued_at
-                            ).toLocaleDateString()}
+                            {new Date(receipt.issued_at).toLocaleDateString()}
                           </p>
                         </div>
 
-                        <Badge
-                          className={`${receiptStatuses[receipt.status].color} text-white`}
-                        >
+                        <Badge className={`${receiptStatuses[receipt.status].color} text-white`}>
                           {receiptStatuses[receipt.status].label}
                         </Badge>
 
@@ -762,10 +682,7 @@ const ReceiptsDashboard = () => {
                             size="sm"
                             variant="outline"
                             onClick={() =>
-                              downloadReceiptPDF(
-                                receipt.id,
-                                receipt.receipt_number
-                              )
+                              downloadReceiptPDF(receipt.id, receipt.receipt_number)
                             }
                           >
                             <Download className="h-4 w-4" />
@@ -780,22 +697,18 @@ const ReceiptsDashboard = () => {
                             <QrCode className="h-4 w-4" />
                           </Button>
 
-                          {user?.role === 'FINANCE_ADMIN' &&
-                            receipt.status !== 'CANCELLED' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  const reason =
-                                    prompt('Motivo de anulación:');
-                                  if (reason) {
-                                    cancelReceipt(receipt.id, reason);
-                                  }
-                                }}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            )}
+                          {user?.role === 'FINANCE_ADMIN' && receipt.status !== 'CANCELLED' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                const reason = prompt('Motivo de anulación:');
+                                if (reason) cancelReceipt(receipt.id, reason);
+                              }}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -876,6 +789,7 @@ const ReceiptsDashboard = () => {
             <DialogTitle>Registrar Pago</DialogTitle>
             <DialogDescription>Confirme el pago de la boleta</DialogDescription>
           </DialogHeader>
+
           <div className="space-y-4">
             <div>
               <Label htmlFor="payment_method">Método de Pago *</Label>
@@ -900,6 +814,7 @@ const ReceiptsDashboard = () => {
                 </SelectContent>
               </Select>
             </div>
+
             <div>
               <Label htmlFor="payment_reference">Referencia del Pago</Label>
               <Input
@@ -915,6 +830,7 @@ const ReceiptsDashboard = () => {
               />
             </div>
           </div>
+
           <DialogFooter>
             <Button onClick={payReceipt}>
               <CheckCircle className="h-4 w-4 mr-2" />

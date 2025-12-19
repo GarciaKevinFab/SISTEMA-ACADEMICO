@@ -246,8 +246,8 @@ function PlansAndCurricula() {
 
   return (
     <IfPerm any={REQS.plans}>
-    <div className="page-container space-y-6">
-      <Card className="border-0 shadow-none"> 
+      <div className="page-container space-y-6">
+        <Card className="border-0 shadow-none">
           <CardHeader className="px-0 pt-0">
             {sectionHeader({ title: "Planes/Mallas Curriculares", description: "Define planes por carrera y sus cursos", Icon: LibraryBig })}
           </CardHeader>
@@ -448,8 +448,20 @@ function LoadAndSchedules() {
   const [rooms, setRooms] = useState([]);
   const [sections, setSections] = useState([]);
 
+  // ✅ nuevo: planes + cursos
+  const [plans, setPlans] = useState([]);
+  const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [planCourses, setPlanCourses] = useState([]);
+  const [selectedCourseId, setSelectedCourseId] = useState("");
+
   const [form, setForm] = useState({
-    course_code: "", course_name: "", teacher_id: "", room_id: "", capacity: 30, period: "2025-I",
+    course_id: "",      // ✅ opcional (pero recomendado)
+    course_code: "",
+    course_name: "",
+    teacher_id: "",
+    room_id: "",
+    capacity: 30,
+    period: "2025-I",
     slots: [], // { day: "MON", start: "08:00", end: "10:00" }
   });
 
@@ -458,15 +470,64 @@ function LoadAndSchedules() {
 
   const load = useCallback(async () => {
     try {
-      const [t, r, s] = await Promise.all([Sections.teachers(), Sections.rooms(), Sections.list({ period: "2025-I" })]);
+      const [t, r, s, pl] = await Promise.all([
+        Sections.teachers(),
+        Sections.rooms(),
+        Sections.list({ period: "2025-I" }),
+        Plans.list(),
+      ]);
+
       const teachersArr = Array.isArray(t?.teachers) ? t.teachers : Array.isArray(t) ? t : [];
       const roomsArr = Array.isArray(r?.classrooms) ? r.classrooms : Array.isArray(r) ? r : [];
       const sectionsArr = Array.isArray(s?.sections) ? s.sections : Array.isArray(s) ? s : [];
-      setTeachers(teachersArr); setRooms(roomsArr); setSections(sectionsArr);
-    } catch (e) { toast.error(e.message); }
+      const plansArr = Array.isArray(pl?.plans) ? pl.plans : Array.isArray(pl) ? pl : [];
+
+      setTeachers(teachersArr);
+      setRooms(roomsArr);
+      setSections(sectionsArr);
+      setPlans(plansArr);
+    } catch (e) {
+      toast.error(e.message);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // ✅ cargar cursos cuando elijo plan
+  useEffect(() => {
+    const run = async () => {
+      if (!selectedPlanId) {
+        setPlanCourses([]);
+        setSelectedCourseId("");
+        setForm((f) => ({ ...f, course_id: "", course_code: "", course_name: "" }));
+        return;
+      }
+      try {
+        const res = await Plans.listCourses(selectedPlanId);
+        const coursesArr = Array.isArray(res?.courses) ? res.courses : Array.isArray(res) ? res : [];
+        setPlanCourses(coursesArr);
+      } catch (e) {
+        toast.error(e.message || "Error al cargar cursos del plan");
+      }
+    };
+    run();
+  }, [selectedPlanId]);
+
+  const onSelectCourse = (courseId) => {
+    setSelectedCourseId(courseId);
+    const c = planCourses.find((x) => String(x.id) === String(courseId));
+    if (!c) {
+      setForm((f) => ({ ...f, course_id: "", course_code: "", course_name: "" }));
+      return;
+    }
+
+    setForm((f) => ({
+      ...f,
+      course_id: c.id,
+      course_code: c.code || "",
+      course_name: c.name || "",
+    }));
+  };
 
   const addSlot = () => setForm((f) => ({ ...f, slots: [...f.slots, newSlot] }));
 
@@ -481,27 +542,97 @@ function LoadAndSchedules() {
   };
 
   const createSection = async () => {
+    if (!selectedPlanId) return toast.error("Selecciona un plan");
+    if (!selectedCourseId) return toast.error("Selecciona un curso");
+    if (!form.teacher_id) return toast.error("Selecciona un docente");
+    if (!form.room_id) return toast.error("Selecciona un aula");
+    if (form.slots.length === 0) return toast.error("Agrega al menos una franja horaria");
     if (conflicts.length > 0) return toast.error("Resuelve los conflictos antes de crear la sección");
+
     try {
       await Sections.create(form);
       toast.success("Sección creada");
-      setForm({ course_code: "", course_name: "", teacher_id: "", room_id: "", capacity: 30, period: "2025-I", slots: [] });
+
+      setSelectedCourseId("");
+      setForm({
+        course_id: "",
+        course_code: "",
+        course_name: "",
+        teacher_id: "",
+        room_id: "",
+        capacity: 30,
+        period: "2025-I",
+        slots: []
+      });
+
       load();
     } catch (e) { toast.error(e.message); }
   };
 
   if (!allowed) return null;
+
   return (
     <div className="space-y-6">
       <Card className="border-0 shadow-none">
         <CardHeader className="px-0 pt-0">
-          {sectionHeader({ title: "Nueva Sección / Horario", description: "Asigna docente, aula y franja horaria", Icon: Calendar })}
+          {sectionHeader({ title: "Nueva Sección / Horario", description: "Asigna curso, docente, aula y franja horaria", Icon: Calendar })}
         </CardHeader>
+
         <CardContent className="px-0 space-y-4">
           <div className="grid md:grid-cols-3 gap-3">
-            <Labeled value={form.course_code} label="Curso (código)" onChange={(v) => setForm({ ...form, course_code: v })} placeholder="MAT101" />
-            <Labeled value={form.course_name} label="Curso (nombre)" onChange={(v) => setForm({ ...form, course_name: v })} placeholder="Matemática I" />
+
+            {/* ✅ PLAN */}
+            <div>
+              <Label>Plan/Malla *</Label>
+              <Select
+                value={selectedPlanId ? String(selectedPlanId) : "ALL"}
+                onValueChange={(v) => setSelectedPlanId(v === "ALL" ? "" : v)}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccionar plan" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Seleccionar</SelectItem>
+                  {(Array.isArray(plans) ? plans : []).map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.name} ({p.start_year})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* ✅ CURSO (jalado del plan) */}
+            <div>
+              <Label>Curso *</Label>
+              <Select
+                value={selectedCourseId ? String(selectedCourseId) : "ALL"}
+                onValueChange={(v) => onSelectCourse(v === "ALL" ? "" : v)}
+                disabled={!selectedPlanId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={selectedPlanId ? "Seleccionar curso" : "Primero elige un plan"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Seleccionar</SelectItem>
+                  {(Array.isArray(planCourses) ? planCourses : []).map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.code} — {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <Labeled value={form.period} label="Período" onChange={(v) => setForm({ ...form, period: v })} />
+
+            {/* readonly auto */}
+            <div>
+              <Label>Código (auto)</Label>
+              <Input value={form.course_code} readOnly />
+            </div>
+            <div className="md:col-span-2">
+              <Label>Nombre (auto)</Label>
+              <Input value={form.course_name} readOnly />
+            </div>
 
             <div>
               <Label>Docente</Label>
@@ -515,6 +646,7 @@ function LoadAndSchedules() {
                 </SelectContent>
               </Select>
             </div>
+
             <div>
               <Label>Aula</Label>
               <Select value={form.room_id ? String(form.room_id) : "ALL"} onValueChange={(v) => setForm({ ...form, room_id: v === "ALL" ? "" : Number(v) })}>
@@ -527,6 +659,7 @@ function LoadAndSchedules() {
                 </SelectContent>
               </Select>
             </div>
+
             <div>
               <Label>Capacidad (sección)</Label>
               <Input type="number" min="1" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: +e.target.value || 1 })} />
@@ -561,8 +694,12 @@ function LoadAndSchedules() {
           </div>
 
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={check} className="gap-2"><Plus className="h-4 w-4 rotate-45" />Verificar conflictos</Button>
-            <Button onClick={createSection} className="gap-2"><Save className="h-4 w-4" />Crear sección</Button>
+            <Button variant="outline" onClick={check} className="gap-2">
+              <Plus className="h-4 w-4 rotate-45" />Verificar conflictos
+            </Button>
+            <Button onClick={createSection} className="gap-2">
+              <Save className="h-4 w-4" />Crear sección
+            </Button>
           </div>
 
           {conflicts.length > 0 && (
@@ -593,7 +730,9 @@ function LoadAndSchedules() {
                   <td className="p-2">{s.course_code} – {s.course_name}</td>
                   <td className="p-2">{s.teacher_name}</td>
                   <td className="p-2">{s.room_name}</td>
-                  <td className="p-2">{(Array.isArray(s.slots) ? s.slots : []).map((k) => `${k.day} ${k.start}-${k.end}`).join(", ")}</td>
+                  <td className="p-2">
+                    {(Array.isArray(s.slots) ? s.slots : []).map((k) => `${k.day} ${k.start}-${k.end}`).join(", ")}
+                  </td>
                   <td className="p-2 text-center">{s.capacity}</td>
                 </tr>
               ))}
@@ -753,7 +892,7 @@ export default function AcademicModule() {
   const { hasAny } = useAuth();
   const [tab, setTab] = useState("dashboard");
 
-  const tabs = useMemo(() => ([ 
+  const tabs = useMemo(() => ([
     { key: "dashboard", label: "Dashboard", need: [] },
     { key: "plans", label: "Mallas", need: REQS.plans },
     { key: "load", label: "Carga & Horarios", need: REQS.load },
@@ -772,57 +911,57 @@ export default function AcademicModule() {
 
   return (
     // Aquí aplicas el estilo de fondo
-<div style={pageStyle} className="p-6">
-  {/* CONTENEDOR TRANSLÚCIDO COMO FINANZAS */}
-  <div className="rounded-3xl bg-slate-200/45 backdrop-blur-md border border-white/20 shadow-xl p-6 space-y-6">
+    <div style={pageStyle} className="p-6">
+      {/* CONTENEDOR TRANSLÚCIDO COMO FINANZAS */}
+      <div className="rounded-3xl bg-slate-200/45 backdrop-blur-md border border-white/20 shadow-xl p-6 space-y-6">
 
 
-    {/* HEADER */}
-    <div>
-      <div className="flex items-center gap-2">
-        <GraduationCap className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-semibold text-black">
-          Módulo Académico
-        </h1>
+        {/* HEADER */}
+        <div>
+          <div className="flex items-center gap-2">
+            <GraduationCap className="h-6 w-6 text-primary" />
+            <h1 className="text-2xl font-semibold text-black">
+              Módulo Académico
+            </h1>
+          </div>
+          <p className="text-sm text-gray-700 mt-1">
+            Gestión integral de planes, secciones, matrícula, notas y procesos
+          </p>
+        </div>
+
+        <Separator />
+
+        {/* TABS */}
+        <Tabs value={tab} onValueChange={setTab} className="space-y-6">
+          <TabsList className="w-full flex gap-2 overflow-x-auto no-scrollbar bg-white/55 backdrop-blur-md border border-white/30 rounded-2xl p-2 shadow-sm">
+            {tabs.map(t => (
+              <IconTab
+                key={t.key}
+                value={t.key}
+                label={t.label}
+                Icon={tabIcon(t.key)}
+              />
+            ))}
+          </TabsList>
+
+          <TabsContent value="dashboard">
+            <AcademicQuickActions go={setTab} />
+            <SmallAcademicDashboard />
+          </TabsContent>
+
+          <TabsContent value="plans"><PlansAndCurricula /></TabsContent>
+          <TabsContent value="load"><LoadAndSchedules /></TabsContent>
+          <TabsContent value="enroll"><EnrollmentComponent /></TabsContent>
+          <TabsContent value="grades"><GradesAttendanceComponent /></TabsContent>
+          <TabsContent value="syllabus"><SectionSyllabusEvaluation /></TabsContent>
+          <TabsContent value="kardex"><KardexAndCertificates /></TabsContent>
+          <TabsContent value="reports"><AcademicReportsPage /></TabsContent>
+          <TabsContent value="proc-inbox"><AcademicProcessesInbox /></TabsContent>
+          <TabsContent value="processes"><AcademicProcesses /></TabsContent>
+        </Tabs>
+
       </div>
-      <p className="text-sm text-gray-700 mt-1">
-        Gestión integral de planes, secciones, matrícula, notas y procesos
-      </p>
     </div>
-
-    <Separator />
-
-    {/* TABS */}
-    <Tabs value={tab} onValueChange={setTab} className="space-y-6">
-      <TabsList className="w-full flex gap-2 overflow-x-auto no-scrollbar bg-white/55 backdrop-blur-md border border-white/30 rounded-2xl p-2 shadow-sm">
-        {tabs.map(t => (
-          <IconTab
-            key={t.key}
-            value={t.key}
-            label={t.label}
-            Icon={tabIcon(t.key)}
-          />
-        ))}
-      </TabsList>
-
-      <TabsContent value="dashboard">
-        <AcademicQuickActions go={setTab} />
-        <SmallAcademicDashboard />
-      </TabsContent>
-
-      <TabsContent value="plans"><PlansAndCurricula /></TabsContent>
-      <TabsContent value="load"><LoadAndSchedules /></TabsContent>
-      <TabsContent value="enroll"><EnrollmentComponent /></TabsContent>
-      <TabsContent value="grades"><GradesAttendanceComponent /></TabsContent>
-      <TabsContent value="syllabus"><SectionSyllabusEvaluation /></TabsContent>
-      <TabsContent value="kardex"><KardexAndCertificates /></TabsContent>
-      <TabsContent value="reports"><AcademicReportsPage /></TabsContent>
-      <TabsContent value="proc-inbox"><AcademicProcessesInbox /></TabsContent>
-      <TabsContent value="processes"><AcademicProcesses /></TabsContent>
-    </Tabs>
-
-  </div>
-</div>
 
   );
 }

@@ -10,7 +10,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../..
 import { Button } from "../../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { Banknote, Receipt, Package, Truck, Users, BarChart3, AlertTriangle, TrendingUp, FileText, Coins } from "lucide-react";
-// ✅ Importa el toast seguro (NO de "sonner" directo)
 import { toast } from "../../utils/safeToast";
 import ConceptsCatalog from "./ConceptsCatalog";
 import ReconciliationDashboard from "./ReconciliationDashboard";
@@ -19,16 +18,11 @@ import FinanceReports from "./FinanceReports";
 import { fmtCurrency, formatApiError } from "../../utils/format";
 import { PERMS } from "../../auth/permissions";
 
-// ---- Helper seguro para toasts de error (sin tipos TS) ----
+// ---- Helper seguro para toasts de error ----
 const showApiError = (e, fallbackMsg) => {
   const err = formatApiError(e, fallbackMsg);
-  // formatApiError siempre devuelve string con nuestro wrapper,
-  // pero si cambia en el futuro, esto evita pasar objetos al toast.
-  if (typeof err === "string") {
-    toast.error(err);
-  } else {
-    toast.error(err.title ?? (fallbackMsg || "Error"), { description: err.description });
-  }
+  if (typeof err === "string") toast.error(err);
+  else toast.error(err.title ?? (fallbackMsg || "Error"), { description: err.description });
 };
 
 const FinanceModule = () => {
@@ -37,18 +31,17 @@ const FinanceModule = () => {
   const [dashboardStats, setDashboardStats] = useState({});
   const [loading, setLoading] = useState(true);
 
-  // ------- Permisos por funcionalidad (no por rol) -------
-  const canCashBanks = hasAny([PERMS["fin.cashbanks.view"]]);           // Caja y bancos + boletas
-  const canReceipts = hasAny([PERMS["fin.cashbanks.view"]]);            // Reutilizo la misma vista
-  const canStdAccounts = hasAny([PERMS["fin.student.accounts.view"]]);  // Estados de cuenta
-  const canConcepts = hasAny([PERMS["fin.concepts.manage"]]);           // Catálogo de conceptos
-  const canReconcile = hasAny([PERMS["fin.reconciliation.view"]]);      // Conciliación
-  const canReports = hasAny([PERMS["fin.reports.view"]]);               // Reportes fin.
-  const canInventory = hasAny([PERMS["fin.inventory.view"]]);           // Inventario (adm.)
-  const canLogistics = hasAny([PERMS["fin.logistics.view"]]);           // Logística (adm.)
-  const canHR = hasAny([PERMS["hr.view"]]);                             // RRHH (adm.)
+  // ------- Permisos por funcionalidad -------
+  const canCashBanks = hasAny([PERMS["fin.cashbanks.view"]]);
+  const canReceipts = hasAny([PERMS["fin.cashbanks.view"]]);
+  const canStdAccounts = hasAny([PERMS["fin.student.accounts.view"]]);
+  const canConcepts = hasAny([PERMS["fin.concepts.manage"]]);
+  const canReconcile = hasAny([PERMS["fin.reconciliation.view"]]);
+  const canReports = hasAny([PERMS["fin.reports.view"]]);
+  const canInventory = hasAny([PERMS["fin.inventory.view"]]);
+  const canLogistics = hasAny([PERMS["fin.logistics.view"]]);
+  const canHR = hasAny([PERMS["hr.view"]]);
 
-  // etiqueta visible según el permiso principal del usuario (solo estética)
   const roleLabel = (() => {
     if (hasAny([PERMS["fin.concepts.manage"], PERMS["fin.reports.view"], PERMS["fin.reconciliation.view"]])) return "Administrador Financiero";
     if (canCashBanks || canReceipts || canStdAccounts) return "Caja";
@@ -62,20 +55,27 @@ const FinanceModule = () => {
     let alive = true;
     try {
       setLoading(true);
-      const { data } = await api.get("/dashboard/stats");
+      // ✅ IMPORTANTE: backend debe tener esta ruta (te la dejo abajo)
+      const { data } = await api.get("/finance/dashboard/stats");
       if (alive) setDashboardStats(data?.stats ?? data ?? {});
     } catch (error) {
       if (alive) showApiError(error, "No se pudieron cargar las estadísticas");
     } finally {
       if (alive) setLoading(false);
     }
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [api]);
 
   useEffect(() => {
     let cleanup;
-    (async () => { cleanup = await fetchDashboardStats(); })();
-    return () => { if (typeof cleanup === "function") cleanup(); };
+    (async () => {
+      cleanup = await fetchDashboardStats();
+    })();
+    return () => {
+      if (typeof cleanup === "function") cleanup();
+    };
   }, [fetchDashboardStats]);
 
   const renderMainDashboard = () => {
@@ -87,7 +87,6 @@ const FinanceModule = () => {
 
     return (
       <div className="space-y-6">
-        {/* tarjetas top, cada una condicionada por permiso */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {canCashBanks && (
             <Card className="border-l-4 border-l-green-500">
@@ -124,9 +123,7 @@ const FinanceModule = () => {
                 <AlertTriangle className="h-4 w-4 text-orange-600" aria-hidden="true" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-orange-600">
-                  {Number.isFinite(lowStockAlerts) ? lowStockAlerts : 0}
-                </div>
+                <div className="text-2xl font-bold text-orange-600">{Number.isFinite(lowStockAlerts) ? lowStockAlerts : 0}</div>
                 <p className="text-xs text-muted-foreground">Ítems con stock bajo</p>
               </CardContent>
             </Card>
@@ -139,16 +136,13 @@ const FinanceModule = () => {
                 <Users className="h-4 w-4 text-purple-600" aria-hidden="true" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-purple-600">
-                  {Number.isFinite(activeEmployees) ? activeEmployees : 0}
-                </div>
+                <div className="text-2xl font-bold text-purple-600">{Number.isFinite(activeEmployees) ? activeEmployees : 0}</div>
                 <p className="text-xs text-muted-foreground">Empleados registrados</p>
               </CardContent>
             </Card>
           )}
         </div>
 
-        {/* Acciones rápidas según permisos */}
         <Card aria-busy={loading}>
           <CardHeader>
             <CardTitle>Acciones rápidas</CardTitle>
@@ -157,31 +151,51 @@ const FinanceModule = () => {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
               {canCashBanks && (
-                <Button onClick={() => setActiveTab("cash-banks")} className="h-20 flex flex-col items-center justify-center space-y-2" variant="outline">
+                <Button
+                  onClick={() => setActiveTab("cash-banks")}
+                  className="h-20 flex flex-col items-center justify-center space-y-2"
+                  variant="outline"
+                >
                   <Banknote className="h-6 w-6" aria-hidden="true" />
                   <span className="text-sm">Caja y Bancos</span>
                 </Button>
               )}
               {canReceipts && (
-                <Button onClick={() => setActiveTab("receipts")} className="h-20 flex flex-col items-center justify-center space-y-2" variant="outline">
+                <Button
+                  onClick={() => setActiveTab("receipts")}
+                  className="h-20 flex flex-col items-center justify-center space-y-2"
+                  variant="outline"
+                >
                   <Receipt className="h-6 w-6" aria-hidden="true" />
                   <span className="text-sm">Boletas</span>
                 </Button>
               )}
               {canInventory && (
-                <Button onClick={() => setActiveTab("inventory")} className="h-20 flex flex-col items-center justify-center space-y-2" variant="outline">
+                <Button
+                  onClick={() => setActiveTab("inventory")}
+                  className="h-20 flex flex-col items-center justify-center space-y-2"
+                  variant="outline"
+                >
                   <Package className="h-6 w-6" aria-hidden="true" />
                   <span className="text-sm">Inventario</span>
                 </Button>
               )}
               {canLogistics && (
-                <Button onClick={() => setActiveTab("logistics")} className="h-20 flex flex-col items-center justify-center space-y-2" variant="outline">
+                <Button
+                  onClick={() => setActiveTab("logistics")}
+                  className="h-20 flex flex-col items-center justify-center space-y-2"
+                  variant="outline"
+                >
                   <Truck className="h-6 w-6" aria-hidden="true" />
                   <span className="text-sm">Logística</span>
                 </Button>
               )}
               {canHR && (
-                <Button onClick={() => setActiveTab("hr")} className="h-20 flex flex-col items-center justify-center space-y-2" variant="outline">
+                <Button
+                  onClick={() => setActiveTab("hr")}
+                  className="h-20 flex flex-col items-center justify-center space-y-2"
+                  variant="outline"
+                >
                   <Users className="h-6 w-6" aria-hidden="true" />
                   <span className="text-sm">RRHH</span>
                 </Button>
@@ -189,97 +203,8 @@ const FinanceModule = () => {
             </div>
           </CardContent>
         </Card>
-
-        {/* demo de actividades / tareas */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader><CardTitle>Actividades recientes</CardTitle></CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {canReceipts && (
-                  <div className="flex items-center space-x-3">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Boleta REC-001-000125 pagada</p>
-                      <p className="text-xs text-muted-foreground">Hace 5 minutos</p>
-                    </div>
-                  </div>
-                )}
-                {canInventory && (
-                  <div className="flex items-center space-x-3">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Movimiento de inventario: Entrada</p>
-                      <p className="text-xs text-muted-foreground">Hace 12 minutos</p>
-                    </div>
-                  </div>
-                )}
-                {canInventory && (
-                  <div className="flex items-center space-x-3">
-                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Alerta: Stock bajo en Papel Bond</p>
-                      <p className="text-xs text-muted-foreground">Hace 1 hora</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Próximas tareas</CardTitle></CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {canCashBanks && (
-                  <div className="flex items-center space-x-3">
-                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Arqueo de caja pendiente</p>
-                      <p className="text-xs text-muted-foreground">Vence hoy</p>
-                    </div>
-                  </div>
-                )}
-                {canReconcile && (
-                  <div className="flex items-center space-x-3">
-                    <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Conciliación bancaria</p>
-                      <p className="text-xs text-muted-foreground">Vence mañana</p>
-                    </div>
-                  </div>
-                )}
-                {canReports && (
-                  <div className="flex items-center space-x-3">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Reporte de inventario mensual</p>
-                      <p className="text-xs text-muted-foreground">Vence en 3 días</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </div>
     );
-  };
-
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case "dashboard": return renderMainDashboard();
-      case "cash-banks": return canCashBanks ? <CashBanksDashboard /> : <div className="text-center py-8">No tienes permisos para acceder a esta sección</div>;
-      case "receipts": return canReceipts ? <ReceiptsDashboard /> : <div className="text-center py-8">No tienes permisos para acceder a esta sección</div>;
-      case "student-accounts": return canStdAccounts ? <StudentAccountsDashboard /> : <div className="text-center py-8">No tienes permisos…</div>;
-      case "concepts": return canConcepts ? <ConceptsCatalog /> : <div className="text-center py-8">No tienes permisos…</div>;
-      case "reconciliation": return canReconcile ? <ReconciliationDashboard /> : <div className="text-center py-8">No tienes permisos…</div>;
-      case "reports": return canReports ? <FinanceReports /> : <div className="text-center py-8">No tienes permisos…</div>;
-      case "inventory": return canInventory ? <InventoryDashboard /> : <div className="text-center py-8">No tienes permisos…</div>;
-      case "logistics": return canLogistics ? <LogisticsDashboard /> : <div className="text-center py-8">No tienes permisos…</div>;
-      case "hr": return canHR ? <HRDashboard /> : <div className="text-center py-8">No tienes permisos…</div>;
-      default: return renderMainDashboard();
-    }
   };
 
   if (loading) {
@@ -292,195 +217,126 @@ const FinanceModule = () => {
 
   if (!user) return <div className="text-center py-12">Acceso no autorizado</div>;
 
-  // REEMPLAZA TODO TU return(...) POR ESTE:
+  return (
+    <div className="p-6">
+      <div className="rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10">
+        <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)]">
+          <div className="px-6 pt-5">
+            <h1 className="text-xl font-bold text-slate-900">Tesorería y Administración</h1>
+            <p className="text-sm text-slate-700">Sistema integral — {roleLabel}</p>
+            <div className="mt-3 h-px w-full bg-white/60" />
+          </div>
 
-return (
-  <div className="p-6">
-    {/* CONTENEDOR ESTILO "MÓDULO ACADÉMICO" */}
-    <div className="rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10">
-      <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)]">
-
-        {/* HEADER */}
-        <div className="px-6 pt-5">
-          <h1 className="text-xl font-bold text-slate-900">Tesorería y Administración</h1>
-          <p className="text-sm text-slate-700">Sistema integral — {roleLabel}</p>
-          <div className="mt-3 h-px w-full bg-white/60" />
-        </div>
-
-        {/* BODY */}
-        <div className="px-6 pb-6 pt-4">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-
-            {/* BARRA DE TABS (igual a los otros módulos) */}
-            <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
-              <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2">
-
-                <TabsTrigger
-                  value="dashboard"
-                  className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <BarChart3 className="h-4 w-4" aria-hidden="true" />
-                    Dashboard
-                  </span>
-                </TabsTrigger>
-
-                {canCashBanks && (
-                  <>
-                    <TabsTrigger
-                      value="cash-banks"
-                      className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        <Banknote className="h-4 w-4" aria-hidden="true" />
-                        Caja y Bancos
-                      </span>
-                    </TabsTrigger>
-
-                    <TabsTrigger
-                      value="receipts"
-                      className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        <Receipt className="h-4 w-4" aria-hidden="true" />
-                        Boletas
-                      </span>
-                    </TabsTrigger>
-                  </>
-                )}
-
-                {canStdAccounts && (
-                  <TabsTrigger
-                    value="student-accounts"
-                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Coins className="h-4 w-4" aria-hidden="true" />
-                      Estados de Cuenta
-                    </span>
-                  </TabsTrigger>
-                )}
-
-                {canConcepts && (
-                  <TabsTrigger
-                    value="concepts"
-                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <FileText className="h-4 w-4" aria-hidden="true" />
-                      Conceptos
-                    </span>
-                  </TabsTrigger>
-                )}
-
-                {canReconcile && (
-                  <TabsTrigger
-                    value="reconciliation"
-                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Banknote className="h-4 w-4" aria-hidden="true" />
-                      Conciliación
-                    </span>
-                  </TabsTrigger>
-                )}
-
-                {canReports && (
-                  <TabsTrigger
-                    value="reports"
-                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                  >
+          <div className="px-6 pb-6 pt-4">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+              <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
+                <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2">
+                  <TabsTrigger value="dashboard" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
                     <span className="inline-flex items-center gap-2">
                       <BarChart3 className="h-4 w-4" aria-hidden="true" />
-                      Reportes
+                      Dashboard
                     </span>
                   </TabsTrigger>
-                )}
 
-                {canInventory && (
-                  <TabsTrigger
-                    value="inventory"
-                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Package className="h-4 w-4" aria-hidden="true" />
-                      Inventario
-                    </span>
-                  </TabsTrigger>
-                )}
+                  {canCashBanks && (
+                    <>
+                      <TabsTrigger value="cash-banks" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <span className="inline-flex items-center gap-2">
+                          <Banknote className="h-4 w-4" aria-hidden="true" />
+                          Caja y Bancos
+                        </span>
+                      </TabsTrigger>
 
-                {canLogistics && (
-                  <TabsTrigger
-                    value="logistics"
-                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Truck className="h-4 w-4" aria-hidden="true" />
-                      Logística
-                    </span>
-                  </TabsTrigger>
-                )}
+                      <TabsTrigger value="receipts" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <span className="inline-flex items-center gap-2">
+                          <Receipt className="h-4 w-4" aria-hidden="true" />
+                          Boletas
+                        </span>
+                      </TabsTrigger>
+                    </>
+                  )}
 
-                {canHR && (
-                  <TabsTrigger
-                    value="hr"
-                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Users className="h-4 w-4" aria-hidden="true" />
-                      RRHH
-                    </span>
-                  </TabsTrigger>
-                )}
-              </TabsList>
-            </div>
+                  {canStdAccounts && (
+                    <TabsTrigger value="student-accounts" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                      <span className="inline-flex items-center gap-2">
+                        <Coins className="h-4 w-4" aria-hidden="true" />
+                        Estados de Cuenta
+                      </span>
+                    </TabsTrigger>
+                  )}
 
-            {/* CONTENIDOS (igual que Académico: TabsContent por pestaña) */}
-            <TabsContent value="dashboard">{renderMainDashboard()}</TabsContent>
+                  {canConcepts && (
+                    <TabsTrigger value="concepts" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                      <span className="inline-flex items-center gap-2">
+                        <FileText className="h-4 w-4" aria-hidden="true" />
+                        Conceptos
+                      </span>
+                    </TabsTrigger>
+                  )}
 
-            <TabsContent value="cash-banks">
-              {canCashBanks ? <CashBanksDashboard /> : <div className="text-center py-8">No tienes permisos para acceder a esta sección</div>}
-            </TabsContent>
+                  {canReconcile && (
+                    <TabsTrigger value="reconciliation" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                      <span className="inline-flex items-center gap-2">
+                        <Banknote className="h-4 w-4" aria-hidden="true" />
+                        Conciliación
+                      </span>
+                    </TabsTrigger>
+                  )}
 
-            <TabsContent value="receipts">
-              {canReceipts ? <ReceiptsDashboard /> : <div className="text-center py-8">No tienes permisos para acceder a esta sección</div>}
-            </TabsContent>
+                  {canReports && (
+                    <TabsTrigger value="reports" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                      <span className="inline-flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4" aria-hidden="true" />
+                        Reportes
+                      </span>
+                    </TabsTrigger>
+                  )}
 
-            <TabsContent value="student-accounts">
-              {canStdAccounts ? <StudentAccountsDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
-            </TabsContent>
+                  {canInventory && (
+                    <TabsTrigger value="inventory" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                      <span className="inline-flex items-center gap-2">
+                        <Package className="h-4 w-4" aria-hidden="true" />
+                        Inventario
+                      </span>
+                    </TabsTrigger>
+                  )}
 
-            <TabsContent value="concepts">
-              {canConcepts ? <ConceptsCatalog /> : <div className="text-center py-8">No tienes permisos…</div>}
-            </TabsContent>
+                  {canLogistics && (
+                    <TabsTrigger value="logistics" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                      <span className="inline-flex items-center gap-2">
+                        <Truck className="h-4 w-4" aria-hidden="true" />
+                        Logística
+                      </span>
+                    </TabsTrigger>
+                  )}
 
-            <TabsContent value="reconciliation">
-              {canReconcile ? <ReconciliationDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
-            </TabsContent>
+                  {canHR && (
+                    <TabsTrigger value="hr" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                      <span className="inline-flex items-center gap-2">
+                        <Users className="h-4 w-4" aria-hidden="true" />
+                        RRHH
+                      </span>
+                    </TabsTrigger>
+                  )}
+                </TabsList>
+              </div>
 
-            <TabsContent value="reports">
-              {canReports ? <FinanceReports /> : <div className="text-center py-8">No tienes permisos…</div>}
-            </TabsContent>
-
-            <TabsContent value="inventory">
-              {canInventory ? <InventoryDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
-            </TabsContent>
-
-            <TabsContent value="logistics">
-              {canLogistics ? <LogisticsDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
-            </TabsContent>
-
-            <TabsContent value="hr">
-              {canHR ? <HRDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
-            </TabsContent>
-
-          </Tabs>
+              <TabsContent value="dashboard">{renderMainDashboard()}</TabsContent>
+              <TabsContent value="cash-banks">{canCashBanks ? <CashBanksDashboard /> : <div className="text-center py-8">No tienes permisos</div>}</TabsContent>
+              <TabsContent value="receipts">{canReceipts ? <ReceiptsDashboard /> : <div className="text-center py-8">No tienes permisos</div>}</TabsContent>
+              <TabsContent value="student-accounts">{canStdAccounts ? <StudentAccountsDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}</TabsContent>
+              <TabsContent value="concepts">{canConcepts ? <ConceptsCatalog /> : <div className="text-center py-8">No tienes permisos…</div>}</TabsContent>
+              <TabsContent value="reconciliation">{canReconcile ? <ReconciliationDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}</TabsContent>
+              <TabsContent value="reports">{canReports ? <FinanceReports /> : <div className="text-center py-8">No tienes permisos…</div>}</TabsContent>
+              <TabsContent value="inventory">{canInventory ? <InventoryDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}</TabsContent>
+              <TabsContent value="logistics">{canLogistics ? <LogisticsDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}</TabsContent>
+              <TabsContent value="hr">{canHR ? <HRDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}</TabsContent>
+            </Tabs>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-);
-
+  );
 };
 
 export default FinanceModule;

@@ -1,5 +1,5 @@
 // src/components/MineduIntegrationModule.jsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "../../context/AuthContext";
 
 import {
@@ -22,8 +22,6 @@ import {
   XCircle,
   Clock,
   AlertTriangle,
-  BarChart3,
-  FileSpreadsheet,
   Eye,
   Shield,
   Users,
@@ -34,10 +32,10 @@ import {
   ListChecks,
   Play,
   Pause,
-  Edit,
   Terminal,
   RotateCcw,
   Search,
+  Copy,
 } from "lucide-react";
 
 import { toast } from "../../utils/safeToast";
@@ -51,6 +49,18 @@ import {
   SelectItem,
 } from "../../components/ui/select";
 
+/* shadcn dialog */
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "../../components/ui/dialog";
+
+/* shadcn separator (opcional pero bonito) */
+import { Separator } from "../../components/ui/separator";
+
 /* servicios MINEDU */
 import {
   Catalog,
@@ -62,7 +72,9 @@ import {
   Stats,
 } from "../../services/minedu.service";
 
-/* helpers */
+/* =========================
+   helpers
+========================= */
 function formatApiError(err, fallback = "Ocurrió un error") {
   const data = err?.response?.data;
   if (data?.detail) {
@@ -85,6 +97,30 @@ function formatApiError(err, fallback = "Ocurrió un error") {
   return fallback;
 }
 
+function safeDate(value, withTime = false) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return withTime ? d.toLocaleString() : d.toLocaleDateString();
+}
+
+function safeJson(obj) {
+  try {
+    return JSON.stringify(obj ?? {}, null, 2);
+  } catch {
+    return "{}";
+  }
+}
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.success("Copiado ✅");
+  } catch {
+    toast.error("No se pudo copiar");
+  }
+}
+
 /* =========================================================
    DASHBOARD
 ========================================================= */
@@ -99,9 +135,7 @@ const MineduDashboard = () => {
       setStats(data ?? {});
     } catch (error) {
       console.error("Error fetching MINEDU stats:", error);
-      toast.error(
-        formatApiError(error, "Error al cargar estadísticas MINEDU")
-      );
+      toast.error(formatApiError(error, "Error al cargar estadísticas MINEDU"));
     } finally {
       setLoading(false);
     }
@@ -124,15 +158,19 @@ const MineduDashboard = () => {
 
   return (
     <div className="space-y-6">
-  <div className="flex justify-between items-center">
-    <div>
-      <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-        Integración MINEDU
-      </h2>
-      <p className="text-slate-600">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+            Integración MINEDU
+          </h2>
+          <p className="text-slate-600">
             SIA/SIAGIE – exportación, validación y monitoreo
           </p>
         </div>
+        <Button variant="outline" onClick={fetchDashboardStats}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Actualizar
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -144,27 +182,21 @@ const MineduDashboard = () => {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {s.pending_exports || 0}
-            </div>
+            <div className="text-2xl font-bold">{s.pending_exports || 0}</div>
             <p className="text-xs text-muted-foreground">Por procesar</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Completadas
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Completadas</CardTitle>
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
               {s.completed_exports || 0}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Enviadas exitosamente
-            </p>
+            <p className="text-xs text-muted-foreground">Enviadas exitosamente</p>
           </CardContent>
         </Card>
 
@@ -183,9 +215,7 @@ const MineduDashboard = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Tasa de Éxito
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Tasa de Éxito</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -194,9 +224,7 @@ const MineduDashboard = () => {
                 ? `${Math.round(s.success_rate)}%`
                 : "0%"}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Sobre el total enviado
-            </p>
+            <p className="text-xs text-muted-foreground">Sobre el total enviado</p>
           </CardContent>
         </Card>
       </div>
@@ -220,6 +248,7 @@ const MineduDashboard = () => {
                 {breakdown.enrollment_exports || 0}
               </div>
             </div>
+
             <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
               <div className="flex items-center space-x-3">
                 <Award className="h-8 w-8 text-green-600" />
@@ -232,6 +261,7 @@ const MineduDashboard = () => {
                 {breakdown.grades_exports || 0}
               </div>
             </div>
+
             <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
               <div className="flex items-center space-x-3">
                 <BookOpen className="h-8 w-8 text-purple-600" />
@@ -258,6 +288,7 @@ const ExportDataModule = () => {
   const [exportType, setExportType] = useState("");
   const [academicYear, setAcademicYear] = useState("2024");
   const [academicPeriod, setAcademicPeriod] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const handleExport = async (e) => {
     e.preventDefault();
@@ -265,27 +296,29 @@ const ExportDataModule = () => {
       toast.error("Complete todos los campos requeridos");
       return;
     }
+    setSubmitting(true);
     try {
       const payload = {
         academic_year: parseInt(academicYear, 10),
         academic_period: academicPeriod,
       };
-      if (exportType === "enrollments")
-        await Exports.enqueueEnrollments(payload);
+      if (exportType === "enrollments") await Exports.enqueueEnrollments(payload);
       else await Exports.enqueueGrades(payload);
+
       toast.success("Exportación encolada");
       setExportType("");
       setAcademicPeriod("");
     } catch (error) {
       toast.error(formatApiError(error, "Error al iniciar exportación"));
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">
-        Exportación de Datos
-      </h2>
+      <h2 className="text-2xl font-bold text-gray-900">Exportación de Datos</h2>
+
       <Card>
         <CardHeader>
           <CardTitle>Exportar a MINEDU</CardTitle>
@@ -316,6 +349,7 @@ const ExportDataModule = () => {
                   </SelectContent>
                 </Select>
               </div>
+
               <div>
                 <Label>Año *</Label>
                 <Select value={academicYear} onValueChange={setAcademicYear}>
@@ -330,12 +364,10 @@ const ExportDataModule = () => {
                   </SelectContent>
                 </Select>
               </div>
+
               <div>
                 <Label>Período *</Label>
-                <Select
-                  value={academicPeriod}
-                  onValueChange={setAcademicPeriod}
-                >
+                <Select value={academicPeriod} onValueChange={setAcademicPeriod}>
                   <SelectTrigger className="mt-2">
                     <SelectValue placeholder="Período" />
                   </SelectTrigger>
@@ -352,8 +384,7 @@ const ExportDataModule = () => {
               <div className="flex items-start gap-3 text-sm text-blue-700">
                 <AlertTriangle className="h-5 w-5 mt-0.5" />
                 <span>
-                  <b>Importante:</b> valide catálogos y mapeos antes de
-                  exportar.
+                  <b>Importante:</b> valide catálogos y mapeos antes de exportar.
                 </span>
               </div>
             </div>
@@ -370,12 +401,23 @@ const ExportDataModule = () => {
               >
                 Limpiar
               </Button>
+
               <Button
                 type="submit"
                 className="bg-blue-600 hover:bg-blue-700"
+                disabled={submitting}
               >
-                <Upload className="h-4 w-4 mr-2" />
-                Iniciar Exportación
+                {submitting ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Encolando...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Iniciar Exportación
+                  </>
+                )}
               </Button>
             </div>
           </form>
@@ -393,6 +435,10 @@ const ExportHistoryModule = () => {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
+
+  // detalle (Dialog)
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedExport, setSelectedExport] = useState(null);
 
   const fetchExports = useCallback(async () => {
     try {
@@ -425,8 +471,7 @@ const ExportHistoryModule = () => {
       case "COMPLETED":
         return {
           label: "Completado",
-          className:
-            "bg-green-100 text-green-700 border border-green-200",
+          className: "bg-green-100 text-green-700 border border-green-200",
           Icon: CheckCircle,
         };
       case "FAILED":
@@ -438,33 +483,37 @@ const ExportHistoryModule = () => {
       case "PROCESSING":
         return {
           label: "Procesando",
-          className:
-            "bg-yellow-100 text-yellow-700 border border-yellow-200",
+          className: "bg-yellow-100 text-yellow-700 border border-yellow-200",
           Icon: RefreshCw,
         };
       case "RETRYING":
         return {
           label: "Reintentando",
-          className:
-            "bg-yellow-100 text-yellow-700 border border-yellow-200",
+          className: "bg-yellow-100 text-yellow-700 border border-yellow-200",
           Icon: RefreshCw,
         };
       case "PENDING":
       default:
         return {
           label: "Pendiente",
-          className:
-            "bg-gray-100 text-gray-700 border border-gray-200",
+          className: "bg-gray-100 text-gray-700 border border-gray-200",
           Icon: Clock,
         };
     }
   };
 
-  const filtered = exportsData.filter((exp) => {
-    const okS = statusFilter === "ALL" || exp.status === statusFilter;
-    const okT = typeFilter === "ALL" || exp.data_type === typeFilter;
-    return okS && okT;
-  });
+  const filtered = useMemo(() => {
+    return (exportsData ?? []).filter((exp) => {
+      const okS = statusFilter === "ALL" || exp.status === statusFilter;
+      const okT = typeFilter === "ALL" || exp.data_type === typeFilter;
+      return okS && okT;
+    });
+  }, [exportsData, statusFilter, typeFilter]);
+
+  const openDetail = (exp) => {
+    setSelectedExport(exp);
+    setDetailOpen(true);
+  };
 
   if (loading) {
     return (
@@ -476,10 +525,76 @@ const ExportHistoryModule = () => {
 
   return (
     <div className="space-y-6">
+      {/* Dialog Detalle */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Detalle de exportación</DialogTitle>
+            <DialogDescription>
+              Si esto falla en prod, mínimo ya tienes el cadáver bien etiquetado.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedExport ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div className="p-3 rounded border bg-white">
+                  <div className="text-xs text-gray-500">ID</div>
+                  <div className="font-semibold">{selectedExport.id}</div>
+                </div>
+
+                <div className="p-3 rounded border bg-white">
+                  <div className="text-xs text-gray-500">Tipo</div>
+                  <div className="font-semibold">{selectedExport.data_type}</div>
+                </div>
+
+                <div className="p-3 rounded border bg-white">
+                  <div className="text-xs text-gray-500">Estado</div>
+                  <div className="font-semibold">{selectedExport.status}</div>
+                </div>
+
+                <div className="p-3 rounded border bg-white">
+                  <div className="text-xs text-gray-500">Registros</div>
+                  <div className="font-semibold">
+                    {selectedExport.total_records ?? "N/A"}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded border bg-white md:col-span-2">
+                  <div className="text-xs text-gray-500">Período</div>
+                  <div className="font-semibold">
+                    {selectedExport.record_data?.academic_year ?? "—"}-
+                    {selectedExport.record_data?.academic_period ?? "—"}
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold">record_data</div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => copyToClipboard(safeJson(selectedExport.record_data))}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copiar JSON
+                </Button>
+              </div>
+
+              <pre className="p-3 rounded border bg-gray-50 text-xs overflow-auto max-h-[320px]">
+                {safeJson(selectedExport.record_data)}
+              </pre>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">Sin datos.</div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">
-          Historial de Exportaciones
-        </h2>
+        <h2 className="text-2xl font-bold text-gray-900">Historial de Exportaciones</h2>
         <Button onClick={fetchExports} variant="outline">
           <RefreshCw className="h-4 w-4 mr-2" />
           Actualizar
@@ -518,6 +633,10 @@ const ExportHistoryModule = () => {
             </SelectContent>
           </Select>
         </div>
+
+        <div className="text-sm text-gray-600 ml-auto">
+          Mostrando: <b>{filtered.length}</b>
+        </div>
       </div>
 
       <Card>
@@ -546,6 +665,7 @@ const ExportHistoryModule = () => {
                   </th>
                 </tr>
               </thead>
+
               <tbody className="bg-white divide-y divide-gray-200">
                 {filtered.map((exp) => {
                   const cfg = statusCfg(exp.status);
@@ -561,45 +681,43 @@ const ExportHistoryModule = () => {
                           ) : (
                             <BookOpen className="h-4 w-4 text-purple-600" />
                           )}
-                          <span className="font-medium">
-                            {exp.data_type}
-                          </span>
+                          <span className="font-medium">{exp.data_type}</span>
                         </div>
                       </td>
+
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {exp.record_data?.academic_year}-
-                        {exp.record_data?.academic_period}
+                        {exp.record_data?.academic_year ?? "—"}-
+                        {exp.record_data?.academic_period ?? "—"}
                       </td>
+
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge
-                          variant="secondary"
-                          className={cfg.className}
-                        >
+                        <Badge variant="secondary" className={cfg.className}>
                           <span className="flex items-center gap-1">
                             <Icon className="h-3 w-3" />
                             {cfg.label}
                           </span>
                         </Badge>
                       </td>
+
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {exp.total_records ?? "N/A"}
                       </td>
+
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {exp.created_at
-                          ? new Date(
-                            exp.created_at
-                          ).toLocaleDateString()
-                          : "-"}
+                        {safeDate(exp.created_at)}
                       </td>
+
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex gap-2">
                           <Button
                             variant="ghost"
                             size="sm"
                             title="Ver detalle"
+                            onClick={() => openDetail(exp)}
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
+
                           {exp.status === "FAILED" && (
                             <Button
                               variant="ghost"
@@ -660,9 +778,8 @@ const DataValidationModule = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">
-          Validación de Integridad
-        </h2>
+        <h2 className="text-2xl font-bold text-gray-900">Validación de Integridad</h2>
+
         <Button
           onClick={runValidation}
           disabled={loading}
@@ -704,86 +821,61 @@ const DataValidationModule = () => {
                   )}
                   <div>
                     <h3
-                      className={`font-semibold ${validation.valid
-                          ? "text-green-800"
-                          : "text-red-800"
+                      className={`font-semibold ${validation.valid ? "text-green-800" : "text-red-800"
                         }`}
                     >
-                      {validation.valid
-                        ? "Datos Válidos"
-                        : "Se Encontraron Problemas"}
+                      {validation.valid ? "Datos Válidos" : "Se Encontraron Problemas"}
                     </h3>
                     <p
-                      className={`text-sm ${validation.valid
-                          ? "text-green-700"
-                          : "text-red-700"
+                      className={`text-sm ${validation.valid ? "text-green-700" : "text-red-700"
                         }`}
                     >
-                      {validation.valid
-                        ? "Listo para exportación"
-                        : "Corrija los puntos listados abajo"}
+                      {validation.valid ? "Listo para exportación" : "Corrija los puntos listados abajo"}
                     </p>
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {Object.entries(validation.stats || {}).map(
-                  ([key, value]) => (
-                    <div
-                      key={key}
-                      className="p-4 bg-gray-50 rounded-lg"
-                    >
-                      <div className="text-2xl font-bold text-gray-900">
-                        {value}
-                      </div>
-                      <div className="text-sm text-gray-600 capitalize">
-                        {key.replace(/_/g, " ")}
-                      </div>
+                {Object.entries(validation.stats || {}).map(([key, value]) => (
+                  <div key={key} className="p-4 bg-gray-50 rounded-lg">
+                    <div className="text-2xl font-bold text-gray-900">{value}</div>
+                    <div className="text-sm text-gray-600 capitalize">
+                      {key.replace(/_/g, " ")}
                     </div>
-                  )
-                )}
+                  </div>
+                ))}
               </div>
 
-              {Array.isArray(validation.errors) &&
-                validation.errors.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="font-semibold text-red-800">
-                      Errores:
-                    </h4>
-                    {validation.errors.map((e, i) => (
-                      <div
-                        key={i}
-                        className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded"
-                      >
-                        <XCircle className="h-5 w-5 text-red-600 mt-0.5" />
-                        <span className="text-sm text-red-700">
-                          {e}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {Array.isArray(validation.errors) && validation.errors.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-red-800">Errores:</h4>
+                  {validation.errors.map((e, i) => (
+                    <div
+                      key={`${i}-${e}`}
+                      className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded"
+                    >
+                      <XCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                      <span className="text-sm text-red-700">{e}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-              {Array.isArray(validation.warnings) &&
-                validation.warnings.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="font-semibold text-yellow-800">
-                      Advertencias:
-                    </h4>
-                    {validation.warnings.map((w, i) => (
-                      <div
-                        key={i}
-                        className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded"
-                      >
-                        <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
-                        <span className="text-sm text-yellow-700">
-                          {w}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {Array.isArray(validation.warnings) && validation.warnings.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-yellow-800">Advertencias:</h4>
+                  {validation.warnings.map((w, i) => (
+                    <div
+                      key={`${i}-${w}`}
+                      className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded"
+                    >
+                      <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                      <span className="text-sm text-yellow-700">{w}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-12 text-gray-500">
@@ -797,20 +889,20 @@ const DataValidationModule = () => {
 };
 
 /* =========================================================
-   MAPPINGS (catálogos MINEDU)
+   MAPPINGS
 ========================================================= */
 const MappingsModule = () => {
   const TYPES = [
     { value: "INSTITUTION", label: "Institución (código IE)", icon: Settings2 },
     { value: "CAREER", label: "Carreras", icon: BookOpen },
-    { value: "STUDY_PLAN", label: "Planes de Estudio", icon: FileSpreadsheet },
+    { value: "STUDY_PLAN", label: "Planes de Estudio", icon: Upload }, // icon simpática
     { value: "STUDENT", label: "Estudiantes", icon: Users },
   ];
 
   const [type, setType] = useState("CAREER");
   const [localItems, setLocalItems] = useState([]);
-  const [remoteOptions, setRemoteOptions] = useState([]); // [{code,label}]
-  const [currentMap, setCurrentMap] = useState({}); // local_id -> code
+  const [remoteOptions, setRemoteOptions] = useState([]);
+  const [currentMap, setCurrentMap] = useState({});
   const [original, setOriginal] = useState({});
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -843,18 +935,20 @@ const MappingsModule = () => {
     loadAll();
   }, [loadAll]);
 
-  const filteredLocal = localItems.filter((it) => {
+  const filteredLocal = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      (it.name || it.label || "").toLowerCase().includes(q) ||
-      (it.code || "").toLowerCase().includes(q)
-    );
-  });
+    return (localItems ?? []).filter((it) => {
+      if (!q) return true;
+      return (
+        (it.name || it.label || "").toLowerCase().includes(q) ||
+        (it.code || it.ident || "").toLowerCase().includes(q)
+      );
+    });
+  }, [localItems, search]);
 
-  const changed = Object.keys(currentMap).filter(
-    (id) => currentMap[id] !== original[id]
-  );
+  const changed = useMemo(() => {
+    return Object.keys(currentMap).filter((id) => currentMap[id] !== original[id]);
+  }, [currentMap, original]);
 
   const save = async () => {
     if (changed.length === 0) {
@@ -879,7 +973,7 @@ const MappingsModule = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 className="text-2xl font-bold">Mapeo de Catálogos MINEDU</h2>
         <div className="flex gap-2 items-center">
           <ListChecks className="h-5 w-5 text-gray-500" />
@@ -903,7 +997,6 @@ const MappingsModule = () => {
         </div>
       </div>
 
-      {/* selector de tipo */}
       <div className="flex flex-wrap gap-2">
         {TYPES.map((t) => {
           const Icon = t.icon;
@@ -925,13 +1018,12 @@ const MappingsModule = () => {
         <CardHeader>
           <CardTitle>Vincular códigos MINEDU</CardTitle>
           <CardDescription>
-            Seleccione el código MINEDU correspondiente para cada registro
-            local
+            Seleccione el código MINEDU correspondiente para cada registro local
           </CardDescription>
         </CardHeader>
+
         <CardContent>
-          {/* filtros */}
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
             <div className="relative w-full md:w-80">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
@@ -941,13 +1033,17 @@ const MappingsModule = () => {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
+
             <Button variant="outline" onClick={loadAll}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Refrescar
             </Button>
+
+            <div className="text-sm text-gray-600 ml-auto">
+              Mostrando: <b>{filteredLocal.length}</b>
+            </div>
           </div>
 
-          {/* tabla */}
           {loading ? (
             <div className="flex items-center justify-center h-40">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
@@ -968,24 +1064,21 @@ const MappingsModule = () => {
                     </th>
                   </tr>
                 </thead>
+
                 <tbody className="divide-y">
                   {filteredLocal.map((it) => {
                     const mappedCode = currentMap[it.id] || "";
-                    const changedRow =
-                      mappedCode !== (original[it.id] || "");
+                    const changedRow = mappedCode !== (original[it.id] || "");
+
                     return (
                       <tr key={it.id} className="hover:bg-gray-50">
                         <td className="px-4 py-2">
-                          <div className="font-medium">
-                            {it.name || it.label}
-                          </div>
+                          <div className="font-medium">{it.name || it.label}</div>
                           <div className="text-xs text-gray-500">
-                            {it.code ||
-                              it.ident ||
-                              it.document ||
-                              ""}
+                            {it.code || it.ident || it.document || ""}
                           </div>
                         </td>
+
                         <td className="px-4 py-2">
                           <Select
                             value={mappedCode}
@@ -1000,20 +1093,16 @@ const MappingsModule = () => {
                               <SelectValue placeholder="Seleccione código" />
                             </SelectTrigger>
                             <SelectContent className="max-h-72">
-                              <SelectItem value="UNLINKED">
-                                — Sin vincular —
-                              </SelectItem>
+                              <SelectItem value="UNLINKED">— Sin vincular —</SelectItem>
                               {remoteOptions.map((opt) => (
-                                <SelectItem
-                                  key={opt.code}
-                                  value={String(opt.code)}
-                                >
+                                <SelectItem key={opt.code} value={String(opt.code)}>
                                   {opt.code} — {opt.label}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </td>
+
                         <td className="px-4 py-2">
                           {changedRow ? (
                             <Badge className="bg-yellow-100 text-yellow-800 border border-yellow-200">
@@ -1058,12 +1147,11 @@ const JobsLogsModule = () => {
   ];
 
   const [jobs, setJobs] = useState([]);
-  const [runs, setRuns] = useState([]); // runs del job seleccionado
-  const [logs, setLogs] = useState([]); // logs del run seleccionado
+  const [runs, setRuns] = useState([]);
+  const [logs, setLogs] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
   const [selectedRun, setSelectedRun] = useState(null);
 
-  // crear/editar
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [form, setForm] = useState({
     type: "EXPORT_ENROLLMENTS",
@@ -1084,7 +1172,7 @@ const JobsLogsModule = () => {
     loadJobs();
   }, [loadJobs]);
 
-  const openRuns = async (job) => {
+  const openRuns = useCallback(async (job) => {
     try {
       setSelectedJob(job);
       const data = await Jobs.runs(job.id);
@@ -1094,7 +1182,7 @@ const JobsLogsModule = () => {
     } catch (e) {
       toast.error(formatApiError(e, "Error al cargar ejecuciones"));
     }
-  };
+  }, []);
 
   const openLogs = async (run) => {
     try {
@@ -1110,6 +1198,7 @@ const JobsLogsModule = () => {
     try {
       await Jobs.runNow(job.id);
       toast.success("Ejecución disparada");
+      await openRuns(job);
     } catch (e) {
       toast.error(formatApiError(e));
     }
@@ -1120,6 +1209,7 @@ const JobsLogsModule = () => {
       await Jobs.pause(job.id);
       toast.success("Job pausado");
       loadJobs();
+      if (selectedJob?.id === job.id) setSelectedJob((j) => ({ ...j, enabled: false }));
     } catch (e) {
       toast.error(formatApiError(e));
     }
@@ -1130,8 +1220,22 @@ const JobsLogsModule = () => {
       await Jobs.resume(job.id);
       toast.success("Job reanudado");
       loadJobs();
+      if (selectedJob?.id === job.id) setSelectedJob((j) => ({ ...j, enabled: true }));
     } catch (e) {
       toast.error(formatApiError(e));
+    }
+  };
+
+  const retryRun = async (run) => {
+    try {
+      await Jobs.retryRun(run.id);
+      toast.success("Run marcado para reintento");
+      // refresca runs + logs
+      if (selectedJob) await openRuns(selectedJob);
+      setSelectedRun(null);
+      setLogs([]);
+    } catch (e) {
+      toast.error(formatApiError(e, "No se pudo reintentar el run"));
     }
   };
 
@@ -1149,32 +1253,32 @@ const JobsLogsModule = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 className="text-2xl font-bold">Jobs Programados & Bitácora</h2>
-        <Button onClick={() => setIsCreateOpen(true)}>
-          <Settings2 className="h-4 w-4 mr-2" />
-          Nuevo Job
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={loadJobs}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Actualizar
+          </Button>
+          <Button onClick={() => setIsCreateOpen(true)}>
+            <Settings2 className="h-4 w-4 mr-2" />
+            Nuevo Job
+          </Button>
+        </div>
       </div>
 
-      {/* create job modal simple */}
       {isCreateOpen && (
         <Card className="border-2 border-blue-100">
           <CardHeader>
             <CardTitle>Crear Job</CardTitle>
           </CardHeader>
           <CardContent>
-            <form
-              onSubmit={createJob}
-              className="grid md:grid-cols-3 gap-4"
-            >
+            <form onSubmit={createJob} className="grid md:grid-cols-3 gap-4">
               <div>
                 <Label>Tipo</Label>
                 <Select
                   value={form.type}
-                  onValueChange={(v) =>
-                    setForm((f) => ({ ...f, type: v }))
-                  }
+                  onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}
                 >
                   <SelectTrigger className="mt-2">
                     <SelectValue />
@@ -1188,45 +1292,31 @@ const JobsLogsModule = () => {
                   </SelectContent>
                 </Select>
               </div>
+
               <div>
                 <Label>CRON</Label>
                 <input
                   className="w-full border rounded h-9 px-3 mt-2 text-sm"
                   value={form.cron}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, cron: e.target.value }))
-                  }
+                  onChange={(e) => setForm((f) => ({ ...f, cron: e.target.value }))}
                   placeholder="0 3 * * *"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Ej. 0 3 * * * (3am diario)
-                </p>
+                <p className="text-xs text-gray-500 mt-1">Ej. 0 3 * * * (3am diario)</p>
               </div>
+
               <div className="flex items-end gap-2 mt-2 md:mt-8">
                 <label className="text-sm flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={form.enabled}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        enabled: e.target.checked,
-                      }))
-                    }
+                    onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.checked }))}
                   />
                   Habilitado
                 </label>
-                <Button
-                  type="submit"
-                  className="ml-auto bg-blue-600 hover:bg-blue-700"
-                >
+                <Button type="submit" className="ml-auto bg-blue-600 hover:bg-blue-700">
                   Guardar
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsCreateOpen(false)}
-                >
+                <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
                   Cancelar
                 </Button>
               </div>
@@ -1235,7 +1325,6 @@ const JobsLogsModule = () => {
         </Card>
       )}
 
-      {/* listado de jobs */}
       <Card>
         <CardHeader>
           <CardTitle>Jobs</CardTitle>
@@ -1246,21 +1335,11 @@ const JobsLogsModule = () => {
             <table className="w-full">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-semibold">
-                    Tipo
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold">
-                    CRON
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold">
-                    Estado
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold">
-                    Última Ejecución
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold">
-                    Acciones
-                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold">Tipo</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold">CRON</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold">Estado</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold">Última Ejecución</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -1278,11 +1357,7 @@ const JobsLogsModule = () => {
                       )}
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-600">
-                      {job.last_run_at
-                        ? new Date(
-                          job.last_run_at
-                        ).toLocaleString()
-                        : "—"}
+                      {safeDate(job.last_run_at, true)}
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex gap-2">
@@ -1294,6 +1369,7 @@ const JobsLogsModule = () => {
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
+
                         <Button
                           size="sm"
                           variant="outline"
@@ -1302,22 +1378,13 @@ const JobsLogsModule = () => {
                         >
                           <Play className="h-4 w-4" />
                         </Button>
+
                         {job.enabled ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => pause(job)}
-                            title="Pausar"
-                          >
+                          <Button size="sm" variant="outline" onClick={() => pause(job)} title="Pausar">
                             <Pause className="h-4 w-4" />
                           </Button>
                         ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => resume(job)}
-                            title="Reanudar"
-                          >
+                          <Button size="sm" variant="outline" onClick={() => resume(job)} title="Reanudar">
                             <Play className="h-4 w-4" />
                           </Button>
                         )}
@@ -1325,12 +1392,10 @@ const JobsLogsModule = () => {
                     </td>
                   </tr>
                 ))}
+
                 {jobs.length === 0 && (
                   <tr>
-                    <td
-                      colSpan="5"
-                      className="text-center py-8 text-gray-500"
-                    >
+                    <td colSpan="5" className="text-center py-8 text-gray-500">
                       No hay jobs configurados.
                     </td>
                   </tr>
@@ -1341,63 +1406,34 @@ const JobsLogsModule = () => {
         </CardContent>
       </Card>
 
-      {/* runs y logs */}
       {selectedJob && (
         <div className="grid md:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>
-                Ejecuciones: {selectedJob.type}
-              </CardTitle>
+              <CardTitle>Ejecuciones: {selectedJob.type}</CardTitle>
+              <CardDescription>Click en terminal para ver logs</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-semibold">
-                        Inicio
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold">
-                        Fin
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold">
-                        Estado
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold">
-                        Acciones
-                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold">Inicio</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold">Fin</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold">Estado</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
                     {runs.map((r) => (
-                      <tr
-                        key={r.id}
-                        className="hover:bg-gray-50"
-                      >
-                        <td className="px-4 py-2 text-sm">
-                          {r.started_at
-                            ? new Date(
-                              r.started_at
-                            ).toLocaleString()
-                            : "-"}
-                        </td>
-                        <td className="px-4 py-2 text-sm">
-                          {r.finished_at
-                            ? new Date(
-                              r.finished_at
-                            ).toLocaleString()
-                            : "-"}
-                        </td>
+                      <tr key={r.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 text-sm">{safeDate(r.started_at, true)}</td>
+                        <td className="px-4 py-2 text-sm">{safeDate(r.finished_at, true)}</td>
                         <td className="px-4 py-2">
                           {r.status === "COMPLETED" ? (
-                            <Badge className="bg-green-100 text-green-800 border border-green-200">
-                              OK
-                            </Badge>
+                            <Badge className="bg-green-100 text-green-800 border border-green-200">OK</Badge>
                           ) : r.status === "FAILED" ? (
-                            <Badge className="bg-red-100 text-red-800 border border-red-200">
-                              Fallo
-                            </Badge>
+                            <Badge className="bg-red-100 text-red-800 border border-red-200">Fallo</Badge>
                           ) : (
                             <Badge className="bg-yellow-100 text-yellow-800 border border-yellow-200">
                               {r.status || "En curso"}
@@ -1414,13 +1450,12 @@ const JobsLogsModule = () => {
                             >
                               <Terminal className="h-4 w-4" />
                             </Button>
+
                             {r.status === "FAILED" && (
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() =>
-                                  Jobs.retryRun(r.id)
-                                }
+                                onClick={() => retryRun(r)}
                                 title="Reintentar ejecución"
                               >
                                 <RotateCcw className="h-4 w-4" />
@@ -1430,12 +1465,10 @@ const JobsLogsModule = () => {
                         </td>
                       </tr>
                     ))}
+
                     {runs.length === 0 && (
                       <tr>
-                        <td
-                          colSpan="4"
-                          className="text-center py-8 text-gray-500"
-                        >
+                        <td colSpan="4" className="text-center py-8 text-gray-500">
                           Sin ejecuciones.
                         </td>
                       </tr>
@@ -1448,10 +1481,10 @@ const JobsLogsModule = () => {
 
           <Card>
             <CardHeader>
-              <CardTitle>
-                Logs{" "}
-                {selectedRun ? `run #${selectedRun.id}` : ""}
-              </CardTitle>
+              <CardTitle>Logs {selectedRun ? `run #${selectedRun.id}` : ""}</CardTitle>
+              <CardDescription>
+                {selectedRun ? `Estado: ${selectedRun.status}` : "Selecciona una ejecución"}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {logs.length === 0 ? (
@@ -1471,22 +1504,14 @@ const JobsLogsModule = () => {
                         }`}
                     >
                       <div className="flex justify-between">
-                        <span className="text-gray-600">
-                          {new Date(
-                            l.timestamp
-                          ).toLocaleString()}
-                        </span>
-                        <Badge variant="secondary">
-                          {l.level}
-                        </Badge>
+                        <span className="text-gray-600">{safeDate(l.timestamp, true)}</span>
+                        <Badge variant="secondary">{l.level}</Badge>
                       </div>
-                      <div className="mt-1 whitespace-pre-wrap">
-                        {l.message}
-                      </div>
+
+                      <div className="mt-1 whitespace-pre-wrap">{l.message}</div>
+
                       {l.meta && (
-                        <pre className="mt-1 opacity-80">
-                          {JSON.stringify(l.meta, null, 2)}
-                        </pre>
+                        <pre className="mt-1 opacity-80">{safeJson(l.meta)}</pre>
                       )}
                     </div>
                   ))}
@@ -1506,16 +1531,13 @@ const JobsLogsModule = () => {
 const MineduIntegrationModule = () => {
   const { user, hasPerm } = useAuth();
 
-  // roles viene normalmente como array en tu AuthContext
   const roles = Array.isArray(user?.roles) ? user.roles : [];
 
-  // Acceso por rol "clásico"
   const canByRole =
     roles.includes("ADMIN_SYSTEM") ||
     roles.includes("ADMIN") ||
     roles.includes("REGISTRAR");
 
-  // Acceso por permisos (ajusta los códigos a los que uses en tu ACL)
   const canByPerm =
     (hasPerm && hasPerm("admin.access.manage")) ||
     (hasPerm && hasPerm("minedu.access"));
@@ -1537,50 +1559,54 @@ const MineduIntegrationModule = () => {
   }
 
   return (
-  <div className="p-6">
-    <div
-      className="
-        bg-white/70
-        backdrop-blur-md
-        border border-white/40
-        rounded-xl
-        p-6
-        shadow-md
-      "
-    >
-      <Tabs defaultValue="dashboard" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6 bg-white/60">
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="mappings">Mapeos</TabsTrigger>
-          <TabsTrigger value="export">Exportar</TabsTrigger>
-          <TabsTrigger value="history">Historial</TabsTrigger>
-          <TabsTrigger value="jobs">Jobs & Logs</TabsTrigger>
-          <TabsTrigger value="validation">Validación</TabsTrigger>
-        </TabsList>
+    <div className="p-6">
+      <div
+        className="
+          bg-white/70
+          backdrop-blur-md
+          border border-white/40
+          rounded-xl
+          p-6
+          shadow-md
+        "
+      >
+        <Tabs defaultValue="dashboard" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-6 bg-white/60">
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="mappings">Mapeos</TabsTrigger>
+            <TabsTrigger value="export">Exportar</TabsTrigger>
+            <TabsTrigger value="history">Historial</TabsTrigger>
+            <TabsTrigger value="jobs">Jobs & Logs</TabsTrigger>
+            <TabsTrigger value="validation">Validación</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="dashboard">
-          <MineduDashboard />
-        </TabsContent>
-        <TabsContent value="mappings">
-          <MappingsModule />
-        </TabsContent>
-        <TabsContent value="export">
-          <ExportDataModule />
-        </TabsContent>
-        <TabsContent value="history">
-          <ExportHistoryModule />
-        </TabsContent>
-        <TabsContent value="jobs">
-          <JobsLogsModule />
-        </TabsContent>
-        <TabsContent value="validation">
-          <DataValidationModule />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="dashboard">
+            <MineduDashboard />
+          </TabsContent>
+
+          <TabsContent value="mappings">
+            <MappingsModule />
+          </TabsContent>
+
+          <TabsContent value="export">
+            <ExportDataModule />
+          </TabsContent>
+
+          <TabsContent value="history">
+            <ExportHistoryModule />
+          </TabsContent>
+
+          <TabsContent value="jobs">
+            <JobsLogsModule />
+          </TabsContent>
+
+          <TabsContent value="validation">
+            <DataValidationModule />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
-  </div>
-);
-
+  );
 };
 
 export default MineduIntegrationModule;

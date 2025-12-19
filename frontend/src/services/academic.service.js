@@ -1,166 +1,278 @@
 // src/services/academic.service.js
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import api from "../lib/api";
 
-const authHeaders = () => ({
-    "Authorization": `Bearer ${localStorage.getItem("token") || ""}`,
-});
-
-const jsonHeaders = {
-    "Content-Type": "application/json",
-};
-
-async function http(method, url, body, isJSON = true) {
-    const resp = await fetch(`${API}${url}`, {
-        method,
-        headers: isJSON ? { ...authHeaders(), ...jsonHeaders } : authHeaders(),
-        body: body ? (isJSON ? JSON.stringify(body) : body) : undefined,
-    });
-    if (!resp.ok) {
-        let detail = "Error en la solicitud";
-        try { const e = await resp.json(); detail = e.detail || e.message || detail; } catch { }
-        throw new Error(detail);
+/* -------------------------------------------------------
+   Helpers
+------------------------------------------------------- */
+const pickFirstArray = (data, keys = []) => {
+    if (Array.isArray(data)) return data;
+    for (const k of keys) {
+        if (Array.isArray(data?.[k])) return data[k];
     }
-    const ct = resp.headers.get("content-type") || "";
-    if (ct.includes("application/json")) return resp.json();
-    return resp; // blobs / streams (PDF, etc.)
-}
-
-/* ====== Catálogos base ====== */
-export const Careers = {
-    list: () => http("GET", "/careers"),
+    return [];
 };
 
-/* ====== Planes (mallas) ====== */
+const asBlobGet = async (url, params = {}) => {
+    const res = await api.get(url, { params, responseType: "blob" });
+    return res; // axios response (blob en res.data)
+};
+
+const asJson = async (method, url, payload, config = {}) => {
+    try {
+        const res = await api.request({
+            method,
+            url,
+            data: payload,
+            ...config,
+        });
+        return res.data;
+    } catch (e) {
+        const data = e?.response?.data;
+        const msg =
+            data?.detail ||
+            data?.message ||
+            (data && typeof data === "object"
+                ? Object.entries(data)
+                    .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
+                    .join(" | ")
+                : null) ||
+            (typeof data === "string" ? data : null) ||
+            e?.message ||
+            "Error en la solicitud";
+        throw new Error(msg);
+    }
+};
+
+/* -------------------------------------------------------
+   Catálogos base
+   (OJO: tus carreras están en admission y viven en /api/careers)
+------------------------------------------------------- */
+export const Careers = {
+    /**
+     * Backend admission:
+     * - puede devolver: [ {id,name,...} ]
+     * - o: {careers:[...]}
+     */
+    list: async () => {
+        const data = await asJson("GET", "/careers");
+        const arr = pickFirstArray(data, ["careers", "items", "results"]);
+        return { careers: arr };
+    },
+
+    create: async (payload) => asJson("POST", "/careers", payload),
+
+    update: async (id, payload) => asJson("PUT", `/careers/${id}`, payload),
+
+    remove: async (id) => asJson("DELETE", `/careers/${id}`),
+
+    toggleActive: async (id) => asJson("POST", `/careers/${id}/toggle-active`, {}),
+};
+
+/* -------------------------------------------------------
+   Planes (mallas) - academic app (stub router: /academic/plans)
+------------------------------------------------------- */
 export const Plans = {
-    list: () => http("GET", "/academic/plans"),
-    create: (payload) => http("POST", "/academic/plans", payload),
-    update: (id, payload) => http("PUT", `/academic/plans/${id}`, payload),
-    remove: (id) => http("DELETE", `/academic/plans/${id}`),
+    list: async () => {
+        const data = await asJson("GET", "/academic/plans");
+        const arr = pickFirstArray(data, ["plans", "items", "results"]);
+        // tu backend stub usa ok(plans=[...])
+        return { plans: arr };
+    },
+
+    create: async (payload) => {
+        const data = await asJson("POST", "/academic/plans", payload);
+        // stub retorna {plan: {...}}
+        return data;
+    },
+
+    update: async (id, payload) => asJson("PUT", `/academic/plans/${id}`, payload),
+
+    remove: async (id) => asJson("DELETE", `/academic/plans/${id}`),
 
     // Cursos de un plan
-    listCourses: (planId) => http("GET", `/academic/plans/${planId}/courses`),
-    addCourse: (planId, payload) => http("POST", `/academic/plans/${planId}/courses`, payload),
-    updateCourse: (planId, courseId, payload) => http("PUT", `/academic/plans/${planId}/courses/${courseId}`, payload),
-    removeCourse: (planId, courseId) => http("DELETE", `/academic/plans/${planId}/courses/${courseId}`),
+    listCourses: async (planId) => {
+        const data = await asJson("GET", `/academic/plans/${planId}/courses`);
+        const arr = pickFirstArray(data, ["courses", "items", "results"]);
+        return { courses: arr };
+    },
 
-    // Prerrequisitos de un curso
-    listPrereqs: (planId, courseId) => http("GET", `/academic/plans/${planId}/courses/${courseId}/prereqs`),
-    setPrereqs: (planId, courseId, prereqIds) => http("PUT", `/academic/plans/${planId}/courses/${courseId}/prereqs`, { prerequisites: prereqIds }),
+    addCourse: async (planId, payload) =>
+        asJson("POST", `/academic/plans/${planId}/courses`, payload),
+
+    updateCourse: async (planId, courseId, payload) =>
+        asJson("PUT", `/academic/plans/${planId}/courses/${courseId}`, payload),
+
+    removeCourse: async (planId, courseId) =>
+        asJson("DELETE", `/academic/plans/${planId}/courses/${courseId}`),
+
+    // Prerrequisitos (según tu stub: PUT /academic/plans/:id/courses/:course_id/prereqs)
+    setPrereqs: async (planId, courseId, prereqIds) =>
+        asJson("PUT", `/academic/plans/${planId}/courses/${courseId}/prereqs`, {
+            prerequisites: prereqIds,
+        }),
+
+    // si en algún momento lo implementas en backend real:
+    listPrereqs: async (planId, courseId) =>
+        asJson("GET", `/academic/plans/${planId}/courses/${courseId}/prereqs`),
 };
 
-/* ====== Secciones / carga lectiva / horarios ====== */
+/* -------------------------------------------------------
+   Secciones / horarios
+------------------------------------------------------- */
 export const Sections = {
-    list: (params) => {
-        const q = new URLSearchParams(params || {}).toString();
-        return http("GET", `/sections${q ? `?${q}` : ""}`);
+    list: async (params = {}) => {
+        const data = await asJson("GET", "/sections", null, { params });
+        const arr = pickFirstArray(data, ["sections", "items", "results"]);
+        return { sections: arr };
     },
-    create: (payload) => http("POST", "/sections", payload),
-    update: (id, payload) => http("PUT", `/sections/${id}`, payload),
-    remove: (id) => http("DELETE", `/sections/${id}`),
 
-    // Horarios por sección
-    listSchedule: (sectionId) => http("GET", `/sections/${sectionId}/schedule`),
-    setSchedule: (sectionId, slots) => http("PUT", `/sections/${sectionId}/schedule`, { slots }),
+    create: async (payload) => asJson("POST", "/sections", payload),
+
+    update: async (id, payload) => asJson("PUT", `/sections/${id}`, payload),
+
+    remove: async (id) => asJson("DELETE", `/sections/${id}`),
 
     // Validaciones
-    checkConflicts: (payload) => http("POST", "/sections/schedule/conflicts", payload),
-    rooms: () => http("GET", "/classrooms"),
-    teachers: () => http("GET", "/teachers"),
+    checkConflicts: async (payload) =>
+        asJson("POST", "/sections/schedule/conflicts", payload),
+
+    rooms: async () => {
+        const data = await asJson("GET", "/classrooms");
+        const arr = pickFirstArray(data, ["classrooms", "items", "results"]);
+        return { classrooms: arr };
+    },
+
+    teachers: async () => {
+        const data = await asJson("GET", "/teachers");
+        const arr = pickFirstArray(data, ["teachers", "items", "results"]);
+        return { teachers: arr };
+    },
+
+    // Horarios por sección (si tu backend lo implementa)
+    listSchedule: async (sectionId) =>
+        asJson("GET", `/sections/${sectionId}/schedule`),
+
+    setSchedule: async (sectionId, slots) =>
+        asJson("PUT", `/sections/${sectionId}/schedule`, { slots }),
 };
 
-/* ====== Kárdex / Boleta / Constancias ====== */
+/* -------------------------------------------------------
+   Kárdex / PDFs
+------------------------------------------------------- */
 export const Kardex = {
-    ofStudent: (studentId) => http("GET", `/kardex/${studentId}`),
-    boletaPDF: async (studentId, period) => http("POST", `/kardex/${studentId}/boleta/pdf`, { academic_period: period }),
-    constanciaPDF: async (studentId) => http("POST", `/kardex/${studentId}/constancia/pdf`, {}),
+    ofStudent: async (studentId) => asJson("GET", `/kardex/${studentId}`),
+
+    // estos devuelven PDF (blob)
+    boletaPDF: async (studentId, period) =>
+        asBlobGet(`/kardex/${studentId}/boleta/pdf`, { academic_period: period }),
+
+    constanciaPDF: async (studentId) =>
+        asBlobGet(`/kardex/${studentId}/constancia/pdf`),
 };
 
-/* ====== Procesos académicos ====== */
+/* -------------------------------------------------------
+   Procesos académicos
+------------------------------------------------------- */
 export const Processes = {
-    retiro: (payload) => http("POST", "/processes/withdraw", payload),
-    reserva: (payload) => http("POST", "/processes/reservation", payload),
-    convalidacion: (payload) => http("POST", "/processes/validation", payload),
-    traslado: (payload) => http("POST", "/processes/transfer", payload),
-    reincorporacion: (payload) => http("POST", "/processes/rejoin", payload),
+    retiro: async (payload) => asJson("POST", "/processes/withdraw", payload),
+    reserva: async (payload) => asJson("POST", "/processes/reservation", payload),
+    convalidacion: async (payload) => asJson("POST", "/processes/validation", payload),
+    traslado: async (payload) => asJson("POST", "/processes/transfer", payload),
+    reincorporacion: async (payload) => asJson("POST", "/processes/rejoin", payload),
 };
 
-/* ====== Periodos académicos ====== */
 export const Periods = {
-    list: () => http("GET", "/academic/periods"),
+    list: async () => asJson("GET", "/academic/periods"),
 };
 
-/* ====== Asistencia ====== */
+/* -------------------------------------------------------
+   Asistencia
+------------------------------------------------------- */
 export const Attendance = {
-    // sesiones por sección
-    createSession: (sectionId, payload) => http("POST", `/sections/${sectionId}/attendance/sessions`, payload),
-    listSessions: (sectionId) => http("GET", `/sections/${sectionId}/attendance/sessions`),
-    closeSession: (sectionId, sessionId) => http("POST", `/sections/${sectionId}/attendance/sessions/${sessionId}/close`),
+    createSession: async (sectionId, payload = {}) =>
+        asJson("POST", `/sections/${sectionId}/attendance/sessions`, payload),
 
-    // marcar asistencia por alumno
-    set: (sectionId, sessionId, rows) => http("PUT", `/sections/${sectionId}/attendance/sessions/${sessionId}`, { rows }),
+    listSessions: async (sectionId) =>
+        asJson("GET", `/sections/${sectionId}/attendance/sessions`),
+
+    closeSession: async (sectionId, sessionId) =>
+        asJson("POST", `/sections/${sectionId}/attendance/sessions/${sessionId}/close`, {}),
+
+    set: async (sectionId, sessionId, rows) =>
+        asJson("PUT", `/sections/${sectionId}/attendance/sessions/${sessionId}`, { rows }),
 };
 
-/* ====== Sugerencias de matrícula ====== */
+/* -------------------------------------------------------
+   Sugerencias de matrícula
+------------------------------------------------------- */
 export const Enrollment = {
-    suggestions: (payload) => http("POST", "/enrollments/suggestions", payload),
+    suggestions: async (payload) => asJson("POST", "/enrollments/suggestions", payload),
 };
 
-/* ====== Sílabos & Evaluación ====== */
+/* -------------------------------------------------------
+   Sílabos & Evaluación
+------------------------------------------------------- */
 export const Syllabus = {
-    get: (sectionId) => http("GET", `/sections/${sectionId}/syllabus`),
-    upload: (sectionId, file) => {
+    get: async (sectionId) => asJson("GET", `/sections/${sectionId}/syllabus`),
+
+    upload: async (sectionId, file) => {
         const fd = new FormData();
         fd.append("file", file);
-        return http("POST", `/sections/${sectionId}/syllabus`, fd, false);
+        return asJson("POST", `/sections/${sectionId}/syllabus`, fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
     },
-    delete: (sectionId) => http("DELETE", `/sections/${sectionId}/syllabus`),
+
+    delete: async (sectionId) => asJson("DELETE", `/sections/${sectionId}/syllabus`),
 };
 
 export const Evaluation = {
-    getConfig: (sectionId) => http("GET", `/sections/${sectionId}/evaluation`),
-    setConfig: (sectionId, config) => http("PUT", `/sections/${sectionId}/evaluation`, config),
-    // config = [{code:"PARCIAL_1", label:"Parcial 1", weight:20}, ...] (suma 100)
+    getConfig: async (sectionId) => asJson("GET", `/sections/${sectionId}/evaluation`),
+
+    setConfig: async (sectionId, config) =>
+        asJson("PUT", `/sections/${sectionId}/evaluation`, { config }),
 };
 
-/* ====== Procesos académicos: bandeja/seguimiento/archivos ====== */
+/* -------------------------------------------------------
+   Procesos: bandeja/archivos/estado
+------------------------------------------------------- */
 export const ProcessFiles = {
-    list: (processId) => http("GET", `/processes/${processId}/files`),
-    upload: (processId, file, meta = {}) => {
+    list: async (processId) => asJson("GET", `/processes/${processId}/files`),
+
+    upload: async (processId, file, meta = {}) => {
         const fd = new FormData();
         fd.append("file", file);
         if (meta.note) fd.append("note", meta.note);
-        return http("POST", `/processes/${processId}/files`, fd, false);
+        return asJson("POST", `/processes/${processId}/files`, fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
     },
-    remove: (processId, fileId) => http("DELETE", `/processes/${processId}/files/${fileId}`),
+
+    remove: async (processId, fileId) =>
+        asJson("DELETE", `/processes/${processId}/files/${fileId}`),
 };
 
 export const ProcessesInbox = {
-    myRequests: (params = {}) => {
-        const q = new URLSearchParams(params).toString();
-        return http("GET", `/processes/my${q ? `?${q}` : ""}`);
-    },
-    listAll: (params = {}) => {
-        const q = new URLSearchParams(params).toString();
-        return http("GET", `/processes${q ? `?${q}` : ""}`);
-    },
-    get: (id) => http("GET", `/processes/${id}`),
-    setStatus: (id, payload) => http("POST", `/processes/${id}/status`, payload), // {status:"APROBADO"|"RECHAZADO", note:""}
-    notify: (id, payload) => http("POST", `/processes/${id}/notify`, payload),   // {channels:["EMAIL"], subject, message}
+    myRequests: async (params = {}) => asJson("GET", "/processes/my", null, { params }),
+
+    listAll: async (params = {}) => asJson("GET", "/processes", null, { params }),
+
+    get: async (id) => asJson("GET", `/processes/${id}`),
+
+    setStatus: async (id, payload) => asJson("POST", `/processes/${id}/status`, payload),
+
+    notify: async (id, payload) => asJson("POST", `/processes/${id}/notify`, payload),
 };
 
-/* ====== Reportes académicos ====== */
+/* -------------------------------------------------------
+   Reportes
+------------------------------------------------------- */
 export const AcademicReports = {
-    summary: (params = {}) => {
-        const q = new URLSearchParams(params).toString();
-        return http("GET", `/academic/reports/summary${q ? `?${q}` : ""}`);
-    },
-    exportPerformance: (params = {}) => {
-        const q = new URLSearchParams(params).toString();
-        return http("GET", `/academic/reports/performance.xlsx${q ? `?${q}` : ""}`);
-    },
-    exportOccupancy: (params = {}) => {
-        const q = new URLSearchParams(params).toString();
-        return http("GET", `/academic/reports/occupancy.xlsx${q ? `?${q}` : ""}`);
-    },
+    summary: async (params = {}) => asJson("GET", "/academic/reports/summary", null, { params }),
+
+    exportPerformance: async (params = {}) =>
+        asBlobGet("/academic/reports/performance.xlsx", params),
+
+    exportOccupancy: async (params = {}) =>
+        asBlobGet("/academic/reports/occupancy.xlsx", params),
 };

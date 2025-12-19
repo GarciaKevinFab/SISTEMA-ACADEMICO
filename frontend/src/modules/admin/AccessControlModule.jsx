@@ -1,22 +1,40 @@
 // src/modules/admin/AccessControlModule.jsx
-import '../academic/styles.css';  // Correcto si styles.css está en la carpeta academic
+import "../academic/styles.css";
 
 import React, { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import {
-  Card, CardContent, CardHeader, CardTitle, CardDescription
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
 } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Badge } from "../../components/ui/badge";
 import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "../../components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import {
-  Users, Shield, Plus, Edit, Trash2, KeyRound, Search,
-  RefreshCw, Check, AlertTriangle, Database
+  Users,
+  Shield,
+  Plus,
+  Edit,
+  Trash2,
+  KeyRound,
+  Search,
+  RefreshCw,
+  Check,
+  AlertTriangle,
+  Database,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -104,6 +122,45 @@ const ConfirmDialog = ({
   </Dialog>
 );
 
+/* ---------- Password Hints ---------- */
+const PasswordHints = ({ feedback }) => {
+  if (!feedback) return null;
+  const { valid, errors } = feedback;
+  if (valid) {
+    return (
+      <p className="mt-1 text-xs text-emerald-600">
+        La contraseña cumple la política.
+      </p>
+    );
+  }
+  return (
+    <ul className="mt-1 text-xs text-red-600 list-disc list-inside">
+      {errors.map((er, i) => (
+        <li key={i}>{er}</li>
+      ))}
+    </ul>
+  );
+};
+
+/* ---------- Helpers visuales ---------- */
+const getInitials = (name = "") => {
+  if (!name) return "?";
+  const parts = name.trim().split(" ").filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const roleBadgeClasses = (role) => {
+  const r = (role || "").toUpperCase();
+  if (r.includes("ADMIN_SYSTEM")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
+  if (r.includes("ADMIN")) return "bg-blue-50 text-blue-700 border-blue-200";
+  if (r.includes("REGISTRAR")) return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (r.includes("TEACHER")) return "bg-amber-50 text-amber-700 border-amber-200";
+  if (r.includes("STUDENT")) return "bg-slate-50 text-slate-700 border-slate-200";
+  return "bg-gray-50 text-gray-700 border-gray-200";
+};
+
 /* ======================== ROOT ======================== */
 const AccessControlModule = () => {
   const { hasPerm } = useAuth();
@@ -113,16 +170,13 @@ const AccessControlModule = () => {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header general de Administración */}
       <motion.div
         {...fade}
         className="rounded-2xl p-[1px] bg-gradient-to-r from-blue-500/30 via-purple-500/30 to-fuchsia-500/30"
       >
         <div className="rounded-2xl bg-white/70 dark:bg-neutral-900/60 backdrop-blur-md px-5 py-4 border border-white/50 dark:border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.06)] flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              Administración
-            </h1>
+            <h1 className="text-2xl font-bold tracking-tight">Administración</h1>
             <p className="text-sm text-gray-600 dark:text-gray-300">
               Gestión de usuarios, roles y permisos del Sistema Académico.
             </p>
@@ -200,58 +254,7 @@ const AccessControlModule = () => {
   );
 };
 
-/* ---------- Password Hints ---------- */
-const PasswordHints = ({ feedback }) => {
-  if (!feedback) return null;
-  const { valid, errors } = feedback;
-  if (valid)
-    return (
-      <p className="mt-1 text-xs text-emerald-600">
-        La contraseña cumple la política.
-      </p>
-    );
-  return (
-    <ul className="mt-1 text-xs text-red-600 list-disc list-inside">
-      {errors.map((er, i) => (
-        <li key={i}>{er}</li>
-      ))}
-    </ul>
-  );
-};
-
-/* ---------- Helpers visuales para tabla de usuarios ---------- */
-
-// Iniciales para el avatar
-const getInitials = (name = "") => {
-  if (!name) return "?";
-  const parts = name.trim().split(" ").filter(Boolean);
-  if (!parts.length) return "?";
-  if (parts.length === 1) return parts[0][0].toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-};
-
-// Colores para los badges de roles
-const roleBadgeClasses = (role) => {
-  const r = (role || "").toUpperCase();
-  if (r.includes("ADMIN_SYSTEM")) {
-    return "bg-indigo-50 text-indigo-700 border-indigo-200";
-  }
-  if (r.includes("ADMIN")) {
-    return "bg-blue-50 text-blue-700 border-blue-200";
-  }
-  if (r.includes("REGISTRAR")) {
-    return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  }
-  if (r.includes("TEACHER")) {
-    return "bg-amber-50 text-amber-700 border-amber-200";
-  }
-  if (r.includes("STUDENT")) {
-    return "bg-slate-50 text-slate-700 border-slate-200";
-  }
-  return "bg-gray-50 text-gray-700 border-gray-200";
-};
-
-/* ------------------------ Usuarios (azul, embellecido) ------------------------ */
+/* ------------------------ Usuarios ------------------------ */
 const UsersTab = () => {
   const [list, setList] = useState([]);
   const [q, setQ] = useState("");
@@ -260,7 +263,17 @@ const UsersTab = () => {
   const [loading, setLoading] = useState(true);
   const [openCreate, setOpenCreate] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
-  const [confirm, setConfirm] = useState({ open: false, action: null, id: null });
+  const [confirm, setConfirm] = useState({
+    open: false,
+    action: null,
+    id: null,
+    title: "¿Estás seguro?",
+    description: "Esto aplica la acción seleccionada.",
+    confirmText: "Sí, continuar",
+    confirmVariant: "destructive",
+  });
+
+  const [rolesOptions, setRolesOptions] = useState([]);
 
   const [editing, setEditing] = useState(null);
   const [editForm, setEditForm] = useState({
@@ -274,28 +287,61 @@ const UsersTab = () => {
     email: "",
     username: "",
     password: "",
-    roles: ["STUDENT"],
+    roles: [],
   });
 
   const pwdFeedback = validatePassword(form.password || "");
 
+  const normalizeUsersPayload = (data) => {
+    // soporta:
+    // - array
+    // - { users: [] }
+    // - { results: [] } (paginación DRF)
+    // - { data: [] }
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.users)) return data.users;
+    if (Array.isArray(data?.results)) return data.results;
+    if (Array.isArray(data?.data)) return data.data;
+    return [];
+  };
+
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await UsersService.list(
-        debouncedQ ? { q: debouncedQ } : undefined
-      );
-      setList(data?.users ?? data ?? []);
+      const data = await UsersService.list(debouncedQ ? { q: debouncedQ } : undefined);
+      setList(normalizeUsersPayload(data));
     } catch {
       toast.error("Error al cargar usuarios");
+      setList([]);
     } finally {
       setLoading(false);
     }
   }, [debouncedQ]);
 
+  const fetchRoles = useCallback(async () => {
+    try {
+      const data = await ACLService.listRoles();
+      // soporta:
+      // - { roles: [{name:...}] }
+      // - [{name:...}]
+      // - ["ADMIN", "STUDENT"]
+      const raw = data?.roles ?? data ?? [];
+      const names = raw
+        .map((r) => (typeof r === "string" ? r : r?.name))
+        .filter(Boolean);
+      setRolesOptions(names);
+    } catch {
+      setRolesOptions([]);
+    }
+  }, []);
+
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  useEffect(() => {
+    fetchRoles();
+  }, [fetchRoles]);
 
   const resetCreate = () =>
     setForm({
@@ -303,11 +349,24 @@ const UsersTab = () => {
       email: "",
       username: "",
       password: "",
-      roles: ["STUDENT"],
+      roles: [],
     });
+
+  const toggleRole = (roleName, currentRoles, setter) => {
+    const set = new Set(currentRoles);
+    set.has(roleName) ? set.delete(roleName) : set.add(roleName);
+    setter(Array.from(set));
+  };
 
   const handleCreate = async (e) => {
     e.preventDefault();
+
+    // si tu backend valida fuerte password, aquí lo evitamos antes de pegarle
+    if (!pwdFeedback?.valid) {
+      toast.error("La contraseña no cumple la política.");
+      return;
+    }
+
     try {
       await UsersService.create(form);
       toast.success("Usuario creado");
@@ -331,8 +390,12 @@ const UsersTab = () => {
 
   const handleResetPass = async (id) => {
     try {
-      await UsersService.resetPassword(id);
+      const res = await UsersService.resetPassword(id);
       toast.success("Contraseña reiniciada");
+      // si backend devuelve temp password, te lo muestro
+      if (res?.temporary_password) {
+        toast.message(`Temp password: ${res.temporary_password}`);
+      }
     } catch {
       toast.error("No se pudo reiniciar la contraseña");
     }
@@ -345,6 +408,16 @@ const UsersTab = () => {
       fetchUsers();
     } catch {
       toast.error("No se pudo reactivar");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await UsersService.delete(id); // ✅ OJO: delete, no remove
+      toast.success("Usuario eliminado");
+      fetchUsers();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "No se pudo eliminar");
     }
   };
 
@@ -361,12 +434,16 @@ const UsersTab = () => {
   const submitEdit = async (e) => {
     e.preventDefault();
     if (!editing) return;
+
     try {
       await UsersService.update(editing.id, {
         full_name: editForm.full_name,
         email: editForm.email,
       });
+
+      // roles por endpoint dedicado
       await UsersService.assignRoles(editing.id, editForm.roles);
+
       toast.success("Usuario actualizado");
       setOpenEdit(false);
       setEditing(null);
@@ -379,14 +456,14 @@ const UsersTab = () => {
   const onConfirmAction = async () => {
     if (!confirm.action || !confirm.id) return;
     await confirm.action(confirm.id);
-    setConfirm({ open: false, action: null, id: null });
+    setConfirm((s) => ({ ...s, open: false }));
   };
-
-  const hasData = !loading && list.length > 0;
 
   const total = list.length;
   const activos = list.filter((u) => u.is_active).length;
   const inactivos = total - activos;
+
+  const hasData = !loading && list.length > 0;
 
   return (
     <Card className="rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] border-t-4 border-t-blue-600 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-md">
@@ -396,9 +473,7 @@ const UsersTab = () => {
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" /> Usuarios
             </CardTitle>
-            <CardDescription>
-              Gestiona altas, ediciones, bajas y roles de usuarios.
-            </CardDescription>
+            <CardDescription>Gestiona altas, ediciones, bajas y roles de usuarios.</CardDescription>
           </div>
 
           <div className="flex flex-wrap gap-2 text-xs md:text-sm">
@@ -416,38 +491,32 @@ const UsersTab = () => {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Filtro + botones */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center rounded-xl p-2 bg-gradient-to-r from-slate-100 to-white dark:from-neutral-800 dark:to-neutral-900 border border-white/50 dark:border-white/10">
           <DebouncedSearch
             value={q}
             onChange={setQ}
             placeholder="Buscar por nombre, usuario o email"
           />
+
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={fetchUsers}
-              className="gap-2 rounded-xl hover:shadow-md transition"
-            >
+            <Button variant="outline" onClick={fetchUsers} className="gap-2 rounded-xl">
               <RefreshCw className="h-4 w-4" /> Buscar
             </Button>
+
             <Dialog open={openCreate} onOpenChange={setOpenCreate}>
               <DialogTrigger asChild>
-                <Button className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow-md transition gap-2">
+                <Button className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 gap-2">
                   <Plus className="h-4 w-4" /> Nuevo Usuario
                 </Button>
               </DialogTrigger>
+
               <DialogContent className="max-w-xl backdrop-blur-md bg-white/85 dark:bg-neutral-900/85 border border-white/50 dark:border-white/10 rounded-2xl">
                 <DialogHeader>
                   <DialogTitle>Crear Usuario</DialogTitle>
                   <DialogDescription>Complete los datos básicos</DialogDescription>
                 </DialogHeader>
 
-                <motion.form
-                  {...scaleIn}
-                  onSubmit={handleCreate}
-                  className="space-y-4"
-                >
+                <motion.form {...scaleIn} onSubmit={handleCreate} className="space-y-4">
                   <div className="grid gap-3">
                     <div>
                       <Label htmlFor="full_name">Nombre completo</Label>
@@ -455,12 +524,11 @@ const UsersTab = () => {
                         id="full_name"
                         className="rounded-xl"
                         value={form.full_name}
-                        onChange={(e) =>
-                          setForm({ ...form, full_name: e.target.value })
-                        }
+                        onChange={(e) => setForm({ ...form, full_name: e.target.value })}
                         required
                       />
                     </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <Label htmlFor="username">Usuario</Label>
@@ -468,9 +536,7 @@ const UsersTab = () => {
                           id="username"
                           className="rounded-xl"
                           value={form.username}
-                          onChange={(e) =>
-                            setForm({ ...form, username: e.target.value })
-                          }
+                          onChange={(e) => setForm({ ...form, username: e.target.value })}
                           required
                         />
                       </div>
@@ -481,13 +547,12 @@ const UsersTab = () => {
                           type="email"
                           className="rounded-xl"
                           value={form.email}
-                          onChange={(e) =>
-                            setForm({ ...form, email: e.target.value })
-                          }
+                          onChange={(e) => setForm({ ...form, email: e.target.value })}
                           required
                         />
                       </div>
                     </div>
+
                     <div>
                       <Label htmlFor="password">Contraseña</Label>
                       <Input
@@ -495,48 +560,51 @@ const UsersTab = () => {
                         type="password"
                         className="rounded-xl"
                         value={form.password}
-                        onChange={(e) =>
-                          setForm({ ...form, password: e.target.value })
-                        }
+                        onChange={(e) => setForm({ ...form, password: e.target.value })}
                         required
                       />
                       <PasswordHints feedback={pwdFeedback} />
                     </div>
+
+                    {/* ✅ Roles selector (checkbox, no comas) */}
                     <div>
-                      <Label htmlFor="roles">Roles (separados por coma)</Label>
-                      <Input
-                        id="roles"
-                        className="rounded-xl"
-                        value={form.roles.join(",")}
-                        onChange={(e) =>
-                          setForm({
-                            ...form,
-                            roles: e.target.value
-                              .split(",")
-                              .map((s) => s.trim())
-                              .filter(Boolean),
-                          })
-                        }
-                        placeholder="ADMIN,REGISTRAR,TEACHER,STUDENT"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Ejemplo: ADMIN,REGISTRAR,TEACHER,STUDENT
-                      </p>
+                      <Label>Roles</Label>
+                      <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
+                        {rolesOptions.map((r) => {
+                          const checked = form.roles.includes(r);
+                          return (
+                            <label
+                              key={r}
+                              className={`flex items-center gap-2 p-2 rounded-xl border cursor-pointer ${checked ? "bg-blue-50 border-blue-200" : "hover:bg-muted/40"
+                                }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() =>
+                                  toggleRole(r, form.roles, (newRoles) =>
+                                    setForm({ ...form, roles: newRoles })
+                                  )
+                                }
+                              />
+                              <span className="text-sm">{r}</span>
+                            </label>
+                          );
+                        })}
+                        {rolesOptions.length === 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            No hay roles (o no tienes permisos para listarlos).
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
+
                   <div className="flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setOpenCreate(false)}
-                      className="rounded-xl"
-                    >
+                    <Button type="button" variant="outline" onClick={() => setOpenCreate(false)} className="rounded-xl">
                       Cancelar
                     </Button>
-                    <Button
-                      type="submit"
-                      className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 gap-2"
-                    >
+                    <Button type="submit" className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 gap-2">
                       <Check className="h-4 w-4" /> Crear
                     </Button>
                   </div>
@@ -558,159 +626,160 @@ const UsersTab = () => {
                 <th className="text-right">Acciones</th>
               </tr>
             </thead>
+
             <tbody>
-              {loading &&
-                Array.from({ length: 6 }).map((_, idx) => (
-                  <tr
-  key={`sk-${idx}`}
-  className="border-t border-white/50 dark:border-white/10"
->
-  <td className="p-3 text-black"> {/* Cambié a texto negro */}
-    <div className="h-4 w-40 rounded bg-gray-200 dark:bg-white/10 animate-pulse" />
-  </td>
-  <td className="p-3 text-black"> {/* Cambié a texto negro */}
-    <div className="h-4 w-56 rounded bg-gray-200 dark:bg-white/10 animate-pulse" />
-  </td>
-  <td className="p-3 text-black"> {/* Cambié a texto negro */}
-    <div className="h-5 w-24 rounded bg-gray-200 dark:bg-white/10 animate-pulse" />
-  </td>
-  <td className="p-3 text-black"> {/* Cambié a texto negro */}
-    <div className="h-5 w-16 rounded bg-gray-200 dark:bg-white/10 animate-pulse" />
-  </td>
-  <td className="p-3 text-right text-black"> {/* Cambié a texto negro */}
-    <div className="h-8 w-28 rounded bg-gray-200 dark:bg-white/10 animate-pulse ml-auto" />
-  </td>
-</tr>
-                ))}
-
-              {!loading &&
-                hasData &&
-                list.map((u) => (
-                  <motion.tr
-                    key={u.id}
-                    {...fade}
-                    className="border-t border-white/40 dark:border-white/10 !bg-slate-50 even:!bg-slate-200 hover:!bg-slate-300 transition-colors"
-
-
-                  >
-                    {/* Usuario + avatar */}
-                    <td className="p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-semibold text-sm">
-                          {getInitials(u.full_name || u.username)}
+              {!loading && hasData && list.map((u) => (
+                <motion.tr
+                  key={u.id}
+                  {...fade}
+                  className="border-t border-white/40 dark:border-white/10 !bg-slate-50 even:!bg-slate-200 hover:!bg-slate-300 transition-colors"
+                >
+                  <td className="p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-semibold text-sm">
+                        {getInitials(u.full_name || u.username)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-medium text-gray-900 truncate">
+                          {u.full_name || u.username}
                         </div>
-                        <div className="min-w-0">
-                          <div className="font-medium text-gray-900 truncate">
-                            {u.full_name || u.username}
-                          </div>
-                          <div className="text-xs text-gray-500 truncate">
-                            @{u.username}
-                          </div>
+                        <div className="text-xs text-gray-500 truncate">
+                          @{u.username}
                         </div>
                       </div>
-                    </td>
+                    </div>
+                  </td>
 
-                    <td className="p-3">
-                      <span className="text-sm text-gray-700 dark:text-gray-200">
-                        {u.email}
-                      </span>
-                    </td>
+                  <td className="p-3">
+                    <span className="text-sm text-gray-700 dark:text-gray-200">
+                      {u.email}
+                    </span>
+                  </td>
 
-                    <td className="p-3">
-                      <div className="flex flex-wrap gap-1">
-                        {(u.roles || []).map((r) => (
-                          <span
-                            key={r}
-                            className={
-                              "rounded-full px-2.5 py-1 text-xs border " +
-                              roleBadgeClasses(r)
-                            }
-                          >
-                            {r}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-
-                    <td className="p-3">
-                      {u.is_active ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-2.5 py-1">
-                          <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                          Activo
+                  <td className="p-3">
+                    <div className="flex flex-wrap gap-1">
+                      {(u.roles || []).map((r) => (
+                        <span
+                          key={r}
+                          className={"rounded-full px-2.5 py-1 text-xs border " + roleBadgeClasses(r)}
+                        >
+                          {r}
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200 text-xs px-2.5 py-1">
-                          <span className="h-2 w-2 rounded-full bg-slate-400" />
-                          Inactivo
-                        </span>
+                      ))}
+                      {(u.roles || []).length === 0 && (
+                        <span className="text-xs text-muted-foreground">—</span>
                       )}
-                    </td>
+                    </div>
+                  </td>
 
-                    <td className="p-3">
-                      <div className="flex justify-end gap-2">
+                  <td className="p-3">
+                    {u.is_active ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-2.5 py-1">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" /> Activo
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200 text-xs px-2.5 py-1">
+                        <span className="h-2 w-2 rounded-full bg-slate-400" /> Inactivo
+                      </span>
+                    )}
+                  </td>
+
+                  <td className="p-3">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleResetPass(u.id)}
+                        className="gap-1 rounded-xl"
+                      >
+                        <KeyRound className="h-4 w-4" /> Reset
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openEditUser(u)}
+                        className="gap-1 rounded-xl"
+                      >
+                        <Edit className="h-4 w-4" /> Editar
+                      </Button>
+
+                      {u.is_active ? (
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleResetPass(u.id)}
-                          className="gap-1 rounded-xl hover:shadow-sm"
-                          title="Reiniciar contraseña"
+                          onClick={() =>
+                            setConfirm({
+                              open: true,
+                              action: handleDeactivate,
+                              id: u.id,
+                              title: "Dar de baja usuario",
+                              description: "El usuario no podrá iniciar sesión hasta reactivarlo.",
+                              confirmText: "Sí, dar de baja",
+                              confirmVariant: "destructive",
+                            })
+                          }
+                          className="gap-1 rounded-xl"
                         >
-                          <KeyRound className="h-4 w-4" /> Reset
+                          <Trash2 className="h-4 w-4" /> Baja
                         </Button>
+                      ) : (
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => openEditUser(u)}
-                          className="gap-1 rounded-xl hover:shadow-sm"
-                          title="Editar usuario"
+                          onClick={() =>
+                            setConfirm({
+                              open: true,
+                              action: handleActivate,
+                              id: u.id,
+                              title: "Reactivar usuario",
+                              description: "El usuario podrá iniciar sesión nuevamente.",
+                              confirmText: "Sí, reactivar",
+                              confirmVariant: "default",
+                            })
+                          }
+                          className="gap-1 rounded-xl"
                         >
-                          <Edit className="h-4 w-4" /> Editar
+                          Activar
                         </Button>
-                        {u.is_active ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              setConfirm({
-                                open: true,
-                                action: handleDeactivate,
-                                id: u.id,
-                              })
-                            }
-                            className="gap-1 rounded-xl hover:shadow-sm"
-                            title="Dar de baja"
-                          >
-                            <Trash2 className="h-4 w-4" /> Baja
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              setConfirm({
-                                open: true,
-                                action: handleActivate,
-                                id: u.id,
-                              })
-                            }
-                            className="gap-1 rounded-xl hover:shadow-sm"
-                            title="Reactivar"
-                          >
-                            Activar
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))}
+                      )}
+
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() =>
+                          setConfirm({
+                            open: true,
+                            action: handleDelete,
+                            id: u.id,
+                            title: "Eliminar definitivamente",
+                            description: "Esto borra el usuario de forma permanente. No hay vuelta atrás.",
+                            confirmText: "Sí, eliminar",
+                            confirmVariant: "destructive",
+                          })
+                        }
+                        className="gap-1 rounded-xl"
+                        title="Eliminar definitivamente"
+                      >
+                        Eliminar
+                      </Button>
+                    </div>
+                  </td>
+                </motion.tr>
+              ))}
 
               {!loading && !hasData && (
                 <tr>
-                  <td
-                    className="p-6 text-center text-muted-foreground"
-                    colSpan={5}
-                  >
+                  <td className="p-6 text-center text-muted-foreground" colSpan={5}>
                     No hay resultados con ese filtro.
+                  </td>
+                </tr>
+              )}
+
+              {loading && (
+                <tr>
+                  <td className="p-6 text-center text-muted-foreground" colSpan={5}>
+                    Cargando…
                   </td>
                 </tr>
               )}
@@ -723,15 +792,10 @@ const UsersTab = () => {
           <DialogContent className="max-w-xl backdrop-blur-md bg-white/85 dark:bg-neutral-900/85 border border-white/50 dark:border-white/10 rounded-2xl">
             <DialogHeader>
               <DialogTitle>Editar Usuario</DialogTitle>
-              <DialogDescription>
-                Actualiza los datos y roles
-              </DialogDescription>
+              <DialogDescription>Actualiza los datos y roles</DialogDescription>
             </DialogHeader>
-            <motion.form
-              {...scaleIn}
-              onSubmit={submitEdit}
-              className="space-y-4"
-            >
+
+            <motion.form {...scaleIn} onSubmit={submitEdit} className="space-y-4">
               <div className="grid gap-3">
                 <div>
                   <Label htmlFor="edit_fullname">Nombre completo</Label>
@@ -739,12 +803,11 @@ const UsersTab = () => {
                     id="edit_fullname"
                     className="rounded-xl"
                     value={editForm.full_name}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, full_name: e.target.value })
-                    }
+                    onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
                     required
                   />
                 </div>
+
                 <div>
                   <Label htmlFor="edit_email">Email</Label>
                   <Input
@@ -752,45 +815,49 @@ const UsersTab = () => {
                     type="email"
                     className="rounded-xl"
                     value={editForm.email}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, email: e.target.value })
-                    }
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
                     required
                   />
                 </div>
+
                 <div>
-                  <Label htmlFor="edit_roles">
-                    Roles (separados por coma)
-                  </Label>
-                  <Input
-                    id="edit_roles"
-                    className="rounded-xl"
-                    value={editForm.roles.join(",")}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        roles: e.target.value
-                          .split(",")
-                          .map((s) => s.trim())
-                          .filter(Boolean),
-                      })
-                    }
-                  />
+                  <Label>Roles</Label>
+                  <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {rolesOptions.map((r) => {
+                      const checked = editForm.roles.includes(r);
+                      return (
+                        <label
+                          key={r}
+                          className={`flex items-center gap-2 p-2 rounded-xl border cursor-pointer ${checked ? "bg-blue-50 border-blue-200" : "hover:bg-muted/40"
+                            }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              toggleRole(r, editForm.roles, (newRoles) =>
+                                setEditForm({ ...editForm, roles: newRoles })
+                              )
+                            }
+                          />
+                          <span className="text-sm">{r}</span>
+                        </label>
+                      );
+                    })}
+                    {rolesOptions.length === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        No hay roles para asignar.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
+
               <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setOpenEdit(false)}
-                  className="rounded-xl"
-                >
+                <Button type="button" variant="outline" onClick={() => setOpenEdit(false)} className="rounded-xl">
                   Cancelar
                 </Button>
-                <Button
-                  type="submit"
-                  className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                >
+                <Button type="submit" className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">
                   Guardar
                 </Button>
               </div>
@@ -800,13 +867,11 @@ const UsersTab = () => {
 
         <ConfirmDialog
           open={confirm.open}
-          onOpenChange={(open) =>
-            setConfirm((s) => ({ ...s, open }))
-          }
-          title="¿Estás seguro?"
-          description="Podrás revertirlo luego si es necesario."
-          confirmText="Sí, continuar"
-          confirmVariant="destructive"
+          onOpenChange={(open) => setConfirm((s) => ({ ...s, open }))}
+          title={confirm.title}
+          description={confirm.description}
+          confirmText={confirm.confirmText}
+          confirmVariant={confirm.confirmVariant}
           onConfirm={onConfirmAction}
         />
       </CardContent>
@@ -814,7 +879,7 @@ const UsersTab = () => {
   );
 };
 
-/* ------------------------ Roles (violeta, scroll propio) ------------------------ */
+/* ------------------------ Roles ------------------------ */
 const RolesTab = () => {
   const [roles, setRoles] = useState([]);
   const [open, setOpen] = useState(false);
@@ -855,9 +920,7 @@ const RolesTab = () => {
         <CardTitle className="flex items-center gap-2">
           <Shield className="h-5 w-5" /> Roles
         </CardTitle>
-        <CardDescription>
-          Define perfiles del sistema y su propósito.
-        </CardDescription>
+        <CardDescription>Define perfiles del sistema y su propósito.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex justify-between">
@@ -872,20 +935,14 @@ const RolesTab = () => {
               <DialogHeader>
                 <DialogTitle>Crear Rol</DialogTitle>
               </DialogHeader>
-              <motion.form
-                {...scaleIn}
-                onSubmit={create}
-                className="space-y-4"
-              >
+              <motion.form {...scaleIn} onSubmit={create} className="space-y-4">
                 <div>
                   <Label htmlFor="role_name">Nombre</Label>
                   <Input
                     id="role_name"
                     className="rounded-xl"
                     value={form.name}
-                    onChange={(e) =>
-                      setForm({ ...form, name: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
                     required
                   />
                 </div>
@@ -895,24 +952,14 @@ const RolesTab = () => {
                     id="role_desc"
                     className="rounded-xl"
                     value={form.description}
-                    onChange={(e) =>
-                      setForm({ ...form, description: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
                   />
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setOpen(false)}
-                    className="rounded-xl"
-                  >
+                  <Button type="button" variant="outline" onClick={() => setOpen(false)} className="rounded-xl">
                     Cancelar
                   </Button>
-                  <Button
-                    type="submit"
-                    className="rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700"
-                  >
+                  <Button type="submit" className="rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700">
                     Crear
                   </Button>
                 </div>
@@ -933,39 +980,30 @@ const RolesTab = () => {
               <tbody>
                 {loading &&
                   Array.from({ length: 10 }).map((_, i) => (
-                    <tr
-                      key={`skl-${i}`}
-                      className="border-t border-white/50 dark:border-white/10"
-                    >
+                    <tr key={`skl-${i}`} className="border-t border-white/50 dark:border-white/10">
                       <td className="p-3">
                         <div className="h-4 w-32 rounded bg-gray-200 dark:bg-white/10 animate-pulse" />
                       </td>
                       <td className="p-3">
-                        <div className="h-4 w-64 rounded bg-gray-200 dark:bg_white/10 animate-pulse" />
+                        <div className="h-4 w-64 rounded bg-gray-200 dark:bg-white/10 animate-pulse" />
                       </td>
                     </tr>
                   ))}
+
                 {!loading &&
                   roles.map((r) => (
                     <tr
                       key={r.id || r.name}
                       className="border-t border-white/40 dark:border-white/10 bg-white/65 hover:bg-violet-50/60 transition"
                     >
-                    <td className="p-3 font-medium text-gray-900">
-                      {r.name}
-                      </td>
-                    <td className="p-3 text-gray-800">
-                      {r.description}
-                    </td>
-                      </tr>
-
+                      <td className="p-3 font-medium text-gray-900">{r.name}</td>
+                      <td className="p-3 text-gray-800">{r.description}</td>
+                    </tr>
                   ))}
+
                 {!loading && roles.length === 0 && (
                   <tr>
-                    <td
-                      className="p-6 text-center text-muted-foreground"
-                      colSpan={2}
-                    >
+                    <td className="p-6 text-center text-muted-foreground" colSpan={2}>
                       Sin roles
                     </td>
                   </tr>
@@ -979,7 +1017,7 @@ const RolesTab = () => {
   );
 };
 
-/* --------------------- Permisos (verde) --------------------- */
+/* --------------------- Permisos --------------------- */
 const PermissionsTab = () => {
   const [perms, setPerms] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -994,17 +1032,17 @@ const PermissionsTab = () => {
         ACLService.listPermissions(),
         ACLService.listRoles(),
       ]);
+
       const allPerms = p ?? [];
       const allRoles = r?.roles ?? r ?? [];
+
       setPerms(allPerms);
       setRoles(allRoles);
+
       if (allRoles.length) {
         const first = allRoles[0];
         setSelectedRole(first);
-        const roleCodes =
-          first.permissions ??
-          first.permissions_detail?.map((x) => x.code) ??
-          [];
+        const roleCodes = first.permissions ?? first.permissions_detail?.map((x) => x.code) ?? [];
         setSelectedPerms(new Set(roleCodes));
       }
     } catch {
@@ -1031,10 +1069,7 @@ const PermissionsTab = () => {
     }
 
     try {
-      await ACLService.setRolePermissions(
-        selectedRole.id,
-        Array.from(selectedPerms)
-      );
+      await ACLService.setRolePermissions(selectedRole.id, Array.from(selectedPerms));
       toast.success("Permisos actualizados");
     } catch {
       toast.error("No se pudo actualizar");
@@ -1045,31 +1080,23 @@ const PermissionsTab = () => {
     <Card className="rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] border-t-4 border-t-emerald-600 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-md">
       <CardHeader className="pb-3">
         <CardTitle>Permisos por Rol</CardTitle>
-        <CardDescription>
-          Asigna o revoca permisos de manera granular.
-        </CardDescription>
+        <CardDescription>Asigna o revoca permisos de manera granular.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-2">
           {roles.map((r) => {
-            const isActive =
-              selectedRole &&
-              (r.id === selectedRole.id || r.name === selectedRole.name);
+            const isActive = selectedRole && (r.id === selectedRole.id || r.name === selectedRole.name);
             return (
               <Button
                 key={r.id || r.name}
                 variant={isActive ? "default" : "outline"}
-                className={`rounded-full ${
-                  isActive
+                className={`rounded-full ${isActive
                     ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
                     : ""
-                }`}
+                  }`}
                 onClick={() => {
                   setSelectedRole(r);
-                  const roleCodes =
-                    r.permissions ??
-                    r.permissions_detail?.map((x) => x.code) ??
-                    [];
+                  const roleCodes = r.permissions ?? r.permissions_detail?.map((x) => x.code) ?? [];
                   setSelectedPerms(new Set(roleCodes));
                 }}
               >
@@ -1077,10 +1104,9 @@ const PermissionsTab = () => {
               </Button>
             );
           })}
+
           {!loading && roles.length === 0 && (
-            <span className="text-sm text-muted-foreground">
-              No hay roles disponibles.
-            </span>
+            <span className="text-sm text-muted-foreground">No hay roles disponibles.</span>
           )}
         </div>
 
@@ -1088,11 +1114,9 @@ const PermissionsTab = () => {
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-[420px] overflow-auto">
             {loading &&
               Array.from({ length: 12 }).map((_, i) => (
-                <div
-                  key={`perm-sk-${i}`}
-                  className="h-9 rounded bg-gray-200 dark:bg-white/10 animate-pulse"
-                />
+                <div key={`perm-sk-${i}`} className="h-9 rounded bg-gray-200 dark:bg-white/10 animate-pulse" />
               ))}
+
             {!loading &&
               perms.map((p) => {
                 const code = typeof p === "string" ? p : p?.code;
@@ -1100,11 +1124,10 @@ const PermissionsTab = () => {
                 return (
                   <label
                     key={code}
-                    className={`flex items-center gap-2 p-2 rounded-xl border transition ${
-                      checked
+                    className={`flex items-center gap-2 p-2 rounded-xl border transition ${checked
                         ? "bg-emerald-50/80 dark:bg-emerald-900/20 border-emerald-200/70"
                         : "hover:bg-muted/40"
-                    }`}
+                      }`}
                   >
                     <input
                       type="checkbox"
@@ -1117,10 +1140,9 @@ const PermissionsTab = () => {
                   </label>
                 );
               })}
+
             {!loading && perms.length === 0 && (
-              <div className="text-sm text-muted-foreground">
-                Sin permisos definidos
-              </div>
+              <div className="text-sm text-muted-foreground">Sin permisos definidos</div>
             )}
           </div>
         </div>
