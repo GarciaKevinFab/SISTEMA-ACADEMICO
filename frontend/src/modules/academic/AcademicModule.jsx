@@ -227,14 +227,20 @@ function PlansAndCurricula() {
     } catch (e) { toast.error(e.message); }
   };
 
-  return (
+ return (
     <IfPerm any={REQS.plans}>
       <div className="page-container space-y-6">
-        <Card className="border-0 shadow-none">
-          <CardHeader className="px-0 pt-0">
-            {sectionHeader({ title: "Planes/Mallas Curriculares", description: "Define planes por carrera y sus cursos", Icon: LibraryBig })}
+        
+        {/* CORRECCIÓN AQUÍ: Se agregaron bordes, sombra y padding interno */}
+        <Card className="border shadow-sm bg-white rounded-xl">
+          <CardHeader className="px-6 pt-6">
+            {sectionHeader({ 
+              title: "Planes/Mallas Curriculares", 
+              description: "Define planes por carrera y sus cursos", 
+              Icon: LibraryBig 
+            })}
           </CardHeader>
-          <CardContent className="px-0 space-y-4">
+          <CardContent className="px-6 pb-6 space-y-4">
             <form onSubmit={createPlan} className="grid md:grid-cols-5 gap-3">
               <div className="md:col-span-2">
                 <Label>Nombre *</Label>
@@ -557,14 +563,22 @@ function LoadAndSchedules() {
 
   if (!allowed) return null;
 
+  if (!allowed) return null;
+
   return (
     <div className="space-y-6">
-      <Card className="border-0 shadow-none">
-        <CardHeader className="px-0 pt-0">
-          {sectionHeader({ title: "Nueva Sección / Horario", description: "Asigna curso, docente, aula y franja horaria", Icon: Calendar })}
+      
+      {/* CORRECCIÓN AQUÍ: Agregamos borde, sombra y padding (px-6) */}
+      <Card className="border shadow-sm bg-white rounded-xl">
+        <CardHeader className="px-6 pt-6">
+          {sectionHeader({ 
+            title: "Nueva Sección / Horario", 
+            description: "Asigna curso, docente, aula y franja horaria", 
+            Icon: Calendar 
+          })}
         </CardHeader>
 
-        <CardContent className="px-0 space-y-4">
+        <CardContent className="px-6 pb-6 space-y-4">
           <div className="grid md:grid-cols-3 gap-3">
 
             {/* ✅ PLAN */}
