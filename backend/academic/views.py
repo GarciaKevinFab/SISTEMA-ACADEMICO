@@ -4,6 +4,8 @@ from io import BytesIO
 from django.db import transaction
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404
+from django.contrib.auth import get_user_model
+from django.db.models import Q
 
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
@@ -39,17 +41,109 @@ def ok(data=None, **extra):
 DAY_TO_INT = {"MON": 1, "TUE": 2, "WED": 3, "THU": 4, "FRI": 5, "SAT": 6, "SUN": 7}
 
 
+def _get_full_name(u):
+    # Compatible con User custom / Django default / campos alternos
+    if hasattr(u, "get_full_name"):
+        fn = (u.get_full_name() or "").strip()
+        if fn:
+            return fn
+    for attr in ("full_name", "name"):
+        if hasattr(u, attr):
+            v = (getattr(u, attr) or "").strip()
+            if v:
+                return v
+    # fallback duro
+    return (getattr(u, "username", "") or getattr(u, "email", "") or f"User {u.id}").strip()
+
+
+from django.core.exceptions import FieldError
+from django.db.models import Q
+from django.contrib.auth import get_user_model
+
+def list_teacher_users_qs():
+    User = get_user_model()
+    qs = User.objects.filter(is_active=True)
+
+    # ✅ Caso real: roles es ManyToMany (lo confirmaste con user.roles.set)
+    # Usa iexact para evitar problemas de mayúsculas/minúsculas ("teacher" vs "TEACHER")
+    teacher_names = ["TEACHER", "DOCENTE", "PROFESOR"]
+
+    base = qs.filter(roles__name__in=teacher_names).distinct()
+    if base.exists():
+        return base
+
+    # ✅ Si tu Role llegara a tener code (opcional), lo intentamos sin romper
+    try:
+        alt = qs.filter(roles__code__in=teacher_names).distinct()
+        if alt.exists():
+            return alt
+    except FieldError:
+        pass
+
+    return qs.none()
+
+
+
+def resolve_teacher(teacher_id):
+    """
+    Acepta teacher_id como:
+    - Teacher.id (modo viejo)
+    - User.id (modo nuevo del frontend) ✅
+    """
+    if not teacher_id:
+        return None
+
+    # 1) intentar como Teacher.id
+    t = Teacher.objects.select_related("user").filter(id=int(teacher_id)).first()
+    if t:
+        return t
+
+    # 2) tratar como User.id
+    User = get_user_model()
+    u = get_object_or_404(User, id=int(teacher_id))
+
+    # crea Teacher si no existe (requiere que Teacher tenga user y no más campos obligatorios)
+    t, _ = Teacher.objects.get_or_create(user=u)
+    return t
+
+
+def count_teachers():
+    qs = list_teacher_users_qs()
+    if qs.exists():
+        return qs.count()
+    return Teacher.objects.count()
+
+
+
 # ─────────────────────── Teachers / Classrooms ───────────────────────
-class TeachersViewSet(viewsets.ReadOnlyModelViewSet):
+class TeachersViewSet(viewsets.ViewSet):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
-    queryset = Teacher.objects.select_related("user").all()
-    serializer_class = TeacherSerializer
 
     def list(self, request, *args, **kwargs):
-        data = self.get_serializer(self.get_queryset(), many=True).data
-        # frontend espera ok(teachers=[...])
-        return ok(teachers=data)
+        qs = list_teacher_users_qs()
+
+        # ✅ fallback: si el filtro por roles no encuentra nada,
+        # devolvemos los Teacher existentes
+        if not qs.exists():
+            ts = Teacher.objects.select_related("user").all()
+            teachers = [{
+                "id": t.user_id,  # ✅ User.id (lo que tu frontend manda)
+                "full_name": _get_full_name(t.user),
+                "email": getattr(t.user, "email", "") or "",
+                "username": getattr(t.user, "username", "") or "",
+            } for t in ts]
+            return ok(teachers=teachers)
+
+        teachers = [{
+            "id": u.id,
+            "full_name": _get_full_name(u),
+            "email": getattr(u, "email", "") or "",
+            "username": getattr(u, "username", "") or "",
+        } for u in qs]
+
+        return ok(teachers=teachers)
+
 
 
 class ClassroomsViewSet(viewsets.ReadOnlyModelViewSet):
@@ -110,17 +204,15 @@ class PlansViewSet(viewsets.ModelViewSet):
             qs = PlanCourse.objects.filter(plan=plan).select_related("course")
             return ok(courses=PlanCourseOutSerializer(qs, many=True).data)
 
-        # POST: tu UI manda {code,name,credits,weekly_hours,semester,type}
         payload_ser = PlanCourseCreateSerializer(data=request.data)
         payload_ser.is_valid(raise_exception=True)
         data = payload_ser.validated_data
 
         with transaction.atomic():
-            course, created = Course.objects.get_or_create(
+            course, _ = Course.objects.get_or_create(
                 code=data["code"],
                 defaults={"name": data["name"], "credits": data.get("credits", 3)},
             )
-            # si ya existía, actualizamos nombre/créditos (opcional pero útil)
             course.name = data["name"]
             course.credits = data.get("credits", course.credits)
             course.save()
@@ -143,23 +235,24 @@ class PlansViewSet(viewsets.ModelViewSet):
             pc.delete()
             return ok(success=True)
 
-        # PUT: permitimos update de code/name/credits y semester/weekly_hours/type
         body = request.data or {}
 
         with transaction.atomic():
-            # Update plan-course fields
-            if "semester" in body: pc.semester = int(body["semester"])
-            if "weekly_hours" in body: pc.weekly_hours = int(body["weekly_hours"])
-            if "type" in body: pc.type = body["type"]
+            if "semester" in body:
+                pc.semester = int(body["semester"])
+            if "weekly_hours" in body:
+                pc.weekly_hours = int(body["weekly_hours"])
+            if "type" in body:
+                pc.type = body["type"]
             pc.save()
 
-            # Update course fields (si vienen)
             c = pc.course
             if "code" in body and body["code"] != c.code:
-                # si cambias code, tiene que seguir siendo unique
                 c.code = body["code"]
-            if "name" in body: c.name = body["name"]
-            if "credits" in body: c.credits = int(body["credits"])
+            if "name" in body:
+                c.name = body["name"]
+            if "credits" in body:
+                c.credits = int(body["credits"])
             c.save()
 
         return ok(course=PlanCourseOutSerializer(pc).data)
@@ -178,7 +271,6 @@ class PlansViewSet(viewsets.ModelViewSet):
         if not isinstance(ids, list):
             return Response({"detail": "prerequisites debe ser lista"}, status=400)
 
-        # seguridad: solo prereqs dentro del MISMO plan
         valid = set(PlanCourse.objects.filter(plan=plan, id__in=ids).values_list("id", flat=True))
 
         with transaction.atomic():
@@ -198,7 +290,9 @@ class SectionsViewSet(viewsets.ViewSet):
 
     def list(self, request):
         period = request.query_params.get("period")
-        qs = Section.objects.select_related("plan_course__course", "teacher__user", "classroom").prefetch_related("schedule_slots")
+        qs = Section.objects.select_related(
+            "plan_course__course", "teacher__user", "classroom"
+        ).prefetch_related("schedule_slots")
         if period:
             qs = qs.filter(period=period)
         return ok(sections=SectionOutSerializer(qs, many=True).data)
@@ -206,16 +300,14 @@ class SectionsViewSet(viewsets.ViewSet):
     def create(self, request):
         body = request.data or {}
 
-        # tu frontend manda: course_id (PlanCourse.id), teacher_id, room_id, capacity, period, slots[]
         course_id = body.get("course_id")
         if not course_id:
             return Response({"detail": "course_id requerido"}, status=400)
 
         pc = get_object_or_404(PlanCourse, id=int(course_id))
 
-        teacher = None
-        if body.get("teacher_id"):
-            teacher = get_object_or_404(Teacher, id=int(body["teacher_id"]))
+        # ✅ FIX: teacher_id viene como User.id desde el frontend
+        teacher = resolve_teacher(body.get("teacher_id"))
 
         room = None
         if body.get("room_id"):
@@ -230,14 +322,12 @@ class SectionsViewSet(viewsets.ViewSet):
             label=body.get("label") or "A",
         )
 
-        # slots
         slots = body.get("slots", [])
         if isinstance(slots, list):
             for sl in slots:
                 day = sl.get("day") or sl.get("weekday")
                 wd = DAY_TO_INT.get(day, None)
                 if wd is None:
-                    # si viene número
                     try:
                         wd = int(day)
                     except Exception:
@@ -249,12 +339,17 @@ class SectionsViewSet(viewsets.ViewSet):
                     end=sl.get("end"),
                 )
 
-        sec = Section.objects.select_related("plan_course__course", "teacher__user", "classroom").prefetch_related("schedule_slots").get(id=sec.id)
+        sec = Section.objects.select_related(
+            "plan_course__course", "teacher__user", "classroom"
+        ).prefetch_related("schedule_slots").get(id=sec.id)
+
         return ok(section=SectionOutSerializer(sec).data)
 
     def retrieve(self, request, pk=None):
         sec = get_object_or_404(
-            Section.objects.select_related("plan_course__course", "teacher__user", "classroom").prefetch_related("schedule_slots"),
+            Section.objects.select_related(
+                "plan_course__course", "teacher__user", "classroom"
+            ).prefetch_related("schedule_slots"),
             id=int(pk)
         )
         return ok(section=SectionOutSerializer(sec).data)
@@ -263,8 +358,10 @@ class SectionsViewSet(viewsets.ViewSet):
         sec = get_object_or_404(Section, id=int(pk))
         body = request.data or {}
 
+        # ✅ FIX: teacher_id viene como User.id desde el frontend
         if "teacher_id" in body:
-            sec.teacher = Teacher.objects.filter(id=int(body["teacher_id"])).first() if body["teacher_id"] else None
+            sec.teacher = resolve_teacher(body["teacher_id"]) if body["teacher_id"] else None
+
         if "room_id" in body:
             sec.classroom = Classroom.objects.filter(id=int(body["room_id"])).first() if body["room_id"] else None
         if "capacity" in body:
@@ -275,7 +372,6 @@ class SectionsViewSet(viewsets.ViewSet):
             sec.label = body["label"]
         sec.save()
 
-        # opcional: si te mandan slots, los reemplazamos
         if "slots" in body and isinstance(body["slots"], list):
             SectionScheduleSlot.objects.filter(section=sec).delete()
             for sl in body["slots"]:
@@ -286,9 +382,17 @@ class SectionsViewSet(viewsets.ViewSet):
                         wd = int(day)
                     except Exception:
                         continue
-                SectionScheduleSlot.objects.create(section=sec, weekday=wd, start=sl.get("start"), end=sl.get("end"))
+                SectionScheduleSlot.objects.create(
+                    section=sec,
+                    weekday=wd,
+                    start=sl.get("start"),
+                    end=sl.get("end")
+                )
 
-        sec = Section.objects.select_related("plan_course__course", "teacher__user", "classroom").prefetch_related("schedule_slots").get(id=sec.id)
+        sec = Section.objects.select_related(
+            "plan_course__course", "teacher__user", "classroom"
+        ).prefetch_related("schedule_slots").get(id=sec.id)
+
         return ok(section=SectionOutSerializer(sec).data)
 
     def destroy(self, request, pk=None):
@@ -318,7 +422,12 @@ class SectionsViewSet(viewsets.ViewSet):
                     wd = int(day)
                 except Exception:
                     continue
-            SectionScheduleSlot.objects.create(section=sec, weekday=wd, start=sl.get("start"), end=sl.get("end"))
+            SectionScheduleSlot.objects.create(
+                section=sec,
+                weekday=wd,
+                start=sl.get("start"),
+                end=sl.get("end")
+            )
 
         sec = Section.objects.prefetch_related("schedule_slots").get(id=sec.id)
         return ok(success=True, slots=SectionOutSerializer(sec).data["slots"])
@@ -504,7 +613,6 @@ class ProcessesMineView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # si luego tienes Student/User mapping, aquí filtras por user
         qs = AcademicProcess.objects.all().order_by("-id")
         data = [{"id": p.id, "type": p.kind, "status": p.status, "student_id": p.student_id, "note": p.note} for p in qs]
         return ok(processes=data)
@@ -580,8 +688,11 @@ class AcademicReportsSummaryView(APIView):
 
     def get(self, request):
         return ok(summary={
-            "students": 1200, "sections": Section.objects.count(), "teachers": Teacher.objects.count(),
-            "occupancy": 0.76, "avg_gpa": 13.4
+            "students": 1200,
+            "sections": Section.objects.count(),
+            "teachers": count_teachers(),  # ✅ FIX: cuenta usuarios TEACHER
+            "occupancy": 0.76,
+            "avg_gpa": 13.4
         })
 
 

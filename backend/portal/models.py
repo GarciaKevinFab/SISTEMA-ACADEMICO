@@ -50,3 +50,20 @@ class InboxItem(models.Model):
     data = models.JSONField(default=dict, blank=True)  # payload completo
     status = models.CharField(max_length=12, choices=INBOX_STATUS, default="NEW")
     created_at = models.DateTimeField(auto_now_add=True)
+
+class AdmissionCall(models.Model):
+    title = models.CharField(max_length=180)
+    description = models.TextField(blank=True, default="")
+    start_date = models.DateField(null=True, blank=True)
+    end_date   = models.DateField(null=True, blank=True)
+
+    # opcional: PDF/imagen de la convocatoria
+    file = models.FileField(upload_to="portal/admission_calls/", null=True, blank=True)
+
+    published = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.title

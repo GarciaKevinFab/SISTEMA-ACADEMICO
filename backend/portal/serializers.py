@@ -28,3 +28,19 @@ class InboxItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = InboxItem
         fields = ['id','type','data','status','created_at']
+
+class AdmissionCallSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AdmissionCall
+        fields = [
+            "id","title","description","start_date","end_date",
+            "published","file","url","created_at","updated_at"
+        ]
+
+    def get_url(self, obj):
+        try:
+            return obj.file.url
+        except:
+            return None

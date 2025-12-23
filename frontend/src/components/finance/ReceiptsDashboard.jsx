@@ -236,28 +236,26 @@ const ReceiptsDashboard = () => {
 
   const downloadReceiptPDF = async (receiptId, receiptNumber) => {
     try {
-      // IMPORTANTE: esto baja el PDF como blob
-      const res = await api.get(`/finance/receipts/${receiptId}/pdf`, {
-        responseType: 'blob'
-      });
+      const res = await Receipts.pdf(receiptId);
 
-      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const blob = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
 
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = `boleta_${receiptNumber}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
 
-      toast.success('Éxito', { description: 'PDF descargado correctamente' });
+      window.URL.revokeObjectURL(url);
+      toast.success("Éxito", { description: "PDF descargado correctamente" });
     } catch (error) {
-      console.error('Error downloading PDF:', error);
-      toast.error('Error', { description: 'No se pudo descargar el PDF' });
+      console.error(error);
+      toast.error("Error", { description: "No se pudo descargar el PDF" });
     }
   };
+
 
   const openVerificationUrl = (receiptId) => {
     // si luego haces /api/verificar/<id>, aquí quedará OK.

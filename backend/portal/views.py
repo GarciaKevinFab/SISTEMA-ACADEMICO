@@ -147,3 +147,23 @@ def inbox_set_status(request, id: int):
     item.status = status_val
     item.save(update_fields=['status'])
     return Response({"ok": True, "id": item.id, "status": item.status})
+
+class AdmissionCallsViewSet(viewsets.ModelViewSet):
+    queryset = AdmissionCall.objects.all().order_by("-updated_at")
+    serializer_class = AdmissionCallSerializer
+    http_method_names = ["get","post","patch","delete"]
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=True, methods=["post"], url_path="publish")
+    def publish_toggle(self, request, pk=None):
+        obj = self.get_object()
+        obj.published = bool(request.data.get("published", True))
+        obj.save(update_fields=["published"])
+        return Response({"ok": True, "id": obj.id, "published": obj.published})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def public_admission_calls(request):
+    qs = AdmissionCall.objects.filter(published=True).order_by("-updated_at")
+    return Response(AdmissionCallSerializer(qs[:100], many=True).data)

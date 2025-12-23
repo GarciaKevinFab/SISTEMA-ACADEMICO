@@ -56,7 +56,6 @@ urlpatterns = [
     path('processes/<int:pid>/notify', ProcessNotifyView.as_view()),
     path('processes/<int:pid>/files', ProcessFilesListView.as_view()),
     path('processes/<int:pid>/files/<int:file_id>', ProcessFileDeleteView.as_view()),
-    path('processes/<int:pid>/files', ProcessFileUploadView.as_view()),
 
     # Reportes
     path('academic/reports/summary', AcademicReportsSummaryView.as_view()),

@@ -61,16 +61,25 @@ export const EInvoice = {
 };
 
 export const Receipts = {
-    list: () => api.get("/finance/receipts/").then(unwrap),
-    create: (payload) => api.post("/finance/receipts/", payload).then(unwrap),
+    // ✅ SIN slash final (porque tu Django URL es "receipts")
+    list: () => api.get("/finance/receipts").then(unwrap),
 
-    pay: (id, payload, headers = {}) => api.post(`/finance/receipts/${id}/pay/`, payload, { headers }).then(unwrap),
+    // ✅ SIN slash final
+    create: (payload) => api.post("/finance/receipts", payload).then(unwrap),
 
-    cancel: (id, payload) => api.post(`/finance/receipts/${id}/cancel/`, payload).then(unwrap),
+    // ✅ SIN slash final
+    pay: (id, payload, headers = {}) =>
+        api.post(`/finance/receipts/${id}/pay`, payload, { headers }).then(unwrap),
 
-    // ✅ PDF es blob (no unwrap)
-    pdf: (id) => api.get(`/finance/receipts/${id}/pdf/`, { responseType: "blob" }),
+    // ✅ SIN slash final
+    cancel: (id, payload) =>
+        api.post(`/finance/receipts/${id}/cancel`, payload).then(unwrap),
+
+    // ✅ PDF blob SIN slash final
+    pdf: (id) =>
+        api.get(`/finance/receipts/${id}/pdf`, { responseType: "blob" }),
 };
+
 
 // ✅ INVENTARIO dentro de finance.service.js
 export const Inventory = {
