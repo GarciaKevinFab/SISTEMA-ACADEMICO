@@ -103,57 +103,58 @@ export default function ConceptsCatalog() {
             </div>
 
             <Card>
-                <CardHeader>
-                    <CardTitle>Conceptos</CardTitle>
-                    <CardDescription>Lista de conceptos facturables</CardDescription>
-                </CardHeader>
-                <CardContent className="p-0">
-                    {loading ? (
-                        <div className="flex items-center justify-center h-40" aria-busy="true">
-                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-gray-50 border-b">
-                                    <tr>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">Código</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">Nombre</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">Tipo</th>
-                                        <th scope="col" className="px-4 py-2 text-right text-xs font-semibold">Monto por defecto</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-semibold">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y">
-                                    {rows.map((r) => (
-                                        <tr key={r.id}>
-                                            <td className="px-4 py-2">{r.code}</td>
-                                            <td className="px-4 py-2">{r.name}</td>
-                                            <td className="px-4 py-2 text-xs">{r.type}</td>
-                                            <td className="px-4 py-2 text-right">{fmtCurrency(r.default_amount)}</td>
-                                            <td className="px-4 py-2">
-                                                <div className="flex gap-2">
-                                                    <Button size="sm" variant="outline" onClick={() => openEdit(r)} aria-label="Editar">
-                                                        <Edit3 className="h-4 w-4" aria-hidden="true" />
-                                                    </Button>
-                                                    <Button size="sm" variant="outline" onClick={() => remove(r)} aria-label="Eliminar">
-                                                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {rows.length === 0 && (
-                                        <tr>
-                                            <td colSpan={5} className="text-center py-8 text-gray-500">Sin conceptos todavía.</td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+  <CardHeader>
+    <CardTitle>Conceptos</CardTitle>
+    <CardDescription>Lista de conceptos facturables</CardDescription>
+  </CardHeader>
+  <CardContent className="p-0">
+    {loading ? (
+      <div className="flex items-center justify-center h-40" aria-busy="true">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+      </div>
+    ) : (
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b"> {/* Primera fila gris */}
+            <tr>
+              <th scope="col" className="px-4 py-2 text-left text-xs font-semibold text-black">Código</th>
+              <th scope="col" className="px-4 py-2 text-left text-xs font-semibold text-black">Nombre</th>
+              <th scope="col" className="px-4 py-2 text-left text-xs font-semibold text-black">Tipo</th>
+              <th scope="col" className="px-4 py-2 text-right text-xs font-semibold text-black">Monto por defecto</th>
+              <th scope="col" className="px-4 py-2 text-left text-xs font-semibold text-black">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {rows.map((r) => (
+              <tr key={r.id} className="bg-white hover:bg-gray-100"> {/* Filas con fondo blanco */}
+                <td className="px-4 py-2 text-black">{r.code}</td>
+                <td className="px-4 py-2 text-black">{r.name}</td>
+                <td className="px-4 py-2 text-xs text-black">{r.type}</td>
+                <td className="px-4 py-2 text-right text-black">{fmtCurrency(r.default_amount)}</td>
+                <td className="px-4 py-2">
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => openEdit(r)} aria-label="Editar">
+                      <Edit3 className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => remove(r)} aria-label="Eliminar">
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={5} className="text-center py-8 text-gray-500">Sin conceptos todavía.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </CardContent>
+</Card>
+
 
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="max-w-lg">

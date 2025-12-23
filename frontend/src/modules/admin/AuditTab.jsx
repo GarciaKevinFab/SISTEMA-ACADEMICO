@@ -208,75 +208,77 @@ const AuditTab = () => {
         </div>
 
         {/* Tabla */}
-        <div className="rounded-2xl border border-white/50 dark:border-white/10 overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50/80 dark:bg-neutral-800/80 backdrop-blur sticky top-0 z-10">
-              <tr>
-                <th className="p-2 text-left">Fecha</th>
-                <th className="p-2 text-left">Actor</th>
-                <th className="p-2 text-left">Acción</th>
-                <th className="p-2 text-left">Entidad</th>
-                <th className="p-2 text-left">Detalle</th>
-                <th className="p-2 text-left">IP</th>
-                <th className="p-2 text-left">ReqId</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && Array.from({ length: 8 }).map((_, i) => (
-                <tr key={`sk-${i}`} className="border-t border-white/40 dark:border-white/10">
-                  <td className="p-2"><div className="h-4 w-36 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
-                  <td className="p-2"><div className="h-4 w-28 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
-                  <td className="p-2"><div className="h-4 w-20 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
-                  <td className="p-2"><div className="h-4 w-24 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
-                  <td className="p-2"><div className="h-4 w-[22rem] rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
-                  <td className="p-2"><div className="h-4 w-20 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
-                  <td className="p-2"><div className="h-4 w-28 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
-                </tr>
-              ))}
+      
+<div className="rounded-2xl border border-white/50 dark:border-white/10 overflow-auto">
+  <table className="w-full text-sm">
+    <thead className="bg-gray-200 text-black"> {/* Primera fila gris y texto negro */}
+      <tr>
+        <th className="p-2 text-left">Fecha</th>
+        <th className="p-2 text-left">Actor</th>
+        <th className="p-2 text-left">Acción</th>
+        <th className="p-2 text-left">Entidad</th>
+        <th className="p-2 text-left">Detalle</th>
+        <th className="p-2 text-left">IP</th>
+        <th className="p-2 text-left">ReqId</th>
+      </tr>
+    </thead>
+    <tbody className="bg-white text-black"> {/* Resto de las filas en blanco y texto negro */}
+      {loading && Array.from({ length: 8 }).map((_, i) => (
+        <tr key={`sk-${i}`} className="border-t border-white/40 dark:border-white/10">
+          <td className="p-2"><div className="h-4 w-36 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
+          <td className="p-2"><div className="h-4 w-28 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
+          <td className="p-2"><div className="h-4 w-20 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
+          <td className="p-2"><div className="h-4 w-24 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
+          <td className="p-2"><div className="h-4 w-[22rem] rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
+          <td className="p-2"><div className="h-4 w-20 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
+          <td className="p-2"><div className="h-4 w-28 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
+        </tr>
+      ))}
 
-              {!loading && rows.length === 0 && (
-                <tr>
-                  <td className="p-6 text-center text-muted-foreground" colSpan={7}>Sin registros</td>
-                </tr>
-              )}
+      {!loading && rows.length === 0 && (
+        <tr>
+          <td className="p-6 text-center text-gray-500" colSpan={7}>Sin registros</td>
+        </tr>
+      )}
 
-              {!loading && rows.map((r, i) => (
-                <motion.tr
-                  key={r.id || r.request_id || i}
-                  {...fade}
-                  className="border-t border-white/40 dark:border-white/10 even:bg-white/60 dark:even:bg-neutral-900/40 hover:bg-blue-50/60 dark:hover:bg-blue-900/20 transition-colors"
+      {!loading && rows.map((r, i) => (
+        <motion.tr
+          key={r.id || r.request_id || i}
+          {...fade}
+          className="border-t border-white/40 dark:border-white/10 even:bg-white hover:bg-blue-50/60 dark:hover:bg-blue-900/20 transition-colors"
+        >
+          <td className="p-2 whitespace-nowrap">{toLocal(r.timestamp || r.created_at)}</td>
+          <td className="p-2">{r.actor_name || r.actor_id}</td>
+          <td className="p-2"><ActionBadge action={r.action} /></td>
+          <td className="p-2 whitespace-nowrap">
+            {r.entity}{r.entity_id ? <span className="opacity-70">#{r.entity_id}</span> : ""}
+          </td>
+          <td className="p-2 max-w-[40ch]">
+            <span title={r.summary || r.detail} className="line-clamp-2">
+              {r.summary || r.detail}
+            </span>
+          </td>
+          <td className="p-2">{r.ip}</td>
+          <td className="p-2">
+            <div className="flex items-center gap-1">
+              <code className="text-xs bg-black/5 dark:bg-white/10 rounded px-1.5 py-0.5">{r.request_id || "—"}</code>
+              {r.request_id && (
+                <button
+                  className="p-1 rounded hover:bg-black/5 dark:hover:bg-white/10"
+                  title="Copiar Request ID"
+                  onClick={() => { navigator.clipboard.writeText(r.request_id); toast.success("ReqId copiado"); }}
                 >
-                  <td className="p-2 whitespace-nowrap">{toLocal(r.timestamp || r.created_at)}</td>
-                  <td className="p-2">{r.actor_name || r.actor_id}</td>
-                  <td className="p-2"><ActionBadge action={r.action} /></td>
-                  <td className="p-2 whitespace-nowrap">
-                    {r.entity}{r.entity_id ? <span className="opacity-70">#{r.entity_id}</span> : ""}
-                  </td>
-                  <td className="p-2 max-w-[40ch]">
-                    <span title={r.summary || r.detail} className="line-clamp-2">
-                      {r.summary || r.detail}
-                    </span>
-                  </td>
-                  <td className="p-2">{r.ip}</td>
-                  <td className="p-2">
-                    <div className="flex items-center gap-1">
-                      <code className="text-xs bg-black/5 dark:bg-white/10 rounded px-1.5 py-0.5">{r.request_id || "—"}</code>
-                      {r.request_id && (
-                        <button
-                          className="p-1 rounded hover:bg-black/5 dark:hover:bg-white/10"
-                          title="Copiar Request ID"
-                          onClick={() => { navigator.clipboard.writeText(r.request_id); toast.success("ReqId copiado"); }}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  <Copy className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </td>
+        </motion.tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+
       </CardContent>
     </Card>
   );

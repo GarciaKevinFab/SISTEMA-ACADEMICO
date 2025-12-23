@@ -103,7 +103,7 @@ const MesaDePartesDashboard = ({ onNew, onSearch, onQR, onReports }) => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Mesa de Partes Digital</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-black">Mesa de Partes Digital</h2>
           <p className="text-muted-foreground">Sistema de gestión de trámites documentarios</p>
         </div>
       </div>

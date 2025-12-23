@@ -169,7 +169,7 @@ export default function ReconciliationDashboard() {
                 <CardContent className="p-0">
                     {loading ? (
                         <div className="flex items-center justify-center h-40" aria-busy="true">
-                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-600" />
                         </div>
                     ) : (
                         <div className="overflow-x-auto">

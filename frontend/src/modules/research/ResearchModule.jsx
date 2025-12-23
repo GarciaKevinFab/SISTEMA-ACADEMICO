@@ -224,7 +224,7 @@ const ProjectsManagement = () => {
             {/* header + actions */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold">Proyectos de Investigación</h2>
+                    <h2 className="text-2xl font-bold text-black">Proyectos de Investigación</h2>
                     <p className="text-sm text-gray-600">CRUD completo + cronograma, productos y evaluación</p>
                 </div>
                 <div className="flex gap-2">
@@ -255,84 +255,90 @@ const ProjectsManagement = () => {
             </div>
 
             {/* list */}
-            <Card>
-                <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-gray-50 border-b">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Código</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Título</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Línea</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Asesor</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fechas</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y">
-                                {filtered.map((p) => (
-                                    <tr key={p.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-3 text-sm">{p.code || `P-${p.id}`}</td>
-                                        <td className="px-6 py-3">
-                                            <div className="font-medium">{p.title}</div>
-                                            <div className="text-xs text-gray-500">{p.keywords}</div>
-                                        </td>
-                                        <td className="px-6 py-3 text-sm">{p.line_name || "-"}</td>
-                                        <td className="px-6 py-3 text-sm">{p.advisor_name || "-"}</td>
-                                        <td className="px-6 py-3 text-xs text-gray-600">
-                                            {(p.start_date && new Date(p.start_date).toLocaleDateString()) || "-"} —{" "}
-                                            {(p.end_date && new Date(p.end_date).toLocaleDateString()) || "-"}
-                                        </td>
-                                        <td className="px-6 py-3">
-                                            <Badge variant={STATUS_CFG[p.status]?.badge || "secondary"}>
-                                                {STATUS_CFG[p.status]?.label || p.status}
-                                            </Badge>
-                                        </td>
-                                        <td className="px-6 py-3">
-                                            <div className="flex gap-2">
-                                                <Button size="sm" variant="outline" onClick={() => openDetail(p)} title="Ver detalle">
-                                                    <Eye className="h-4 w-4" />
-                                                </Button>
-                                                <Button size="sm" variant="outline" onClick={() => openEdit(p)} title="Editar">
-                                                    <Edit3 className="h-4 w-4" />
-                                                </Button>
-                                                <Button size="sm" variant="outline" onClick={() => remove(p)} title="Eliminar">
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                                {/* quick status */}
-                                                {p.status !== "APPROVED" && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => changeStatus(p, "APPROVED")}
-                                                        title="Aprobar"
-                                                    >
-                                                        <CheckCircle className="h-4 w-4" />
-                                                    </Button>
-                                                )}
-                                                {p.status !== "REJECTED" && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => changeStatus(p, "REJECTED")}
-                                                        title="Rechazar"
-                                                    >
-                                                        <XCircle className="h-4 w-4" />
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {filtered.length === 0 && (
-                                    <tr><td colSpan="7" className="text-center py-10 text-gray-500">Sin resultados.</td></tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </CardContent>
-            </Card>
+<Card className="rounded-2xl border shadow-sm overflow-hidden bg-white/50"> {/* Fondo blanco con opacidad */}
+    <CardContent className="p-0">
+        <div className="overflow-x-auto">
+            <table className="w-full">
+                <thead className="table-header-background">
+                    <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Código</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Título</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Línea</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Asesor</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Fechas</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Estado</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y bg-white"> {/* Fondo blanco en las filas */}
+                    {filtered.map((p) => (
+                        <tr key={p.id} className="hover:bg-gray-50"> {/* Fondo en hover de fila */}
+                            <td className="px-6 py-3 text-sm text-gray-700">{p.code || `P-${p.id}`}</td>
+                            <td className="px-6 py-3">
+                                <div className="font-medium text-gray-800">{p.title}</div>
+                                <div className="text-xs text-gray-500">{p.keywords}</div>
+                            </td>
+                            <td className="px-6 py-3 text-sm text-gray-700">{p.line_name || "-"}</td>
+                            <td className="px-6 py-3 text-sm text-gray-700">{p.advisor_name || "-"}</td>
+                            <td className="px-6 py-3 text-xs text-gray-600">
+                                {(p.start_date && new Date(p.start_date).toLocaleDateString()) || "-"} —{" "}
+                                {(p.end_date && new Date(p.end_date).toLocaleDateString()) || "-"}
+                            </td>
+                            <td className="px-6 py-3">
+                                <Badge variant={STATUS_CFG[p.status]?.badge || "secondary"} className="text-xs">
+                                    {STATUS_CFG[p.status]?.label || p.status}
+                                </Badge>
+                            </td>
+                            <td className="px-6 py-3">
+                                <div className="flex gap-2 justify-center">
+                                    <Button size="sm" variant="outline" onClick={() => openDetail(p)} title="Ver detalle">
+                                        <Eye className="h-4 w-4" />
+                                    </Button>
+                                    <Button size="sm" variant="outline" onClick={() => openEdit(p)} title="Editar">
+                                        <Edit3 className="h-4 w-4" />
+                                    </Button>
+                                    <Button size="sm" variant="outline" onClick={() => remove(p)} title="Eliminar">
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                    {/* Quick status */}
+                                    {p.status !== "APPROVED" && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => changeStatus(p, "APPROVED")}
+                                            title="Aprobar"
+                                        >
+                                            <CheckCircle className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                    {p.status !== "REJECTED" && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => changeStatus(p, "REJECTED")}
+                                            title="Rechazar"
+                                        >
+                                            <XCircle className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </div>
+                            </td>
+                        </tr>
+                    ))}
+                    {filtered.length === 0 && (
+                        <tr>
+                            <td colSpan="7" className="text-center py-10 text-gray-500">Sin resultados.</td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+        </div>
+    </CardContent>
+</Card>
+
+
+
+
 
             {/* create modal */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -946,7 +952,7 @@ const ReportsModule = () => {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold">Reportes de Investigación</h2>
+                    <h2 className="text-2xl font-bold text-black">Reportes de Investigación</h2>
                     <p className="text-gray-600">Avance, estados y productos</p>
                 </div>
                 <div className="flex gap-2 items-center">
@@ -1106,50 +1112,52 @@ const CatalogsTab = () => {
             {/* LÍNEAS */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-xl font-semibold">Líneas de investigación</h3>
+                    <h3 className="text-2xl font-bold text-black">Líneas de investigación</h3>
                     <p className="text-sm text-gray-600">Base para clasificar proyectos</p>
                 </div>
                 <Button onClick={openCreateLine}><Plus className="h-4 w-4 mr-2" />Nueva línea</Button>
             </div>
 
-            <Card>
-                <CardContent className="p-0">
-                    {loading ? (
-                        <div className="flex items-center justify-center h-36">
-                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-gray-50 border-b">
-                                    <tr>
-                                        <th className="p-2 text-left">Nombre</th>
-                                        <th className="p-2 text-left w-32">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y">
-                                    {lines.map(l => (
-                                        <tr key={l.id}>
-                                            <td className="p-2">{l.name}</td>
-                                            <td className="p-2">
-                                                <div className="flex gap-2">
-                                                    <Button size="sm" variant="outline" onClick={() => openEditLine(l)}>
-                                                        <Edit3 className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button size="sm" variant="outline" onClick={() => removeLine(l)}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {lines.length === 0 && <tr><td className="p-4 text-center text-gray-500" colSpan={2}>Sin líneas</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+           <Card>
+  <CardContent className="p-0">
+    {loading ? (
+      <div className="flex items-center justify-center h-36">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+      </div>
+    ) : (
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-slate-500 border-b"> {/* Fondo gris claro para la primera fila */}
+            <tr>
+              <th className="p-2 text-left text-black">Nombre</th>  {/* Texto en negro */}
+              <th className="p-2 text-left text-black w-32">Acciones</th>  {/* Texto en negro */}
+            </tr>
+          </thead>
+          <tbody className="divide-y bg-white">
+            {lines.map(l => (
+              <tr key={l.id}>
+                <td className="p-2 text-black">{l.name}</td>  {/* Texto en negro */}
+                <td className="p-2">
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => openEditLine(l)}>
+                      <Edit3 className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => removeLine(l)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {lines.length === 0 && <tr><td className="p-4 text-center text-gray-500" colSpan={2}>Sin líneas</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </CardContent>
+</Card>
+
+
 
             {/* DIALOG LÍNEA */}
             <Dialog open={openLineForm} onOpenChange={setOpenLineForm}>
@@ -1173,54 +1181,57 @@ const CatalogsTab = () => {
             {/* ASESORES */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-xl font-semibold">Asesores</h3>
+                    <h3 className="text-2xl font-bold text-black">Asesores</h3>
                     <p className="text-sm text-gray-600">Docentes/investigadores que asesoran proyectos</p>
                 </div>
                 <Button onClick={openCreateAdvisor}><Plus className="h-4 w-4 mr-2" />Nuevo asesor</Button>
             </div>
 
-            <Card>
-                <CardContent className="p-0">
-                    {loading ? (
-                        <div className="flex items-center justify-center h-36">
-                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-gray-50 border-b">
-                                    <tr>
-                                        <th className="p-2 text-left">Nombre</th>
-                                        <th className="p-2 text-left">Email</th>
-                                        <th className="p-2 text-left">ORCID</th>
-                                        <th className="p-2 text-left w-32">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y">
-                                    {advisors.map(a => (
-                                        <tr key={a.id}>
-                                            <td className="p-2">{a.full_name}</td>
-                                            <td className="p-2">{a.email || "-"}</td>
-                                            <td className="p-2">{a.orcid || "-"}</td>
-                                            <td className="p-2">
-                                                <div className="flex gap-2">
-                                                    <Button size="sm" variant="outline" onClick={() => openEditAdvisor(a)}>
-                                                        <Edit3 className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button size="sm" variant="outline" onClick={() => removeAdvisor(a)}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {advisors.length === 0 && <tr><td className="p-4 text-center text-gray-500" colSpan={4}>Sin asesores</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+       <Card>
+  <CardContent className="p-0">
+    {loading ? (
+      <div className="flex items-center justify-center h-36">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+      </div>
+    ) : (
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-slate-500 border-b">
+            <tr>
+              <th className="p-2 text-left text-black">Nombre</th>  {/* Texto en negro */}
+              <th className="p-2 text-left text-black">Email</th>   {/* Texto en negro */}
+              <th className="p-2 text-left text-black">ORCID</th>   {/* Texto en negro */}
+              <th className="p-2 text-left text-black w-32">Acciones</th>  {/* Texto en negro */}
+            </tr>
+          </thead>
+          <tbody className="divide-y bg-white">
+            {advisors.map(a => (
+              <tr key={a.id}>
+                <td className="p-2 text-black">{a.full_name}</td>  {/* Texto en negro */}
+                <td className="p-2 text-black">{a.email || "-"}</td>  {/* Texto en negro */}
+                <td className="p-2 text-black">{a.orcid || "-"}</td>  {/* Texto en negro */}
+                <td className="p-2">
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => openEditAdvisor(a)}>
+                      <Edit3 className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => removeAdvisor(a)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {advisors.length === 0 && <tr><td className="p-4 text-center text-gray-500" colSpan={4}>Sin asesores</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </CardContent>
+</Card>
+
+
+
 
             {/* DIALOG ASESOR */}
             <Dialog open={openAdvisorForm} onOpenChange={setOpenAdvisorForm}>
@@ -1259,7 +1270,7 @@ const CallsModule = () => {
     const [items, setItems] = useState([]);
     return (
         <div className="space-y-4">
-            <h2 className="text-2xl font-bold">Convocatorias</h2>
+            <h2 className="text-2xl font-bold text-black">Convocatorias</h2>
             <p className="text-gray-600">Publica y gestiona convocatorias de proyectos.</p>
             <Card>
                 <CardHeader><CardTitle>Listado</CardTitle></CardHeader>
@@ -1275,23 +1286,42 @@ const CallsModule = () => {
    MAIN MODULE
 ========================================================= */
 const ResearchModule = () => {
-    return (
-        <div className="p-6">
-            <Tabs defaultValue="projects" className="space-y-6">
-                <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="projects">Proyectos</TabsTrigger>
-                    <TabsTrigger value="reports">Reportes</TabsTrigger>
-                    <TabsTrigger value="catalogs">Catálogos</TabsTrigger>
-                    <TabsTrigger value="calls">Convocatorias</TabsTrigger>
-                </TabsList>
+  return (
+<div className="p-6">
+  {/* CONTENEDOR CLARO (como Administración) */}
+  <div
+    className="rounded-3xl border p-4 md:p-6 shadow-sm"
+    style={{ background: "rgba(255, 255, 255, 0.74)" }} 
+  >
+    <Tabs defaultValue="projects" className="space-y-6">
+      <TabsList className="grid w-full grid-cols-4 bg-slate-200/70 p-1 rounded-2xl">
+        <TabsTrigger value="projects" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow">
+          Proyectos
+        </TabsTrigger>
+        <TabsTrigger value="reports" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow">
+          Reportes
+        </TabsTrigger>
+        <TabsTrigger value="catalogs" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow">
+          Catálogos
+        </TabsTrigger>
+        <TabsTrigger value="calls" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow">
+          Convocatorias
+        </TabsTrigger>
+      </TabsList>
 
-                <TabsContent value="projects"><ProjectsManagement /></TabsContent>
-                <TabsContent value="reports"><ReportsModule /></TabsContent>
-                <TabsContent value="catalogs"><CatalogsTab /></TabsContent>
-                <TabsContent value="calls"><CallsModule /></TabsContent>
-            </Tabs>
-        </div>
-    );
+      <TabsContent value="projects"><ProjectsManagement /></TabsContent>
+      <TabsContent value="reports"><ReportsModule /></TabsContent>
+      <TabsContent value="catalogs"><CatalogsTab /></TabsContent>
+      <TabsContent value="calls"><CallsModule /></TabsContent>
+    </Tabs>
+  </div>
+</div>
+  )
 };
 
 export default ResearchModule;
+
+
+
+
+

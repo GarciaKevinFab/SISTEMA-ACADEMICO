@@ -1,7 +1,26 @@
-/* Fondo de la parte principal (debajo de los botones) */
+/* Eliminar scroll innecesario */
+body, .main, .container, .card, .overflow-x-auto, .overflow-auto {
+  overflow-x: hidden !important; /* Eliminar scroll horizontal */
+  overflow-y: hidden !important; /* Eliminar scroll vertical */
+  margin: 0;
+  padding: 0;
+}
+
+/* Eliminar scroll innecesario en las tablas */
+table {
+  overflow-x: hidden !important; /* Eliminar el scroll horizontal */
+  overflow-y: hidden !important; /* Eliminar el scroll vertical */
+}
+
+/* Para las secciones de contenido con scroll */
+.card-custom-background, .table-custom-background, .table-header-background {
+  overflow-x: hidden !important; /* Eliminar scroll horizontal */
+  overflow-y: hidden !important; /* Eliminar scroll vertical */
+}
+
 main {
   background-color: #1C2A44 !important; /* Azul marino */
-  color: #FFFFFF !important; /* Texto blanco */
+  color: #030303 !important; /* Texto blanco */
   padding: 0;
   margin: 0;
 }
@@ -15,8 +34,8 @@ main {
 
 /* Fondo de las tablas y otras secciones */
 table {
-  background-color: #1C2A44 !important; /* Azul marino */
-  color: #FFFFFF !important; /* Texto blanco */
+  background-color: #ffffff !important; /* Azul marino */
+  color: #000000 !important; /* Texto blanco */
 }
 
 table th, table td {
@@ -90,3 +109,19 @@ input:focus, textarea:focus, select:focus {
   border: 2px solid #2196F3 !important;  /* Borde azul brillante al hacer foco */
   background-color: #f1f1f1 !important;  /* Fondo gris suave al enfocar */
 }
+
+/* Fondo del Card con transparencia */
+.card-custom-background {
+    background: rgba(160, 1, 1, 0.6); /* Blanco con transparencia */
+}
+
+/* Fondo de las filas en la tabla */
+.table-custom-background {
+    background: rgba(255, 255, 255, 0.87); /* Fila de la tabla con fondo semi-transparente */
+}
+
+/* Fondo celeste más claro (donde está la cabecera de los proyectos) */
+.table-header-background {
+    background: rgba(255, 255, 255, 0.877);
+}
+

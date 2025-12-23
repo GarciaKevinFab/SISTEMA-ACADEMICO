@@ -638,106 +638,106 @@ const ExportHistoryModule = () => {
           Mostrando: <b>{filtered.length}</b>
         </div>
       </div>
+<Card>
+  <CardContent className="p-0">
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead className="bg-gray-200 border-b"> {/* Fondo gris para la primera fila */}
+          <tr>
+            <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+              Tipo
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+              Período
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+              Estado
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+              Registros
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+              Fecha
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+              Acciones
+            </th>
+          </tr>
+        </thead>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Tipo
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Período
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Estado
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Registros
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Fecha
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
+        <tbody className="bg-white divide-y divide-gray-200">
+          {filtered.map((exp) => {
+            const cfg = statusCfg(exp.status);
+            const Icon = cfg.Icon;
+            return (
+              <tr key={exp.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 whitespace-nowrap text-black"> {/* Letra negra */}
+                  <div className="flex items-center gap-2">
+                    {exp.data_type === "ENROLLMENT" ? (
+                      <Users className="h-4 w-4 text-blue-600" />
+                    ) : exp.data_type === "GRADES" ? (
+                      <Award className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <BookOpen className="h-4 w-4 text-purple-600" />
+                    )}
+                    <span className="font-medium">{exp.data_type}</span>
+                  </div>
+                </td>
 
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filtered.map((exp) => {
-                  const cfg = statusCfg(exp.status);
-                  const Icon = cfg.Icon;
-                  return (
-                    <tr key={exp.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          {exp.data_type === "ENROLLMENT" ? (
-                            <Users className="h-4 w-4 text-blue-600" />
-                          ) : exp.data_type === "GRADES" ? (
-                            <Award className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <BookOpen className="h-4 w-4 text-purple-600" />
-                          )}
-                          <span className="font-medium">{exp.data_type}</span>
-                        </div>
-                      </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                  {exp.record_data?.academic_year ?? "—"}-
+                  {exp.record_data?.academic_period ?? "—"}
+                </td>
 
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {exp.record_data?.academic_year ?? "—"}-
-                        {exp.record_data?.academic_period ?? "—"}
-                      </td>
+                <td className="px-6 py-4 whitespace-nowrap text-black">
+                  <Badge variant="secondary" className={cfg.className}>
+                    <span className="flex items-center gap-1">
+                      <Icon className="h-3 w-3" />
+                      {cfg.label}
+                    </span>
+                  </Badge>
+                </td>
 
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant="secondary" className={cfg.className}>
-                          <span className="flex items-center gap-1">
-                            <Icon className="h-3 w-3" />
-                            {cfg.label}
-                          </span>
-                        </Badge>
-                      </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                  {exp.total_records ?? "N/A"}
+                </td>
 
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {exp.total_records ?? "N/A"}
-                      </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                  {safeDate(exp.created_at)}
+                </td>
 
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {safeDate(exp.created_at)}
-                      </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-black">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="Ver detalle"
+                      onClick={() => openDetail(exp)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
 
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Ver detalle"
-                            onClick={() => openDetail(exp)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                    {exp.status === "FAILED" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => retry(exp.id)}
+                        title="Reintentar"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  </CardContent>
+</Card>
 
-                          {exp.status === "FAILED" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => retry(exp.id)}
-                              title="Reintentar"
-                            >
-                              <RefreshCw className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
 
       {filtered.length === 0 && (
         <div className="text-center py-12">
@@ -974,7 +974,7 @@ const MappingsModule = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="text-2xl font-bold">Mapeo de Catálogos MINEDU</h2>
+        <h2 className="text-2xl font-bold text-black">Mapeo de Catálogos MINEDU</h2>
         <div className="flex gap-2 items-center">
           <ListChecks className="h-5 w-5 text-gray-500" />
           <span className="text-sm text-gray-600">
@@ -1014,123 +1014,118 @@ const MappingsModule = () => {
         })}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Vincular códigos MINEDU</CardTitle>
-          <CardDescription>
-            Seleccione el código MINEDU correspondiente para cada registro local
-          </CardDescription>
-        </CardHeader>
+    <Card>
+  <CardHeader>
+    <CardTitle>Vincular códigos MINEDU</CardTitle>
+    <CardDescription>
+      Seleccione el código MINEDU correspondiente para cada registro local
+    </CardDescription>
+  </CardHeader>
 
-        <CardContent>
-          <div className="flex items-center gap-3 mb-4 flex-wrap">
-            <div className="relative w-full md:w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                className="w-full border rounded pl-9 h-9 text-sm"
-                placeholder="Buscar..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
+  <CardContent>
+    <div className="flex items-center gap-3 mb-4 flex-wrap">
+      <div className="relative w-full md:w-80">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <input
+          className="w-full border rounded pl-9 h-9 text-sm"
+          placeholder="Buscar..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
 
-            <Button variant="outline" onClick={loadAll}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refrescar
-            </Button>
+      <Button variant="outline" onClick={loadAll}>
+        <RefreshCw className="h-4 w-4 mr-2" />
+        Refrescar
+      </Button>
 
-            <div className="text-sm text-gray-600 ml-auto">
-              Mostrando: <b>{filteredLocal.length}</b>
-            </div>
-          </div>
+      <div className="text-sm text-gray-600 ml-auto">
+        Mostrando: <b>{filteredLocal.length}</b>
+      </div>
+    </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center h-40">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
-            </div>
-          ) : (
-            <div className="overflow-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
-                      Local
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
-                      Código MINEDU
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
-                      Estado
-                    </th>
-                  </tr>
-                </thead>
+    {loading ? (
+      <div className="flex items-center justify-center h-40">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+      </div>
+    ) : (
+      <div className="overflow-auto">
+        <table className="w-full">
+          <thead className="bg-gray-400 border-b">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs font-semibold text-black uppercase">
+                Local
+              </th>
+              <th className="px-4 py-2 text-left text-xs font-semibold text-black uppercase">
+                Código MINEDU
+              </th>
+              <th className="px-4 py-2 text-left text-xs font-semibold text-black uppercase">
+                Estado
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y bg-white">
+            {filteredLocal.map((it) => {
+              const mappedCode = currentMap[it.id] || "";
+              const changedRow = mappedCode !== (original[it.id] || "");
 
-                <tbody className="divide-y">
-                  {filteredLocal.map((it) => {
-                    const mappedCode = currentMap[it.id] || "";
-                    const changedRow = mappedCode !== (original[it.id] || "");
+              return (
+                <tr key={it.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-2 text-black">
+                    <div className="font-medium">{it.name || it.label}</div>
+                    <div className="text-xs text-gray-500">
+                      {it.code || it.ident || it.document || ""}
+                    </div>
+                  </td>
 
-                    return (
-                      <tr key={it.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-2">
-                          <div className="font-medium">{it.name || it.label}</div>
-                          <div className="text-xs text-gray-500">
-                            {it.code || it.ident || it.document || ""}
-                          </div>
-                        </td>
+                  <td className="px-4 py-2 text-black">
+                    <Select
+                      value={mappedCode}
+                      onValueChange={(v) =>
+                        setCurrentMap((m) => ({
+                          ...m,
+                          [it.id]: v === "UNLINKED" ? "" : v,
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="w-80">
+                        <SelectValue placeholder="Seleccione código" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        <SelectItem value="UNLINKED">— Sin vincular —</SelectItem>
+                        {remoteOptions.map((opt) => (
+                          <SelectItem key={opt.code} value={String(opt.code)}>
+                            {opt.code} — {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </td>
 
-                        <td className="px-4 py-2">
-                          <Select
-                            value={mappedCode}
-                            onValueChange={(v) =>
-                              setCurrentMap((m) => ({
-                                ...m,
-                                [it.id]: v === "UNLINKED" ? "" : v,
-                              }))
-                            }
-                          >
-                            <SelectTrigger className="w-80">
-                              <SelectValue placeholder="Seleccione código" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-72">
-                              <SelectItem value="UNLINKED">— Sin vincular —</SelectItem>
-                              {remoteOptions.map((opt) => (
-                                <SelectItem key={opt.code} value={String(opt.code)}>
-                                  {opt.code} — {opt.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
+                  <td className="px-4 py-2 text-black">
+                    {changedRow ? (
+                      <Badge className="bg-yellow-100 text-yellow-800 border border-yellow-200">
+                        Pendiente de guardar
+                      </Badge>
+                    ) : mappedCode ? (
+                      <Badge className="bg-green-100 text-green-800 border border-green-200">
+                        Vinculado
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary">Sin vincular</Badge>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </CardContent>
+</Card>
 
-                        <td className="px-4 py-2">
-                          {changedRow ? (
-                            <Badge className="bg-yellow-100 text-yellow-800 border border-yellow-200">
-                              Pendiente de guardar
-                            </Badge>
-                          ) : mappedCode ? (
-                            <Badge className="bg-green-100 text-green-800 border border-green-200">
-                              Vinculado
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary">Sin vincular</Badge>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
 
-              {filteredLocal.length === 0 && (
-                <div className="text-center py-10 text-gray-500">
-                  No hay registros para mostrar.
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 };
@@ -1325,159 +1320,161 @@ const JobsLogsModule = () => {
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Jobs</CardTitle>
-          <CardDescription>Programación y acciones</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-semibold">Tipo</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold">CRON</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold">Estado</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold">Última Ejecución</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {jobs.map((job) => (
-                  <tr key={job.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2">{job.type}</td>
-                    <td className="px-4 py-2">{job.cron || "-"}</td>
-                    <td className="px-4 py-2">
-                      {job.enabled ? (
-                        <Badge className="bg-green-100 text-green-800 border border-green-200">
-                          Habilitado
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">Pausado</Badge>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-600">
-                      {safeDate(job.last_run_at, true)}
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openRuns(job)}
-                          title="Ver ejecuciones"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => runNow(job)}
-                          title="Ejecutar ahora"
-                        >
-                          <Play className="h-4 w-4" />
-                        </Button>
-
-                        {job.enabled ? (
-                          <Button size="sm" variant="outline" onClick={() => pause(job)} title="Pausar">
-                            <Pause className="h-4 w-4" />
-                          </Button>
-                        ) : (
-                          <Button size="sm" variant="outline" onClick={() => resume(job)} title="Reanudar">
-                            <Play className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-
-                {jobs.length === 0 && (
-                  <tr>
-                    <td colSpan="5" className="text-center py-8 text-gray-500">
-                      No hay jobs configurados.
-                    </td>
-                  </tr>
+   <Card>
+  <CardHeader>
+    <CardTitle>Jobs</CardTitle>
+    <CardDescription>Programación y acciones</CardDescription>
+  </CardHeader>
+  <CardContent>
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead className="bg-gray-200 border-b">
+          <tr>
+            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Tipo</th> {/* Cambié a text-gray-900 */}
+            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">CRON</th> {/* Cambié a text-gray-900 */}
+            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Estado</th> {/* Cambié a text-gray-900 */}
+            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Última Ejecución</th> {/* Cambié a text-gray-900 */}
+            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Acciones</th> {/* Cambié a text-gray-900 */}
+          </tr>
+        </thead>
+        <tbody className="divide-y bg-white">
+          {jobs.map((job) => (
+            <tr key={job.id} className="hover:bg-gray-50">
+              <td className="px-4 py-2 text-gray-900">{job.type}</td> {/* Cambié a text-gray-900 */}
+              <td className="px-4 py-2 text-gray-900">{job.cron || "-"}</td> {/* Cambié a text-gray-900 */}
+              <td className="px-4 py-2">
+                {job.enabled ? (
+                  <Badge className="bg-green-100 text-green-800 border border-green-200">
+                    Habilitado
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary">Pausado</Badge>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+              </td>
+              <td className="px-4 py-2 text-sm text-gray-900">
+                {safeDate(job.last_run_at, true)} {/* Cambié a text-gray-900 */}
+              </td>
+              <td className="px-4 py-2">
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openRuns(job)}
+                    title="Ver ejecuciones"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => runNow(job)}
+                    title="Ejecutar ahora"
+                  >
+                    <Play className="h-4 w-4" />
+                  </Button>
+
+                  {job.enabled ? (
+                    <Button size="sm" variant="outline" onClick={() => pause(job)} title="Pausar">
+                      <Pause className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => resume(job)} title="Reanudar">
+                      <Play className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+
+          {jobs.length === 0 && (
+            <tr>
+              <td colSpan="5" className="text-center py-8 text-gray-500">
+                No hay jobs configurados.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  </CardContent>
+</Card>
+
+
 
       {selectedJob && (
         <div className="grid md:grid-cols-2 gap-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Ejecuciones: {selectedJob.type}</CardTitle>
-              <CardDescription>Click en terminal para ver logs</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-semibold">Inicio</th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold">Fin</th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold">Estado</th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {runs.map((r) => (
-                      <tr key={r.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-2 text-sm">{safeDate(r.started_at, true)}</td>
-                        <td className="px-4 py-2 text-sm">{safeDate(r.finished_at, true)}</td>
-                        <td className="px-4 py-2">
-                          {r.status === "COMPLETED" ? (
-                            <Badge className="bg-green-100 text-green-800 border border-green-200">OK</Badge>
-                          ) : r.status === "FAILED" ? (
-                            <Badge className="bg-red-100 text-red-800 border border-red-200">Fallo</Badge>
-                          ) : (
-                            <Badge className="bg-yellow-100 text-yellow-800 border border-yellow-200">
-                              {r.status || "En curso"}
-                            </Badge>
-                          )}
-                        </td>
-                        <td className="px-4 py-2">
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openLogs(r)}
-                              title="Ver logs"
-                            >
-                              <Terminal className="h-4 w-4" />
-                            </Button>
+  <CardHeader>
+    <CardTitle>Ejecuciones: {selectedJob.type}</CardTitle>
+    <CardDescription>Click en terminal para ver logs</CardDescription>
+  </CardHeader>
+  <CardContent>
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead className="bg-gray-200 border-b">
+          <tr>
+            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Inicio</th> {/* Letras negras */}
+            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Fin</th> {/* Letras negras */}
+            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Estado</th> {/* Letras negras */}
+            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Acciones</th> {/* Letras negras */}
+          </tr>
+        </thead>
+        <tbody className="divide-y bg-white">
+          {runs.map((r) => (
+            <tr key={r.id} className="hover:bg-gray-50">
+              <td className="px-4 py-2 text-sm text-gray-900">{safeDate(r.started_at, true)}</td> {/* Letras negras */}
+              <td className="px-4 py-2 text-sm text-gray-900">{safeDate(r.finished_at, true)}</td> {/* Letras negras */}
+              <td className="px-4 py-2">
+                {r.status === "COMPLETED" ? (
+                  <Badge className="bg-green-100 text-green-800 border border-green-200">OK</Badge>
+                ) : r.status === "FAILED" ? (
+                  <Badge className="bg-red-100 text-red-800 border border-red-200">Fallo</Badge>
+                ) : (
+                  <Badge className="bg-yellow-100 text-yellow-800 border border-yellow-200">
+                    {r.status || "En curso"}
+                  </Badge>
+                )}
+              </td>
+              <td className="px-4 py-2">
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openLogs(r)}
+                    title="Ver logs"
+                  >
+                    <Terminal className="h-4 w-4" />
+                  </Button>
 
-                            {r.status === "FAILED" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => retryRun(r)}
-                                title="Reintentar ejecución"
-                              >
-                                <RotateCcw className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                  {r.status === "FAILED" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => retryRun(r)}
+                      title="Reintentar ejecución"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
 
-                    {runs.length === 0 && (
-                      <tr>
-                        <td colSpan="4" className="text-center py-8 text-gray-500">
-                          Sin ejecuciones.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+          {runs.length === 0 && (
+            <tr>
+              <td colSpan="4" className="text-center py-8 text-gray-500">
+                Sin ejecuciones.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  </CardContent>
+</Card>
 
           <Card>
             <CardHeader>

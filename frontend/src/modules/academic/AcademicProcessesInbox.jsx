@@ -54,56 +54,58 @@ export default function AcademicProcessesInbox() {
 
     return (
         <div className="space-y-4">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Bandeja de procesos</CardTitle>
-                    <CardDescription>Revisión y resolución de solicitudes académicas</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="flex gap-2">
-                        <Input placeholder="Buscar por estudiante, tipo..." value={q} onChange={e => setQ(e.target.value)} />
-                        <Button onClick={load}>Buscar</Button>
-                    </div>
+  <Card>
+    <CardHeader>
+      <CardTitle>Bandeja de procesos</CardTitle>
+      <CardDescription>Revisión y resolución de solicitudes académicas</CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-4">
+      <div className="flex gap-2">
+        <Input placeholder="Buscar por estudiante, tipo..." value={q} onChange={e => setQ(e.target.value)} />
+        <Button onClick={load}>Buscar</Button>
+      </div>
 
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="p-2 text-left">Código</th>
-                                    <th className="p-2 text-left">Estudiante</th>
-                                    <th className="p-2 text-left">Tipo</th>
-                                    <th className="p-2 text-left">Período</th>
-                                    <th className="p-2 text-left">Estado</th>
-                                    <th className="p-2 text-right"></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {(Array.isArray(list) ? list : []).map(p => (
-                                    <tr key={p.id} className="border-t">
-                                        <td className="p-2">{p.code}</td>
-                                        <td className="p-2">{p.student_name} ({p.student_id})</td>
-                                        <td className="p-2">{p.type}</td>
-                                        <td className="p-2">{p.period}</td>
-                                        <td className="p-2">
-                                            <Badge variant={p.status === "APROBADO" ? "default" : p.status === "RECHAZADO" ? "destructive" : "secondary"}>
-                                                {p.status}
-                                            </Badge>
-                                        </td>
-                                        <td className="p-2 text-right">
-                                            <Button variant="outline" size="sm" onClick={() => openDetail(p)}>
-                                                <Eye className="h-4 w-4 mr-1" />Abrir
-                                            </Button>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {(Array.isArray(list) ? list : []).length === 0 && (
-                                    <tr><td className="p-3 text-center text-gray-500" colSpan={6}>Sin procesos</td></tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </CardContent>
-            </Card>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          {/* Encabezado gris con texto negro */}
+          <thead className="bg-gray-200">
+            <tr>
+              <th className="p-2 text-left text-black">Código</th>
+              <th className="p-2 text-left text-black">Estudiante</th>
+              <th className="p-2 text-left text-black">Tipo</th>
+              <th className="p-2 text-left text-black">Período</th>
+              <th className="p-2 text-left text-black">Estado</th>
+              <th className="p-2 text-right text-black"></th>
+            </tr>
+          </thead>
+          {/* Cuerpo blanco con texto negro */}
+          <tbody className="bg-white">
+            {(Array.isArray(list) ? list : []).map(p => (
+              <tr key={p.id} className="border-t hover:bg-gray-50">
+                <td className="p-2 text-black">{p.code}</td>
+                <td className="p-2 text-black">{p.student_name} ({p.student_id})</td>
+                <td className="p-2 text-black">{p.type}</td>
+                <td className="p-2 text-black">{p.period}</td>
+                <td className="p-2 text-black">
+                  <Badge variant={p.status === "APROBADO" ? "default" : p.status === "RECHAZADO" ? "destructive" : "secondary"}>
+                    {p.status}
+                  </Badge>
+                </td>
+                <td className="p-2 text-right">
+                  <Button variant="outline" size="sm" onClick={() => openDetail(p)}>
+                    <Eye className="h-4 w-4 mr-1" />Abrir
+                  </Button>
+                </td>
+              </tr>
+            ))}
+            {(Array.isArray(list) ? list : []).length === 0 && (
+              <tr><td className="p-3 text-center text-gray-500" colSpan={6}>Sin procesos</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </CardContent>
+  </Card>
 
             <Dialog open={!!detail} onOpenChange={() => setDetail(null)}>
                 <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">

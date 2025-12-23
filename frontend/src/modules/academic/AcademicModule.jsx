@@ -60,8 +60,6 @@ const sectionHeader = ({ title, description, Icon }) => (
   </div>
 );
 
-const statCard = "relative overflow-hidden rounded-2xl border bg-white hover:bg-[#E3F2FD] transition-colors";
-
 
 
 const REQS = {
@@ -76,7 +74,7 @@ const REQS = {
   processes: [PERMS["academic.reports.view"]],
 };
 
-/* ------------- ACCIONES RÁPIDAS (respetan permisos) ------------- */
+//* ------------- ACCIONES RÁPIDAS (respetan permisos) ------------- */
 function AcademicQuickActions({ go }) {
   const { hasAny } = useAuth();
 
@@ -92,28 +90,27 @@ function AcademicQuickActions({ go }) {
     { key: "processes", label: "Procesos", Icon: Clock, need: REQS.processes },
   ].filter(a => hasAny(a.need));
 
-  const MAX_QUICK = 5;
+  const MAX_QUICK = 9;
   const primary = actions.slice(0, MAX_QUICK);
   const more = actions.slice(MAX_QUICK);
 
-  return (
+ return (
     <Card className="border-0 shadow-none">
-      <CardHeader className="px-0 pt-0" style={cardHeaderStyle}>
-        {sectionHeader({ title: "Acciones Rápidas", Icon: LayoutGrid })}
+      <CardHeader className="px-0 pt-0 bg-gray-200"> {/* Encabezado gris */}
       </CardHeader>
       <CardContent className="px-0">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {primary.map(({ key, label, Icon }) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4"> {/* Ajustado el padding y espacio entre los botones */}
+          {actions.map(({ key, label, Icon }) => (
             <TooltipProvider key={key} delayDuration={100}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="outline"
-                    className="group h-24 rounded-2xl border bg-gradient-to-br from-muted/40 to-background hover:from-background hover:to-muted/40 transition-all duration-200 flex flex-col items-center justify-center gap-2 shadow-sm hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                    style={buttonStyle}
+                    className="group h-16 rounded-2xl border bg-white hover:bg-gray-200 transition-all duration-200 flex flex-col items-center justify-center gap-2 shadow-sm hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    style={{ color: "black" }} // Fondo blanco con letras negras
                     onClick={() => go(key)}
                   >
-                    <Icon className="h-6 w-6 transition-transform duration-200 group-hover:scale-110" />
+                    <Icon className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />
                     <span className="text-xs font-medium">{label}</span>
                   </Button>
                 </TooltipTrigger>
@@ -121,24 +118,6 @@ function AcademicQuickActions({ go }) {
               </Tooltip>
             </TooltipProvider>
           ))}
-
-          {more.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="group h-24 rounded-2xl border bg-gradient-to-br from-muted/40 to-background hover:from-background hover:to-muted/40 transition-all duration-200 flex flex-col items-center justify-center gap-2 shadow-sm hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" style={buttonStyle}>
-                  <LayoutGrid className="h-6 w-6" />
-                  <span className="text-xs font-medium">Más</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                {more.map(({ key, label, Icon }) => (
-                  <DropdownMenuItem key={key} onClick={() => go(key)} className="gap-2">
-                    <Icon className="h-4 w-4" /> {label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
         </div>
       </CardContent>
     </Card>
@@ -151,28 +130,32 @@ function SmallAcademicDashboard() {
   useEffect(() => { setStats((s) => s); }, []);
 
   const items = [
-    { label: "Secciones", value: stats.sections, Icon: Calendar },
-    { label: "Docentes", value: stats.teachers, Icon: Users },
-    { label: "Estudiantes", value: stats.students, Icon: Users },
-    { label: "Procesos abiertos", value: stats.openProcesses, Icon: Clock },
+    { label: "Secciones", value: stats.sections, Icon: Calendar, bgColor: 'bg-blue-50', iconColor: 'text-blue-600' },
+    { label: "Docentes", value: stats.teachers, Icon: Users, bgColor: 'bg-green-50', iconColor: 'text-green-600' },
+    { label: "Estudiantes", value: stats.students, Icon: Users, bgColor: 'bg-purple-50', iconColor: 'text-purple-600' },
+    { label: "Procesos abiertos", value: stats.openProcesses, Icon: Clock, bgColor: 'bg-orange-50', iconColor: 'text-orange-600' },
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 p-1 mt-4"> {/* Añadí margin-top (mt-4) para separarlo un poco de arriba */}
       {items.map((k, i) => (
-        <Card key={i} className={statCard} style={cardStyle}>
+        <Card key={i} className={`border bg-white shadow-lg rounded-xl p-4 ${k.bgColor} hover:shadow-xl transition-all`}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">{k.label}</CardTitle>
-            <k.Icon className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm font-medium text-gray-800">{k.label}</CardTitle>
+            <k.Icon className={`h-5 w-5 ${k.iconColor}`} />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold tracking-tight">{k.value}</div>
+            <div className="text-2xl font-bold tracking-tight">{k.value}</div> {/* Se mantuvo el tamaño de texto */}
           </CardContent>
         </Card>
       ))}
     </div>
   );
 }
+
+
+
+export { AcademicQuickActions, SmallAcademicDashboard };
 
 /* ------------- PLANES / MALLAS ------------- */
 function PlansAndCurricula() {
@@ -352,52 +335,55 @@ function PlansAndCurricula() {
               </form>
 
               <div className="border rounded-xl overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/40">
-                    <tr>
-                      <th className="p-2 text-left">Código</th>
-                      <th className="p-2 text-left">Curso</th>
-                      <th className="p-2 text-center">Cred.</th>
-                      <th className="p-2 text-center">Sem.</th>
-                      <th className="p-2 text-center">Tipo</th>
-                      <th className="p-2 text-right"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(Array.isArray(courses) ? courses : []).map((c) => (
-                      <tr key={c.id} className="border-t hover:bg-accent/5">
-                        <td className="p-2 font-mono text-xs">{c.code}</td>
-                        <td className="p-2">{c.name}</td>
-                        <td className="p-2 text-center">{c.credits}</td>
-                        <td className="p-2 text-center">{c.semester}</td>
-                        <td className="p-2 text-center">
-                          <Badge variant="outline" className="rounded-full px-2">
-                            {c.type === "ELECTIVE" ? "Electivo" : "Obligatorio"}
-                          </Badge>
-                        </td>
-                        <td className="p-2 text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setPrereqFor(c);
-                              setPrereqs(Array.isArray(c.prerequisites) ? c.prerequisites.map((p) => p.id) : []);
-                            }}
-                            className="gap-2"
-                          >
-                            <ClipboardList className="h-4 w-4" /> Prerrequisitos
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                    {selectedPlan && (Array.isArray(courses) ? courses : []).length === 0 && (
-                      <tr>
-                        <td className="p-3 text-center text-muted-foreground" colSpan={6}>Sin cursos</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+  <table className="w-full text-sm">
+    {/* Encabezado gris con texto negro */}
+    <thead className="bg-gray-200">
+      <tr>
+        <th className="p-2 text-left text-black">Código</th>
+        <th className="p-2 text-left text-black">Curso</th>
+        <th className="p-2 text-center text-black">Cred.</th>
+        <th className="p-2 text-center text-black">Sem.</th>
+        <th className="p-2 text-center text-black">Tipo</th>
+        <th className="p-2 text-right text-black"></th>
+      </tr>
+    </thead>
+    {/* Cuerpo blanco con letras negras */}
+    <tbody className="bg-white">
+      {(Array.isArray(courses) ? courses : []).map((c) => (
+        <tr key={c.id} className="border-t hover:bg-gray-50">
+          <td className="p-2 font-mono text-xs text-black">{c.code}</td>
+          <td className="p-2 text-black">{c.name}</td>
+          <td className="p-2 text-center text-black">{c.credits}</td>
+          <td className="p-2 text-center text-black">{c.semester}</td>
+          <td className="p-2 text-center text-black">
+            <Badge variant="outline" className="rounded-full px-2 text-black">
+              {c.type === "ELECTIVE" ? "Electivo" : "Obligatorio"}
+            </Badge>
+          </td>
+          <td className="p-2 text-right">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setPrereqFor(c);
+                setPrereqs(Array.isArray(c.prerequisites) ? c.prerequisites.map((p) => p.id) : []);
+              }}
+              className="gap-2"
+            >
+              <ClipboardList className="h-4 w-4" /> Prerrequisitos
+            </Button>
+          </td>
+        </tr>
+      ))}
+      {selectedPlan && (Array.isArray(courses) ? courses : []).length === 0 && (
+        <tr>
+          <td className="p-3 text-center text-muted-foreground" colSpan={6}>Sin cursos</td>
+        </tr>
+      )}
+    </tbody>
+  </table>
+</div>
+
 
               {prereqFor && (
                 <div className="border rounded-2xl p-3">
@@ -622,7 +608,7 @@ function LoadAndSchedules() {
               </Select>
             </div>
 
-            <Labeled value={form.period} label="Período" onChange={(v) => setForm({ ...form, period: v })} />
+            <Labeled value={form.period} label="Periodo" onChange={(v) => setForm({ ...form, period: v })} />
 
             {/* readonly auto */}
             <div>
@@ -712,37 +698,40 @@ function LoadAndSchedules() {
       </Card>
 
       <Card>
-        <CardHeader>{sectionHeader({ title: "Secciones (Período 2025-I)" })}</CardHeader>
-        <CardContent className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40">
-              <tr>
-                <th className="p-2 text-left">Curso</th>
-                <th className="p-2 text-left">Docente</th>
-                <th className="p-2 text-left">Aula</th>
-                <th className="p-2 text-left">Horario</th>
-                <th className="p-2 text-center">Cap.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(Array.isArray(sections) ? sections : []).map((s) => (
-                <tr key={s.id} className="border-t hover:bg-accent/5">
-                  <td className="p-2">{s.course_code} – {s.course_name}</td>
-                  <td className="p-2">{s.teacher_name}</td>
-                  <td className="p-2">{s.room_name}</td>
-                  <td className="p-2">
-                    {(Array.isArray(s.slots) ? s.slots : []).map((k) => `${k.day} ${k.start}-${k.end}`).join(", ")}
-                  </td>
-                  <td className="p-2 text-center">{s.capacity}</td>
-                </tr>
-              ))}
-              {(Array.isArray(sections) ? sections : []).length === 0 && (
-                <tr><td className="p-4 text-center text-muted-foreground" colSpan={5}>Sin secciones</td></tr>
-              )}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+  <CardHeader>{sectionHeader({ title: "Secciones (Período 2025-I)" })}</CardHeader>
+  <CardContent className="overflow-x-auto">
+    <table className="w-full text-sm">
+      {/* Encabezado gris */}
+      <thead className="bg-gray-200">
+        <tr>
+          <th className="p-2 text-left text-black">Curso</th>
+          <th className="p-2 text-left text-black">Docente</th>
+          <th className="p-2 text-left text-black">Aula</th>
+          <th className="p-2 text-left text-black">Horario</th>
+          <th className="p-2 text-center text-black">Cap.</th>
+        </tr>
+      </thead>
+      {/* Cuerpo blanco con letras negras */}
+      <tbody className="bg-white">
+        {(Array.isArray(sections) ? sections : []).map((s) => (
+          <tr key={s.id} className="border-t hover:bg-gray-50">
+            <td className="p-2 text-black">{s.course_code} – {s.course_name}</td>
+            <td className="p-2 text-black">{s.teacher_name}</td>
+            <td className="p-2 text-black">{s.room_name}</td>
+            <td className="p-2 text-black">
+              {(Array.isArray(s.slots) ? s.slots : []).map((k) => `${k.day} ${k.start}-${k.end}`).join(", ")}
+            </td>
+            <td className="p-2 text-center text-black">{s.capacity}</td>
+          </tr>
+        ))}
+        {(Array.isArray(sections) ? sections : []).length === 0 && (
+          <tr><td className="p-4 text-center text-muted-foreground" colSpan={5}>Sin secciones</td></tr>
+        )}
+      </tbody>
+    </table>
+  </CardContent>
+</Card>
+
     </div>
   );
 }
@@ -888,11 +877,12 @@ function Empty({ label = "Sin datos", Icon = Inbox }) {
 }
 
 /* ------------- CONTENEDOR PRINCIPAL ------------- */
+/* ------------- CONTENEDOR PRINCIPAL ------------- */
 export default function AcademicModule() {
   const { hasAny } = useAuth();
   const [tab, setTab] = useState("dashboard");
 
-  const tabs = useMemo(() => ([
+  const tabs = useMemo(() => ([ 
     { key: "dashboard", label: "Dashboard", need: [] },
     { key: "plans", label: "Mallas", need: REQS.plans },
     { key: "load", label: "Carga & Horarios", need: REQS.load },
@@ -910,13 +900,8 @@ export default function AcademicModule() {
   }, [tabs, tab]);
 
   return (
-    // Aquí aplicas el estilo de fondo
     <div style={pageStyle} className="p-6">
-      {/* CONTENEDOR TRANSLÚCIDO COMO FINANZAS */}
-      <div className="rounded-3xl bg-slate-200/45 backdrop-blur-md border border-white/20 shadow-xl p-6 space-y-6">
-
-
-        {/* HEADER */}
+      <div className="rounded-3xl bg-white/70 backdrop-blur-md border border-white/70 shadow-xl p-6 space-y-6"> {/* Fondo blanco con opacidad */}
         <div>
           <div className="flex items-center gap-2">
             <GraduationCap className="h-6 w-6 text-primary" />
@@ -933,16 +918,18 @@ export default function AcademicModule() {
 
         {/* TABS */}
         <Tabs value={tab} onValueChange={setTab} className="space-y-6">
-          <TabsList className="w-full flex gap-2 overflow-x-auto no-scrollbar bg-white/55 backdrop-blur-md border border-white/30 rounded-2xl p-2 shadow-sm">
-            {tabs.map(t => (
-              <IconTab
-                key={t.key}
-                value={t.key}
-                label={t.label}
-                Icon={tabIcon(t.key)}
-              />
-            ))}
-          </TabsList>
+          <TabsList className="w-full flex gap-10  overflow-x-auto bg-white/55 backdrop-blur-md border border-white/20 rounded-2xl p-2 shadow-sm">
+  {tabs.map(t => (
+    <IconTab
+      key={t.key}
+      value={t.key}
+      label={t.label}
+      Icon={tabIcon(t.key)}
+      className="min-w-[200px] text-center"  // Cambié el ancho mínimo y alineación del texto
+    />
+  ))}
+</TabsList>
+
 
           <TabsContent value="dashboard">
             <AcademicQuickActions go={setTab} />
@@ -959,18 +946,15 @@ export default function AcademicModule() {
           <TabsContent value="proc-inbox"><AcademicProcessesInbox /></TabsContent>
           <TabsContent value="processes"><AcademicProcesses /></TabsContent>
         </Tabs>
-
       </div>
     </div>
-
   );
 }
 
-
 function IconTab({ value, label, Icon }) {
   return (
-    <TabsTrigger value={value} className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-2">
-      <Icon className="h-4 w-4" />
+    <TabsTrigger value={value} className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-4 px-4 py-2 rounded-2xl text-sm hover:bg-gray-200 transition-colors">
+      <Icon className="h-5 w-5" />
       <span className="hidden sm:inline-block">{label}</span>
       <span className="sm:hidden text-xs">{label.slice(0, 8)}</span>
     </TabsTrigger>
