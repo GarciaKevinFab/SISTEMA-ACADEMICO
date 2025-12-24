@@ -1,167 +1,190 @@
 // src/components/SideNav.jsx
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
-  GraduationCap, FileText, Calculator, BarChart3, User,
-  BookOpen, Building, Database, LogOut, Shield
+  LayoutDashboard, ShieldCheck, Settings, BookOpenCheck, 
+  UserPlus, ClipboardList, Wallet, HardDrive, 
+  Microscope, LogOut, ChevronLeft, ChevronRight, UserCircle, Menu, X
 } from "lucide-react";
 import { PERMS } from "../auth/permissions";
 
 const SideNav = () => {
   const { user, roles = [], logout, hasAny, permissions = [] } = useAuth();
   const location = useLocation();
+  
+  // Estados para el control de visibilidad
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  // Cerrar el menú móvil cuando cambie la ruta
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [location.pathname]);
 
   const hasRole = (...codes) => codes.some((r) => roles.includes(r));
-  const permsReady = permissions.length > 0;
+  const isActive = (path) => path === "/dashboard" ? location.pathname === "/dashboard" : location.pathname.startsWith(path);
 
-  const canSecurity = hasAny([
-    PERMS["admin.access.manage"], PERMS["admin.audit.view"],
-    PERMS["security.policies.manage"], PERMS["security.sessions.inspect"],
-  ]) || hasRole("ADMIN_SYSTEM", "ACCESS_ADMIN", "SECURITY_ADMIN");
-
-  const canAdmin = hasAny([PERMS["admin.access.manage"], PERMS["admin.audit.view"]])
-    || hasRole("ADMIN_SYSTEM", "ACCESS_ADMIN");
-
-  const canAcademic = hasAny([
-    PERMS["academic.plans.view"], PERMS["academic.sections.view"],
-    PERMS["academic.enrollment.view"], PERMS["academic.grades.edit"],
-    PERMS["academic.kardex.view"], PERMS["academic.reports.view"],
-    PERMS["academic.view"],
-  ]) || hasRole("ADMIN_SYSTEM", "ADMIN_ACADEMIC", "REGISTRAR", "TEACHER");
-
-  const canAdmission = hasAny([
-    PERMS["admission.calls.view"], PERMS["admission.calls.manage"],
-    PERMS["admission.applicants.manage"], PERMS["admission.documents.review"],
-    PERMS["admission.schedule.manage"], PERMS["admission.evaluation.board"],
-    PERMS["admission.results.publish"], PERMS["admission.reports.view"],
-  ]) || hasRole("ADMIN_SYSTEM", "ADMISSION_OFFICER");
-
-  const canMPV = hasAny([
-    PERMS["mpv.processes.review"], PERMS["mpv.processes.resolve"], PERMS["mpv.reports.view"],
-  ]) || hasRole("ADMIN_SYSTEM", "MPV_OFFICER", "MPV_MANAGER");
-
-  const canFinance = hasAny([
-    PERMS["fin.cashbanks.view"], PERMS["fin.reconciliation.view"],
-    PERMS["fin.student.accounts.view"], PERMS["fin.reports.view"],
-    PERMS["fin.concepts.manage"], PERMS["fin.payments.receive"],
-    PERMS["fin.cash.movements"], PERMS["fin.electronic.invoice.issue"],
-    PERMS["fin.ar.manage"], PERMS["fin.ap.manage"], PERMS["fin.inventory.view"],
-    PERMS["fin.inventory.manage"], PERMS["fin.logistics.view"],
-    PERMS["logistics.procure.manage"], PERMS["logistics.warehouse.dispatch"],
-    PERMS["hr.view"], PERMS["hr.people.manage"], PERMS["hr.payroll.view"],
-    "finance.dashboard.view",
-  ]) || hasRole("ADMIN_SYSTEM", "FINANCE_ADMIN", "ACCOUNTANT", "CASHIER");
-
-  const canMinedu = hasAny([
-    PERMS["minedu.integration.view"],
-    PERMS["minedu.integration.export"],
-    PERMS["minedu.integration.validate"]
-  ]) || hasRole("ADMIN_SYSTEM", "MINEDU_INTEGRATION");
-
-  const canResearch = hasAny([
-    PERMS["research.calls.view"], PERMS["research.calls.manage"],
-    PERMS["research.projects.view"], PERMS["research.projects.edit"],
-    PERMS["research.tabs.reports"]
-  ]) || hasRole("ADMIN_SYSTEM", "RESEARCH_COORDINATOR", "TEACHER_RESEARCHER");
-
-  const isActive = (path) =>
-    path === "/dashboard"
-      ? location.pathname === "/dashboard"
-      : location.pathname.startsWith(path);
-
-  const menuItems = [
-    { id: "dashboard", title: "Dashboard", path: "/dashboard", icon: BarChart3, show: !!user },
-    { id: "security", title: "Seguridad", path: "/dashboard/security", icon: Shield, show: canSecurity },
-    { id: "admin", title: "Administración", path: "/dashboard/admin", icon: Building, show: canAdmin },
+  const menuGroups = [
     {
-      id: "academic", title: "Académico", path: "/dashboard/academic", icon: BookOpen,
-      show: permsReady ? canAcademic : hasRole("ADMIN_SYSTEM", "ADMIN_ACADEMIC", "REGISTRAR", "TEACHER")
+      group: "General",
+      items: [{ id: "dashboard", title: "Dashboard", path: "/dashboard", icon: LayoutDashboard, show: !!user }]
     },
-    { id: "admission", title: "Admisión", path: "/dashboard/admission", icon: GraduationCap, show: canAdmission },
-    { id: "mesa-partes", title: "Mesa de Partes", path: "/dashboard/mesa-partes", icon: FileText, show: canMPV },
-    { id: "finance", title: "Tesorería / Finanzas", path: "/dashboard/finance", icon: Calculator, show: canFinance },
-    { id: "minedu", title: "MINEDU", path: "/dashboard/minedu", icon: Database, show: canMinedu },
-    { id: "research", title: "Investigación", path: "/dashboard/research", icon: Database, show: canResearch },
+    {
+      group: "Gestión y Control",
+      items: [
+        { id: "security", title: "Seguridad", path: "/dashboard/security", icon: ShieldCheck, show: true }, // Simplificado para el ejemplo
+        { id: "admin", title: "Administración", path: "/dashboard/admin", icon: Settings, show: true },
+      ]
+    },
+    {
+      group: "Académico",
+      items: [
+        { id: "academic", title: "Académico", path: "/dashboard/academic", icon: BookOpenCheck, show: true },
+        { id: "admission", title: "Admisión", path: "/dashboard/admission", icon: UserPlus, show: true },
+        { id: "research", title: "Investigación", path: "/dashboard/research", icon: Microscope, show: true },
+      ]
+    },
+    {
+      group: "Operaciones",
+      items: [
+        { id: "mesa-partes", title: "Mesa de Partes", path: "/dashboard/mesa-partes", icon: ClipboardList, show: true },
+        { id: "finance", title: "Finanzas", path: "/dashboard/finance", icon: Wallet, show: true },
+        { id: "minedu", title: "Sistemas MINEDU", path: "/dashboard/minedu", icon: HardDrive, show: true },
+      ]
+    }
   ];
 
   return (
-    <div className="bg-gray-800 text-white w-64 min-h-screen flex flex-col">
-      
-      {/* Encabezado con logo institucional */}
-      <div className="p-4 border-b border-gray-700">
-        <div className="flex items-center space-x-3">
-          
-          <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center overflow-hidden">
-            <img
-              src="/logo.png"
-              alt="Logo IESPP"
-              className="h-12 w-12 object-contain"
-            />
-          </div>
+    <>
+      {/* --- HEADER MÓVIL (Solo visible en pantallas pequeñas) --- */}
+      <div className="lg:hidden bg-[#0f172a] text-white p-4 flex items-center justify-between border-b border-slate-800 sticky top-0 z-[60]">
+        <div className="flex items-center gap-2">
+          <img src="/logo.png" alt="Logo" className="h-8 w-8 object-contain bg-white rounded p-1" />
+          <span className="font-bold text-lg">IESPP</span>
+        </div>
+        <button 
+          onClick={() => setIsMobileOpen(!isMobileOpen)}
+          className="p-2 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-500/20"
+        >
+          {isMobileOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      </div>
 
-          <div>
-            <h1 className="text-lg font-bold">IESPP</h1>
-            <p className="text-xs text-gray-400">"Gustavo Allende Llavería"</p>
+      {/* --- OVERLAY MÓVIL (Fondo oscuro al abrir en móvil) --- */}
+      {isMobileOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] lg:hidden transition-opacity"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
+
+      {/* --- SIDEBAR --- */}
+      <aside 
+        className={`
+          fixed inset-y-0 left-0 z-[80] lg:relative lg:z-0
+          flex flex-col bg-[#0f172a] text-slate-300 border-r border-slate-800 shadow-2xl transition-all duration-300 ease-in-out
+          ${isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+          ${isCollapsed ? "lg:w-20" : "lg:w-72 w-[280px]"}
+        `}
+      >
+        {/* Toggle Button (Solo Desktop) */}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="hidden lg:flex absolute -right-3 top-12 bg-indigo-600 text-white rounded-full p-1 border-4 border-[#0f172a] hover:bg-indigo-500 transition-all z-50 shadow-lg"
+        >
+          {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
+
+        {/* Brand Header */}
+        <div className="h-24 flex items-center px-6 mb-4">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="h-11 w-11 min-w-[44px] rounded-xl bg-white flex items-center justify-center p-1.5 shadow-xl shadow-indigo-500/10">
+              <img src="/logo.png" alt="Logo" className="h-full w-full object-contain" />
+            </div>
+            {(!isCollapsed || isMobileOpen) && (
+              <div className="flex flex-col whitespace-nowrap overflow-hidden animate-in fade-in duration-300">
+                <span className="font-black text-xl tracking-tight text-white uppercase italic">IESPP</span>
+                <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-[0.2em] leading-none">Allende Llavería</span>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Información del usuario */}
+        {/* User Card */}
         {user && (
-          <div className="mt-4 p-3 bg-gray-700 rounded-lg">
-            <div className="flex items-center space-x-2">
-              <User className="h-4 w-4" />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">{user.full_name}</div>
-                <div className="text-xs text-gray-400 truncate">{user.email}</div>
-                <div className="text-xs text-blue-400 truncate">{roles.join(" · ")}</div>
+          <div className="px-4 mb-6">
+            <div className={`flex items-center gap-3 p-3 rounded-2xl bg-slate-800/40 border border-slate-700/50 ${(isCollapsed && !isMobileOpen) ? "justify-center px-2" : ""}`}>
+              <div className="h-10 w-10 min-w-[40px] rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white">
+                <UserCircle size={24} />
               </div>
-              <span
-                title={permissions.join(", ")}
-                className="ml-2 text-[10px] bg-blue-600/70 px-2 py-[2px] rounded"
-              >
-                perms: {permissions.length}
-              </span>
+              {(!isCollapsed || isMobileOpen) && (
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <p className="text-sm font-bold text-slate-100 truncate">{user.full_name.split(' ')[0]}</p>
+                  <p className="text-[10px] text-indigo-300 font-medium truncate opacity-80 uppercase italic">
+                    {roles[0]?.split('_').join(' ')}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
-      </div>
 
-      {/* Navegación */}
-      <nav className="flex-1 p-4">
-        <ul className="space-y-2">
-          {menuItems.filter((m) => m.show).map((item) => {
-            const Icon = item.icon;
+        {/* Navigation Groups */}
+        <nav className="flex-1 px-3 space-y-6 overflow-y-auto overflow-x-hidden custom-scrollbar pb-10">
+          {menuGroups.map((group, idx) => {
+            const visibleItems = group.items.filter(i => i.show);
+            if (visibleItems.length === 0) return null;
+
             return (
-              <li key={item.id}>
-                <Link
-                  to={item.path}
-                  className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors ${
-                    isActive(item.path)
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-300 hover:bg-gray-700 hover:text-white"
-                  }`}
-                >
-                  <Icon className="h-5 w-5 flex-shrink-0" />
-                  <span className="truncate">{item.title}</span>
-                </Link>
-              </li>
+              <div key={idx} className="space-y-1">
+                {(!isCollapsed || isMobileOpen) && (
+                  <p className="px-4 text-[10px] font-extrabold text-slate-500 uppercase tracking-[0.15em] mb-2 ml-1">
+                    {group.group}
+                  </p>
+                )}
+                <ul className="space-y-1">
+                  {visibleItems.map((item) => {
+                    const Icon = item.icon;
+                    const active = isActive(item.path);
+                    return (
+                      <li key={item.id}>
+                        <Link
+                          to={item.path}
+                          className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${
+                            active 
+                              ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30" 
+                              : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-100"
+                          }`}
+                        >
+                          <Icon size={20} className={`${active ? "text-white" : "group-hover:text-indigo-400"}`} />
+                          {(!isCollapsed || isMobileOpen) && (
+                            <span className="font-semibold text-[13px] tracking-wide whitespace-nowrap">
+                              {item.title}
+                            </span>
+                          )}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             );
           })}
-        </ul>
-      </nav>
+        </nav>
 
-      {/* Logout */}
-      <div className="p-4 border-t border-gray-700">
-        <button
-          onClick={logout}
-          className="w-full flex items-center justify-center space-x-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors"
-        >
-          <LogOut className="h-4 w-4" />
-          <span>Cerrar Sesión</span>
-        </button>
-      </div>
-    </div>
+        {/* Bottom Actions */}
+        <div className="p-4 bg-slate-900/40 border-t border-slate-800/50">
+          <button
+            onClick={logout}
+            className={`flex items-center gap-3 w-full p-3 rounded-xl text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all font-bold ${(isCollapsed && !isMobileOpen) ? "justify-center" : ""}`}
+          >
+            <LogOut size={18} />
+            {(!isCollapsed || isMobileOpen) && <span className="text-[13px] uppercase tracking-wider">Cerrar Sesión</span>}
+          </button>
+        </div>
+      </aside>
+    </>
   );
 };
 

@@ -10,7 +10,8 @@ const Landing = () => {
                         <div className="flex items-center">
                             <div className="flex-shrink-0">
                                 <img
-                                    className="h-12 w-12"
+                                    // CAMBIO AQUÍ: Aumentado de h-12 w-12 a h-20 w-20
+                                    className="h-20 w-20 object-contain"
                                     src="/logo.png" // Ruta de la imagen del logo
                                     alt="Logo del Instituto"
                                 />

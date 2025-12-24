@@ -666,131 +666,68 @@ export default function CompleteAdmissionModule() {
 
   if (!user) return <div>Acceso no autorizado</div>;
 
-  return (
-  <div className="p-6">
-    {/* CONTENEDOR estilo MÓDULO ACADÉMICO */}
-    <div className="rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10">
-      <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)]">
-        {/* HEADER */}
-        <div className="px-6 pt-5">
+return (
+  <div className="p-6 box-border flex justify-center">
+    {/* 1. CONTENEDOR: Usamos 'max-h' en vez de 'h' para que no ocupe espacio vacío */}
+    <div className="w-full rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10 max-h-[calc(100vh-3rem)] flex flex-col">
+      
+      {/* 2. TARJETA: Restauramos color 70 y ajustamos el flex */}
+      <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)] flex flex-col overflow-hidden max-h-full">
+        
+        {/* HEADER (Se queda quieto) */}
+        <div className="px-6 pt-5 flex-none">
           <h1 className="text-xl font-bold text-slate-900">
             Módulo Admisión
           </h1>
           <p className="text-sm text-slate-700">
             Gestión de convocatorias, postulantes, documentos, evaluación y resultados.
           </p>
-
-          {/* línea separadora como Académico */}
           <div className="mt-3 h-px w-full bg-white/60" />
         </div>
 
-        <Tabs value={active} onValueChange={onTabChange} className="space-y-6 px-6 pb-6 pt-4">
-          {/* BARRA DE TABS estilo Académico */}
-          <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
+        {/* TABS */}
+        <Tabs value={active} onValueChange={onTabChange} className="px-6 pt-4 flex flex-col overflow-hidden">
+          
+          {/* BARRA DE MENU (Se queda quieta) */}
+          <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2 flex-none mb-4">
             <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2">
-              <TabsTrigger
-                value="dashboard"
-                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Dashboard
-              </TabsTrigger>
-              <TabsTrigger
-                value="careers"
-                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Carreras
-              </TabsTrigger>
-              <TabsTrigger
-                value="calls"
-                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Convocatorias
-              </TabsTrigger>
-              <TabsTrigger
-                value="applicants"
-                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Postulantes
-              </TabsTrigger>
-              <TabsTrigger
-                value="apply"
-                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Postulación
-              </TabsTrigger>
-              <TabsTrigger
-                value="docs"
-                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Documentos
-              </TabsTrigger>
-              <TabsTrigger
-                value="doc-review"
-                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Revisión Docs
-              </TabsTrigger>
-              <TabsTrigger
-                value="eval"
-                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Evaluación
-              </TabsTrigger>
-              <TabsTrigger
-                value="results"
-                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Resultados
-              </TabsTrigger>
-              <TabsTrigger
-                value="schedule"
-                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Cronograma
-              </TabsTrigger>
-              <TabsTrigger
-                value="certificates"
-                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Constancias
-              </TabsTrigger>
-              <TabsTrigger
-                value="reports"
-                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Reportes
-              </TabsTrigger>
-              <TabsTrigger
-                value="payments"
-                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Pagos
-              </TabsTrigger>
-              <TabsTrigger
-                value="params"
-                className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Parámetros
-              </TabsTrigger>
+              <TabsTrigger value="dashboard" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Dashboard</TabsTrigger>
+              <TabsTrigger value="careers" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Carreras</TabsTrigger>
+              <TabsTrigger value="calls" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Convocatorias</TabsTrigger>
+              <TabsTrigger value="applicants" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Postulantes</TabsTrigger>
+              <TabsTrigger value="apply" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Postulación</TabsTrigger>
+              <TabsTrigger value="docs" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Documentos</TabsTrigger>
+              <TabsTrigger value="doc-review" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Revisión Docs</TabsTrigger>
+              <TabsTrigger value="eval" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Evaluación</TabsTrigger>
+              <TabsTrigger value="results" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Resultados</TabsTrigger>
+              <TabsTrigger value="schedule" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Cronograma</TabsTrigger>
+              <TabsTrigger value="certificates" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Constancias</TabsTrigger>
+              <TabsTrigger value="reports" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Reportes</TabsTrigger>
+              <TabsTrigger value="payments" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Pagos</TabsTrigger>
+              <TabsTrigger value="params" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Parámetros</TabsTrigger>
             </TabsList>
           </div>
 
-          {/* CONTENIDO (NO CAMBIA) */}
-          <TabsContent value="dashboard"><AdmissionDashboard /></TabsContent>
-          <TabsContent value="careers"><CareersManagement /></TabsContent>
-          <TabsContent value="calls"><AdmissionCallsManagement /></TabsContent>
-          <TabsContent value="applicants"><ApplicantsManagement /></TabsContent>
-          <TabsContent value="doc-review"><DocumentReview /></TabsContent>
-
-          <TabsContent value="apply"><ApplicationWizard /></TabsContent>
-          <TabsContent value="docs"><ApplicantDocuments /></TabsContent>
-          <TabsContent value="eval"><EvaluationBoard /></TabsContent>
-          <TabsContent value="results"><ResultsPublication /></TabsContent>
-          <TabsContent value="schedule"><AdmissionScheduleModule /></TabsContent>
-          <TabsContent value="payments"><PaymentsManagement /></TabsContent>
-          <TabsContent value="certificates"><AdmissionCertificates /></TabsContent>
-          <TabsContent value="reports"><AdmissionReportsModule /></TabsContent>
-          <TabsContent value="params"><AdmissionParamsModule /></TabsContent>
+          {/* 3. ZONA DE CONTENIDO: 
+              - 'overflow-y-auto': Activa el scroll si se pasa del alto.
+              - Quitamos 'flex-1' forzado para que no estire la caja si no hay contenido.
+          */}
+          <div className="overflow-y-auto pb-6 pr-1 custom-scrollbar">
+            <TabsContent value="dashboard" className="mt-0"><AdmissionDashboard /></TabsContent>
+            <TabsContent value="careers" className="mt-0"><CareersManagement /></TabsContent>
+            <TabsContent value="calls" className="mt-0"><AdmissionCallsManagement /></TabsContent>
+            <TabsContent value="applicants" className="mt-0"><ApplicantsManagement /></TabsContent>
+            <TabsContent value="doc-review" className="mt-0"><DocumentReview /></TabsContent>
+            <TabsContent value="apply" className="mt-0"><ApplicationWizard /></TabsContent>
+            <TabsContent value="docs" className="mt-0"><ApplicantDocuments /></TabsContent>
+            <TabsContent value="eval" className="mt-0"><EvaluationBoard /></TabsContent>
+            <TabsContent value="results" className="mt-0"><ResultsPublication /></TabsContent>
+            <TabsContent value="schedule" className="mt-0"><AdmissionScheduleModule /></TabsContent>
+            <TabsContent value="payments" className="mt-0"><PaymentsManagement /></TabsContent>
+            <TabsContent value="certificates" className="mt-0"><AdmissionCertificates /></TabsContent>
+            <TabsContent value="reports" className="mt-0"><AdmissionReportsModule /></TabsContent>
+            <TabsContent value="params" className="mt-0"><AdmissionParamsModule /></TabsContent>
+          </div>
         </Tabs>
       </div>
     </div>

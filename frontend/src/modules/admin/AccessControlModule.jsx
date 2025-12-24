@@ -1,6 +1,6 @@
 // src/modules/admin/AccessControlModule.jsx
 import "../academic/styles.css";
-
+import { t } from "./aclTranslations";
 import React, { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import {
@@ -360,8 +360,6 @@ const UsersTab = () => {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-
-    // si tu backend valida fuerte password, aquí lo evitamos antes de pegarle
     if (!pwdFeedback?.valid) {
       toast.error("La contraseña no cumple la política.");
       return;
@@ -392,7 +390,6 @@ const UsersTab = () => {
     try {
       const res = await UsersService.resetPassword(id);
       toast.success("Contraseña reiniciada");
-      // si backend devuelve temp password, te lo muestro
       if (res?.temporary_password) {
         toast.message(`Temp password: ${res.temporary_password}`);
       }
@@ -413,7 +410,7 @@ const UsersTab = () => {
 
   const handleDelete = async (id) => {
     try {
-      await UsersService.delete(id); // ✅ OJO: delete, no remove
+      await UsersService.delete(id); // ✅ 
       toast.success("Usuario eliminado");
       fetchUsers();
     } catch (e) {
@@ -440,8 +437,6 @@ const UsersTab = () => {
         full_name: editForm.full_name,
         email: editForm.email,
       });
-
-      // roles por endpoint dedicado
       await UsersService.assignRoles(editing.id, editForm.roles);
 
       toast.success("Usuario actualizado");
@@ -879,7 +874,7 @@ const UsersTab = () => {
   );
 };
 
-/* ------------------------ Roles ------------------------ */
+/* ------------------------ Roles (Traducido) ------------------------ */
 const RolesTab = () => {
   const [roles, setRoles] = useState([]);
   const [open, setOpen] = useState(false);
@@ -897,9 +892,7 @@ const RolesTab = () => {
       setLoading(false);
     }
   };
-  useEffect(() => {
-    fetch();
-  }, []);
+  useEffect(() => { fetch(); }, []);
 
   const create = async (e) => {
     e.preventDefault();
@@ -937,7 +930,7 @@ const RolesTab = () => {
               </DialogHeader>
               <motion.form {...scaleIn} onSubmit={create} className="space-y-4">
                 <div>
-                  <Label htmlFor="role_name">Nombre</Label>
+                  <Label htmlFor="role_name">Nombre (ID Técnico)</Label>
                   <Input
                     id="role_name"
                     className="rounded-xl"
@@ -996,7 +989,11 @@ const RolesTab = () => {
                       key={r.id || r.name}
                       className="border-t border-white/40 dark:border-white/10 bg-white/65 hover:bg-violet-50/60 transition"
                     >
-                      <td className="p-3 font-medium text-gray-900">{r.name}</td>
+                      <td className="p-3 font-medium text-gray-900">
+                        {/* AQUI SE TRADUCE EL ROL */}
+                        <div className="text-sm font-semibold">{t(r.name)}</div>
+                        <div className="text-[10px] text-gray-400 font-mono">{r.name}</div>
+                      </td>
                       <td className="p-3 text-gray-800">{r.description}</td>
                     </tr>
                   ))}
@@ -1017,7 +1014,7 @@ const RolesTab = () => {
   );
 };
 
-/* --------------------- Permisos --------------------- */
+/* --------------------- Permisos (Traducido) --------------------- */
 const PermissionsTab = () => {
   const [perms, setPerms] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -1091,8 +1088,8 @@ const PermissionsTab = () => {
                 key={r.id || r.name}
                 variant={isActive ? "default" : "outline"}
                 className={`rounded-full ${isActive
-                    ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
-                    : ""
+                  ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
+                  : ""
                   }`}
                 onClick={() => {
                   setSelectedRole(r);
@@ -1100,7 +1097,8 @@ const PermissionsTab = () => {
                   setSelectedPerms(new Set(roleCodes));
                 }}
               >
-                {r.name}
+                {/* TRADUCCIÓN BOTONES */}
+                {t(r.name)}
               </Button>
             );
           })}
@@ -1124,26 +1122,26 @@ const PermissionsTab = () => {
                 return (
                   <label
                     key={code}
-                    className={`flex items-center gap-2 p-2 rounded-xl border transition ${checked
-                        ? "bg-emerald-50/80 dark:bg-emerald-900/20 border-emerald-200/70"
-                        : "hover:bg-muted/40"
+                    className={`flex items-center gap-2 p-2 rounded-xl border transition cursor-pointer ${checked
+                      ? "bg-emerald-50/80 dark:bg-emerald-900/20 border-emerald-200/70"
+                      : "hover:bg-muted/40"
                       }`}
                   >
                     <input
                       type="checkbox"
-                      className="accent-emerald-600"
+                      className="accent-emerald-600 h-4 w-4"
                       checked={checked}
                       onChange={() => toggle(code)}
                       aria-label={`Permiso ${code}`}
                     />
-                    <span className="text-sm">{code}</span>
+                    <div className="flex flex-col leading-snug">
+                      {/* TRADUCCIÓN CHECKBOXES */}
+                      <span className="text-sm font-medium">{t(code)}</span>
+                      <span className="text-[10px] text-gray-400 font-mono">{code}</span>
+                    </div>
                   </label>
                 );
               })}
-
-            {!loading && perms.length === 0 && (
-              <div className="text-sm text-muted-foreground">Sin permisos definidos</div>
-            )}
           </div>
         </div>
 
@@ -1159,5 +1157,4 @@ const PermissionsTab = () => {
     </Card>
   );
 };
-
 export default AccessControlModule;

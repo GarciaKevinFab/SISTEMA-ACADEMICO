@@ -219,124 +219,126 @@ const ProjectsManagement = () => {
         setDetailOpen(true);
     };
 
-    return (
-        <div className="space-y-6">
-            {/* header + actions */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-bold text-black">Proyectos de Investigación</h2>
-                    <p className="text-sm text-gray-600">CRUD completo + cronograma, productos y evaluación</p>
-                </div>
-                <div className="flex gap-2">
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                        <SelectTrigger className="w-44">
-                            <SelectValue placeholder="Estado" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="ALL">Todos los estados</SelectItem>
-                            {Object.keys(STATUS_CFG).map((s) => (
-                                <SelectItem key={s} value={s}>{STATUS_CFG[s].label}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <div className="relative">
-                        <Input
-                            className="pl-9 w-64"
-                            placeholder="Buscar por título, código, línea, asesor…"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                        <SearchIcon />
-                    </div>
-                    <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700">
-                        <Plus className="h-4 w-4 mr-2" />Nuevo Proyecto
-                    </Button>
-                </div>
+   return (
+    /* AJUSTE: p-4 para móviles, p-6 para PC */
+    <div className="p-4 sm:p-6 space-y-6">
+        {/* header + actions */}
+        {/* AJUSTE: flex-col en móvil para que no se choquen los textos con los botones */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h2 className="text-2xl font-bold text-black">Proyectos de Investigación</h2>
+                <p className="text-sm text-gray-600">CRUD completo + cronograma, productos y evaluación</p>
             </div>
-
-            {/* list */}
-<Card className="rounded-2xl border shadow-sm overflow-hidden bg-white/50"> {/* Fondo blanco con opacidad */}
-    <CardContent className="p-0">
-        <div className="overflow-x-auto">
-            <table className="w-full">
-                <thead className="table-header-background">
-                    <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Código</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Título</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Línea</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Asesor</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Fechas</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Estado</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y bg-white"> {/* Fondo blanco en las filas */}
-                    {filtered.map((p) => (
-                        <tr key={p.id} className="hover:bg-gray-50"> {/* Fondo en hover de fila */}
-                            <td className="px-6 py-3 text-sm text-gray-700">{p.code || `P-${p.id}`}</td>
-                            <td className="px-6 py-3">
-                                <div className="font-medium text-gray-800">{p.title}</div>
-                                <div className="text-xs text-gray-500">{p.keywords}</div>
-                            </td>
-                            <td className="px-6 py-3 text-sm text-gray-700">{p.line_name || "-"}</td>
-                            <td className="px-6 py-3 text-sm text-gray-700">{p.advisor_name || "-"}</td>
-                            <td className="px-6 py-3 text-xs text-gray-600">
-                                {(p.start_date && new Date(p.start_date).toLocaleDateString()) || "-"} —{" "}
-                                {(p.end_date && new Date(p.end_date).toLocaleDateString()) || "-"}
-                            </td>
-                            <td className="px-6 py-3">
-                                <Badge variant={STATUS_CFG[p.status]?.badge || "secondary"} className="text-xs">
-                                    {STATUS_CFG[p.status]?.label || p.status}
-                                </Badge>
-                            </td>
-                            <td className="px-6 py-3">
-                                <div className="flex gap-2 justify-center">
-                                    <Button size="sm" variant="outline" onClick={() => openDetail(p)} title="Ver detalle">
-                                        <Eye className="h-4 w-4" />
-                                    </Button>
-                                    <Button size="sm" variant="outline" onClick={() => openEdit(p)} title="Editar">
-                                        <Edit3 className="h-4 w-4" />
-                                    </Button>
-                                    <Button size="sm" variant="outline" onClick={() => remove(p)} title="Eliminar">
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                    {/* Quick status */}
-                                    {p.status !== "APPROVED" && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => changeStatus(p, "APPROVED")}
-                                            title="Aprobar"
-                                        >
-                                            <CheckCircle className="h-4 w-4" />
-                                        </Button>
-                                    )}
-                                    {p.status !== "REJECTED" && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => changeStatus(p, "REJECTED")}
-                                            title="Rechazar"
-                                        >
-                                            <XCircle className="h-4 w-4" />
-                                        </Button>
-                                    )}
-                                </div>
-                            </td>
-                        </tr>
-                    ))}
-                    {filtered.length === 0 && (
-                        <tr>
-                            <td colSpan="7" className="text-center py-10 text-gray-500">Sin resultados.</td>
-                        </tr>
-                    )}
-                </tbody>
-            </table>
+            
+            {/* AJUSTE: flex-wrap para que los filtros bajen de línea si no hay espacio */}
+            <div className="flex flex-wrap gap-2 items-center">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full sm:w-44">
+                        <SelectValue placeholder="Estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="ALL">Todos los estados</SelectItem>
+                        {Object.keys(STATUS_CFG).map((s) => (
+                            <SelectItem key={s} value={s}>{STATUS_CFG[s].label}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                
+                <div className="relative w-full sm:w-64">
+                    <Input
+                        className="pl-9 w-full"
+                        placeholder="Buscar por título, código, línea, asesor…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                    />
+                    <div className="absolute left-3 top-2.5">
+                        <SearchIcon className="h-4 w-4 text-gray-400" />
+                    </div>
+                </div>
+                
+                <Button onClick={openCreate} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
+                    <Plus className="h-4 w-4 mr-2" />Nuevo Proyecto
+                </Button>
+            </div>
         </div>
-    </CardContent>
-</Card>
 
-
+        {/* list */}
+        <Card className="rounded-2xl border shadow-sm overflow-hidden bg-white/50">
+            <CardContent className="p-0">
+                {/* AJUSTE: overflow-x-auto permite deslizar la tabla en móviles sin romper el diseño */}
+                <div className="overflow-x-auto">
+                    {/* AJUSTE: min-w-[1000px] asegura que las columnas mantengan su forma */}
+                    <table className="w-full min-w-[1000px]">
+                        <thead className="table-header-background">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Código</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Título</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Línea</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Asesor</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Fechas</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Estado</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-800 uppercase">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y bg-white">
+                            {filtered.map((p) => (
+                                <tr key={p.id} className="hover:bg-gray-50">
+                                    <td className="px-6 py-3 text-sm text-gray-700">{p.code || `P-${p.id}`}</td>
+                                    <td className="px-6 py-3">
+                                        <div className="font-medium text-gray-800">{p.title}</div>
+                                        <div className="text-xs text-gray-500">{p.keywords}</div>
+                                    </td>
+                                    <td className="px-6 py-3 text-sm text-gray-700">{p.line_name || "-"}</td>
+                                    <td className="px-6 py-3 text-sm text-gray-700">{p.advisor_name || "-"}</td>
+                                    <td className="px-6 py-3 text-xs text-gray-600 whitespace-nowrap">
+                                        {(p.start_date && new Date(p.start_date).toLocaleDateString()) || "-"} —{" "}
+                                        {(p.end_date && new Date(p.end_date).toLocaleDateString()) || "-"}
+                                    </td>
+                                    <td className="px-6 py-3">
+                                        <Badge variant={STATUS_CFG[p.status]?.badge || "secondary"} className="text-xs">
+                                            {STATUS_CFG[p.status]?.label || p.status}
+                                        </Badge>
+                                    </td>
+                                    <td className="px-6 py-3">
+                                        <div className="flex gap-2">
+                                            <Button size="sm" variant="outline" onClick={() => openDetail(p)} title="Ver detalle">
+                                                <Eye className="h-4 w-4" />
+                                            </Button>
+                                            <Button size="sm" variant="outline" onClick={() => openEdit(p)} title="Editar">
+                                                <Edit3 className="h-4 w-4" />
+                                            </Button>
+                                            <Button size="sm" variant="outline" onClick={() => remove(p)} title="Eliminar">
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                            {p.status !== "APPROVED" && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => changeStatus(p, "APPROVED")}
+                                                    title="Aprobar"
+                                                >
+                                                    <CheckCircle className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                            {p.status !== "REJECTED" && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => changeStatus(p, "REJECTED")}
+                                                    title="Rechazar"
+                                                >
+                                                    <XCircle className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </CardContent>
+        </Card>
 
 
 
