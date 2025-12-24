@@ -286,3 +286,98 @@ def procedures_report_volume(request):
     res = HttpResponse(out, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     res["Content-Disposition"] = 'attachment; filename="volume.xlsx"'
     return res
+
+def get_model(app_label, candidates):
+    for name in candidates:
+        try:
+            return apps.get_model(app_label, name)
+        except Exception:
+            continue
+    return None
+
+def has_field(model, name: str) -> bool:
+    try:
+        model._meta.get_field(name)
+        return True
+    except Exception:
+        return False
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def procedures_reports_summary(request):
+    """
+    Shape para tu DashboardHome:
+      total, open, sla_breached, by_status, trend
+    """
+
+    Procedure = get_model("mesa_partes", ["Procedure", "Tramite", "Process", "ProcedureModel"])
+
+    if not Procedure:
+        return Response({
+            "total": 0,
+            "open": 0,
+            "sla_breached": 0,
+            "by_status": [],
+            "trend": [],
+        })
+
+    total = Procedure.objects.count()
+
+    status_field = "status" if has_field(Procedure, "status") else None
+
+    open_count = 0
+    by_status = []
+    if status_field:
+        rows = (
+            Procedure.objects.values(status_field)
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+        by_status = [{"name": r[status_field], "value": r["count"]} for r in rows]
+
+        open_count = Procedure.objects.filter(**{f"{status_field}__in": ["OPEN", "PENDING", "IN_PROGRESS"]}).count()
+    else:
+        open_count = total
+
+    # SLA breached: deadline_at / due_at / expires_at
+    deadline_field = None
+    for fld in ["deadline_at", "due_at", "expires_at", "limit_at"]:
+        if has_field(Procedure, fld):
+            deadline_field = fld
+            break
+
+    sla_breached = 0
+    if deadline_field and status_field:
+        now = timezone.now()
+        sla_breached = Procedure.objects.filter(
+            **{
+                f"{deadline_field}__lt": now,
+            }
+        ).exclude(**{f"{status_field}__in": ["CLOSED", "DONE", "RESOLVED"]}).count()
+
+    # Trend: últimos 14 días por created_at/date
+    date_field = None
+    for fld in ["created_at", "created", "date", "registered_at"]:
+        if has_field(Procedure, fld):
+            date_field = fld
+            break
+
+    trend = []
+    if date_field:
+        since = timezone.now() - timedelta(days=14)
+        qs = (
+            Procedure.objects.filter(**{f"{date_field}__gte": since})
+            .annotate(d=TruncDate(date_field))
+            .values("d")
+            .annotate(count=Count("id"))
+            .order_by("d")
+        )
+        trend = [{"date": str(r["d"]), "value": r["count"]} for r in qs]
+
+    return Response({
+        "total": total,
+        "open": open_count,
+        "sla_breached": sla_breached,
+        "by_status": by_status,   # ✅ tu PieChart lo usa directo
+        "trend": trend,
+    })

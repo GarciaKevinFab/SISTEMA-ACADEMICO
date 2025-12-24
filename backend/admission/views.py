@@ -711,3 +711,69 @@ def calls_collection(request):
     s.is_valid(raise_exception=True)
     obj = s.save()
     return Response(_call_to_fe(obj), status=201)
+
+def _has_field(model, name: str) -> bool:
+    try:
+        model._meta.get_field(name)
+        return True
+    except Exception:
+        return False
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def admission_dashboard(request):
+    """
+    Shape ideal para tu DashboardHome:
+      - total_applications
+      - calls_open
+      - by_career: [{ name, value }]
+      - trend: [{ date, value }]
+    """
+
+    # OPEN CALLS (OPEN = no publicado en tu lógica actual)
+    calls_open = AdmissionCall.objects.filter(published=False).count()
+
+    # TOTAL APPLICATIONS
+    total_applications = Application.objects.count()
+
+    # BY CAREER (BarChart)
+    career_fk = "career" if _has_field(Application, "career") else ("career_id" if _has_field(Application, "career_id") else None)
+
+    by_career = []
+    if career_fk == "career":
+        rows = (
+            Application.objects.values("career__id", "career__name")
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+        by_career = [{"name": r["career__name"] or f"Carrera {r['career__id']}", "value": r["count"]} for r in rows]
+    elif career_fk == "career_id":
+        rows = (
+            Application.objects.values("career_id")
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+        names = {c.id: c.name for c in Career.objects.all()}
+        by_career = [{"name": names.get(r["career_id"], f"Carrera {r['career_id']}"), "value": r["count"]} for r in rows]
+
+    # TREND (últimos 14 días)
+    created_field = "created_at" if _has_field(Application, "created_at") else ("created" if _has_field(Application, "created") else None)
+    trend = []
+    if created_field:
+        since = timezone.now() - timedelta(days=14)
+        qs = (
+            Application.objects
+            .filter(**{f"{created_field}__gte": since})
+            .annotate(day=TruncDate(created_field))
+            .values("day")
+            .annotate(count=Count("id"))
+            .order_by("day")
+        )
+        trend = [{"date": str(r["day"]), "value": r["count"]} for r in qs]
+
+    return Response({
+        "total_applications": total_applications,
+        "calls_open": calls_open,
+        "by_career": by_career,
+        "trend": trend,
+    })

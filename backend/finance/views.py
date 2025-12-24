@@ -1659,3 +1659,112 @@ def hr_contract_detail(request, pk):
 
     obj.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+def get_model(app_label, candidates):
+    for name in candidates:
+        try:
+            return apps.get_model(app_label, name)
+        except Exception:
+            continue
+    return None
+
+def has_field(model, name: str) -> bool:
+    try:
+        model._meta.get_field(name)
+        return True
+    except Exception:
+        return False
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def finance_dashboard_stats(request):
+    """
+    Shape para DashboardHome:
+      income_today, pending_receipts, cash_balance, trend
+    """
+
+    Receipt = get_model("finance", ["Receipt", "Recibo", "FinanceReceipt"])
+    Payment = get_model("finance", ["Payment", "Pago", "FinancePayment"])
+    Movement = get_model("finance", ["CashMovement", "Movement", "FinanceMovement"])
+    CashSession = get_model("finance", ["CashSession", "Session", "CashBankSession"])
+
+    today = timezone.localdate()
+
+    income_today = 0
+    pending_receipts = 0
+    cash_balance = 0
+    trend = []
+
+    # pending receipts
+    if Receipt:
+        # status field: PENDING/PAID/CANCELLED (o similares)
+        status_field = "status" if has_field(Receipt, "status") else None
+        if status_field:
+            pending_receipts = Receipt.objects.filter(status__in=["PENDING", "UNPAID", "OPEN"]).count()
+        else:
+            pending_receipts = Receipt.objects.count()
+
+        # income_today: suma por paid_at/date o created_at si no hay paid_at
+        date_field = None
+        for fld in ["paid_at", "payment_date", "date", "created_at"]:
+            if has_field(Receipt, fld):
+                date_field = fld
+                break
+
+        amount_field = None
+        for fld in ["amount", "total", "total_amount", "monto"]:
+            if has_field(Receipt, fld):
+                amount_field = fld
+                break
+
+        if date_field and amount_field:
+            qs = Receipt.objects.all()
+            # si hay status: considera pagados
+            if status_field:
+                qs = qs.filter(status__in=["PAID", "CONFIRMED", "DONE"])
+            qs = qs.filter(**{f"{date_field}__date": today})
+            income_today = qs.aggregate(s=Sum(amount_field))["s"] or 0
+
+        # trend (últimos 14 días)
+        if date_field and amount_field:
+            since = timezone.now() - timedelta(days=14)
+            qs = Receipt.objects.all()
+            if status_field:
+                qs = qs.filter(status__in=["PAID", "CONFIRMED", "DONE"])
+            qs = (
+                qs.filter(**{f"{date_field}__gte": since})
+                .annotate(d=TruncDate(date_field))
+                .values("d")
+                .annotate(total=Sum(amount_field))
+                .order_by("d")
+            )
+            trend = [{"date": str(r["d"]), "value": float(r["total"] or 0)} for r in qs]
+
+    # cash balance: si hay movimientos, suma ingresos-egresos; si no, 0
+    if Movement:
+        amount_field = None
+        for fld in ["amount", "value", "monto"]:
+            if has_field(Movement, fld):
+                amount_field = fld
+                break
+
+        type_field = None
+        for fld in ["type", "kind", "movement_type"]:
+            if has_field(Movement, fld):
+                type_field = fld
+                break
+
+        if amount_field:
+            if type_field:
+                inflow = Movement.objects.filter(**{f"{type_field}__in": ["IN", "INCOME", "CREDIT"]}).aggregate(s=Sum(amount_field))["s"] or 0
+                outflow = Movement.objects.filter(**{f"{type_field}__in": ["OUT", "EXPENSE", "DEBIT"]}).aggregate(s=Sum(amount_field))["s"] or 0
+                cash_balance = float(inflow) - float(outflow)
+            else:
+                cash_balance = float(Movement.objects.aggregate(s=Sum(amount_field))["s"] or 0)
+
+    return Response({
+        "income_today": float(income_today or 0),
+        "pending_receipts": int(pending_receipts or 0),
+        "cash_balance": float(cash_balance or 0),
+        "trend": trend,
+    })

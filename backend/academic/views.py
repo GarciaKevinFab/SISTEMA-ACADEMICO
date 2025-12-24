@@ -11,6 +11,9 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import action
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .models import (
@@ -717,3 +720,101 @@ class AcademicReportOccupancyXlsxView(APIView):
 
     def get(self, request):
         return _xlsx_response("occupancy.xlsx")
+
+def get_model(app_label, candidates):
+    for name in candidates:
+        try:
+            return apps.get_model(app_label, name)
+        except Exception:
+            continue
+    return None
+
+def has_field(model, name: str) -> bool:
+    try:
+        model._meta.get_field(name)
+        return True
+    except Exception:
+        return False
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def academic_reports_summary(request):
+    """
+    Shape para tu DashboardHome:
+      students, sections, attendance_rate, avg_grade, trend(optional)
+    """
+
+    Student = get_model("academic", ["Student", "Alumno", "AcademicStudent"])
+    Section = get_model("academic", ["Section", "Seccion", "AcademicSection"])
+    Attendance = get_model("academic", ["Attendance", "Asistencia", "AttendanceRow"])
+    Grade = get_model("academic", ["Grade", "Nota", "AcademicGrade"])
+
+    students = Student.objects.count() if Student else 0
+    sections = Section.objects.count() if Section else 0
+
+    attendance_rate = 0
+    if Attendance and has_field(Attendance, "is_present"):
+        total = Attendance.objects.count()
+        present = Attendance.objects.filter(is_present=True).count()
+        attendance_rate = round((present / total) * 100, 2) if total else 0
+
+    avg_grade = 0
+    if Grade:
+        # intenta campos comunes
+        for fld in ["value", "grade", "score", "nota"]:
+            if has_field(Grade, fld):
+                avg_grade = Grade.objects.aggregate(a=Avg(fld))["a"] or 0
+                avg_grade = round(float(avg_grade), 2)
+                break
+
+    # Trend (últimos 14 días): intenta Attendance o Grade por fecha
+    trend = []
+    since = timezone.now() - timedelta(days=14)
+
+    # Attendance trend
+    if Attendance:
+        date_field = None
+        for fld in ["created_at", "date", "day", "taken_at"]:
+            if has_field(Attendance, fld):
+                date_field = fld
+                break
+        if date_field:
+            qs = (
+                Attendance.objects.filter(**{f"{date_field}__gte": since})
+                .annotate(d=TruncDate(date_field))
+                .values("d")
+                .annotate(count=Count("id"))
+                .order_by("d")
+            )
+            trend = [{"date": str(r["d"]), "value": r["count"]} for r in qs]
+
+    # si no hay attendance trend, prueba grade trend (promedio por día)
+    if not trend and Grade:
+        date_field = None
+        for fld in ["created_at", "date", "day", "registered_at"]:
+            if has_field(Grade, fld):
+                date_field = fld
+                break
+        value_field = None
+        for fld in ["value", "grade", "score", "nota"]:
+            if has_field(Grade, fld):
+                value_field = fld
+                break
+
+        if date_field and value_field:
+            qs = (
+                Grade.objects.filter(**{f"{date_field}__gte": since})
+                .annotate(d=TruncDate(date_field))
+                .values("d")
+                .annotate(avg=Avg(value_field))
+                .order_by("d")
+            )
+            trend = [{"date": str(r["d"]), "value": round(float(r["avg"] or 0), 2)} for r in qs]
+
+    return Response({
+        "students": students,
+        "sections": sections,
+        "attendance_rate": attendance_rate,
+        "avg_grade": avg_grade,
+        "trend": trend,  # opcional, pero útil
+    })

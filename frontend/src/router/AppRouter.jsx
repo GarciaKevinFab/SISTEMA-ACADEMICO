@@ -14,6 +14,7 @@ import Layout from "../components/Layout";
 
 /* Páginas */
 import Forbidden from "../pages/Forbidden";
+import DashboardHome from "../pages/DashboardHome";
 
 /* Módulos */
 import InstitutionalPortal from "../modules/portal/InstitutionalPortal";
@@ -47,14 +48,6 @@ const ProtectedRoute = ({ children }) => {
     if (!user) return <Navigate to="/login" replace />;
     return children;
 };
-
-/* Home */
-const DashboardHome = () => (
-    <div className="p-6">
-        <h1 className="text-2xl font-bold">Dashboard Principal</h1>
-        <p className="text-gray-600 mt-2">Bienvenido al Sistema Académico Integral</p>
-    </div>
-);
 
 export default function AppRouter() {
     return (
