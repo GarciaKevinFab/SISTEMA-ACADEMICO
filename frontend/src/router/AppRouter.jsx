@@ -17,7 +17,6 @@ import Forbidden from "../pages/Forbidden";
 import DashboardHome from "../pages/DashboardHome";
 
 /* Módulos */
-import InstitutionalPortal from "../modules/portal/InstitutionalPortal";
 import PublicAdmissionCalls from "../modules/admission/PublicAdmissionCalls";
 import AccessControlModule from "../modules/admin/AccessControlModule";
 
@@ -55,7 +54,6 @@ export default function AppRouter() {
             {/* Públicas */}
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/portal" element={<InstitutionalPortal />} />
             <Route path="/public/admission" element={<PublicAdmissionCalls />} />
             <Route path="/public/procedures/track" element={<PublicProcedureTracking />} />
 
@@ -246,9 +244,6 @@ export default function AppRouter() {
                         </RequirePerm>
                     }
                 />
-
-                {/* Portal desde dashboard (opcional) */}
-                <Route path="/dashboard/portal" element={<InstitutionalPortal />} />
             </Route>
 
             {/* 404 */}
