@@ -686,33 +686,41 @@ return (
         </div>
 
         {/* TABS */}
-        <Tabs value={active} onValueChange={onTabChange} className="px-6 pt-4 flex flex-col overflow-hidden">
+        <Tabs value={active} onValueChange={onTabChange} className="px-6 pt-4 flex flex-col overflow-hidden h-full">
           
-          {/* BARRA DE MENU (Se queda quieta) */}
-          <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2 flex-none mb-4">
-            <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2">
-              <TabsTrigger value="dashboard" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Dashboard</TabsTrigger>
-              <TabsTrigger value="careers" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Carreras</TabsTrigger>
-              <TabsTrigger value="calls" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Convocatorias</TabsTrigger>
-              <TabsTrigger value="applicants" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Postulantes</TabsTrigger>
-              <TabsTrigger value="apply" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Postulación</TabsTrigger>
-              <TabsTrigger value="docs" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Documentos</TabsTrigger>
-              <TabsTrigger value="doc-review" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Revisión Docs</TabsTrigger>
-              <TabsTrigger value="eval" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Evaluación</TabsTrigger>
-              <TabsTrigger value="results" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Resultados</TabsTrigger>
-              <TabsTrigger value="schedule" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Cronograma</TabsTrigger>
-              <TabsTrigger value="certificates" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Constancias</TabsTrigger>
-              <TabsTrigger value="reports" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Reportes</TabsTrigger>
-              <TabsTrigger value="payments" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Pagos</TabsTrigger>
-              <TabsTrigger value="params" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">Parámetros</TabsTrigger>
+          {/* BARRA DE MENU: h-auto para permitir que crezca si baja de línea */}
+          <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2 flex-none mb-4 h-auto">
+            <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2 h-auto">
+              {[
+                { val: "dashboard", label: "Dashboard" },
+                { val: "careers", label: "Carreras" },
+                { val: "calls", label: "Convocatorias" },
+                { val: "applicants", label: "Postulantes" },
+                { val: "apply", label: "Postulación" },
+                { val: "docs", label: "Documentos" },
+                { val: "doc-review", label: "Revisión Docs" },
+                { val: "eval", label: "Evaluación" },
+                { val: "results", label: "Resultados" },
+                { val: "schedule", label: "Cronograma" },
+                { val: "certificates", label: "Constancias" },
+                { val: "reports", label: "Reportes" },
+                { val: "payments", label: "Pagos" },
+                { val: "params", label: "Parámetros" }
+              ].map((item) => (
+                <TabsTrigger 
+                  key={item.val}
+                  value={item.val} 
+                  // CLAVE: flex-1 para que se adapte al ancho, whitespace-nowrap para que no parta el texto
+                  className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm flex-1 whitespace-nowrap text-center min-w-[100px]"
+                >
+                  {item.label}
+                </TabsTrigger>
+              ))}
             </TabsList>
           </div>
 
-          {/* 3. ZONA DE CONTENIDO: 
-              - 'overflow-y-auto': Activa el scroll si se pasa del alto.
-              - Quitamos 'flex-1' forzado para que no estire la caja si no hay contenido.
-          */}
-          <div className="overflow-y-auto pb-6 pr-1 custom-scrollbar">
+          {/* 3. ZONA DE CONTENIDO */}
+          <div className="overflow-y-auto pb-6 pr-1 custom-scrollbar flex-1">
             <TabsContent value="dashboard" className="mt-0"><AdmissionDashboard /></TabsContent>
             <TabsContent value="careers" className="mt-0"><CareersManagement /></TabsContent>
             <TabsContent value="calls" className="mt-0"><AdmissionCallsManagement /></TabsContent>

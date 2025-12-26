@@ -44,6 +44,9 @@ const Section = ({ title, desc, icon, children }) => (
 // ===================================================================
 // Periodos Académicos
 // ===================================================================
+// ===================================================================
+// Periodos Académicos (SCROLL FORZADO CORREGIDO)
+// ===================================================================
 const PeriodsSection = () => {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -60,6 +63,7 @@ const PeriodsSection = () => {
             setRows(data?.items ?? data ?? []);
         } catch (e) { toast.error(formatApiError(e)); } finally { setLoading(false); }
     }, []);
+
     useEffect(() => { load(); }, [load]);
 
     const save = async () => {
@@ -68,16 +72,20 @@ const PeriodsSection = () => {
             if (editing) await Periods.update(editing.id, payload);
             else await Periods.create(payload);
             toast.success(editing ? "Periodo actualizado" : "Periodo creado");
-            setOpen(false); setEditing(null); setForm({ code: "", year: new Date().getFullYear(), term: "I", start_date: "", end_date: "", is_active: false });
+            setOpen(false); setEditing(null);
+            setForm({ code: "", year: new Date().getFullYear(), term: "I", start_date: "", end_date: "", is_active: false });
             load();
         } catch (e) { toast.error(formatApiError(e)); }
     };
+
     const remove = async (id) => {
         if (!window.confirm("¿Eliminar periodo?")) return;
         try { await Periods.remove(id); load(); } catch (e) { toast.error(formatApiError(e)); }
     };
+
     const toggleActive = async (r) => {
-        try { await Periods.setActive(r.id, !r.is_active); load(); } catch (e) { toast.error(formatApiError(e)); }
+        try { await Periods.setActive(r.id, !r.is_active); load();
+        } catch (e) { toast.error(formatApiError(e)); }
     };
 
     return (
@@ -127,41 +135,65 @@ const PeriodsSection = () => {
                 </Dialog>
             </div>
 
-            <Card className="border-none shadow-none">
+            <Card className="border shadow-sm">
                 <CardContent className="p-0">
                     {loading ? (
                         <div className="flex justify-center py-10"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" /></div>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-gray-50 border-b">
+                        /* CAMBIO CLAVE: he bajado a 250px. Si tienes 5 items, el scroll aparecerá seguro. */
+                        <div 
+                            className="w-full relative border rounded-md"
+                            style={{ 
+                                display: 'block',
+                                maxHeight: '250px', 
+                                overflowY: 'auto',
+                                scrollbarWidth: 'thin' // Ayuda a visualizar en Firefox
+                            }}
+                        >
+                            <table className="w-full text-sm text-left border-collapse">
+                                <thead className="bg-gray-100 text-xs text-gray-700 uppercase" style={{ position: "sticky", top: 0, zIndex: 10, backgroundColor: "#f3f4f6" }}>
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Código</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Año</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Término</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fechas</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                                        <th className="px-6 py-3 border-b">Código</th>
+                                        <th className="px-6 py-3 border-b">Año</th>
+                                        <th className="px-6 py-3 border-b">Término</th>
+                                        <th className="px-6 py-3 border-b">Fechas</th>
+                                        <th className="px-6 py-3 border-b">Estado</th>
+                                        <th className="px-6 py-3 border-b">Acciones</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y">
+                                <tbody className="divide-y divide-gray-200">
                                     {rows.map((r) => (
-                                        <tr key={r.id}>
-                                            <td className="px-6 py-3">{r.code}</td>
+                                        <tr key={r.id} className="bg-white hover:bg-gray-50">
+                                            <td className="px-6 py-3 font-medium text-gray-900">{r.code}</td>
                                             <td className="px-6 py-3">{r.year}</td>
                                             <td className="px-6 py-3">{r.term}</td>
-                                            <td className="px-6 py-3 text-sm">{(r.start_date || "-")} — {(r.end_date || "-")}</td>
-                                            <td className="px-6 py-3">{r.is_active ? <Badge>Activo</Badge> : <Badge variant="secondary">Inactivo</Badge>}</td>
+                                            <td className="px-6 py-3 text-gray-500">{(r.start_date || "-")} — {(r.end_date || "-")}</td>
+                                            <td className="px-6 py-3">
+                                                {r.is_active 
+                                                    ? <Badge className="bg-green-600">Activo</Badge> 
+                                                    : <Badge variant="secondary">Inactivo</Badge>
+                                                }
+                                            </td>
                                             <td className="px-6 py-3">
                                                 <div className="flex gap-2">
-                                                    <Button size="sm" variant="outline" onClick={() => { setEditing(r); setForm({ ...r }); setOpen(true); }}>Editar</Button>
-                                                    <Button size="sm" variant="outline" onClick={() => toggleActive(r)}>{r.is_active ? "Desactivar" : "Activar"}</Button>
-                                                    <Button size="sm" variant="outline" onClick={() => remove(r.id)}>Eliminar</Button>
+                                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => { setEditing(r); setForm({ ...r }); setOpen(true); }}>
+                                                        <span className="sr-only">Editar</span>
+                                                        <Settings className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600" onClick={() => remove(r.id)}>
+                                                        <span className="sr-only">Eliminar</span>
+                                                        <XCircle className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button size="sm" variant="outline" className="h-8 text-xs px-2" onClick={() => toggleActive(r)}>
+                                                        {r.is_active ? "Desactivar" : "Activar"}
+                                                    </Button>
                                                 </div>
                                             </td>
                                         </tr>
                                     ))}
-                                    {rows.length === 0 && <tr><td colSpan="6" className="text-center py-10 text-gray-500">Sin periodos</td></tr>}
+                                    {rows.length === 0 && (
+                                        <tr><td colSpan="6" className="text-center py-10 text-gray-500">No hay periodos registrados</td></tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -171,7 +203,6 @@ const PeriodsSection = () => {
         </Section>
     );
 };
-
 // ===================================================================
 // Sedes & Aulas
 // ===================================================================

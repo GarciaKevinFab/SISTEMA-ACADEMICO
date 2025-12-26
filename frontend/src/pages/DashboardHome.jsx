@@ -13,6 +13,7 @@ import {
     CartesianGrid,
     Tooltip,
     Legend,
+    
 } from "recharts";
 import {
     Activity,
@@ -24,6 +25,7 @@ import {
     HardDrive,
     Microscope,
     Users,
+    Info
 } from "lucide-react";
 
 import { AcademicReports } from "../services/academic.service";
@@ -335,42 +337,49 @@ export default function DashboardHome() {
     ];
 
     return (
-        <div className="p-6 bg-slate-50 min-h-[calc(100vh-64px)]">
-            <div className="flex items-end justify-between gap-4 mb-6">
+    /* 1. SCROLL FIX: Altura calculada con fondo suave */
+    <div className="h-[calc(100vh-64px)] overflow-y-auto bg-slate-50/70 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
+        
+        <div className="p-6 lg:p-10 max-w-[1920px] mx-auto space-y-8">
+
+            {/* HEADER: Más limpio y con mejor tipografía */}
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 border-b border-slate-200/60 pb-6">
                 <div>
-                    <h1 className="text-2xl font-black text-slate-900">
+                    <h1 className="text-3xl font-black tracking-tight text-slate-900">
                         Dashboard Principal
                     </h1>
-                    <p className="text-slate-600 mt-1">
-                        Stats y gráficos para ver cómo va el sistema (sin adivinar como brujo).
+                    <p className="text-base text-slate-500 mt-2 font-medium">
+                        Visión general de estadísticas y métricas del sistema.
                     </p>
                 </div>
 
                 <button
                     onClick={() => window.location.reload()}
-                    className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 transition font-bold text-slate-700 shadow-sm"
-                    title="Recargar datos"
+                    className="group inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-md active:scale-95 transition-all duration-200 font-bold text-slate-600 shadow-sm w-full sm:w-auto"
                 >
-                    <TrendingUp size={18} />
+                    <TrendingUp size={18} className="text-slate-400 group-hover:text-indigo-600 transition-colors" />
                     Actualizar
                 </button>
             </div>
 
-            {err ? (
-                <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-700 flex items-start gap-3">
-                    <AlertTriangle className="mt-0.5" size={18} />
+            {/* ERROR */}
+            {err && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50/50 p-4 text-rose-700 flex items-start gap-4 shadow-sm animate-in fade-in slide-in-from-top-2">
+                    <div className="p-2 bg-rose-100 rounded-full shrink-0">
+                        <AlertTriangle className="text-rose-600" size={20} />
+                    </div>
                     <div>
-                        <p className="font-extrabold">Error</p>
-                        <p className="text-sm">{err}</p>
+                        <p className="font-extrabold text-lg">Error detectado</p>
+                        <p className="text-sm font-medium opacity-90">{err}</p>
                     </div>
                 </div>
-            ) : null}
+            )}
 
-            {/* KPI Cards (fila 1) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {/* KPI CARDS - FILA 1 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard
                     icon={Activity}
-                    title="Postulaciones (Admisión)"
+                    title="Postulaciones"
                     value={loading ? "..." : kpis.totalApplications}
                     hint={loading ? "" : `Convocatorias activas: ${kpis.openCalls}`}
                     tone="indigo"
@@ -379,255 +388,265 @@ export default function DashboardHome() {
                     icon={GraduationCap}
                     title="Académico"
                     value={loading ? "..." : `${kpis.students} estudiantes`}
-                    hint={
-                        loading
-                            ? ""
-                            : `${kpis.sections} secciones • Asistencia: ${kpis.attendanceRate || 0}% • Prom.: ${kpis.avgGrade || 0
-                            }`
-                    }
+                    hint={loading ? "" : `${kpis.sections} secciones • ${kpis.attendanceRate}% asis.`}
                     tone="emerald"
                 />
                 <StatCard
                     icon={Wallet}
                     title="Finanzas"
                     value={loading ? "..." : `S/ ${kpis.incomeToday.toLocaleString("es-PE")}`}
-                    hint={
-                        loading
-                            ? ""
-                            : `Pendientes: ${kpis.pendingReceipts} • Caja: S/ ${kpis.cashBalance.toLocaleString("es-PE")}`
-                    }
+                    hint={loading ? "" : `Caja Total: S/ ${kpis.cashBalance.toLocaleString("es-PE")}`}
                     tone="amber"
                 />
                 <StatCard
                     icon={ClipboardList}
                     title="Mesa de Partes"
                     value={loading ? "..." : `${kpis.proceduresTotal} trámites`}
-                    hint={
-                        loading
-                            ? ""
-                            : `Abiertos: ${kpis.proceduresOpen} • SLA vencido: ${kpis.slaBreached}`
-                    }
+                    hint={loading ? "" : `Pendientes de atención: ${kpis.proceduresOpen}`}
                     tone="rose"
                 />
             </div>
 
-            {/* KPI Cards (fila 2) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+            {/* KPI CARDS - FILA 2 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 <StatCard
                     icon={Users}
-                    title="Usuarios"
+                    title="Usuarios Totales"
                     value={loading ? "..." : kpis.totalUsers}
-                    hint="Total registrados"
+                    hint="Registrados en plataforma"
                     tone="slate"
                 />
                 <StatCard
                     icon={HardDrive}
-                    title="MINEDU"
-                    value={loading ? "..." : `${kpis.mineduPending} en cola`}
-                    hint={loading ? "" : `OK: ${kpis.mineduSuccess} • Fallidos: ${kpis.mineduFailed}`}
-                    tone="indigo"
+                    title="MINEDU (Cola)"
+                    value={loading ? "..." : `${kpis.mineduPending} pendientes`}
+                    hint={loading ? "" : `Enviados OK: ${kpis.mineduSuccess} • Errores: ${kpis.mineduFailed}`}
+                    tone="blue"
                 />
                 <StatCard
                     icon={Microscope}
                     title="Investigación"
                     value={loading ? "..." : `${kpis.researchProjects} proyectos`}
-                    hint={loading ? "" : `Activos: ${kpis.researchActive}`}
-                    tone="emerald"
+                    hint={loading ? "" : `En ejecución: ${kpis.researchActive}`}
+                    tone="cyan"
                 />
             </div>
 
-            {/* Charts */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mt-6">
-                {/* Bar: Admisión por carrera */}
-                <div className="xl:col-span-1 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between mb-3">
-                        <p className="font-black text-slate-900">
-                            Admisión: Postulaciones por carrera
-                        </p>
-                        <span className="text-xs font-bold text-slate-500">Top / Distribución</span>
+            {/* GRÁFICOS Y PANELES INFERIORES */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                
+                {/* Gráfico 1: Barras */}
+                <div className="xl:col-span-1 rounded-3xl border border-slate-200/60 bg-white p-6 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] hover:shadow-lg transition-shadow duration-300 min-h-[400px] flex flex-col">
+                    <div className="mb-6 flex items-center justify-between">
+                        <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg">
+                            <span className="w-1.5 h-6 bg-indigo-500 rounded-full"></span>
+                            Admisión: Por carrera
+                        </h3>
                     </div>
-
-                    {admissionByCareer.length >= 2 ? (
-                        <div className="h-72">
+                    <div className="flex-1 min-h-0 w-full">
+                        {admissionByCareer.length >= 1 ? (
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={admissionByCareer}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis
-                                        dataKey="name"
-                                        tick={{ fontSize: 11 }}
-                                        interval={0}
-                                        height={60}
+                                <BarChart data={admissionByCareer} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis 
+                                        dataKey="name" 
+                                        tick={{ fontSize: 10, fill: '#64748b' }} 
+                                        interval={0} 
+                                        height={60} 
+                                        axisLine={false}
+                                        tickLine={false}
                                     />
-                                    <YAxis />
-                                    <Tooltip />
-                                    <Legend />
-                                    <Bar
-                                        dataKey="value"
-                                        name="Postulaciones"
-                                        fill="#4f46e5"
-                                        radius={[10, 10, 0, 0]}
+                                    <YAxis 
+                                        tick={{ fontSize: 10, fill: '#64748b' }} 
+                                        axisLine={false}
+                                        tickLine={false}
+                                    />
+                                    <Tooltip 
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        cursor={{ fill: '#f8fafc' }}
+                                    />
+                                    <Bar 
+                                        dataKey="value" 
+                                        name="Postulaciones" 
+                                        fill="#6366f1" 
+                                        radius={[6, 6, 0, 0]} 
+                                        barSize={32}
                                     />
                                 </BarChart>
                             </ResponsiveContainer>
-                        </div>
-                    ) : (
-                        <EmptyBox
-                            title="Sin serie suficiente"
-                            subtitle="Cuando tu endpoint de admisión devuelva by_career (o similar), acá aparecerá el gráfico."
-                        />
-                    )}
+                        ) : (
+                            <EmptyBox title="Sin datos" subtitle="No hay postulaciones registradas" />
+                        )}
+                    </div>
                 </div>
 
-                {/* Line: Finanzas trend */}
-                <div className="xl:col-span-2 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between mb-3">
-                        <p className="font-black text-slate-900">
-                            Finanzas: Ingresos (tendencia)
-                        </p>
-                        <span className="text-xs font-bold text-slate-500">Día a día</span>
+                {/* Gráfico 2: Líneas */}
+                <div className="xl:col-span-2 rounded-3xl border border-slate-200/60 bg-white p-6 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] hover:shadow-lg transition-shadow duration-300 min-h-[400px] flex flex-col">
+                    <div className="mb-6">
+                        <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg">
+                            <span className="w-1.5 h-6 bg-purple-500 rounded-full"></span>
+                            Finanzas: Tendencia de Ingresos
+                        </h3>
                     </div>
-
-                    {financeTrend.length >= 2 ? (
-                        <div className="h-72">
+                    <div className="flex-1 min-h-0 w-full">
+                        {financeTrend.length >= 2 ? (
                             <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={financeTrend}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                                    <YAxis />
-                                    <Tooltip />
-                                    <Legend />
-                                    <Line
-                                        type="monotone"
-                                        dataKey="value"
-                                        name="Ingresos"
-                                        stroke="#7c3aed"
-                                        strokeWidth={3}
-                                        dot={false}
+                                <LineChart data={financeTrend} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis 
+                                        dataKey="date" 
+                                        tick={{ fontSize: 12, fill: '#64748b' }} 
+                                        axisLine={false}
+                                        tickLine={false}
+                                        dy={10}
+                                    />
+                                    <YAxis 
+                                        tick={{ fontSize: 12, fill: '#64748b' }} 
+                                        width={50} 
+                                        axisLine={false}
+                                        tickLine={false}
+                                    />
+                                    <Tooltip 
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                    />
+                                    <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
+                                    <Line 
+                                        type="monotone" 
+                                        dataKey="value" 
+                                        name="Ingresos (S/)" 
+                                        stroke="#8b5cf6" 
+                                        strokeWidth={3} 
+                                        dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+                                        activeDot={{ r: 7, strokeWidth: 0 }} 
                                     />
                                 </LineChart>
                             </ResponsiveContainer>
-                        </div>
-                    ) : (
-                        <EmptyBox
-                            title="Sin tendencia"
-                            subtitle="Cuando tu endpoint de finanzas devuelva income_trend (o series), acá verás la línea."
-                        />
-                    )}
+                        ) : (
+                            <EmptyBox title="Sin tendencia" subtitle="Faltan datos históricos para generar la curva" />
+                        )}
+                    </div>
                 </div>
 
-                {/* Pie: Mesa de Partes */}
-                <div className="xl:col-span-1 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between mb-3">
-                        <p className="font-black text-slate-900">Mesa de Partes: Estados</p>
-                        <span className="text-xs font-bold text-slate-500">Distribución</span>
+                {/* Gráfico 3: Pastel */}
+                <div className="xl:col-span-1 rounded-3xl border border-slate-200/60 bg-white p-6 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] hover:shadow-lg transition-shadow duration-300 min-h-[400px] flex flex-col">
+                    <div className="mb-6">
+                        <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg">
+                            <span className="w-1.5 h-6 bg-rose-500 rounded-full"></span>
+                            Mesa de Partes: Estado
+                        </h3>
                     </div>
-
-                    {mpvStatus.length >= 1 ? (
-                        <div className="h-72">
+                    <div className="flex-1 min-h-0 w-full relative">
+                        {mpvStatus.length >= 1 ? (
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
-                                    <Tooltip />
-                                    <Legend />
+                                    <Tooltip 
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                    />
+                                    <Legend 
+                                        verticalAlign="bottom" 
+                                        height={36} 
+                                        iconType="circle"
+                                        formatter={(value) => <span className="text-slate-600 font-medium ml-1">{value}</span>}
+                                    />
                                     <Pie
                                         data={mpvStatus}
                                         dataKey="value"
                                         nameKey="name"
-                                        innerRadius={55}
-                                        outerRadius={95}
-                                        paddingAngle={3}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={60}
+                                        outerRadius={90}
+                                        paddingAngle={5}
+                                        cornerRadius={6}
                                     >
                                         {mpvStatus.map((_, i) => (
-                                            <Cell key={i} fill={pieColors[i % pieColors.length]} />
+                                            <Cell key={i} fill={pieColors[i % pieColors.length]} stroke="none" />
                                         ))}
                                     </Pie>
                                 </PieChart>
                             </ResponsiveContainer>
-                        </div>
-                    ) : (
-                        <EmptyBox
-                            title="Sin estados"
-                            subtitle="Cuando procedures/reports/summary devuelva by_status, este gráfico queda automático."
-                        />
-                    )}
-                </div>
-
-                {/* Mini panel académico */}
-                <div className="xl:col-span-2 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <p className="font-black text-slate-900 mb-2">
-                        Académico: Resumen rápido
-                    </p>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="rounded-xl border border-slate-200 p-4 bg-slate-50">
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                Estudiantes
-                            </p>
-                            <p className="text-2xl font-black text-slate-900 mt-1">
-                                {loading ? "..." : kpis.students}
-                            </p>
-                        </div>
-
-                        <div className="rounded-xl border border-slate-200 p-4 bg-slate-50">
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                Secciones
-                            </p>
-                            <p className="text-2xl font-black text-slate-900 mt-1">
-                                {loading ? "..." : kpis.sections}
-                            </p>
-                        </div>
-
-                        <div className="rounded-xl border border-slate-200 p-4 bg-slate-50">
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                Asistencia Prom.
-                            </p>
-                            <p className="text-2xl font-black text-slate-900 mt-1">
-                                {loading ? "..." : `${kpis.attendanceRate || 0}%`}
-                            </p>
-                            <p className="text-xs text-slate-500 mt-1">
-                                (si tu backend manda attendance_rate)
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-600 bg-white">
-                        Tip: si quieres gráfico académico real, agrega en{" "}
-                        <b>/academic/reports/summary</b> una serie tipo{" "}
-                        <code className="px-1 py-0.5 bg-slate-100 rounded">
-                            trend: [{"{ date, value }"}]
-                        </code>{" "}
-                        (asistencia o promedio).
+                        ) : (
+                            <EmptyBox title="Sin trámites" subtitle="No hay datos para mostrar" />
+                        )}
                     </div>
                 </div>
 
-                {/* Panel MINEDU (simple) */}
-                <div className="xl:col-span-1 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <p className="font-black text-slate-900 mb-2">MINEDU: Resumen</p>
+                {/* PANEL ACADÉMICO */}
+                <div className="xl:col-span-2 rounded-3xl border border-slate-200/60 bg-white p-6 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)]">
+                    <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2 text-lg">
+                        <GraduationCap size={20} className="text-emerald-500" />
+                        Resumen Académico
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="group rounded-2xl border border-slate-100 p-5 bg-slate-50/50 hover:bg-white hover:border-emerald-200 hover:shadow-md transition-all duration-300">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover:text-emerald-600 transition-colors">Estudiantes</p>
+                            <p className="text-3xl font-black text-slate-900 mt-2">{loading ? "..." : kpis.students}</p>
+                        </div>
+                        <div className="group rounded-2xl border border-slate-100 p-5 bg-slate-50/50 hover:bg-white hover:border-emerald-200 hover:shadow-md transition-all duration-300">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover:text-emerald-600 transition-colors">Secciones</p>
+                            <p className="text-3xl font-black text-slate-900 mt-2">{loading ? "..." : kpis.sections}</p>
+                        </div>
+                        <div className="group rounded-2xl border border-slate-100 p-5 bg-slate-50/50 hover:bg-white hover:border-emerald-200 hover:shadow-md transition-all duration-300">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover:text-emerald-600 transition-colors">Tasa Asistencia</p>
+                            <p className="text-3xl font-black text-slate-900 mt-2">{loading ? "..." : `${kpis.attendanceRate}%`}</p>
+                        </div>
+                    </div>
 
-                    <div className="space-y-3">
-                        <div className="rounded-xl border border-slate-200 p-4 bg-slate-50">
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                En cola
-                            </p>
-                            <p className="text-2xl font-black text-slate-900 mt-1">
-                                {loading ? "..." : kpis.mineduPending}
-                            </p>
+                    <div className="mt-6 rounded-xl border border-dashed border-slate-300 p-4 flex items-center gap-3 bg-slate-50/30">
+                        <div className="p-2 bg-slate-100 rounded-full text-slate-500">
+                            <Info size={16} />
+                        </div>
+                        <p className="text-sm text-slate-500 font-medium">
+                            <code className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-slate-700 font-mono text-xs">
+                                </code><code className="font-bold"></code>.
+                        </p>
+                    </div>
+                </div>
+
+                {/* PANEL MINEDU */}
+                <div className="xl:col-span-1 rounded-3xl border border-slate-200/60 bg-white p-6 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)]">
+                    <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2 text-lg">
+                        <HardDrive size={20} className="text-blue-500" />
+                        Conector MINEDU
+                    </h3>
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between rounded-2xl border border-slate-100 p-5 bg-slate-50/50">
+                            <div>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">En cola de envío</p>
+                                <p className="text-3xl font-black text-slate-900">
+                                    {loading ? "..." : kpis.mineduPending}
+                                </p>
+                            </div>
+                            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                                <Activity size={20} />
+                            </div>
                         </div>
 
-                        <div className="rounded-xl border border-slate-200 p-4 bg-slate-50">
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                OK / Fallidos
-                            </p>
-                            <p className="text-lg font-black text-slate-900 mt-1">
-                                {loading ? "..." : `${kpis.mineduSuccess} / ${kpis.mineduFailed}`}
-                            </p>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 p-4 text-center">
+                                <p className="text-xs font-bold text-emerald-600 uppercase mb-1">Exitosos</p>
+                                <p className="text-xl font-black text-emerald-700">{loading ? "-" : kpis.mineduSuccess}</p>
+                            </div>
+                            <div className="rounded-2xl border border-rose-100 bg-rose-50/30 p-4 text-center">
+                                <p className="text-xs font-bold text-rose-600 uppercase mb-1">Fallidos</p>
+                                <p className="text-xl font-black text-rose-700">{loading ? "-" : kpis.mineduFailed}</p>
+                            </div>
                         </div>
 
-                        <div className="text-xs text-slate-500">
-                            Cuando me pases el JSON real de <b>/minedu/dashboard/stats</b>, te meto pie/bar por estado.
+                        <div className="pt-2 text-center">
+                            <p className="text-xs text-slate-400 font-medium">
+                                Datos sincronizados en tiempo real  <b></b>
+                            </p>
                         </div>
                     </div>
                 </div>
+
             </div>
+
+            {/* Espacio extra al final */}
+            <div className="h-12"></div>
         </div>
-    );
+    </div>
+);
 }

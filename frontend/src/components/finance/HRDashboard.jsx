@@ -849,7 +849,6 @@ const HRDashboard = () => {
 
   // =========================
   // UI
-  // =========================
   return (
     <div className="space-y-6">
       {/* Statistics Cards */}
@@ -1114,7 +1113,8 @@ const HRDashboard = () => {
             </CardHeader>
 
             <CardContent>
-              <div className="space-y-3">
+              {/* LISTA CON SCROLL: Muestra aprox 4 y hace scroll */}
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
                 {employees.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">No hay empleados registrados</div>
                 ) : (
@@ -1160,7 +1160,7 @@ const HRDashboard = () => {
           </Card>
         </TabsContent>
 
-        {/* ===================== ATTENDANCE ===================== */}
+       {/* ===================== ATTENDANCE ===================== */}
         <TabsContent value="attendance">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -1292,7 +1292,8 @@ const HRDashboard = () => {
             </CardHeader>
 
             <CardContent>
-              <div className="space-y-3">
+              {/* MODIFICADO: Agregado max-h-[400px] y overflow-y-auto */}
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
                 {attendance.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">No hay registros de asistencia para hoy</div>
                 ) : (

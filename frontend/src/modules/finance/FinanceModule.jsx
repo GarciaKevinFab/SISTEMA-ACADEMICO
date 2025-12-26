@@ -230,7 +230,7 @@ const FinanceModule = () => {
           <div className="px-6 pb-6 pt-4">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
               <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
-                <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2">
+                <TabsList className="h-auto w-full justify-center bg-transparent p-1 flex flex-wrap gap-3">
                   <TabsTrigger value="dashboard" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
                     <span className="inline-flex items-center gap-2">
                       <BarChart3 className="h-4 w-4" aria-hidden="true" />

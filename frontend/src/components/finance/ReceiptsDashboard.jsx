@@ -621,16 +621,16 @@ const ReceiptsDashboard = () => {
               </div>
 
               {/* Receipts List */}
-              <div className="space-y-3">
-                {filteredReceipts.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    No se encontraron boletas
-                  </div>
-                ) : (
-                  filteredReceipts.map((receipt) => (
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2"> 
+  {filteredReceipts.length === 0 ? (
+    <div className="text-center py-8 text-gray-500">
+      No se encontraron boletas
+    </div>
+  ) : (
+    filteredReceipts.map((receipt) => (
                     <div
-                      key={receipt.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                          key={receipt.id}
+                          className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
                     >
                       <div className="flex items-center space-x-4">
                         <Receipt className="h-8 w-8 text-blue-500" />

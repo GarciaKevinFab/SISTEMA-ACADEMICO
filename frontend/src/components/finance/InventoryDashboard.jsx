@@ -20,7 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { toast } from "sonner";
 import { Plus, Package, TrendingUp, TrendingDown, AlertTriangle, Eye, FileText, Download } from "lucide-react";
 
-import { Inventory } from "../../services/finance.service"; // ✅ aquí está la magia
+import { Inventory } from "../../services/finance.service"; 
 
 const InventoryDashboard = () => {
   const { user } = useContext(AuthContext);
@@ -78,7 +78,6 @@ const InventoryDashboard = () => {
     ADJUSTMENT: "Ajuste",
   };
 
-  // ✅ helper para sacar error del backend (DRF / Django / etc.)
   const getErrMsg = (e, fallback = "Ocurrió un error") => {
     const msg =
       e?.response?.data?.detail ||
@@ -97,7 +96,6 @@ const InventoryDashboard = () => {
         Inventory.alerts(),
       ]);
 
-      // según tu backend puede ser {items: []} o {items:...}
       setItems(itemsRes.items || itemsRes || []);
       setMovements(movRes.movements || movRes.items || movRes || []);
       setAlerts(alertsRes.alerts || alertsRes.items || alertsRes || []);
@@ -409,46 +407,56 @@ const InventoryDashboard = () => {
             </CardHeader>
 
             <CardContent>
-              <div className="space-y-3">
-                {items.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">No hay items registrados</div>
-                ) : (
-                  items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
-                    >
-                      <div className="flex items-center space-x-4">
-                        <Package className="h-8 w-8 text-blue-500" />
-                        <div>
-                          <p className="font-semibold">{item.name}</p>
-                          <p className="text-sm text-gray-600">{item.code}</p>
-                          <p className="text-xs text-gray-500">{item.category}</p>
+              {/* ========================================================================
+                  MODIFICACIÓN:
+                  - Se reduce el maxHeight a 250px para forzar el scroll antes.
+                  - Se agrega style explicito por seguridad.
+                  ======================================================================== */}
+              <div 
+                className="overflow-y-auto pr-2" 
+                style={{ maxHeight: "250px" }}
+              >
+                <div className="space-y-3">
+                  {items.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">No hay items registrados</div>
+                  ) : (
+                    items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                      >
+                        <div className="flex items-center space-x-4">
+                          <Package className="h-8 w-8 text-blue-500" />
+                          <div>
+                            <p className="font-semibold">{item.name}</p>
+                            <p className="text-sm text-gray-600">{item.code}</p>
+                            <p className="text-xs text-gray-500">{item.category}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-4">
+                          <div className="text-right">
+                            <p className="font-semibold">Stock: {item.current_stock || 0}</p>
+                            <p className="text-sm text-gray-600">
+                              Min: {item.min_stock} | Max: {item.max_stock}
+                            </p>
+                            <p className="text-xs text-gray-500">S/. {Number(item.unit_cost ?? 0).toFixed(2)} c/u</p>
+                          </div>
+
+                          {(item.current_stock || 0) <= (item.min_stock || 0) && (
+                            <Badge variant="destructive">Stock Bajo</Badge>
+                          )}
+
+                          <div className="flex space-x-2">
+                            <Button size="sm" variant="outline" onClick={() => fetchKardex(item.id)}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
-
-                      <div className="flex items-center space-x-4">
-                        <div className="text-right">
-                          <p className="font-semibold">Stock: {item.current_stock || 0}</p>
-                          <p className="text-sm text-gray-600">
-                            Min: {item.min_stock} | Max: {item.max_stock}
-                          </p>
-                          <p className="text-xs text-gray-500">S/. {Number(item.unit_cost ?? 0).toFixed(2)} c/u</p>
-                        </div>
-
-                        {(item.current_stock || 0) <= (item.min_stock || 0) && (
-                          <Badge variant="destructive">Stock Bajo</Badge>
-                        )}
-
-                        <div className="flex space-x-2">
-                          <Button size="sm" variant="outline" onClick={() => fetchKardex(item.id)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -600,41 +608,51 @@ const InventoryDashboard = () => {
             </CardHeader>
 
             <CardContent>
-              <div className="space-y-3">
-                {movements.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">No hay movimientos registrados</div>
-                ) : (
-                  movements.map((movement) => (
-                    <div key={movement.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center space-x-4">
-                        {movement.movement_type === "ENTRY" ? (
-                          <TrendingUp className="h-8 w-8 text-green-500" />
-                        ) : (
-                          <TrendingDown className="h-8 w-8 text-red-500" />
-                        )}
+              {/* ========================================================================
+                  MODIFICACIÓN:
+                  - Se reduce el maxHeight a 250px para forzar el scroll antes.
+                  - Se agrega style explicito por seguridad.
+                  ======================================================================== */}
+              <div 
+                className="overflow-y-auto pr-2" 
+                style={{ maxHeight: "250px" }}
+              >
+                <div className="space-y-3">
+                  {movements.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">No hay movimientos registrados</div>
+                  ) : (
+                    movements.map((movement) => (
+                      <div key={movement.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="flex items-center space-x-4">
+                          {movement.movement_type === "ENTRY" ? (
+                            <TrendingUp className="h-8 w-8 text-green-500" />
+                          ) : (
+                            <TrendingDown className="h-8 w-8 text-red-500" />
+                          )}
 
-                        <div>
-                          <p className="font-semibold">{movement.item?.name}</p>
-                          <p className="text-sm text-gray-600">{movementTypes[movement.movement_type]}</p>
-                          <p className="text-xs text-gray-500">{movement.reason}</p>
+                          <div>
+                            <p className="font-semibold">{movement.item?.name}</p>
+                            <p className="text-sm text-gray-600">{movementTypes[movement.movement_type]}</p>
+                            <p className="text-xs text-gray-500">{movement.reason}</p>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="font-semibold">
+                            {movement.movement_type === "ENTRY" ? "+" : "-"}
+                            {movement.quantity}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {movement.unit_cost ? `S/. ${Number(movement.unit_cost).toFixed(2)}` : "Sin costo"}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {movement.created_at ? new Date(movement.created_at).toLocaleDateString() : ""}
+                          </p>
                         </div>
                       </div>
-
-                      <div className="text-right">
-                        <p className="font-semibold">
-                          {movement.movement_type === "ENTRY" ? "+" : "-"}
-                          {movement.quantity}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          {movement.unit_cost ? `S/. ${Number(movement.unit_cost).toFixed(2)}` : "Sin costo"}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {movement.created_at ? new Date(movement.created_at).toLocaleDateString() : ""}
-                        </p>
-                      </div>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

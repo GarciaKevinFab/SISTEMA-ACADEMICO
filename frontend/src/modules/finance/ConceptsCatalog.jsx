@@ -6,13 +6,12 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../../components/ui/dialog";
-import { toast } from "../../utils/safeToast"; // <-- usa safeToast
+import { toast } from "../../utils/safeToast";
 import { Plus, Save, Edit3, Trash2 } from "lucide-react";
 import { fmtCurrency, formatApiError } from "../../utils/format";
 
 const TYPES = ["ADMISION", "MATRICULA", "PENSION", "CERTIFICADO", "OTRO"];
 
-// helper de error consistente
 const showApiError = (e, fallback) => {
     const msg = formatApiError(e, fallback);
     toast.error(msg);
@@ -103,58 +102,67 @@ export default function ConceptsCatalog() {
             </div>
 
             <Card>
-  <CardHeader>
-    <CardTitle>Conceptos</CardTitle>
-    <CardDescription>Lista de conceptos facturables</CardDescription>
-  </CardHeader>
-  <CardContent className="p-0">
-    {loading ? (
-      <div className="flex items-center justify-center h-40" aria-busy="true">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
-      </div>
-    ) : (
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b"> {/* Primera fila gris */}
-            <tr>
-              <th scope="col" className="px-4 py-2 text-left text-xs font-semibold text-black">Código</th>
-              <th scope="col" className="px-4 py-2 text-left text-xs font-semibold text-black">Nombre</th>
-              <th scope="col" className="px-4 py-2 text-left text-xs font-semibold text-black">Tipo</th>
-              <th scope="col" className="px-4 py-2 text-right text-xs font-semibold text-black">Monto por defecto</th>
-              <th scope="col" className="px-4 py-2 text-left text-xs font-semibold text-black">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {rows.map((r) => (
-              <tr key={r.id} className="bg-white hover:bg-gray-100"> {/* Filas con fondo blanco */}
-                <td className="px-4 py-2 text-black">{r.code}</td>
-                <td className="px-4 py-2 text-black">{r.name}</td>
-                <td className="px-4 py-2 text-xs text-black">{r.type}</td>
-                <td className="px-4 py-2 text-right text-black">{fmtCurrency(r.default_amount)}</td>
-                <td className="px-4 py-2">
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => openEdit(r)} aria-label="Editar">
-                      <Edit3 className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => remove(r)} aria-label="Eliminar">
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={5} className="text-center py-8 text-gray-500">Sin conceptos todavía.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    )}
-  </CardContent>
-</Card>
-
+                <CardHeader>
+                    <CardTitle>Conceptos</CardTitle>
+                    <CardDescription>Lista de conceptos facturables</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                    {loading ? (
+                        <div className="flex items-center justify-center h-40" aria-busy="true">
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+                        </div>
+                    ) : (
+                        /* ==========================================================
+                           SOLUCIÓN DEFINITIVA CON ESTILOS EN LÍNEA (INLINE STYLES)
+                           Esto ignora Tailwind y fuerza al navegador a hacer scroll.
+                           ========================================================== */
+                        <div style={{ 
+                            height: "300px",        /* Altura FIJA */
+                            overflowY: "auto",      /* Scroll vertical automático */
+                            overflowX: "hidden",    /* Evita scroll horizontal innecesario */
+                            borderBottom: "1px solid #eee" /* Un borde sutil abajo */
+                        }}>
+                            <table className="w-full text-sm">
+                                {/* Sticky Header con estilo en línea para asegurar que se quede fijo */}
+                                <thead style={{ position: "sticky", top: 0, zIndex: 10, backgroundColor: "#f9fafb" }}>
+                                    <tr className="border-b">
+                                        <th scope="col" className="px-4 py-3 text-left font-semibold text-gray-700">Código</th>
+                                        <th scope="col" className="px-4 py-3 text-left font-semibold text-gray-700">Nombre</th>
+                                        <th scope="col" className="px-4 py-3 text-left font-semibold text-gray-700">Tipo</th>
+                                        <th scope="col" className="px-4 py-3 text-right font-semibold text-gray-700">Monto</th>
+                                        <th scope="col" className="px-4 py-3 text-left font-semibold text-gray-700">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {rows.map((r) => (
+                                        <tr key={r.id} className="bg-white hover:bg-gray-50">
+                                            <td className="px-4 py-3 text-gray-900">{r.code}</td>
+                                            <td className="px-4 py-3 text-gray-900">{r.name}</td>
+                                            <td className="px-4 py-3 text-gray-600">{r.type}</td>
+                                            <td className="px-4 py-3 text-right text-gray-900 font-medium">{fmtCurrency(r.default_amount)}</td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex gap-2">
+                                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openEdit(r)}>
+                                                        <Edit3 className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600" onClick={() => remove(r)}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {rows.length === 0 && (
+                                        <tr>
+                                            <td colSpan={5} className="text-center py-10 text-gray-500">Sin conceptos todavía.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="max-w-lg">
