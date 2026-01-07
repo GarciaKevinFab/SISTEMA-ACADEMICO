@@ -2,12 +2,7 @@ from django.urls import path
 from .views import *
 
 urlpatterns = [
-    # Catálogos mínimos
-    path('catalogs/periods', catalog_periods),
-    path('catalogs/careers', catalog_careers),
-    path('catalogs/sections', catalog_sections),
-    path('catalogs/courses', catalog_courses),
-    path('students/search', students_search),
+  
 
     # PDFs oficiales (POST -> 202 -> polling)
     path('reports/actas/academic', actas_academic),

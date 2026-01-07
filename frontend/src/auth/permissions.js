@@ -5,9 +5,14 @@
 // ============================
 export const PERMS = {
     /* === ADMINISTRACIÓN / ACCESOS / SEGURIDAD === */
-    "admin.access.manage": "admin.access.manage",          // gestionar usuarios/roles/permisos
-    "admin.audit.view": "admin.audit.view",                // ver auditoría / logs
-    "admin.audit.export": "admin.audit.export",            // exportar bitácora (CSV/JSON)
+    "admin.access.manage": "admin.access.manage", // gestionar usuarios/roles/permisos
+    "admin.audit.view": "admin.audit.view", // ver auditoría / logs
+    "admin.audit.export": "admin.audit.export", // exportar bitácora (CSV/JSON)
+
+    // ✅ Catálogos (nuevo)
+    "admin.catalogs.view": "admin.catalogs.view",
+    "admin.catalogs.manage": "admin.catalogs.manage",
+
     "security.policies.manage": "security.policies.manage",
     "security.sessions.inspect": "security.sessions.inspect",
 
@@ -62,6 +67,7 @@ export const PERMS = {
     "mpv.reports.view": "mpv.reports.view",
     "mpv.public.intake": "mpv.public.intake",
     "mpv.public.tracking": "mpv.public.tracking",
+
     // legacy
     "desk.intake.manage": "desk.intake.manage",
     "desk.reports.view": "desk.reports.view",
@@ -120,89 +126,172 @@ export const ROLE_POLICIES = {
 
     /* Administración / Seguridad */
     ACCESS_ADMIN: [
-        "admin.access.manage", "admin.audit.view", "admin.audit.export"
+        "admin.access.manage",
+        "admin.audit.view",
+        "admin.audit.export",
+
+        // ✅ que también pueda ver/gestionar catálogos (si aplica en tu negocio)
+        "admin.catalogs.view",
+        "admin.catalogs.manage",
     ],
+
     SECURITY_ADMIN: [
-        "security.policies.manage", "security.sessions.inspect", "admin.audit.view"
+        "security.policies.manage",
+        "security.sessions.inspect",
+        "admin.audit.view",
     ],
 
     /* Académico */
     ADMIN_ACADEMIC: [
-        "academic.plans.view", "academic.plans.edit",
-        "academic.sections.view", "academic.sections.create", "academic.sections.conflicts",
-        "academic.enrollment.view", "academic.enrollment.commit",
-        "academic.grades.edit", "academic.grades.submit", "academic.grades.reopen",
-        "academic.syllabus.upload", "academic.syllabus.delete",
-        "academic.evaluation.config", "academic.kardex.view", "academic.reports.view",
-        "academic.attendance.view", "academic.attendance.edit",
-        "academic.acts.view", "academic.acts.close", "academic.acts.export",
-        "sia.export.enrollment", "sia.export.grades", "sia.export.certificates",
+        "academic.plans.view",
+        "academic.plans.edit",
+        "academic.sections.view",
+        "academic.sections.create",
+        "academic.sections.conflicts",
+        "academic.enrollment.view",
+        "academic.enrollment.commit",
+        "academic.grades.edit",
+        "academic.grades.submit",
+        "academic.grades.reopen",
+        "academic.syllabus.upload",
+        "academic.syllabus.delete",
+        "academic.evaluation.config",
+        "academic.kardex.view",
+        "academic.reports.view",
+        "academic.attendance.view",
+        "academic.attendance.edit",
+        "academic.acts.view",
+        "academic.acts.close",
+        "academic.acts.export",
+        "sia.export.enrollment",
+        "sia.export.grades",
+        "sia.export.certificates",
+
         // compat navegación
-        "academic.view", "academic.plans.manage", "academic.sections.manage",
-        "academic.grades.manage", "academic.attendance.manage", "academic.processes.inbox.view",
+        "academic.view",
+        "academic.plans.manage",
+        "academic.sections.manage",
+        "academic.grades.manage",
+        "academic.attendance.manage",
+        "academic.processes.inbox.view",
     ],
+
     REGISTRAR: [
-        "academic.sections.view", "academic.sections.create", "academic.sections.conflicts",
-        "academic.grades.reopen", "academic.reports.view",
-        "academic.acts.view", "academic.acts.close", "academic.acts.export",
-        "sia.export.enrollment", "sia.export.grades",
-        "academic.view", "academic.sections.manage"
+        "academic.sections.view",
+        "academic.sections.create",
+        "academic.sections.conflicts",
+        "academic.grades.reopen",
+        "academic.reports.view",
+        "academic.acts.view",
+        "academic.acts.close",
+        "academic.acts.export",
+        "sia.export.enrollment",
+        "sia.export.grades",
+        "academic.view",
+        "academic.sections.manage",
+
+        // ✅ catálogos (registraría normalmente necesita)
+        "admin.catalogs.view",
+        "admin.catalogs.manage",
     ],
+
     TEACHER: [
         "academic.sections.view",
-        "academic.grades.edit", "academic.grades.submit",
-        "academic.attendance.view", "academic.attendance.edit",
-        "academic.syllabus.upload", "academic.evaluation.config",
-        "academic.view", "academic.grades.manage", "academic.attendance.manage"
+        "academic.grades.edit",
+        "academic.grades.submit",
+        "academic.attendance.view",
+        "academic.attendance.edit",
+        "academic.syllabus.upload",
+        "academic.evaluation.config",
+        "academic.view",
+        "academic.grades.manage",
+        "academic.attendance.manage",
     ],
+
     STUDENT: [
-        "academic.enrollment.view", "academic.enrollment.commit", "academic.kardex.view"
+        "academic.enrollment.view",
+        "academic.enrollment.commit",
+        "academic.kardex.view",
     ],
 
     /* Admisión */
     ADMISSION_OFFICER: [
-        "admission.calls.view", "admission.calls.manage", "admission.applicants.manage",
-        "admission.documents.review", "admission.schedule.manage",
-        "admission.evaluation.board", "admission.results.publish",
-        "admission.payments.manage", "admission.reports.view", "admission.certificates.issue",
-        "admission.dashboard.view", "admission.applicant.profile.view"
+        "admission.calls.view",
+        "admission.calls.manage",
+        "admission.applicants.manage",
+        "admission.documents.review",
+        "admission.schedule.manage",
+        "admission.evaluation.board",
+        "admission.results.publish",
+        "admission.payments.manage",
+        "admission.reports.view",
+        "admission.certificates.issue",
+        "admission.dashboard.view",
+        "admission.applicant.profile.view",
     ],
 
     /* Mesa de Partes */
     MPV_OFFICER: [
-        "mpv.processes.review", "mpv.files.upload", "mpv.reports.view",
-        "desk.intake.manage", "desk.reports.view"
+        "mpv.processes.review",
+        "mpv.files.upload",
+        "mpv.reports.view",
+        "desk.intake.manage",
+        "desk.reports.view",
     ],
+
     MPV_MANAGER: [
-        "mpv.processes.review", "mpv.processes.resolve", "mpv.files.upload", "mpv.reports.view",
-        "desk.intake.manage", "desk.reports.view"
+        "mpv.processes.review",
+        "mpv.processes.resolve",
+        "mpv.files.upload",
+        "mpv.reports.view",
+        "desk.intake.manage",
+        "desk.reports.view",
     ],
 
     /* Finanzas */
     CASHIER: [
-        "fin.cashbanks.view", "fin.student.accounts.view",
-        "fin.payments.receive", "fin.cash.movements", "finance.dashboard.view"
+        "fin.cashbanks.view",
+        "fin.student.accounts.view",
+        "fin.payments.receive",
+        "fin.cash.movements",
+        "finance.dashboard.view",
     ],
+
     ACCOUNTANT: [
-        "fin.reconciliation.view", "fin.reports.view", "fin.concepts.manage",
-        "fin.electronic.invoice.issue", "fin.ar.manage", "fin.ap.manage",
-        "finance.dashboard.view"
+        "fin.reconciliation.view",
+        "fin.reports.view",
+        "fin.concepts.manage",
+        "fin.electronic.invoice.issue",
+        "fin.ar.manage",
+        "fin.ap.manage",
+        "finance.dashboard.view",
     ],
+
     FINANCE_ADMIN: [
-        "fin.cashbanks.view", "fin.student.accounts.view", "fin.reconciliation.view",
-        "fin.reports.view", "fin.concepts.manage", "finance.dashboard.view",
-        "fin.payments.receive", "fin.cash.movements",
-        "fin.electronic.invoice.issue", "fin.ar.manage", "fin.ap.manage",
-        "fin.inventory.manage"
+        "fin.cashbanks.view",
+        "fin.student.accounts.view",
+        "fin.reconciliation.view",
+        "fin.reports.view",
+        "fin.concepts.manage",
+        "finance.dashboard.view",
+        "fin.payments.receive",
+        "fin.cash.movements",
+        "fin.electronic.invoice.issue",
+        "fin.ar.manage",
+        "fin.ap.manage",
+        "fin.inventory.manage",
     ],
+
     WAREHOUSE: ["fin.inventory.view", "logistics.warehouse.dispatch"],
     LOGISTICS: ["fin.logistics.view", "logistics.procure.manage"],
     HR_ADMIN: ["hr.view", "hr.people.manage", "hr.payroll.view"],
 
     /* MINEDU */
     MINEDU_INTEGRATION: [
-        "minedu.integration.view", "minedu.integration.export", "minedu.integration.validate",
-        "minedu.integrations.run"
+        "minedu.integration.view",
+        "minedu.integration.export",
+        "minedu.integration.validate",
+        "minedu.integrations.run",
     ],
 
     /* Portal */
@@ -210,10 +299,19 @@ export const ROLE_POLICIES = {
 
     /* Investigación */
     RESEARCH_COORDINATOR: [
-        "research.calls.view", "research.calls.manage",
-        "research.projects.view", "research.projects.edit", "research.tabs.reports"
+        "research.calls.view",
+        "research.calls.manage",
+        "research.projects.view",
+        "research.projects.edit",
+        "research.tabs.reports",
     ],
-    TEACHER_RESEARCHER: ["research.projects.view", "research.projects.edit", "research.calls.view"],
+
+    TEACHER_RESEARCHER: [
+        "research.projects.view",
+        "research.projects.edit",
+        "research.calls.view",
+    ],
+
     CALLS_COMMITTEE: ["research.calls.view", "research.calls.manage"],
 };
 

@@ -16,9 +16,7 @@ export const toISO = (v) => {
     const s = String(v).trim();
     // Compatibilidad con datetime-local (sin zona)
     // 'YYYY-MM-DDTHH:MM' o 'YYYY-MM-DDTHH:MM:SS'
-    const m = s.match(
-        /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::(\d{2}))?$/
-    );
+    const m = s.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::(\d{2}))?$/);
     if (m) {
         const secs = m[3] ? `:${m[3]}` : ":00";
         // Interpretamos como hora local del navegador
@@ -28,6 +26,19 @@ export const toISO = (v) => {
     // ISO nativo
     const d = new Date(s);
     return isNaN(d.getTime()) ? null : d.toISOString();
+};
+
+/** Extrae listas desde respuestas de backend que vienen en formatos distintos */
+const extractList = (data) => {
+    if (Array.isArray(data)) return data;
+    return (
+        data?.admission_calls ||
+        data?.calls ||
+        data?.items ||
+        data?.results ||
+        data?.data ||
+        []
+    );
 };
 
 /* ------------------------------------------
@@ -46,6 +57,7 @@ const normalizeCall = (c) => {
         name: x.name ?? x.career_name ?? x.title ?? `Carrera ${x.id ?? x.career_id}`,
         vacancies: x.vacancies ?? x.quota ?? x.slots ?? 0,
     }));
+
     return {
         id: c.id,
         name: c.name,
@@ -58,14 +70,18 @@ const normalizeCall = (c) => {
         results_date: c.results_date ?? c.results_at ?? null,
         application_fee: c.application_fee ?? c.fee ?? 0,
         max_applications_per_career: c.max_applications_per_career ?? c.max_choices ?? 1,
+        minimum_age: c.minimum_age ?? null,
+        maximum_age: c.maximum_age ?? null,
+        required_documents: c.required_documents ?? [],
         careers,
+        // opcional si el backend lo manda (si no, portal lo calcula)
+        career_vacancies: c.career_vacancies ?? c.vacancies_map ?? null,
         total_applications: c.total_applications ?? c.applications_count ?? 0,
         status: c.status ?? c.state ?? "OPEN",
     };
 };
 
-export const listAdmissionCalls = async () =>
-    (await api.get("/admission-calls")).data;
+export const listAdmissionCalls = async () => (await api.get("/admission-calls")).data;
 
 /**
  * Crea una convocatoria; enviamos nombres oficiales y sinónimos
@@ -108,26 +124,45 @@ export const createAdmissionCall = async (form) => {
 };
 
 export const AdmissionCalls = {
-    listPublic: async () => (await api.get("/admission-calls/public")).data,
+    listPublic: async () => {
+        const endpoints = [
+            "/admission-calls/public",        // ✅ primero el real
+            "/portal/public/admission-calls", // fallback si existe en algún proxy
+        ];
+
+        let lastErr = null;
+
+        for (const url of endpoints) {
+            try {
+                const { data } = await api.get(url);
+                const raw = extractList(data);
+
+                // ✅ si este endpoint devuelve vacío, prueba el siguiente
+                if (Array.isArray(raw) && raw.length === 0) continue;
+
+                return raw.map(normalizeCall);
+            } catch (e) {
+                lastErr = e;
+            }
+        }
+
+        // si todos fallan o dan vacío:
+        return [];
+    },
+
     listAdmin: async () => {
         const { data } = await api.get("/admission-calls");
-        const raw =
-            (Array.isArray(data) && data) ||
-            data?.items ||
-            data?.results ||
-            data?.admission_calls ||
-            data?.calls ||
-            [];
+        const raw = extractList(data);
         return raw.map(normalizeCall);
     },
 };
+
 
 /* ------------------------------------------
    Carreras
 -------------------------------------------*/
 export const listCareers = async () => (await api.get("/careers")).data;
-export const createCareer = async (payload) =>
-    (await api.post("/careers", payload)).data;
+export const createCareer = async (payload) => (await api.post("/careers", payload)).data;
 
 /* ------------------------------------------
    Postulaciones
@@ -137,12 +172,8 @@ export const Applications = {
     my: async () => (await api.get("/applications/me")).data,
     list: async (q = {}) => {
         const { data } = await api.get("/applications", { params: q });
-        // Garantizar array
         return Array.isArray(data) ? data : data?.applications || [];
     },
-    // Si en el futuro agregas endpoint para estado:
-    // setStatus: async (application_id, status) =>
-    //   (await api.post(`/applications/${application_id}/status`, { status })).data,
 };
 export const listMyApplications = async () => Applications.my();
 
@@ -160,12 +191,10 @@ export const ApplicationPayment = {
    Evaluación
 -------------------------------------------*/
 export const Evaluation = {
-    listForScoring: async (params) =>
-        (await api.get("/evaluation/applications", { params })).data,
+    listForScoring: async (params) => (await api.get("/evaluation/applications", { params })).data,
     saveScores: async (application_id, rubric) =>
         (await api.post(`/evaluation/${application_id}/scores`, rubric)).data,
-    bulkCompute: async (call_id) =>
-        (await api.post(`/evaluation/compute`, { call_id })).data,
+    bulkCompute: async (call_id) => (await api.post(`/evaluation/compute`, { call_id })).data,
 };
 
 /* ------------------------------------------
@@ -175,8 +204,7 @@ export const Results = {
     list: async (params) => (await api.get("/results", { params })).data,
     publish: async (payload) => (await api.post("/results/publish", payload)).data,
     close: async (payload) => (await api.post("/results/close", payload)).data,
-    actaPdf: async (params) =>
-        await api.get("/results/acta.pdf", { params, responseType: "blob" }),
+    actaPdf: async (params) => await api.get("/results/acta.pdf", { params, responseType: "blob" }),
 };
 
 /* ------------------------------------------
@@ -184,22 +212,13 @@ export const Results = {
 -------------------------------------------*/
 export const AdmissionReports = {
     exportExcel: async (range) =>
-        await api.get("/reports/admission.xlsx", {
-            params: range,
-            responseType: "blob",
-        }),
+        await api.get("/reports/admission.xlsx", { params: range, responseType: "blob" }),
     summary: async (range) =>
         (await api.get("/reports/admission/summary", { params: range })).data,
     ranking: async (params) =>
-        await api.get("/reports/admission/ranking.xlsx", {
-            params,
-            responseType: "blob",
-        }),
+        await api.get("/reports/admission/ranking.xlsx", { params, responseType: "blob" }),
     vacantsVs: async (params) =>
-        await api.get("/reports/admission/vacants-vs.xlsx", {
-            params,
-            responseType: "blob",
-        }),
+        await api.get("/reports/admission/vacants-vs.xlsx", { params, responseType: "blob" }),
 };
 
 /* ------------------------------------------
@@ -214,8 +233,7 @@ export const AdmissionParams = {
    Perfil postulante
 -------------------------------------------*/
 export const getApplicantMe = async () => (await api.get("/applicants/me")).data;
-export const createApplicant = async (payload) =>
-    (await api.post("/applicants", payload)).data;
+export const createApplicant = async (payload) => (await api.post("/applicants", payload)).data;
 
 /* ------------------------------------------
    Documentos de postulante
@@ -231,7 +249,11 @@ const normalizeDoc = (d) => ({
 export const ApplicantDocs = {
     async list(applicationId) {
         const { data } = await api.get(`/applications/${applicationId}/documents`);
-        const arr = Array.isArray(data?.documents) ? data.documents : (Array.isArray(data) ? data : []);
+        const arr = Array.isArray(data?.documents)
+            ? data.documents
+            : Array.isArray(data)
+                ? data
+                : [];
         return arr.map(normalizeDoc);
     },
 
@@ -251,13 +273,10 @@ ApplicantDocs.listMine = (applicationId) => ApplicantDocs.list(applicationId);
    Cronograma por convocatoria
 -------------------------------------------*/
 export const AdmissionSchedule = {
-    list: async (call_id) =>
-        (await api.get(`/admission-calls/${call_id}/schedule`)).data,
-    create: async (call_id, payload) =>
-        (await api.post(`/admission-calls/${call_id}/schedule`, payload)).data,
+    list: async (call_id) => (await api.get(`/admission-calls/${call_id}/schedule`)).data,
+    create: async (call_id, payload) => (await api.post(`/admission-calls/${call_id}/schedule`, payload)).data,
     update: async (call_id, item_id, payload) =>
-        (await api.put(`/admission-calls/${call_id}/schedule/${item_id}`, payload))
-            .data,
+        (await api.put(`/admission-calls/${call_id}/schedule/${item_id}`, payload)).data,
     remove: async (call_id, item_id) =>
         (await api.delete(`/admission-calls/${call_id}/schedule/${item_id}`)).data,
 };
@@ -266,14 +285,9 @@ export const AdmissionSchedule = {
    Pagos (admin)
 -------------------------------------------*/
 export const Payments = {
-    list: async (params) =>
-        (await api.get(`/admission-payments`, { params })).data,
-    confirm: async (payment_id) =>
-        (await api.post(`/admission-payments/${payment_id}/confirm`)).data,
-    void: async (payment_id) =>
-        (await api.post(`/admission-payments/${payment_id}/void`)).data,
+    list: async (params) => (await api.get(`/admission-payments`, { params })).data,
+    confirm: async (payment_id) => (await api.post(`/admission-payments/${payment_id}/confirm`)).data,
+    void: async (payment_id) => (await api.post(`/admission-payments/${payment_id}/void`)).data,
     receiptPdf: async (payment_id) =>
-        await api.get(`/admission-payments/${payment_id}/receipt.pdf`, {
-            responseType: "blob",
-        }),
+        await api.get(`/admission-payments/${payment_id}/receipt.pdf`, { responseType: "blob" }),
 };

@@ -10,15 +10,36 @@ import React, {
 import { useAuth } from "../../context/AuthContext";
 import IfPerm from "@/components/auth/IfPerm";
 import { PERMS } from "@/auth/permissions";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Badge } from "../../components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../../components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../../components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
+
 import {
   FileText,
   Clock,
@@ -36,14 +57,26 @@ import {
   Pencil,
   Power,
 } from "lucide-react";
+
 import { toast } from "sonner";
-import { BACKEND_URL } from "../../utils/config";
 import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
-import { Procedures as ProcSvc, Catalog, ProcedureFiles } from "../../services/mesaPartes.service";
+
+import {
+  Procedures as ProcSvc,
+  Catalog,
+  ProcedureFiles,
+  ProcedureTypes,
+  MesaPartesDashboard,
+  MesaPartesPublic, // ✅ NUEVO: para verifyUrl()
+} from "../../services/mesaPartes.service";
+
 import MesaPartesReports from "./MesaPartesReports";
 
 /* ---------------- helpers ---------------- */
 function formatApiError(err, fallback = "Ocurrió un error") {
+  // El service lanza Error("msg"), así que primero agarramos message.
+  if (typeof err?.message === "string" && err.message.trim()) return err.message;
+
   const data = err?.response?.data;
   if (data?.detail) {
     const d = data.detail;
@@ -61,13 +94,13 @@ function formatApiError(err, fallback = "Ocurrió un error") {
   if (typeof data?.error?.message === "string") return data.error.message;
   if (typeof data?.message === "string") return data.message;
   if (typeof data?.error === "string") return data.error;
-  if (typeof err?.message === "string") return err.message;
+
   return fallback;
 }
 
 /* ===================== DASHBOARD ===================== */
-const MesaDePartesDashboard = ({ onNew, onSearch, onQR, onReports }) => {
-  const { api, hasAny } = useAuth();
+const MesaDePartesDashboardUI = ({ onNew, onSearch, onQR, onReports }) => {
+  const { hasAny } = useAuth();
   const canSee = hasAny([PERMS["mpv.processes.review"], PERMS["mpv.reports.view"]]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
@@ -75,7 +108,7 @@ const MesaDePartesDashboard = ({ onNew, onSearch, onQR, onReports }) => {
   const fetchDashboardStats = useCallback(async () => {
     try {
       setLoading(true);
-      const { data } = await api.get("/dashboard/stats/");
+      const data = await MesaPartesDashboard.stats();
       setStats(data?.stats ?? data ?? {});
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
@@ -83,7 +116,7 @@ const MesaDePartesDashboard = ({ onNew, onSearch, onQR, onReports }) => {
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, []);
 
   useEffect(() => {
     if (canSee) fetchDashboardStats();
@@ -199,8 +232,9 @@ const MesaDePartesDashboard = ({ onNew, onSearch, onQR, onReports }) => {
 
 /* ===================== TYPES ===================== */
 const ProcedureTypesManagement = () => {
-  const { api, hasPerm } = useAuth();
+  const { hasPerm } = useAuth();
   const canManageTypes = hasPerm(PERMS["mpv.processes.resolve"]); // o crea "mpv.catalog.manage"
+
   const [procedureTypes, setProcedureTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -222,15 +256,15 @@ const ProcedureTypesManagement = () => {
   const fetchProcedureTypes = useCallback(async () => {
     try {
       setLoading(true);
-      const { data } = await api.get("/procedure-types");
-      setProcedureTypes(data?.procedure_types ?? data ?? []);
+      const data = await ProcedureTypes.list();
+      setProcedureTypes(data?.procedure_types ?? []);
     } catch (error) {
       console.error("Error fetching procedure types:", error);
       toast.error(formatApiError(error, "Error al cargar tipos de trámite"));
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, []);
 
   useEffect(() => {
     fetchProcedureTypes();
@@ -239,7 +273,7 @@ const ProcedureTypesManagement = () => {
   const handleSubmitCreate = async (e) => {
     e.preventDefault();
     try {
-      await api.post("/procedure-types", formData);
+      await ProcedureTypes.create(formData);
       toast.success("Tipo de trámite creado exitosamente");
       setIsCreateModalOpen(false);
       setFormData({
@@ -265,10 +299,10 @@ const ProcedureTypesManagement = () => {
   const toggleActive = async () => {
     if (!selected) return;
     try {
-      const payload = { is_active: !selected.is_active };
-      await api.patch(`/procedure-types/${selected.id}`, payload);
-      toast.success(`Tipo ${payload.is_active ? "activado" : "inactivado"}`);
-      setSelected({ ...selected, ...payload });
+      const next = !selected.is_active;
+      await ProcedureTypes.toggle(selected.id, next);
+      toast.success(`Tipo ${next ? "activado" : "inactivado"}`);
+      setSelected({ ...selected, is_active: next });
       fetchProcedureTypes();
     } catch (err) {
       toast.error(formatApiError(err, "No se pudo cambiar el estado"));
@@ -286,7 +320,7 @@ const ProcedureTypesManagement = () => {
         processing_days: Number(selected.processing_days || 0),
         cost: Number(selected.cost || 0),
       };
-      await api.patch(`/procedure-types/${selected.id}`, body);
+      await ProcedureTypes.patch(selected.id, body);
       toast.success("Tipo actualizado");
       setEditing(false);
       fetchProcedureTypes();
@@ -309,6 +343,7 @@ const ProcedureTypesManagement = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Tipos de Trámite</h2>
+
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
@@ -316,11 +351,13 @@ const ProcedureTypesManagement = () => {
               Nuevo Tipo de Trámite
             </Button>
           </DialogTrigger>
+
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Crear Nuevo Tipo de Trámite</DialogTitle>
               <DialogDescription>Configure un nuevo tipo de trámite documentario</DialogDescription>
             </DialogHeader>
+
             <form onSubmit={handleSubmitCreate} className="space-y-4">
               <div>
                 <Label htmlFor="name">Nombre del Trámite *</Label>
@@ -346,7 +383,9 @@ const ProcedureTypesManagement = () => {
                 <Textarea
                   id="required_documents"
                   value={formData.required_documents}
-                  onChange={(e) => setFormData({ ...formData, required_documents: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, required_documents: e.target.value })
+                  }
                   placeholder="Liste los documentos necesarios para este trámite"
                 />
               </div>
@@ -360,7 +399,10 @@ const ProcedureTypesManagement = () => {
                     min="1"
                     value={formData.processing_days}
                     onChange={(e) =>
-                      setFormData({ ...formData, processing_days: parseInt(e.target.value || "0", 10) })
+                      setFormData({
+                        ...formData,
+                        processing_days: parseInt(e.target.value || "0", 10),
+                      })
                     }
                     required
                   />
@@ -373,7 +415,9 @@ const ProcedureTypesManagement = () => {
                     min="0"
                     step="0.01"
                     value={formData.cost}
-                    onChange={(e) => setFormData({ ...formData, cost: parseFloat(e.target.value || "0") })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, cost: parseFloat(e.target.value || "0") })
+                    }
                     required
                   />
                 </div>
@@ -392,7 +436,7 @@ const ProcedureTypesManagement = () => {
         </Dialog>
       </div>
 
-      {/* Procedure Types List */}
+      {/* List */}
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -402,12 +446,21 @@ const ProcedureTypesManagement = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Tipo de Trámite
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Días</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Costo</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Días
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Costo
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Estado
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
+
               <tbody className="bg-white divide-y divide-gray-200">
                 {procedureTypes.map((type) => (
                   <tr key={type.id} className="hover:bg-gray-50">
@@ -417,7 +470,9 @@ const ProcedureTypesManagement = () => {
                         <div className="text-sm text-gray-500">{type.description}</div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{type.processing_days} días</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {type.processing_days} días
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       S/. {(Number(type.cost) || 0).toFixed(2)}
                     </td>
@@ -436,6 +491,7 @@ const ProcedureTypesManagement = () => {
                   </tr>
                 ))}
               </tbody>
+
             </table>
           </div>
         </CardContent>
@@ -470,7 +526,10 @@ const ProcedureTypesManagement = () => {
                     disabled={!editing}
                     value={selected.processing_days ?? 1}
                     onChange={(e) =>
-                      setSelected({ ...selected, processing_days: parseInt(e.target.value || "0", 10) })
+                      setSelected({
+                        ...selected,
+                        processing_days: parseInt(e.target.value || "0", 10),
+                      })
                     }
                   />
                 </div>
@@ -532,9 +591,7 @@ const ProcedureTypesManagement = () => {
                       <Button type="button" variant="outline" onClick={() => setEditing(false)}>
                         Cancelar
                       </Button>
-                      <Button type="submit">
-                        Guardar
-                      </Button>
+                      <Button type="submit">Guardar</Button>
                     </>
                   )}
                 </div>
@@ -565,7 +622,7 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
   const fetchFiles = useCallback(async () => {
     if (!proc?.id) return;
     const d = await ProcedureFiles.list(proc.id);
-    setFiles(d?.files || d || []);
+    setFiles(d?.files ?? []);
   }, [proc?.id]);
 
   const uploadFile = async (e) => {
@@ -593,7 +650,12 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
     }
   };
 
-  const [routeForm, setRouteForm] = useState({ to_office_id: "", assignee_id: "", deadline_at: "", note: "" });
+  const [routeForm, setRouteForm] = useState({
+    to_office_id: "",
+    assignee_id: "",
+    deadline_at: "",
+    note: "",
+  });
   const [statusForm, setStatusForm] = useState({ status: "IN_REVIEW", note: "" });
   const [notifyForm, setNotifyForm] = useState({ channels: ["EMAIL"], subject: "", message: "" });
 
@@ -611,22 +673,27 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
       const procData = p?.procedure || p;
       setProc(procData);
 
-      const tArr = Array.isArray(t?.timeline) ? t.timeline : (Array.isArray(t) ? t : []);
+      const tArr = Array.isArray(t?.timeline) ? t.timeline : Array.isArray(t) ? t : [];
       setTimeline(tArr);
 
-      const officesArr = Array.isArray(o?.offices) ? o.offices : (Array.isArray(o) ? o : []);
-      const usersArr = Array.isArray(u?.users) ? u.users : (Array.isArray(u) ? u : []);
+      const officesArr = Array.isArray(o?.offices) ? o.offices : Array.isArray(o) ? o : [];
+      const usersArr = Array.isArray(u?.users) ? u.users : Array.isArray(u) ? u : [];
       setOffices(officesArr);
       setUsers(usersArr);
     } catch (e) {
-      toast.error(e.message);
+      toast.error(formatApiError(e, "No se pudo cargar el detalle"));
     } finally {
       setLoading(false);
     }
   }, [procedureId, canReview]);
 
-  useEffect(() => { if (open) load(); }, [open, load]);
-  useEffect(() => { if (open && proc?.id) fetchFiles(); }, [open, proc?.id, fetchFiles]);
+  useEffect(() => {
+    if (open) load();
+  }, [open, load]);
+
+  useEffect(() => {
+    if (open && proc?.id) fetchFiles();
+  }, [open, proc?.id, fetchFiles]);
 
   const doRoute = async () => {
     try {
@@ -637,32 +704,37 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
         deadline_at: routeForm.deadline_at || null,
       });
       toast.success("Trámite derivado");
-      await load(); onChanged?.();
-    } catch (e) { toast.error(e.message); }
+      await load();
+      onChanged?.();
+    } catch (e) {
+      toast.error(formatApiError(e, "No se pudo derivar"));
+    }
   };
 
   const doStatus = async () => {
     try {
       await ProcSvc.setStatus(proc.id, statusForm);
       toast.success("Estado actualizado");
-      await load(); onChanged?.();
-    } catch (e) { toast.error(e.message); }
+      await load();
+      onChanged?.();
+    } catch (e) {
+      toast.error(formatApiError(e, "No se pudo actualizar estado"));
+    }
   };
 
   const doNotify = async () => {
     try {
       await ProcSvc.notify(proc.id, notifyForm);
       toast.success("Notificación enviada");
-    } catch (e) { toast.error(e.message); }
+    } catch (e) {
+      toast.error(formatApiError(e, "No se pudo notificar"));
+    }
   };
 
-  // PDFs
+  // PDFs (polling)
   const genCover = async () => {
     const id = proc?.id ?? procedureId;
-    if (!id) {
-      toast.error("No se pudo obtener el ID del trámite");
-      return;
-    }
+    if (!id) return toast.error("No se pudo obtener el ID del trámite");
     try {
       const r = await generatePDFWithPolling(`/procedures/${id}/cover`, {}, { testId: "cover-pdf" });
       if (r?.success && r.downloadUrl) {
@@ -679,10 +751,7 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
 
   const genCargo = async () => {
     const id = proc?.id ?? procedureId;
-    if (!id) {
-      toast.error("No se pudo obtener el ID del trámite");
-      return;
-    }
+    if (!id) return toast.error("No se pudo obtener el ID del trámite");
     try {
       const r = await generatePDFWithPolling(`/procedures/${id}/cargo`, {}, { testId: "cargo-pdf" });
       if (r?.success && r.downloadUrl) {
@@ -706,69 +775,131 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
         </DialogHeader>
 
         {!canReview ? (
-          <div className="p-4 text-sm text-muted-foreground">No tienes permiso para ver el detalle del trámite.</div>
+          <div className="p-4 text-sm text-muted-foreground">
+            No tienes permiso para ver el detalle del trámite.
+          </div>
         ) : loading ? (
           <div className="flex items-center justify-center h-40">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
           </div>
         ) : proc ? (
           <div className="grid md:grid-cols-2 gap-6">
-            {/* IZQ: Resumen + Trazabilidad + Archivos */}
+            {/* IZQ */}
             <div className="space-y-4">
               <Card>
-                <CardHeader><CardTitle>Resumen</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>Resumen</CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-2 text-sm">
-                  <div><b>Solicitante:</b> {proc.applicant_name} ({proc.applicant_document})</div>
-                  <div><b>Tipo:</b> {proc.procedure_type_name}</div>
-                  <div><b>Estado:</b> <Badge>{proc.status}</Badge></div>
-                  <div><b>Oficina actual:</b> {proc.current_office_name || "-"}</div>
-                  <div><b>Responsable:</b> {proc.assignee_name || "-"}</div>
-                  <div><b>Vence:</b> {proc.deadline_at ? new Date(proc.deadline_at).toLocaleString() : "-"}</div>
+                  <div>
+                    <b>Solicitante:</b> {proc.applicant_name} ({proc.applicant_document})
+                  </div>
+                  <div>
+                    <b>Tipo:</b> {proc.procedure_type_name}
+                  </div>
+                  <div>
+                    <b>Estado:</b> <Badge>{proc.status}</Badge>
+                  </div>
+                  <div>
+                    <b>Oficina actual:</b> {proc.current_office_name || "-"}
+                  </div>
+                  <div>
+                    <b>Responsable:</b> {proc.assignee_name || "-"}
+                  </div>
+                  <div>
+                    <b>Vence:</b>{" "}
+                    {proc.deadline_at ? new Date(proc.deadline_at).toLocaleString() : "-"}
+                  </div>
                   <div className="flex gap-2 pt-2">
-                    <Button variant="outline" onClick={genCover}><FileText className="h-4 w-4 mr-2" />Carátula</Button>
-                    <Button variant="outline" onClick={genCargo}><FileText className="h-4 w-4 mr-2" />Cargo</Button>
+                    <Button variant="outline" onClick={genCover}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Carátula
+                    </Button>
+                    <Button variant="outline" onClick={genCargo}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Cargo
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader><CardTitle>Trazabilidad</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>Trazabilidad</CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-2 max-h-[320px] overflow-y-auto">
                   {(!Array.isArray(timeline) || timeline.length === 0) && (
                     <div className="text-sm text-gray-500">Sin eventos</div>
                   )}
 
-                  {Array.isArray(timeline) && timeline.map((ev, i) => (
-                    <div key={i} className="border rounded p-2">
-                      <div className="text-xs text-gray-500">{new Date(ev.at).toLocaleString()}</div>
-                      <div className="text-sm"><b>{ev.type}</b> — {ev.description}</div>
-                      {ev.actor_name && <div className="text-xs text-gray-500">Por: {ev.actor_name}</div>}
-                    </div>
-                  ))}
+                  {Array.isArray(timeline) &&
+                    timeline.map((ev, i) => (
+                      <div key={i} className="border rounded p-2">
+                        <div className="text-xs text-gray-500">
+                          {ev?.at ? new Date(ev.at).toLocaleString() : "-"}
+                        </div>
+                        <div className="text-sm">
+                          <b>{ev.type}</b> — {ev.description}
+                        </div>
+                        {ev.actor_name && (
+                          <div className="text-xs text-gray-500">Por: {ev.actor_name}</div>
+                        )}
+                      </div>
+                    ))}
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader><CardTitle>Documentos adjuntos</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>Documentos adjuntos</CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <Input type="file" accept="application/pdf,image/*" onChange={uploadFile} disabled={!canUpload} />
-                    {!canUpload && <span className="text-xs text-muted-foreground">No tienes permiso para subir archivos</span>}
+                    <Input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      onChange={uploadFile}
+                      disabled={!canUpload}
+                    />
+                    {!canUpload && (
+                      <span className="text-xs text-muted-foreground">
+                        No tienes permiso para subir archivos
+                      </span>
+                    )}
                   </div>
+
                   <div className="space-y-2 max-h-[240px] overflow-y-auto">
-                    {files.length === 0 && <div className="text-sm text-gray-500">Sin archivos</div>}
+                    {files.length === 0 && (
+                      <div className="text-sm text-gray-500">Sin archivos</div>
+                    )}
                     {files.map((f) => (
-                      <div key={f.id} className="flex items-center justify-between border rounded p-2 text-sm">
+                      <div
+                        key={f.id}
+                        className="flex items-center justify-between border rounded p-2 text-sm"
+                      >
                         <div className="flex items-center gap-2">
                           <Paperclip className="h-4 w-4" />
-                          <a href={f.url} target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                          <a
+                            href={f.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-600 underline"
+                          >
                             {f.filename || f.original_name || "archivo"}
                           </a>
                           <span className="text-xs text-gray-500">
-                            {f.doc_type ? `· ${f.doc_type}` : ""} {f.size ? `· ${Math.round(f.size / 1024)} KB` : ""}
+                            {f.doc_type ? `· ${f.doc_type}` : ""}{" "}
+                            {f.size ? `· ${Math.round(f.size / 1024)} KB` : ""}
                           </span>
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => deleteFile(f)} disabled={!canUpload} title={!canUpload ? "Sin permiso para eliminar" : ""}>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteFile(f)}
+                          disabled={!canUpload}
+                          title={!canUpload ? "Sin permiso para eliminar" : ""}
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -778,10 +909,12 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
               </Card>
             </div>
 
-            {/* DER: Acciones */}
+            {/* DER */}
             <div className="space-y-4">
               <Card>
-                <CardHeader><CardTitle>Derivar</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>Derivar</CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
                     <Label>Oficina destino</Label>
@@ -790,7 +923,9 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                       onValueChange={(v) => setRouteForm({ ...routeForm, to_office_id: v })}
                       disabled={!canResolve}
                     >
-                      <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar" />
+                      </SelectTrigger>
                       <SelectContent>
                         {(Array.isArray(offices) ? offices : []).map((o) => (
                           <SelectItem key={o.id} value={String(o.id)}>
@@ -800,6 +935,7 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                       </SelectContent>
                     </Select>
                   </div>
+
                   <div>
                     <Label>Responsable (opcional)</Label>
                     <Select
@@ -807,7 +943,9 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                       onValueChange={(v) => setRouteForm({ ...routeForm, assignee_id: v })}
                       disabled={!canResolve}
                     >
-                      <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar" />
+                      </SelectTrigger>
                       <SelectContent>
                         {(Array.isArray(users) ? users : []).map((u) => (
                           <SelectItem key={u.id} value={String(u.id)}>
@@ -817,6 +955,7 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                       </SelectContent>
                     </Select>
                   </div>
+
                   <div>
                     <Label>Vence el</Label>
                     <Input
@@ -826,6 +965,7 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                       disabled={!canResolve}
                     />
                   </div>
+
                   <div>
                     <Label>Nota</Label>
                     <Textarea
@@ -835,21 +975,35 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                       disabled={!canResolve}
                     />
                   </div>
+
                   <div className="flex justify-end">
-                    <Button onClick={doRoute} disabled={!canResolve} title={!canResolve ? "No tienes permiso para derivar" : ""}>
-                      <Send className="h-4 w-4 mr-2" />Derivar
+                    <Button
+                      onClick={doRoute}
+                      disabled={!canResolve}
+                      title={!canResolve ? "No tienes permiso para derivar" : ""}
+                    >
+                      <Send className="h-4 w-4 mr-2" />
+                      Derivar
                     </Button>
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader><CardTitle>Estado</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>Estado</CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
                     <Label>Nuevo estado</Label>
-                    <Select value={statusForm.status} onValueChange={(v) => setStatusForm({ ...statusForm, status: v })} disabled={!canResolve}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <Select
+                      value={statusForm.status}
+                      onValueChange={(v) => setStatusForm({ ...statusForm, status: v })}
+                      disabled={!canResolve}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="RECEIVED">Recibido</SelectItem>
                         <SelectItem value="IN_REVIEW">En Revisión</SelectItem>
@@ -859,6 +1013,7 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                       </SelectContent>
                     </Select>
                   </div>
+
                   <div>
                     <Label>Nota</Label>
                     <Textarea
@@ -868,36 +1023,47 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                       disabled={!canResolve}
                     />
                   </div>
+
                   <div className="flex justify-end">
-                    <Button variant="outline" onClick={doStatus} disabled={!canResolve} title={!canResolve ? "No tienes permiso para actualizar estado" : ""}>
-                      <CheckCircle className="h-4 w-4 mr-2" />Actualizar
+                    <Button
+                      variant="outline"
+                      onClick={doStatus}
+                      disabled={!canResolve}
+                      title={!canResolve ? "No tienes permiso para actualizar estado" : ""}
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Actualizar
                     </Button>
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader><CardTitle>Notificar</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>Notificar</CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex gap-3">
-                    {["EMAIL", "SMS"].map(ch => (
+                    {["EMAIL", "SMS"].map((ch) => (
                       <label key={ch} className="text-sm flex items-center gap-2 border rounded px-2 py-1">
                         <input
                           type="checkbox"
                           checked={notifyForm.channels.includes(ch)}
                           onChange={(e) =>
-                            setNotifyForm(f => ({
+                            setNotifyForm((f) => ({
                               ...f,
                               channels: e.target.checked
                                 ? [...f.channels, ch]
-                                : f.channels.filter(x => x !== ch)
-                            }))}
+                                : f.channels.filter((x) => x !== ch),
+                            }))
+                          }
                           disabled={!canResolve}
                         />
                         {ch}
                       </label>
                     ))}
                   </div>
+
                   <div>
                     <Label>Asunto</Label>
                     <Input
@@ -906,6 +1072,7 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                       disabled={!canResolve}
                     />
                   </div>
+
                   <div>
                     <Label>Mensaje</Label>
                     <Textarea
@@ -915,9 +1082,15 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                       disabled={!canResolve}
                     />
                   </div>
+
                   <div className="flex justify-end">
-                    <Button onClick={doNotify} disabled={!canResolve} title={!canResolve ? "No tienes permiso para notificar" : ""}>
-                      <Send className="h-4 w-4 mr-2" />Enviar
+                    <Button
+                      onClick={doNotify}
+                      disabled={!canResolve}
+                      title={!canResolve ? "No tienes permiso para notificar" : ""}
+                    >
+                      <Send className="h-4 w-4 mr-2" />
+                      Enviar
                     </Button>
                   </div>
                 </CardContent>
@@ -932,18 +1105,20 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
 
 /* ===================== PROCEDURES ===================== */
 const ProceduresManagement = forwardRef((props, ref) => {
-  const { api, hasPerm } = useAuth();
+  const { hasPerm } = useAuth();
   const canReview = hasPerm(PERMS["mpv.processes.review"]);
-  const canResolve = hasPerm(PERMS["mpv.processes.resolve"]);
 
   const [procedures, setProcedures] = useState([]);
   const [procedureTypes, setProcedureTypes] = useState([]);
   const [loading, setLoading] = useState(true);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailId, setDetailId] = useState(null);
+
   const searchInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
@@ -968,7 +1143,7 @@ const ProceduresManagement = forwardRef((props, ref) => {
     if (!canReview) return;
     try {
       setLoading(true);
-      const { data } = await api.get("/procedures");
+      const data = await ProcSvc.list();
       setProcedures(data?.procedures ?? data ?? []);
     } catch (error) {
       console.error("Error fetching procedures:", error);
@@ -976,16 +1151,16 @@ const ProceduresManagement = forwardRef((props, ref) => {
     } finally {
       setLoading(false);
     }
-  }, [api, canReview]);
+  }, [canReview]);
 
   const fetchProcedureTypes = useCallback(async () => {
     try {
-      const { data } = await api.get("/procedure-types");
-      setProcedureTypes(data?.procedure_types ?? data ?? []);
+      const data = await ProcedureTypes.list();
+      setProcedureTypes(data?.procedure_types ?? []);
     } catch (error) {
       console.error("Error fetching procedure types:", error);
     }
-  }, [api]);
+  }, []);
 
   useEffect(() => {
     fetchProcedures();
@@ -999,13 +1174,11 @@ const ProceduresManagement = forwardRef((props, ref) => {
     try {
       const payload = {
         ...formData,
-        procedure_type: formData.procedure_type_id
-          ? Number(formData.procedure_type_id)
-          : null,
+        procedure_type: formData.procedure_type_id ? Number(formData.procedure_type_id) : null,
       };
       delete payload.procedure_type_id;
 
-      await api.post("/procedures", payload);
+      await ProcSvc.create(payload);
 
       toast.success("Trámite creado exitosamente");
       setIsCreateModalOpen(false);
@@ -1020,7 +1193,7 @@ const ProceduresManagement = forwardRef((props, ref) => {
       });
       fetchProcedures();
     } catch (error) {
-      console.log("create error:", error.response?.data);
+      console.log("create error:", error);
       toast.error(formatApiError(error, "Error al crear trámite"));
     }
   };
@@ -1049,10 +1222,7 @@ const ProceduresManagement = forwardRef((props, ref) => {
 
   const handleDownloadPDF = async (proc) => {
     const id = proc?.id;
-    if (!id) {
-      toast.error("No se pudo obtener el ID del trámite");
-      return;
-    }
+    if (!id) return toast.error("No se pudo obtener el ID del trámite");
     try {
       const result = await generatePDFWithPolling(`/procedures/${id}/cover`, {}, { testId: "procedure-cover" });
       if (result?.success) {
@@ -1084,18 +1254,20 @@ const ProceduresManagement = forwardRef((props, ref) => {
     }
   };
 
-  const handleVerifyQR = (proc) => {
-    const url = `${BACKEND_URL}/verify?code=${encodeURIComponent(proc.tracking_code || proc.id)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
-
   const openDetail = async (p) => {
     let id = p?.id;
+
     if (!id && p?.tracking_code) {
       const d = await ProcSvc.getByCode(p.tracking_code);
-      id = d?.id || d?.procedure?.id;
+      const procData = d?.procedure || d;
+      id = procData?.id || d?.id;
     }
-    if (!id) { toast.error("No se pudo obtener el ID del trámite"); return; }
+
+    if (!id) {
+      toast.error("No se pudo obtener el ID del trámite");
+      return;
+    }
+
     setDetailId(id);
     setDetailOpen(true);
   };
@@ -1112,6 +1284,7 @@ const ProceduresManagement = forwardRef((props, ref) => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Gestión de Trámites</h2>
+
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
@@ -1119,11 +1292,13 @@ const ProceduresManagement = forwardRef((props, ref) => {
               Nuevo Trámite
             </Button>
           </DialogTrigger>
+
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Registrar Nuevo Trámite</DialogTitle>
               <DialogDescription>Complete los datos del trámite documentario</DialogDescription>
             </DialogHeader>
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <Label htmlFor="procedure_type_id">Tipo de Trámite *</Label>
@@ -1255,7 +1430,7 @@ const ProceduresManagement = forwardRef((props, ref) => {
         </Select>
       </div>
 
-      {/* Procedures List */}
+      {/* List */}
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -1270,6 +1445,7 @@ const ProceduresManagement = forwardRef((props, ref) => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                 </tr>
               </thead>
+
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredProcedures.map((procedure) => (
                   <tr key={procedure.id} className="hover:bg-gray-50">
@@ -1289,11 +1465,19 @@ const ProceduresManagement = forwardRef((props, ref) => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {procedure.created_at ? new Date(procedure.created_at).toLocaleDateString() : "-"}
                     </td>
+
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex gap-2">
-                        <Button data-testid="procedure-view" variant="ghost" size="sm" onClick={() => openDetail(procedure)} title="Ver detalle">
+                        <Button
+                          data-testid="procedure-view"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openDetail(procedure)}
+                          title="Ver detalle"
+                        >
                           <Eye className="h-4 w-4" />
                         </Button>
+
                         <Button
                           data-testid="procedure-download-pdf"
                           variant="ghost"
@@ -1303,6 +1487,7 @@ const ProceduresManagement = forwardRef((props, ref) => {
                         >
                           <Download className="h-4 w-4" />
                         </Button>
+
                         <Button
                           data-testid="procedure-generate-qr"
                           variant="ghost"
@@ -1312,20 +1497,20 @@ const ProceduresManagement = forwardRef((props, ref) => {
                         >
                           <QrCode className="h-4 w-4" />
                         </Button>
-                        {/* Verificar público opcional */}
-                        {/* <Button variant="ghost" size="sm" onClick={() => handleVerifyQR(procedure)} title="Verificar en portal">
-                          <ExternalLink className="h-4 w-4" />
-                        </Button> */}
                       </div>
                     </td>
                   </tr>
                 ))}
+
                 {filteredProcedures.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center py-8 text-gray-500">Sin resultados.</td>
+                    <td colSpan={6} className="text-center py-8 text-gray-500">
+                      Sin resultados.
+                    </td>
                   </tr>
                 )}
               </tbody>
+
             </table>
           </div>
         </CardContent>
@@ -1346,13 +1531,12 @@ const ProceduresManagement = forwardRef((props, ref) => {
 const MesaDePartesModule = () => {
   const { user, hasAny } = useAuth();
 
-  // Tabs disponibles según permisos (evalúa hasAny solo si hay user)
   const tabs = [
     { key: "dashboard", label: "Dashboard", need: [PERMS["mpv.processes.review"], PERMS["mpv.reports.view"]] },
     { key: "types", label: "Tipos de Trámite", need: [PERMS["mpv.processes.resolve"]] },
     { key: "procedures", label: "Trámites", need: [PERMS["mpv.processes.review"]] },
     { key: "reports", label: "Reportes", need: [PERMS["mpv.reports.view"]] },
-  ].filter(t => (user ? hasAny(t.need) : false));
+  ].filter((t) => (user ? hasAny(t.need) : false));
 
   const defaultTab = tabs[0]?.key || "dashboard";
   const [activeTab, setActiveTab] = useState(defaultTab);
@@ -1373,81 +1557,73 @@ const MesaDePartesModule = () => {
 
   const handleQuickQR = () => {
     const code = window.prompt("Ingrese el código de trámite para verificar:");
-    if (code) {
-      const url = `${BACKEND_URL}/verify?code=${encodeURIComponent(code)}`;
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
+    if (!code) return;
+    const url = MesaPartesPublic.verifyUrl(code);
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   if (!user) return <div>Acceso no autorizado</div>;
 
-return (
-  <div className="p-6">
-    {/* CONTENEDOR estilo "MÓDULO ACADÉMICO" */}
-    <div className="rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10">
-      <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)]">
+  return (
+    <div className="p-6">
+      <div className="rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10">
+        <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)]">
+          <div className="px-6 pt-5">
+            <h1 className="text-xl font-bold text-slate-900">Mesa de Partes Digital</h1>
+            <p className="text-sm text-slate-700">Sistema de gestión de trámites documentarios</p>
+            <div className="mt-3 h-px w-full bg-white/60" />
+          </div>
 
-        {/* HEADER */}
-        <div className="px-6 pt-5">
-          <h1 className="text-xl font-bold text-slate-900">Mesa de Partes Digital</h1>
-          <p className="text-sm text-slate-700">Sistema de gestión de trámites documentarios</p>
-          <div className="mt-3 h-px w-full bg-white/60" />
-        </div>
+          <div className="px-6 pb-6 pt-4">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+              <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
+                <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2">
+                  {tabs.map((t) => (
+                    <TabsTrigger
+                      key={t.key}
+                      value={t.key}
+                      className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                    >
+                      {t.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </div>
 
-        {/* CONTENIDO */}
-        <div className="px-6 pb-6 pt-4">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+              {tabs.some((t) => t.key === "dashboard") && (
+                <TabsContent value="dashboard">
+                  <MesaDePartesDashboardUI
+                    onNew={handleQuickNew}
+                    onSearch={handleQuickSearch}
+                    onQR={handleQuickQR}
+                    onReports={goReports}
+                  />
+                </TabsContent>
+              )}
 
-            {/* BARRA DE TABS estilo modelo Académico */}
-            <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
-              <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2">
-                {tabs.map((t) => (
-                  <TabsTrigger
-                    key={t.key}
-                    value={t.key}
-                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                  >
-                    {t.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </div>
+              {tabs.some((t) => t.key === "types") && (
+                <TabsContent value="types">
+                  <ProcedureTypesManagement />
+                </TabsContent>
+              )}
 
-            {tabs.some((t) => t.key === "dashboard") && (
-              <TabsContent value="dashboard">
-                <MesaDePartesDashboard
-                  onNew={handleQuickNew}
-                  onSearch={handleQuickSearch}
-                  onQR={handleQuickQR}
-                  onReports={goReports}
-                />
-              </TabsContent>
-            )}
+              {tabs.some((t) => t.key === "procedures") && (
+                <TabsContent value="procedures">
+                  <ProceduresManagement ref={procRef} />
+                </TabsContent>
+              )}
 
-            {tabs.some((t) => t.key === "types") && (
-              <TabsContent value="types">
-                <ProcedureTypesManagement />
-              </TabsContent>
-            )}
-
-            {tabs.some((t) => t.key === "procedures") && (
-              <TabsContent value="procedures">
-                <ProceduresManagement ref={procRef} />
-              </TabsContent>
-            )}
-
-            {tabs.some((t) => t.key === "reports") && (
-              <TabsContent value="reports">
-                <MesaPartesReports />
-              </TabsContent>
-            )}
-          </Tabs>
+              {tabs.some((t) => t.key === "reports") && (
+                <TabsContent value="reports">
+                  <MesaPartesReports />
+                </TabsContent>
+              )}
+            </Tabs>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-);
-
+  );
 };
 
 export default MesaDePartesModule;

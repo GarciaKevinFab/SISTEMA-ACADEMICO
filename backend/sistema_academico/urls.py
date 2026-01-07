@@ -9,27 +9,26 @@ def health(_):
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+
     path("api/health", health),
 
-    # módulos
-    path("api/", include("reports.urls")),
-    path("api/research/", include("research.urls")),
-    path("api/", include("security_mfa.urls")),
-
-    path("api/", include("users.urls")),
+    # 🔥 primero rutas específicas con prefijo propio
+    path("api/catalogs/", include("catalogs.urls")),
     path("api/acl/", include("acl.urls")),
-    path("api/", include("catalogs.urls")),
+    path("api/finance/", include("finance.urls")),
+    path("api/minedu/", include("minedu.urls")),
+    path("api/research/", include("research.urls")),
+    path("api/audit", include("audit.urls")),
+
+    # luego lo genérico api/
+    path("api/", include("reports.urls")),
+    path("api/", include("security_mfa.urls")),
+    path("api/", include("users.urls")),
     path("api/", include("academic.urls")),
     path("api/", include("admission.urls")),
     path("api/", include("mesa_partes.urls")),
-    path("api/finance/", include("finance.urls")),
-    path("api/minedu/", include("minedu.urls")),
     path("api/", include("notifications.urls")),
     path("api/", include("portal.urls")),
 
-    # ✅ audit como módulo
-    path("api/audit", include("audit.urls")),
-
-    # browsable api login
     path("api/", include("rest_framework.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

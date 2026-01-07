@@ -1,5 +1,7 @@
+# backend/academic/models.py
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class Career(models.Model):
@@ -22,7 +24,6 @@ class Plan(models.Model):
     career = models.ForeignKey(Career, on_delete=models.CASCADE, related_name='plans')
     name = models.CharField(max_length=120)
 
-    # ✅ tu frontend usa start_year, semesters, description
     start_year = models.PositiveSmallIntegerField(default=2025)
     semesters = models.PositiveSmallIntegerField(default=10)
     description = models.TextField(blank=True, default="")
@@ -41,7 +42,6 @@ class PlanCourse(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='in_plans')
     semester = models.PositiveSmallIntegerField(default=1)
 
-    # ✅ tu frontend manda weekly_hours y type por curso del plan
     weekly_hours = models.PositiveSmallIntegerField(default=3)
     type = models.CharField(max_length=15, choices=TYPE_CHOICES, default="MANDATORY")
 
@@ -52,7 +52,6 @@ class PlanCourse(models.Model):
         return f"{self.plan.name}: {self.course.code} (S{self.semester})"
 
 
-# ✅ PRERREQS por PlanCourse -> PlanCourse (calza con tu UI)
 class CoursePrereq(models.Model):
     plan_course = models.ForeignKey(PlanCourse, on_delete=models.CASCADE, related_name='prereqs')
     prerequisite = models.ForeignKey(PlanCourse, on_delete=models.CASCADE, related_name='required_for')
@@ -79,8 +78,8 @@ class Teacher(models.Model):
 
     def __str__(self):
         if self.user:
-            full = (self.user.get_full_name() or "").strip()
-            return full or self.user.username
+            full = (self.user.get_full_name() or "").strip() if hasattr(self.user, "get_full_name") else ""
+            return full or getattr(self.user, "full_name", "") or self.user.username
         return f"Teacher #{self.id}"
 
 
@@ -90,7 +89,6 @@ class Section(models.Model):
     classroom = models.ForeignKey(Classroom, on_delete=models.SET_NULL, null=True, blank=True)
     label = models.CharField(max_length=20, default='A')
 
-    # ✅ tu frontend usa period y capacity
     period = models.CharField(max_length=20, default="2025-I")
     capacity = models.PositiveSmallIntegerField(default=30)
 
@@ -106,7 +104,7 @@ class SectionScheduleSlot(models.Model):
 
 
 class AcademicPeriod(models.Model):
-    code = models.CharField(max_length=20, unique=True)  # p.e. 2025-I
+    code = models.CharField(max_length=20, unique=True)
     start = models.DateField()
     end   = models.DateField()
 
@@ -118,12 +116,12 @@ class Syllabus(models.Model):
 
 class EvaluationConfig(models.Model):
     section = models.OneToOneField(Section, on_delete=models.CASCADE, related_name='evaluation')
-    config = models.JSONField(default=list)  # [{code,label,weight}, ...]
+    config = models.JSONField(default=list)
 
 
 class AttendanceSession(models.Model):
     section = models.ForeignKey(Section, on_delete=models.CASCADE, related_name='attendance_sessions')
-    date = models.DateField(auto_now_add=True)
+    date = models.DateField(default=timezone.now)  # ✅ ahora aceptará fecha via backend
     closed = models.BooleanField(default=False)
 
 
@@ -131,6 +129,14 @@ class AttendanceRow(models.Model):
     session = models.ForeignKey(AttendanceSession, on_delete=models.CASCADE, related_name='rows')
     student_id = models.IntegerField()
     status = models.CharField(max_length=10)
+
+
+class SectionGrades(models.Model):
+    section = models.OneToOneField(Section, on_delete=models.CASCADE, related_name="grades_bundle")
+    grades = models.JSONField(default=dict)  # {student_id:{PARCIAL_1:..., ...}}
+    submitted = models.BooleanField(default=False)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
 
 class AcademicProcess(models.Model):

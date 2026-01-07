@@ -1,5 +1,5 @@
 // src/components/SideNav.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -19,10 +19,10 @@ import {
   Menu,
   X,
 } from "lucide-react";
-import { PERMS } from "../auth/permissions";
+import { PERMS, PERM_ALIASES } from "../auth/permissions";
 
 const SideNav = () => {
-  const { user, roles = [], logout, hasAny, permissions = [] } = useAuth();
+  const { user, roles = [], logout, permissions = [] } = useAuth();
   const location = useLocation();
 
   // Estados para el control de visibilidad
@@ -40,91 +40,196 @@ const SideNav = () => {
       ? location.pathname === "/dashboard"
       : location.pathname.startsWith(path);
 
-  const menuGroups = [
-    {
-      group: "General",
-      items: [
-        {
-          id: "dashboard",
-          title: "Dashboard",
-          path: "/dashboard",
-          icon: LayoutDashboard,
-          show: !!user,
-        },
-      ],
-    },
-    {
-      group: "Gestión y Control",
-      items: [
-        {
-          id: "security",
-          title: "Seguridad",
-          path: "/dashboard/security",
-          icon: ShieldCheck,
-          show: true,
-        },
-        {
-          id: "admin",
-          title: "Administración",
-          path: "/dashboard/admin",
-          icon: Settings,
-          show: true,
-        },
-      ],
-    },
-    {
-      group: "Académico",
-      items: [
-        {
-          id: "academic",
-          title: "Académico",
-          path: "/dashboard/academic",
-          icon: BookOpenCheck,
-          show: true,
-        },
-        {
-          id: "admission",
-          title: "Admisión",
-          path: "/dashboard/admission",
-          icon: UserPlus,
-          show: true,
-        },
-        {
-          id: "research",
-          title: "Investigación",
-          path: "/dashboard/research",
-          icon: Microscope,
-          show: true,
-        },
-      ],
-    },
-    {
-      group: "Operaciones",
-      items: [
-        {
-          id: "mesa-partes",
-          title: "Mesa de Partes",
-          path: "/dashboard/mesa-partes",
-          icon: ClipboardList,
-          show: true,
-        },
-        {
-          id: "finance",
-          title: "Finanzas",
-          path: "/dashboard/finance",
-          icon: Wallet,
-          show: true,
-        },
-        {
-          id: "minedu",
-          title: "Sistemas MINEDU",
-          path: "/dashboard/minedu",
-          icon: HardDrive,
-          show: true,
-        },
-      ],
-    },
-  ];
+  // ✅ Permisos efectivos (incluye aliases)
+  const grantedPerms = useMemo(() => {
+    const set = new Set((permissions || []).filter(Boolean));
+    // si tengo X, también tengo su alias/implicado
+    for (const p of set) {
+      const implied = PERM_ALIASES?.[p];
+      if (implied) set.add(implied);
+    }
+    return set;
+  }, [permissions]);
+
+  const canAny = (...req) => {
+    // si no está logueado, no ve nada salvo que explícitamente lo permitas
+    if (!user) return false;
+    if (!req || req.length === 0) return true;
+    return req.some((p) => grantedPerms.has(p));
+  };
+
+  /**
+   * ✅ Política de menú (decidida y clara):
+   * - Dashboard: cualquier usuario logueado.
+   * - Seguridad: admin/auditoría/sesiones/políticas.
+   * - Administración: gestión de accesos, catálogos, auditoría.
+   * - Académico: cualquier permiso académico relevante.
+   * - Admisión: cualquier permiso de admisión.
+   * - Investigación: cualquier permiso research.
+   * - Mesa de Partes: cualquier permiso mpv (o legacy desk.* si lo usan).
+   * - Finanzas: cualquier permiso fin.* o dashboard fin.
+   * - MINEDU: cualquier permiso minedu.*
+   */
+
+  const menuGroups = useMemo(
+    () => [
+      {
+        group: "General",
+        items: [
+          {
+            id: "dashboard",
+            title: "Dashboard",
+            path: "/dashboard",
+            icon: LayoutDashboard,
+            show: !!user,
+          },
+        ],
+      },
+
+      {
+        group: "Gestión y Control",
+        items: [
+          {
+            id: "security",
+            title: "Seguridad",
+            path: "/dashboard/security",
+            icon: ShieldCheck,
+            // ✅ Seguridad
+            anyPerms: [
+              PERMS["security.policies.manage"],
+              PERMS["security.sessions.inspect"],
+              PERMS["admin.audit.view"],
+              PERMS["admin.audit.export"],
+            ],
+            show: canAny(
+              PERMS["security.policies.manage"],
+              PERMS["security.sessions.inspect"],
+              PERMS["admin.audit.view"],
+              PERMS["admin.audit.export"]
+            ),
+          },
+          {
+            id: "admin",
+            title: "Administración",
+            path: "/dashboard/admin",
+            icon: Settings,
+            // ✅ Administración / Accesos / Catálogos
+            anyPerms: [
+              PERMS["admin.access.manage"],
+              PERMS["admin.catalogs.view"],
+              PERMS["admin.catalogs.manage"],
+              PERMS["admin.audit.view"],
+            ],
+            show: canAny(
+              PERMS["admin.access.manage"],
+              PERMS["admin.catalogs.view"],
+              PERMS["admin.catalogs.manage"],
+              PERMS["admin.audit.view"]
+            ),
+          },
+        ],
+      },
+
+      {
+        group: "Académico",
+        items: [
+          {
+            id: "academic",
+            title: "Académico",
+            path: "/dashboard/academic",
+            icon: BookOpenCheck,
+            show: canAny(
+              // base / compat
+              PERMS["academic.view"],
+              PERMS["academic.sections.view"],
+              PERMS["academic.plans.view"],
+              PERMS["academic.enrollment.view"],
+              PERMS["academic.reports.view"],
+              PERMS["academic.grades.edit"],
+              PERMS["academic.attendance.view"]
+            ),
+          },
+          {
+            id: "admission",
+            title: "Admisión",
+            path: "/dashboard/admission",
+            icon: UserPlus,
+            show: canAny(
+              PERMS["admission.dashboard.view"],
+              PERMS["admission.calls.view"],
+              PERMS["admission.calls.manage"],
+              PERMS["admission.applicants.manage"],
+              PERMS["admission.documents.review"],
+              PERMS["admission.reports.view"]
+            ),
+          },
+          {
+            id: "research",
+            title: "Investigación",
+            path: "/dashboard/research",
+            icon: Microscope,
+            show: canAny(
+              PERMS["research.calls.view"],
+              PERMS["research.calls.manage"],
+              PERMS["research.projects.view"],
+              PERMS["research.projects.edit"],
+              PERMS["research.tabs.reports"]
+            ),
+          },
+        ],
+      },
+
+      {
+        group: "Operaciones",
+        items: [
+          {
+            id: "mesa-partes",
+            title: "Mesa de Partes",
+            path: "/dashboard/mesa-partes",
+            icon: ClipboardList,
+            show: canAny(
+              PERMS["mpv.processes.review"],
+              PERMS["mpv.processes.resolve"],
+              PERMS["mpv.files.upload"],
+              PERMS["mpv.reports.view"],
+              // legacy por si el backend aún devuelve desk.*
+              PERMS["desk.intake.manage"],
+              PERMS["desk.reports.view"],
+              PERMS["desk.track.view"]
+            ),
+          },
+          {
+            id: "finance",
+            title: "Finanzas",
+            path: "/dashboard/finance",
+            icon: Wallet,
+            show: canAny(
+              PERMS["finance.dashboard.view"],
+              PERMS["fin.cashbanks.view"],
+              PERMS["fin.student.accounts.view"],
+              PERMS["fin.payments.receive"],
+              PERMS["fin.reports.view"],
+              PERMS["fin.concepts.manage"],
+              PERMS["fin.reconciliation.view"]
+            ),
+          },
+          {
+            id: "minedu",
+            title: "Sistemas MINEDU",
+            path: "/dashboard/minedu",
+            icon: HardDrive,
+            show: canAny(
+              PERMS["minedu.integration.view"],
+              PERMS["minedu.integration.export"],
+              PERMS["minedu.integration.validate"],
+              PERMS["minedu.integrations.run"]
+            ),
+          },
+        ],
+      },
+    ],
+    [user, grantedPerms] // grantedPerms cambia cuando cambian permisos
+  );
 
   return (
     <>

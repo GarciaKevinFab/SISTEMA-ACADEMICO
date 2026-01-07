@@ -1,151 +1,257 @@
 // src/services/mesaPartes.service.js
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import axios from "axios";
+import api from "../lib/api";
+import { API_BASE } from "../utils/config";
 
-// Usa el access de tu flujo actual (y cae a "token" si existiera)
-const getToken = () =>
-    localStorage.getItem("access") ||
-    localStorage.getItem("token") ||
-    "";
+/* -------------------------------------------------------
+   Helpers (estilo academic.service.js)
+------------------------------------------------------- */
+const pickFirstArray = (data, keys = []) => {
+    if (Array.isArray(data)) return data;
+    for (const k of keys) {
+        if (Array.isArray(data?.[k])) return data[k];
+    }
+    return [];
+};
 
-const authHeaders = () => ({
-    Authorization: `Bearer ${getToken()}`,
+const trimSlash = (s = "") => String(s).replace(/\/+$/, "");
+
+// Cliente público (sin auth / sin refresh)
+const publicApi = axios.create({
+    baseURL: API_BASE,
 });
 
-const jsonHeaders = { "Content-Type": "application/json" };
-
-// Normaliza la URL para evitar dobles barras, pero sin forzar slash final
-function joinApi(url) {
-    return `${API}${url}`.replace(/([^:]\/)\/+/g, "$1");
-}
-
-async function http(method, url, body, { isJSON = true, isPublic = false } = {}) {
-    const headers = isJSON
-        ? { ...(isPublic ? {} : authHeaders()), ...jsonHeaders }
-        : (isPublic ? {} : authHeaders());
-
-    const resp = await fetch(joinApi(url), {
-        method,
-        headers,
-        body: body ? (isJSON ? JSON.stringify(body) : body) : undefined,
-    });
-
-    if (!resp.ok) {
-        let msg = "Error en la solicitud";
-        try {
-            const e = await resp.json();
-            msg = e.detail || e.message || msg;
-        } catch { }
+const asJson = async (client, method, url, payload, config = {}) => {
+    try {
+        const res = await client.request({
+            method,
+            url,
+            data: payload,
+            ...config,
+        });
+        return res.data;
+    } catch (e) {
+        const data = e?.response?.data;
+        const msg =
+            data?.detail ||
+            data?.message ||
+            (data && typeof data === "object"
+                ? Object.entries(data)
+                    .map(
+                        ([k, v]) =>
+                            `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`
+                    )
+                    .join(" | ")
+                : null) ||
+            (typeof data === "string" ? data : null) ||
+            e?.message ||
+            "Error en la solicitud";
         throw new Error(msg);
     }
+};
 
-    const ct = resp.headers.get("content-type") || "";
-    if (ct.includes("application/json")) return resp.json();
-    return resp; // blobs/stream
-}
+// Cuando un endpoint devuelve a veces JSON y a veces blob (xlsx/pdf)
+const asBlobOrJson = async (client, method, url, payload = null, config = {}) => {
+    try {
+        const res = await client.request({
+            method,
+            url,
+            data: payload,
+            responseType: "blob",
+            ...config,
+        });
 
-/* ===== Catálogos ===== */
+        const ct = (res.headers?.["content-type"] || "").toLowerCase();
+
+        if (ct.includes("application/json")) {
+            const text = await res.data.text();
+            return JSON.parse(text);
+        }
+
+        return res; // axios response con blob
+    } catch (e) {
+        const data = e?.response?.data;
+
+        // Si el error vino como blob, intentamos leerlo
+        if (data instanceof Blob) {
+            try {
+                const text = await data.text();
+                const parsed = JSON.parse(text);
+                throw new Error(parsed?.detail || parsed?.message || text || "Error en la solicitud");
+            } catch (_) { }
+        }
+
+        const msg =
+            e?.response?.data?.detail ||
+            e?.response?.data?.message ||
+            (e?.response?.data && typeof e.response.data === "object"
+                ? Object.entries(e.response.data)
+                    .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
+                    .join(" | ")
+                : null) ||
+            (typeof e?.response?.data === "string" ? e.response.data : null) ||
+            e?.message ||
+            "Error en la solicitud";
+
+        throw new Error(msg);
+    }
+};
+
+/* -------------------------------------------------------
+   Dashboard
+------------------------------------------------------- */
+export const MesaPartesDashboard = {
+    stats: async () => asJson(api, "GET", "/dashboard/stats/"),
+};
+
+/* -------------------------------------------------------
+   Catálogos
+------------------------------------------------------- */
 export const Catalog = {
     offices: async () => {
-        const d = await http("GET", "/offices");
-        return Array.isArray(d?.offices) ? d.offices : (Array.isArray(d) ? d : []);
+        const data = await asJson(api, "GET", "/offices");
+        const arr = pickFirstArray(data, ["offices", "items", "results"]);
+        return { offices: arr };
     },
-    users: async (params) => {
-        const q = new URLSearchParams(params || {}).toString();
-        const d = await http("GET", `/users${q ? `?${q}` : ""}`);
-        return Array.isArray(d?.users) ? d.users : (Array.isArray(d) ? d : []);
+
+    users: async (params = {}) => {
+        const data = await asJson(api, "GET", "/users", null, { params });
+        const arr = pickFirstArray(data, ["users", "items", "results"]);
+        return { users: arr };
     },
 };
 
-/* ===== Tipos de trámite ===== */
+/* -------------------------------------------------------
+   Tipos de trámite
+------------------------------------------------------- */
 export const ProcedureTypes = {
-    list: () => http("GET", "/procedure-types"),
-    create: (payload) => http("POST", "/procedure-types", payload),
-    update: (id, payload) => http("PUT", `/procedure-types/${id}`, payload),
-    toggle: (id, is_active) => http("PATCH", `/procedure-types/${id}`, { is_active }),
+    list: async (params = {}) => {
+        const data = await asJson(api, "GET", "/procedure-types", null, { params });
+        const arr = pickFirstArray(data, ["procedure_types", "types", "items", "results"]);
+        return {
+            procedure_types: arr.length
+                ? arr
+                : pickFirstArray(data, ["procedure_types"]) ||
+                (Array.isArray(data) ? data : []),
+        };
+    },
+
+    create: async (payload) => asJson(api, "POST", "/procedure-types", payload),
+
+    patch: async (id, payload) => asJson(api, "PATCH", `/procedure-types/${id}`, payload),
+
+    update: async (id, payload) => asJson(api, "PUT", `/procedure-types/${id}`, payload),
+
+    toggle: async (id, is_active) => asJson(api, "PATCH", `/procedure-types/${id}`, { is_active }),
 };
 
-/* ===== Trámites ===== */
+/* -------------------------------------------------------
+   Trámites
+------------------------------------------------------- */
 export const Procedures = {
-    list: (params) => {
-        const q = new URLSearchParams(params || {}).toString();
-        return http("GET", `/procedures${q ? `?${q}` : ""}`);
-    },
-    create: (payload) => http("POST", "/procedures", payload),
-    get: (id) => http("GET", `/procedures/${id}`),
-    getByCode: (code) => http("GET", `/procedures/code/${encodeURIComponent(code)}`),
+    list: async (params = {}) => asJson(api, "GET", "/procedures", null, { params }),
 
-    // Derivación / asignación
-    route: (id, { to_office_id, assignee_id, note, deadline_at }) =>
-        http("POST", `/procedures/${id}/route`, { to_office_id, assignee_id, note, deadline_at }),
+    create: async (payload) => asJson(api, "POST", "/procedures", payload),
 
-    // Cambio de estado
-    setStatus: (id, { status, note }) =>
-        http("POST", `/procedures/${id}/status`, { status, note }),
+    get: async (id) => asJson(api, "GET", `/procedures/${id}`),
 
-    // Trazabilidad / notas
-    timeline: (id) => http("GET", `/procedures/${id}/timeline`),
-    addNote: (id, { note }) => http("POST", `/procedures/${id}/notes`, { note }),
+    getByCode: async (code) =>
+        asJson(api, "GET", `/procedures/code/${encodeURIComponent(code)}`),
 
-    // PDFs (coinciden con tus @action: cover y cargo)
-    coverPDF: (id) => http("POST", `/procedures/${id}/cover`, {}),
-    cargoPDF: (id) => http("POST", `/procedures/${id}/cargo`, {}),
+    route: async (id, { to_office_id, assignee_id, note, deadline_at }) =>
+        asJson(api, "POST", `/procedures/${id}/route`, {
+            to_office_id,
+            assignee_id,
+            note,
+            deadline_at,
+        }),
+
+    setStatus: async (id, { status, note }) =>
+        asJson(api, "POST", `/procedures/${id}/status`, { status, note }),
+
+    timeline: async (id) => asJson(api, "GET", `/procedures/${id}/timeline`),
+
+    addNote: async (id, { note }) => asJson(api, "POST", `/procedures/${id}/notes`, { note }),
+
+    notify: async (id, payload) => asJson(api, "POST", `/procedures/${id}/notify`, payload),
+
+    coverPDF: async (id) => asJson(api, "POST", `/procedures/${id}/cover`, {}),
+    cargoPDF: async (id) => asJson(api, "POST", `/procedures/${id}/cargo`, {}),
 };
 
-/* ===== Público ===== */
+/* -------------------------------------------------------
+   Público
+------------------------------------------------------- */
 export const PublicProcedures = {
-    track: (code) =>
-        http(
-            "GET",
-            `/public/procedures/track?code=${encodeURIComponent(code)}`,
-            null,
-            { isJSON: true, isPublic: true }
-        ),
+    track: async (code) =>
+        asJson(publicApi, "GET", `/public/procedures/track`, null, { params: { code } }),
 };
 
-/* ===== Archivos de trámite ===== */
+/* -------------------------------------------------------
+   Archivos de trámite
+------------------------------------------------------- */
 export const ProcedureFiles = {
-    list: (id) => http("GET", `/procedures/${id}/files`),
-    upload: (id, file, meta = {}) => {
+    list: async (procedureId) => {
+        const data = await asJson(api, "GET", `/procedures/${procedureId}/files`);
+        const arr = pickFirstArray(data, ["files", "items", "results"]);
+        return { files: arr };
+    },
+
+    upload: async (procedureId, file, meta = {}) => {
         const fd = new FormData();
         fd.append("file", file);
         if (meta.doc_type) fd.append("doc_type", meta.doc_type);
         if (meta.description) fd.append("description", meta.description);
-        return http("POST", `/procedures/${id}/files`, fd, { isJSON: false });
+
+        return asJson(api, "POST", `/procedures/${procedureId}/files`, fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
     },
-    remove: (id, fileId) => http("DELETE", `/procedures/${id}/files/${fileId}`),
+
+    remove: async (procedureId, fileId) =>
+        asJson(api, "DELETE", `/procedures/${procedureId}/files/${fileId}`),
 };
 
-/* ===== Recepción pública (ciudadano) ===== */
+/* -------------------------------------------------------
+   Recepción pública (ciudadano)
+------------------------------------------------------- */
 export const PublicIntake = {
-    create: (payload) =>
-        http("POST", `/public/procedures`, payload, { isJSON: true, isPublic: true }),
-    uploadFile: (trackingCode, file, meta = {}) => {
+    create: async (payload) => asJson(publicApi, "POST", `/public/procedures`, payload),
+
+    uploadFile: async (trackingCode, file, meta = {}) => {
         const fd = new FormData();
         fd.append("file", file);
         if (meta.doc_type) fd.append("doc_type", meta.doc_type);
         if (meta.description) fd.append("description", meta.description);
-        return http(
+
+        return asJson(
+            publicApi,
             "POST",
             `/public/procedures/${encodeURIComponent(trackingCode)}/files`,
             fd,
-            { isJSON: false, isPublic: true }
+            { headers: { "Content-Type": "multipart/form-data" } }
         );
     },
 };
 
-/* ===== Reportes (SLA/volúmenes) ===== */
+/* -------------------------------------------------------
+   Reportes (SLA/volúmenes)
+------------------------------------------------------- */
 export const ProcedureReports = {
-    summary: (params = {}) => {
-        const q = new URLSearchParams(params).toString();
-        return http("GET", `/procedures/reports/summary${q ? `?${q}` : ""}`);
-    },
-    exportSLA: (params = {}) => {
-        const q = new URLSearchParams(params).toString();
-        return http("GET", `/procedures/reports/sla.xlsx${q ? `?${q}` : ""}`);
-    },
-    exportVolume: (params = {}) => {
-        const q = new URLSearchParams(params).toString();
-        return http("GET", `/procedures/reports/volume.xlsx${q ? `?${q}` : ""}`);
-    },
+    summary: async (params = {}) =>
+        asJson(api, "GET", `/procedures/reports/summary`, null, { params }),
+
+    exportSLA: async (params = {}) =>
+        asBlobOrJson(api, "GET", `/procedures/reports/sla.xlsx`, null, { params }),
+
+    exportVolume: async (params = {}) =>
+        asBlobOrJson(api, "GET", `/procedures/reports/volume.xlsx`, null, { params }),
+};
+
+/* -------------------------------------------------------
+   URLs públicas (para window.open, links, etc.)
+------------------------------------------------------- */
+export const MesaPartesPublic = {
+    baseURL: trimSlash(API_BASE),
+    verifyUrl: (code) => `${trimSlash(API_BASE)}/verify?code=${encodeURIComponent(code)}`,
 };

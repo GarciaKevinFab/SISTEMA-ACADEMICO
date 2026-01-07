@@ -45,6 +45,9 @@ import AuditTab from "./AuditTab";
 import { useAuth } from "../../context/AuthContext";
 import { PERMS } from "../../auth/permissions";
 
+// ✅ NUEVO: módulo Catálogos
+import ConfigCatalogsModule from "./ConfigCatalogsModule";
+
 /* ---------- Animations ---------- */
 const fade = {
   initial: { opacity: 0, y: 8 },
@@ -164,9 +167,15 @@ const roleBadgeClasses = (role) => {
 /* ======================== ROOT ======================== */
 const AccessControlModule = () => {
   const { hasPerm } = useAuth();
+
   const canManage = hasPerm(PERMS["admin.access.manage"]);
   const canAudit = hasPerm(PERMS["admin.audit.view"]);
-  const defaultTab = canManage ? "users" : canAudit ? "audit" : "users";
+
+  // ✅ NUEVO: permiso de catálogos (si no existe, cae a manage)
+  const catalogsPerm = PERMS["admin.catalogs.view"] ?? PERMS["admin.access.manage"];
+  const canCatalogs = hasPerm(catalogsPerm);
+
+  const defaultTab = canManage ? "users" : canCatalogs ? "catalogs" : canAudit ? "audit" : "users";
 
   return (
     <div className="p-6 space-y-6">
@@ -214,6 +223,17 @@ const AccessControlModule = () => {
               <KeyRound className="h-4 w-4" /> Permisos
             </TabsTrigger>
           )}
+
+          {/* ✅ NUEVO: Catálogos */}
+          {canCatalogs && (
+            <TabsTrigger
+              value="catalogs"
+              className="gap-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-800 data-[state=active]:to-slate-600 data-[state=active]:text-white"
+            >
+              <Database className="h-4 w-4" /> Catálogos
+            </TabsTrigger>
+          )}
+
           {canAudit && (
             <TabsTrigger value="audit" className="rounded-xl">
               Auditoría
@@ -242,6 +262,16 @@ const AccessControlModule = () => {
             </motion.div>
           </TabsContent>
         )}
+
+        {/* ✅ NUEVO CONTENT: Catálogos */}
+        {canCatalogs && (
+          <TabsContent value="catalogs" asChild>
+            <motion.div {...fade}>
+              <ConfigCatalogsModule />
+            </motion.div>
+          </TabsContent>
+        )}
+
         {canAudit && (
           <TabsContent value="audit" asChild>
             <motion.div {...fade}>
@@ -596,10 +626,18 @@ const UsersTab = () => {
                   </div>
 
                   <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setOpenCreate(false)} className="rounded-xl">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setOpenCreate(false)}
+                      className="rounded-xl"
+                    >
                       Cancelar
                     </Button>
-                    <Button type="submit" className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 gap-2">
+                    <Button
+                      type="submit"
+                      className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 gap-2"
+                    >
                       <Check className="h-4 w-4" /> Crear
                     </Button>
                   </div>
@@ -990,7 +1028,6 @@ const RolesTab = () => {
                       className="border-t border-white/40 dark:border-white/10 bg-white/65 hover:bg-violet-50/60 transition"
                     >
                       <td className="p-3 font-medium text-gray-900">
-                        {/* AQUI SE TRADUCE EL ROL */}
                         <div className="text-sm font-semibold">{t(r.name)}</div>
                         <div className="text-[10px] text-gray-400 font-mono">{r.name}</div>
                       </td>
@@ -1097,7 +1134,6 @@ const PermissionsTab = () => {
                   setSelectedPerms(new Set(roleCodes));
                 }}
               >
-                {/* TRADUCCIÓN BOTONES */}
                 {t(r.name)}
               </Button>
             );
@@ -1135,7 +1171,6 @@ const PermissionsTab = () => {
                       aria-label={`Permiso ${code}`}
                     />
                     <div className="flex flex-col leading-snug">
-                      {/* TRADUCCIÓN CHECKBOXES */}
                       <span className="text-sm font-medium">{t(code)}</span>
                       <span className="text-[10px] text-gray-400 font-mono">{code}</span>
                     </div>
@@ -1157,4 +1192,5 @@ const PermissionsTab = () => {
     </Card>
   );
 };
+
 export default AccessControlModule;

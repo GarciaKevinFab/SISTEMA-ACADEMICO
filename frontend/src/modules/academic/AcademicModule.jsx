@@ -1,41 +1,50 @@
-import './styles.css'; // Asegúrate de que la ruta sea la correcta
-import { pageStyle, buttonStyle, buttonHoverStyle, cardStyle, cardHeaderStyle, sectionHeaderStyle } from './styles';
 import React, { useEffect, useState, useCallback, useMemo } from "react";
+import "./styles.css";
+
+import { pageStyle } from "./styles";
 import { useAuth } from "@/context/AuthContext";
 import { PERMS } from "@/auth/permissions";
 import IfPerm from "@/components/auth/IfPerm";
-import "./styles.css";
-import {
-  Tabs, TabsContent, TabsList, TabsTrigger,
-} from "@/components/ui/tabs";
-import {
-  Card, CardContent, CardDescription, CardHeader, CardTitle,
-} from "@/components/ui/card";
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 import { toast } from "sonner";
 import {
-  Plus, Save, Calendar, Users, Clock, FileText, CheckCircle,
-  Search as SearchIcon, BookOpen, GraduationCap, BarChart3, Inbox, LayoutGrid, ClipboardList, LibraryBig,
+  Plus,
+  Save,
+  Calendar,
+  Users,
+  Clock,
+  FileText,
+  CheckCircle,
+  Search as SearchIcon,
+  BookOpen,
+  GraduationCap,
+  BarChart3,
+  Inbox,
+  LayoutGrid,
+  ClipboardList,
+  LibraryBig,
 } from "lucide-react";
 
 // Utils
 import { generatePDFWithPolling, downloadFile } from "@/utils/pdfQrPolling";
 
-// Servicios
+// Servicios (académico)
 import { Careers, Plans, Sections, Kardex, Processes } from "@/services/academic.service";
+
+// Catálogos
+import { Teachers as CatalogTeachers, Classrooms as CatalogClassrooms } from "@/services/catalogs.service";
 
 // Reutilizados
 import EnrollmentComponent from "./EnrollmentComponent";
@@ -44,8 +53,7 @@ import SectionSyllabusEvaluation from "./SectionSyllabusEvaluation";
 import AcademicProcessesInbox from "./AcademicProcessesInbox";
 import AcademicReportsPage from "./AcademicReports";
 
-/* ----------------------------- ESTILOS MODIFICADOS ----------------------------- */
-/* Encabezado de sección */
+/* ----------------------------- UI HELPERS ----------------------------- */
 const sectionHeader = ({ title, description, Icon }) => (
   <div className="flex items-start justify-between">
     <div>
@@ -53,14 +61,10 @@ const sectionHeader = ({ title, description, Icon }) => (
         {Icon ? <Icon className="h-5 w-5 text-[#2196F3]" /> : null}
         <CardTitle className="text-[#2196F3]">{title}</CardTitle>
       </div>
-      {description ? (
-        <CardDescription className="mt-1 text-[#1976D2]">{description}</CardDescription>
-      ) : null}
+      {description ? <CardDescription className="mt-1 text-[#1976D2]">{description}</CardDescription> : null}
     </div>
   </div>
 );
-
-
 
 const REQS = {
   plans: [PERMS["academic.plans.view"], PERMS["academic.plans.edit"]],
@@ -74,7 +78,7 @@ const REQS = {
   processes: [PERMS["academic.reports.view"]],
 };
 
-//* ------------- ACCIONES RÁPIDAS (respetan permisos) ------------- */
+/* ----------------------------- ACCIONES RÁPIDAS ----------------------------- */
 function AcademicQuickActions({ go }) {
   const { hasAny } = useAuth();
 
@@ -88,18 +92,13 @@ function AcademicQuickActions({ go }) {
     { key: "reports", label: "Reportes", Icon: BarChart3, need: REQS.reports },
     { key: "proc-inbox", label: "Bandeja procesos", Icon: Inbox, need: REQS.procInbox },
     { key: "processes", label: "Procesos", Icon: Clock, need: REQS.processes },
-  ].filter(a => hasAny(a.need));
+  ].filter((a) => hasAny(a.need));
 
-  const MAX_QUICK = 9;
-  const primary = actions.slice(0, MAX_QUICK);
-  const more = actions.slice(MAX_QUICK);
-
- return (
+  return (
     <Card className="border-0 shadow-none">
-      <CardHeader className="px-0 pt-0 bg-gray-200"> {/* Encabezado gris */}
-      </CardHeader>
+      <CardHeader className="px-0 pt-0 bg-gray-200" />
       <CardContent className="px-0">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4"> {/* Ajustado el padding y espacio entre los botones */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4">
           {actions.map(({ key, label, Icon }) => (
             <TooltipProvider key={key} delayDuration={100}>
               <Tooltip>
@@ -107,7 +106,7 @@ function AcademicQuickActions({ go }) {
                   <Button
                     variant="outline"
                     className="group h-16 rounded-2xl border bg-white hover:bg-gray-200 transition-all duration-200 flex flex-col items-center justify-center gap-2 shadow-sm hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                    style={{ color: "black" }} // Fondo blanco con letras negras
+                    style={{ color: "black" }}
                     onClick={() => go(key)}
                   >
                     <Icon className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />
@@ -124,20 +123,22 @@ function AcademicQuickActions({ go }) {
   );
 }
 
-/* ------------- DASHBOARD PEQUEÑO ------------- */
+/* ----------------------------- DASHBOARD PEQUEÑO ----------------------------- */
 function SmallAcademicDashboard() {
   const [stats, setStats] = useState({ sections: 0, teachers: 0, students: 0, openProcesses: 0 });
-  useEffect(() => { setStats((s) => s); }, []);
+  useEffect(() => {
+    setStats((s) => s);
+  }, []);
 
   const items = [
-    { label: "Secciones", value: stats.sections, Icon: Calendar, bgColor: 'bg-blue-50', iconColor: 'text-blue-600' },
-    { label: "Docentes", value: stats.teachers, Icon: Users, bgColor: 'bg-green-50', iconColor: 'text-green-600' },
-    { label: "Estudiantes", value: stats.students, Icon: Users, bgColor: 'bg-purple-50', iconColor: 'text-purple-600' },
-    { label: "Procesos abiertos", value: stats.openProcesses, Icon: Clock, bgColor: 'bg-orange-50', iconColor: 'text-orange-600' },
+    { label: "Secciones", value: stats.sections, Icon: Calendar, bgColor: "bg-blue-50", iconColor: "text-blue-600" },
+    { label: "Docentes", value: stats.teachers, Icon: Users, bgColor: "bg-green-50", iconColor: "text-green-600" },
+    { label: "Estudiantes", value: stats.students, Icon: Users, bgColor: "bg-purple-50", iconColor: "text-purple-600" },
+    { label: "Procesos abiertos", value: stats.openProcesses, Icon: Clock, bgColor: "bg-orange-50", iconColor: "text-orange-600" },
   ];
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 p-1 mt-4"> {/* Añadí margin-top (mt-4) para separarlo un poco de arriba */}
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 p-1 mt-4">
       {items.map((k, i) => (
         <Card key={i} className={`border bg-white shadow-lg rounded-xl p-4 ${k.bgColor} hover:shadow-xl transition-all`}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -145,7 +146,7 @@ function SmallAcademicDashboard() {
             <k.Icon className={`h-5 w-5 ${k.iconColor}`} />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold tracking-tight">{k.value}</div> {/* Se mantuvo el tamaño de texto */}
+            <div className="text-2xl font-bold tracking-tight">{k.value}</div>
           </CardContent>
         </Card>
       ))}
@@ -153,26 +154,32 @@ function SmallAcademicDashboard() {
   );
 }
 
-
-
 export { AcademicQuickActions, SmallAcademicDashboard };
 
-/* ------------- PLANES / MALLAS ------------- */
+/* ----------------------------- PLANES / MALLAS ----------------------------- */
 function PlansAndCurricula() {
   const [list, setList] = useState([]);
   const [careers, setCareers] = useState([]);
   const [selectedPlan, setSelectedPlan] = useState(null);
 
-  // Form plan
   const [pform, setPform] = useState({
-    name: "", career_id: "", start_year: new Date().getFullYear(), semesters: 10, description: "",
+    name: "",
+    career_id: "",
+    start_year: new Date().getFullYear(),
+    semesters: 10,
+    description: "",
   });
 
-  // Cursos del plan
   const [courses, setCourses] = useState([]);
   const [cform, setCform] = useState({
-    code: "", name: "", credits: 3, weekly_hours: 3, semester: 1, type: "MANDATORY",
+    code: "",
+    name: "",
+    credits: 3,
+    weekly_hours: 3,
+    semester: 1,
+    type: "MANDATORY",
   });
+
   const [prereqFor, setPrereqFor] = useState(null);
   const [prereqs, setPrereqs] = useState([]);
 
@@ -183,7 +190,9 @@ function PlansAndCurricula() {
       const careersArr = Array.isArray(cs?.careers) ? cs.careers : Array.isArray(cs) ? cs : [];
       setList(plans);
       setCareers(careersArr);
-    } catch (e) { toast.error(e.message || "Error al cargar planes"); }
+    } catch (e) {
+      toast.error(e.message || "Error al cargar planes");
+    }
   }, []);
 
   const loadCourses = useCallback(async (planId) => {
@@ -191,11 +200,18 @@ function PlansAndCurricula() {
       const c = await Plans.listCourses(planId);
       const coursesArr = Array.isArray(c?.courses) ? c.courses : Array.isArray(c) ? c : [];
       setCourses(coursesArr);
-    } catch (e) { toast.error(e.message || "Error al cargar cursos"); }
+    } catch (e) {
+      toast.error(e.message || "Error al cargar cursos");
+    }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => { if (selectedPlan?.id) loadCourses(selectedPlan.id); }, [selectedPlan?.id, loadCourses]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (selectedPlan?.id) loadCourses(selectedPlan.id);
+  }, [selectedPlan?.id, loadCourses]);
 
   const createPlan = async (e) => {
     e.preventDefault();
@@ -205,7 +221,9 @@ function PlansAndCurricula() {
       setPform({ name: "", career_id: "", start_year: new Date().getFullYear(), semesters: 10, description: "" });
       const created = res?.plan || res;
       setList((prev) => [created, ...prev]);
-    } catch (e) { toast.error(e.message); }
+    } catch (e2) {
+      toast.error(e2.message || "Error al crear plan");
+    }
   };
 
   const createCourse = async (e) => {
@@ -216,62 +234,94 @@ function PlansAndCurricula() {
       toast.success("Curso añadido");
       setCform({ code: "", name: "", credits: 3, weekly_hours: 3, semester: 1, type: "MANDATORY" });
       loadCourses(selectedPlan.id);
-    } catch (e) { toast.error(e.message); }
+    } catch (e2) {
+      toast.error(e2.message || "Error al crear curso");
+    }
   };
 
   const savePrereqs = async () => {
+    if (!selectedPlan?.id || !prereqFor?.id) return;
     try {
       await Plans.setPrereqs(selectedPlan.id, prereqFor.id, prereqs);
       toast.success("Prerrequisitos guardados");
-      setPrereqFor(null); setPrereqs([]); loadCourses(selectedPlan.id);
-    } catch (e) { toast.error(e.message); }
+      setPrereqFor(null);
+      setPrereqs([]);
+      loadCourses(selectedPlan.id);
+    } catch (e2) {
+      toast.error(e2.message || "Error al guardar prerrequisitos");
+    }
   };
 
- return (
+  return (
     <IfPerm any={REQS.plans}>
       <div className="page-container space-y-6">
-        
-        {/* CORRECCIÓN AQUÍ: Se agregaron bordes, sombra y padding interno */}
         <Card className="border shadow-sm bg-white rounded-xl">
           <CardHeader className="px-6 pt-6">
-            {sectionHeader({ 
-              title: "Planes/Mallas Curriculares", 
-              description: "Define planes por carrera y sus cursos", 
-              Icon: LibraryBig 
+            {sectionHeader({
+              title: "Planes/Mallas Curriculares",
+              description: "Define planes por carrera y sus cursos",
+              Icon: LibraryBig,
             })}
           </CardHeader>
+
           <CardContent className="px-6 pb-6 space-y-4">
             <form onSubmit={createPlan} className="grid md:grid-cols-5 gap-3">
               <div className="md:col-span-2">
                 <Label>Nombre *</Label>
                 <Input value={pform.name} onChange={(e) => setPform({ ...pform, name: e.target.value })} required />
               </div>
+
               <div>
                 <Label>Carrera *</Label>
-                <Select value={pform.career_id ? String(pform.career_id) : "ALL"} onValueChange={(v) => setPform({ ...pform, career_id: v === "ALL" ? "" : Number(v) })}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                <Select
+                  value={pform.career_id ? String(pform.career_id) : "ALL"}
+                  onValueChange={(v) => setPform({ ...pform, career_id: v === "ALL" ? "" : Number(v) })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ALL">Seleccionar</SelectItem>
                     {(Array.isArray(careers) ? careers : []).map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+
               <div>
                 <Label>Año inicio</Label>
-                <Input type="number" min="2000" max="2100" value={pform.start_year} onChange={(e) => setPform({ ...pform, start_year: +e.target.value })} />
+                <Input
+                  type="number"
+                  min="2000"
+                  max="2100"
+                  value={pform.start_year}
+                  onChange={(e) => setPform({ ...pform, start_year: +e.target.value })}
+                />
               </div>
+
               <div>
                 <Label>Semestres</Label>
-                <Input type="number" min="1" max="20" value={pform.semesters} onChange={(e) => setPform({ ...pform, semesters: +e.target.value })} />
+                <Input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={pform.semesters}
+                  onChange={(e) => setPform({ ...pform, semesters: +e.target.value })}
+                />
               </div>
+
               <div className="md:col-span-5">
                 <Label>Descripción</Label>
                 <Textarea value={pform.description} onChange={(e) => setPform({ ...pform, description: e.target.value })} />
               </div>
+
               <div className="md:col-span-5 flex justify-end">
-                <Button type="submit" className="gap-2"><Plus className="h-4 w-4" /> Crear plan</Button>
+                <Button type="submit" className="gap-2">
+                  <Plus className="h-4 w-4" /> Crear plan
+                </Button>
               </div>
             </form>
           </CardContent>
@@ -281,19 +331,25 @@ function PlansAndCurricula() {
           <Card className="border">
             <CardHeader>{sectionHeader({ title: "Planes" })}</CardHeader>
             <CardContent className="space-y-2">
-              {(Array.isArray(list) ? list : []).length === 0 && <Empty label="Sin planes" />}
+              {(Array.isArray(list) ? list : []).length === 0 ? <Empty label="Sin planes" /> : null}
+
               {(Array.isArray(list) ? list : []).map((p) => (
                 <button
                   type="button"
                   key={p.id}
                   onClick={() => setSelectedPlan(p)}
-                  className={`w-full text-left p-3 border rounded-xl flex items-center justify-between hover:bg-accent/10 transition-colors ${selectedPlan?.id === p.id ? "bg-primary/5 border-primary/30" : ""}`}
+                  className={`w-full text-left p-3 border rounded-xl flex items-center justify-between hover:bg-accent/10 transition-colors ${selectedPlan?.id === p.id ? "bg-primary/5 border-primary/30" : ""
+                    }`}
                 >
                   <div>
                     <div className="font-medium">{p.name}</div>
-                    <div className="text-xs text-muted-foreground">Carrera: {p.career_name || p.career?.name} · Semestres: {p.semesters}</div>
+                    <div className="text-xs text-muted-foreground">
+                      Carrera: {p.career_name || p.career?.name} · Semestres: {p.semesters}
+                    </div>
                   </div>
-                  <Badge variant="secondary" className="rounded-full">{p.start_year}</Badge>
+                  <Badge variant="secondary" className="rounded-full">
+                    {p.start_year}
+                  </Badge>
                 </button>
               ))}
             </CardContent>
@@ -301,102 +357,137 @@ function PlansAndCurricula() {
 
           <Card className="border">
             <CardHeader>
-              {sectionHeader({ title: `Cursos del Plan ${selectedPlan ? `– ${selectedPlan.name}` : ""}`, description: "Alta rápida + prerrequisitos", Icon: ClipboardList })}
+              {sectionHeader({
+                title: `Cursos del Plan ${selectedPlan ? `– ${selectedPlan.name}` : ""}`,
+                description: "Alta rápida + prerrequisitos",
+                Icon: ClipboardList,
+              })}
             </CardHeader>
+
             <CardContent className="space-y-4">
               <form onSubmit={createCourse} className="grid md:grid-cols-6 gap-3">
                 <div className="md:col-span-2">
                   <Label>Nombre *</Label>
                   <Input value={cform.name} onChange={(e) => setCform({ ...cform, name: e.target.value })} required />
                 </div>
+
                 <div>
                   <Label>Código *</Label>
                   <Input value={cform.code} onChange={(e) => setCform({ ...cform, code: e.target.value })} required />
                 </div>
+
                 <div>
                   <Label>Créditos</Label>
-                  <Input type="number" min="0" value={cform.credits} onChange={(e) => setCform({ ...cform, credits: +e.target.value || 0 })} />
+                  <Input
+                    type="number"
+                    min="0"
+                    value={cform.credits}
+                    onChange={(e) => setCform({ ...cform, credits: +e.target.value || 0 })}
+                  />
                 </div>
+
                 <div>
                   <Label>Hrs/Sem</Label>
-                  <Input type="number" min="0" value={cform.weekly_hours} onChange={(e) => setCform({ ...cform, weekly_hours: +e.target.value || 0 })} />
+                  <Input
+                    type="number"
+                    min="0"
+                    value={cform.weekly_hours}
+                    onChange={(e) => setCform({ ...cform, weekly_hours: +e.target.value || 0 })}
+                  />
                 </div>
+
                 <div>
                   <Label>Semestre</Label>
-                  <Input type="number" min="1" value={cform.semester} onChange={(e) => setCform({ ...cform, semester: +e.target.value || 1 })} />
+                  <Input
+                    type="number"
+                    min="1"
+                    value={cform.semester}
+                    onChange={(e) => setCform({ ...cform, semester: +e.target.value || 1 })}
+                  />
                 </div>
+
                 <div>
                   <Label>Tipo</Label>
                   <Select value={cform.type} onValueChange={(v) => setCform({ ...cform, type: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="MANDATORY">Obligatorio</SelectItem>
                       <SelectItem value="ELECTIVE">Electivo</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="md:col-span-6 flex justify-end">
-                  <Button disabled={!selectedPlan} type="submit" className="gap-2"><Save className="h-4 w-4" />Guardar curso</Button>
+                  <Button disabled={!selectedPlan} type="submit" className="gap-2">
+                    <Save className="h-4 w-4" /> Guardar curso
+                  </Button>
                 </div>
               </form>
 
+              {/* ✅ CORREGIDO: thead/tbody sin whitespace nodes */}
               <div className="border rounded-xl overflow-x-auto">
-  <table className="w-full text-sm">
-    {/* Encabezado gris con texto negro */}
-    <thead className="bg-gray-200">
-      <tr>
-        <th className="p-2 text-left text-black">Código</th>
-        <th className="p-2 text-left text-black">Curso</th>
-        <th className="p-2 text-center text-black">Cred.</th>
-        <th className="p-2 text-center text-black">Sem.</th>
-        <th className="p-2 text-center text-black">Tipo</th>
-        <th className="p-2 text-right text-black"></th>
-      </tr>
-    </thead>
-    {/* Cuerpo blanco con letras negras */}
-    <tbody className="bg-white">
-      {(Array.isArray(courses) ? courses : []).map((c) => (
-        <tr key={c.id} className="border-t hover:bg-gray-50">
-          <td className="p-2 font-mono text-xs text-black">{c.code}</td>
-          <td className="p-2 text-black">{c.name}</td>
-          <td className="p-2 text-center text-black">{c.credits}</td>
-          <td className="p-2 text-center text-black">{c.semester}</td>
-          <td className="p-2 text-center text-black">
-            <Badge variant="outline" className="rounded-full px-2 text-black">
-              {c.type === "ELECTIVE" ? "Electivo" : "Obligatorio"}
-            </Badge>
-          </td>
-          <td className="p-2 text-right">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setPrereqFor(c);
-                setPrereqs(Array.isArray(c.prerequisites) ? c.prerequisites.map((p) => p.id) : []);
-              }}
-              className="gap-2"
-            >
-              <ClipboardList className="h-4 w-4" /> Prerrequisitos
-            </Button>
-          </td>
-        </tr>
-      ))}
-      {selectedPlan && (Array.isArray(courses) ? courses : []).length === 0 && (
-        <tr>
-          <td className="p-3 text-center text-muted-foreground" colSpan={6}>Sin cursos</td>
-        </tr>
-      )}
-    </tbody>
-  </table>
-</div>
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-200">
+                    <tr>
+                      <th className="p-2 text-left text-black">Código</th>
+                      <th className="p-2 text-left text-black">Curso</th>
+                      <th className="p-2 text-center text-black">Cred.</th>
+                      <th className="p-2 text-center text-black">Sem.</th>
+                      <th className="p-2 text-center text-black">Tipo</th>
+                      <th className="p-2 text-right text-black" />
+                    </tr>
+                  </thead>
 
+                  <tbody className="bg-white">
+                    {(Array.isArray(courses) ? courses : []).map((c) => (
+                      <tr key={c.id} className="border-t hover:bg-gray-50">
+                        <td className="p-2 font-mono text-xs text-black">{c.code}</td>
+                        <td className="p-2 text-black">{c.name}</td>
+                        <td className="p-2 text-center text-black">{c.credits}</td>
+                        <td className="p-2 text-center text-black">{c.semester}</td>
+                        <td className="p-2 text-center text-black">
+                          <Badge variant="outline" className="rounded-full px-2 text-black">
+                            {c.type === "ELECTIVE" ? "Electivo" : "Obligatorio"}
+                          </Badge>
+                        </td>
+                        <td className="p-2 text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setPrereqFor(c);
+                              setPrereqs(Array.isArray(c.prerequisites) ? c.prerequisites.map((p) => p.id) : []);
+                            }}
+                            className="gap-2"
+                          >
+                            <ClipboardList className="h-4 w-4" /> Prerrequisitos
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
 
-              {prereqFor && (
+                    {selectedPlan && (Array.isArray(courses) ? courses : []).length === 0 ? (
+                      <tr>
+                        <td className="p-3 text-center text-muted-foreground" colSpan={6}>
+                          Sin cursos
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+
+              {prereqFor ? (
                 <div className="border rounded-2xl p-3">
                   <div className="flex items-center justify-between">
                     <div className="font-medium">Prerrequisitos de: {prereqFor.name}</div>
-                    <Button variant="ghost" onClick={() => { setPrereqFor(null); setPrereqs([]); }}>✕</Button>
+                    <Button variant="ghost" onClick={() => { setPrereqFor(null); setPrereqs([]); }}>
+                      ✕
+                    </Button>
                   </div>
+
                   <ScrollArea className="h-56 mt-2 pr-2">
                     <div className="grid md:grid-cols-2 gap-2">
                       {(Array.isArray(courses) ? courses : [])
@@ -404,12 +495,18 @@ function PlansAndCurricula() {
                         .map((c) => {
                           const checked = prereqs.includes(c.id);
                           return (
-                            <label key={c.id} className={`border rounded-xl p-2 flex items-center gap-2 text-sm ${checked ? "bg-primary/5 border-primary/40" : ""}`}>
+                            <label
+                              key={c.id}
+                              className={`border rounded-xl p-2 flex items-center gap-2 text-sm ${checked ? "bg-primary/5 border-primary/40" : ""
+                                }`}
+                            >
                               <input
                                 type="checkbox"
                                 checked={checked}
                                 onChange={(e) =>
-                                  setPrereqs((prev) => e.target.checked ? [...prev, c.id] : prev.filter((id) => id !== c.id))
+                                  setPrereqs((prev) =>
+                                    e.target.checked ? [...prev, c.id] : prev.filter((id) => id !== c.id)
+                                  )
                                 }
                               />
                               <span className="font-mono text-xs">{c.code}</span> – {c.name}
@@ -418,11 +515,14 @@ function PlansAndCurricula() {
                         })}
                     </div>
                   </ScrollArea>
+
                   <div className="mt-3 flex justify-end">
-                    <Button onClick={savePrereqs} className="gap-2"><Save className="h-4 w-4" />Guardar prerrequisitos</Button>
+                    <Button onClick={savePrereqs} className="gap-2">
+                      <Save className="h-4 w-4" /> Guardar prerrequisitos
+                    </Button>
                   </div>
                 </div>
-              )}
+              ) : null}
             </CardContent>
           </Card>
         </div>
@@ -431,7 +531,7 @@ function PlansAndCurricula() {
   );
 }
 
-/* ------------- CARGA LECTIVA / HORARIOS ------------- */
+/* ----------------------------- CARGA LECTIVA / HORARIOS ----------------------------- */
 function LoadAndSchedules() {
   const { hasAny } = useAuth();
   const allowed = hasAny(REQS.load);
@@ -440,21 +540,20 @@ function LoadAndSchedules() {
   const [rooms, setRooms] = useState([]);
   const [sections, setSections] = useState([]);
 
-  // ✅ nuevo: planes + cursos
   const [plans, setPlans] = useState([]);
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [planCourses, setPlanCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState("");
 
   const [form, setForm] = useState({
-    course_id: "",      // ✅ opcional (pero recomendado)
+    course_id: "",
     course_code: "",
     course_name: "",
     teacher_id: "",
     room_id: "",
     capacity: 30,
     period: "2025-I",
-    slots: [], // { day: "MON", start: "08:00", end: "10:00" }
+    slots: [],
   });
 
   const [newSlot, setNewSlot] = useState({ day: "MON", start: "08:00", end: "10:00" });
@@ -463,14 +562,22 @@ function LoadAndSchedules() {
   const load = useCallback(async () => {
     try {
       const [t, r, s, pl] = await Promise.all([
-        Sections.teachers(),
-        Sections.rooms(),
+        CatalogTeachers.list(),
+        CatalogClassrooms.list(),
         Sections.list({ period: "2025-I" }),
         Plans.list(),
       ]);
 
-      const teachersArr = Array.isArray(t?.teachers) ? t.teachers : Array.isArray(t) ? t : [];
-      const roomsArr = Array.isArray(r?.classrooms) ? r.classrooms : Array.isArray(r) ? r : [];
+      const teachersArr =
+        Array.isArray(t?.items) ? t.items :
+          Array.isArray(t?.teachers) ? t.teachers :
+            Array.isArray(t) ? t : [];
+
+      const roomsArr =
+        Array.isArray(r?.items) ? r.items :
+          Array.isArray(r?.classrooms) ? r.classrooms :
+            Array.isArray(r) ? r : [];
+
       const sectionsArr = Array.isArray(s?.sections) ? s.sections : Array.isArray(s) ? s : [];
       const plansArr = Array.isArray(pl?.plans) ? pl.plans : Array.isArray(pl) ? pl : [];
 
@@ -479,13 +586,14 @@ function LoadAndSchedules() {
       setSections(sectionsArr);
       setPlans(plansArr);
     } catch (e) {
-      toast.error(e.message);
+      toast.error(e.message || "Error al cargar catálogos/secciones");
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  // ✅ cargar cursos cuando elijo plan
   useEffect(() => {
     const run = async () => {
       if (!selectedPlanId) {
@@ -530,7 +638,9 @@ function LoadAndSchedules() {
       setConflicts(list);
       if (list.length === 0) toast.success("Sin conflictos de horario / aforo");
       else toast.error("Conflictos detectados");
-    } catch (e) { toast.error(e.message); }
+    } catch (e) {
+      toast.error(e.message || "Error al verificar conflictos");
+    }
   };
 
   const createSection = async () => {
@@ -554,41 +664,36 @@ function LoadAndSchedules() {
         room_id: "",
         capacity: 30,
         period: "2025-I",
-        slots: []
+        slots: [],
       });
 
       load();
-    } catch (e) { toast.error(e.message); }
+    } catch (e) {
+      toast.error(e.message || "Error al crear sección");
+    }
   };
-
-  if (!allowed) return null;
 
   if (!allowed) return null;
 
   return (
     <div className="space-y-6">
-      
-      {/* CORRECCIÓN AQUÍ: Agregamos borde, sombra y padding (px-6) */}
       <Card className="border shadow-sm bg-white rounded-xl">
         <CardHeader className="px-6 pt-6">
-          {sectionHeader({ 
-            title: "Nueva Sección / Horario", 
-            description: "Asigna curso, docente, aula y franja horaria", 
-            Icon: Calendar 
+          {sectionHeader({
+            title: "Nueva Sección / Horario",
+            description: "Asigna curso, docente, aula y franja horaria",
+            Icon: Calendar,
           })}
         </CardHeader>
 
         <CardContent className="px-6 pb-6 space-y-4">
           <div className="grid md:grid-cols-3 gap-3">
-
-            {/* ✅ PLAN */}
             <div>
               <Label>Plan/Malla *</Label>
-              <Select
-                value={selectedPlanId ? String(selectedPlanId) : "ALL"}
-                onValueChange={(v) => setSelectedPlanId(v === "ALL" ? "" : v)}
-              >
-                <SelectTrigger><SelectValue placeholder="Seleccionar plan" /></SelectTrigger>
+              <Select value={selectedPlanId ? String(selectedPlanId) : "ALL"} onValueChange={(v) => setSelectedPlanId(v === "ALL" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar plan" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Seleccionar</SelectItem>
                   {(Array.isArray(plans) ? plans : []).map((p) => (
@@ -600,7 +705,6 @@ function LoadAndSchedules() {
               </Select>
             </div>
 
-            {/* ✅ CURSO (jalado del plan) */}
             <div>
               <Label>Curso *</Label>
               <Select
@@ -624,11 +728,11 @@ function LoadAndSchedules() {
 
             <Labeled value={form.period} label="Periodo" onChange={(v) => setForm({ ...form, period: v })} />
 
-            {/* readonly auto */}
             <div>
               <Label>Código (auto)</Label>
               <Input value={form.course_code} readOnly />
             </div>
+
             <div className="md:col-span-2">
               <Label>Nombre (auto)</Label>
               <Input value={form.course_name} readOnly />
@@ -636,12 +740,19 @@ function LoadAndSchedules() {
 
             <div>
               <Label>Docente</Label>
-              <Select value={form.teacher_id ? String(form.teacher_id) : "ALL"} onValueChange={(v) => setForm({ ...form, teacher_id: v === "ALL" ? "" : Number(v) })}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+              <Select
+                value={form.teacher_id ? String(form.teacher_id) : "ALL"}
+                onValueChange={(v) => setForm({ ...form, teacher_id: v === "ALL" ? "" : Number(v) })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Seleccionar</SelectItem>
                   {(Array.isArray(teachers) ? teachers : []).map((t) => (
-                    <SelectItem key={t.id} value={String(t.id)}>{t.full_name || t.name}</SelectItem>
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      {t.display_name || t.full_name || t.email || t.document || `Docente ${t.id}`}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -649,12 +760,19 @@ function LoadAndSchedules() {
 
             <div>
               <Label>Aula</Label>
-              <Select value={form.room_id ? String(form.room_id) : "ALL"} onValueChange={(v) => setForm({ ...form, room_id: v === "ALL" ? "" : Number(v) })}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+              <Select
+                value={form.room_id ? String(form.room_id) : "ALL"}
+                onValueChange={(v) => setForm({ ...form, room_id: v === "ALL" ? "" : Number(v) })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Seleccionar</SelectItem>
                   {(Array.isArray(rooms) ? rooms : []).map((r) => (
-                    <SelectItem key={r.id} value={String(r.id)}>{r.name} (cap. {r.capacity})</SelectItem>
+                    <SelectItem key={r.id} value={String(r.id)}>
+                      {r.code ? `${r.code} — ` : ""}{r.name} (cap. {r.capacity})
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -671,86 +789,109 @@ function LoadAndSchedules() {
               <div className="w-40">
                 <Label>Día</Label>
                 <Select value={newSlot.day} onValueChange={(v) => setNewSlot((s) => ({ ...s, day: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    {["MON", "TUE", "WED", "THU", "FRI", "SAT"].map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                    {["MON", "TUE", "WED", "THU", "FRI", "SAT"].map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
               <Labeled type="time" label="Inicio" value={newSlot.start} onChange={(v) => setNewSlot((s) => ({ ...s, start: v }))} />
               <Labeled type="time" label="Fin" value={newSlot.end} onChange={(v) => setNewSlot((s) => ({ ...s, end: v }))} />
-              <Button onClick={addSlot} className="gap-2"><Plus className="h-4 w-4" />Agregar franja</Button>
+
+              <Button onClick={addSlot} className="gap-2">
+                <Plus className="h-4 w-4" /> Agregar franja
+              </Button>
             </div>
 
-            {form.slots.length > 0 && (
+            {form.slots.length > 0 ? (
               <div className="mt-3">
                 <div className="flex flex-wrap gap-2">
                   {form.slots.map((s, i) => (
-                    <Badge key={i} variant="outline" className="rounded-full">{s.day} {s.start}-{s.end}</Badge>
+                    <Badge key={i} variant="outline" className="rounded-full">
+                      {s.day} {s.start}-{s.end}
+                    </Badge>
                   ))}
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
 
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={check} className="gap-2">
-              <Plus className="h-4 w-4 rotate-45" />Verificar conflictos
+              <Plus className="h-4 w-4 rotate-45" /> Verificar conflictos
             </Button>
             <Button onClick={createSection} className="gap-2">
-              <Save className="h-4 w-4" />Crear sección
+              <Save className="h-4 w-4" /> Crear sección
             </Button>
           </div>
 
-          {conflicts.length > 0 && (
+          {conflicts.length > 0 ? (
             <div className="mt-2 p-3 border rounded-2xl bg-destructive/5">
               <div className="font-medium text-destructive mb-1">Conflictos:</div>
-              {conflicts.map((c, i) => (<div key={i} className="text-sm text-destructive">• {c.message}</div>))}
+              {conflicts.map((c, i) => (
+                <div key={i} className="text-sm text-destructive">
+                  • {c.message}
+                </div>
+              ))}
             </div>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 
       <Card>
-  <CardHeader>{sectionHeader({ title: "Secciones (Período 2025-I)" })}</CardHeader>
-  <CardContent className="overflow-x-auto">
-    <table className="w-full text-sm">
-      {/* Encabezado gris */}
-      <thead className="bg-gray-200">
-        <tr>
-          <th className="p-2 text-left text-black">Curso</th>
-          <th className="p-2 text-left text-black">Docente</th>
-          <th className="p-2 text-left text-black">Aula</th>
-          <th className="p-2 text-left text-black">Horario</th>
-          <th className="p-2 text-center text-black">Cap.</th>
-        </tr>
-      </thead>
-      {/* Cuerpo blanco con letras negras */}
-      <tbody className="bg-white">
-        {(Array.isArray(sections) ? sections : []).map((s) => (
-          <tr key={s.id} className="border-t hover:bg-gray-50">
-            <td className="p-2 text-black">{s.course_code} – {s.course_name}</td>
-            <td className="p-2 text-black">{s.teacher_name}</td>
-            <td className="p-2 text-black">{s.room_name}</td>
-            <td className="p-2 text-black">
-              {(Array.isArray(s.slots) ? s.slots : []).map((k) => `${k.day} ${k.start}-${k.end}`).join(", ")}
-            </td>
-            <td className="p-2 text-center text-black">{s.capacity}</td>
-          </tr>
-        ))}
-        {(Array.isArray(sections) ? sections : []).length === 0 && (
-          <tr><td className="p-4 text-center text-muted-foreground" colSpan={5}>Sin secciones</td></tr>
-        )}
-      </tbody>
-    </table>
-  </CardContent>
-</Card>
+        <CardHeader>{sectionHeader({ title: "Secciones (Período 2025-I)" })}</CardHeader>
 
+        <CardContent className="overflow-x-auto">
+          {/* ✅ CORREGIDO: thead/tbody sin whitespace nodes */}
+          <table className="w-full text-sm">
+            <thead className="bg-gray-200">
+              <tr>
+                <th className="p-2 text-left text-black">Curso</th>
+                <th className="p-2 text-left text-black">Docente</th>
+                <th className="p-2 text-left text-black">Aula</th>
+                <th className="p-2 text-left text-black">Horario</th>
+                <th className="p-2 text-center text-black">Cap.</th>
+              </tr>
+            </thead>
+
+            <tbody className="bg-white">
+              {(Array.isArray(sections) ? sections : []).map((s) => (
+                <tr key={s.id} className="border-t hover:bg-gray-50">
+                  <td className="p-2 text-black">
+                    {s.course_code} – {s.course_name}
+                  </td>
+                  <td className="p-2 text-black">{s.teacher_name}</td>
+                  <td className="p-2 text-black">{s.room_name}</td>
+                  <td className="p-2 text-black">
+                    {(Array.isArray(s.slots) ? s.slots : []).map((k) => `${k.day} ${k.start}-${k.end}`).join(", ")}
+                  </td>
+                  <td className="p-2 text-center text-black">{s.capacity}</td>
+                </tr>
+              ))}
+
+              {(Array.isArray(sections) ? sections : []).length === 0 ? (
+                <tr>
+                  <td className="p-4 text-center text-muted-foreground" colSpan={5}>
+                    Sin secciones
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-/* ------------- KÁRDEX / CONSTANCIAS ------------- */
+/* ----------------------------- KÁRDEX / CONSTANCIAS ----------------------------- */
 function KardexAndCertificates() {
   const { hasAny } = useAuth();
   const allowed = hasAny(REQS.kardex);
@@ -764,7 +905,9 @@ function KardexAndCertificates() {
     try {
       const k = await Kardex.ofStudent(studentId);
       setData(k);
-    } catch (e) { toast.error(e.message); }
+    } catch (e) {
+      toast.error(e.message || "Error al consultar kárdex");
+    }
   };
 
   const genBoleta = async () => {
@@ -772,7 +915,9 @@ function KardexAndCertificates() {
     try {
       const res = await generatePDFWithPolling(`/kardex/${studentId}/boleta`, { academic_period: period }, { testId: "boleta-pdf" });
       if (res.success) await downloadFile(res.downloadUrl, `boleta-${studentId}-${period}.pdf`);
-    } catch { toast.error("Error al generar boleta"); }
+    } catch {
+      toast.error("Error al generar boleta");
+    }
   };
 
   const genConstancia = async () => {
@@ -780,10 +925,13 @@ function KardexAndCertificates() {
     try {
       const res = await generatePDFWithPolling(`/kardex/${studentId}/constancia`, {}, { testId: "constancia-pdf" });
       if (res.success) await downloadFile(res.downloadUrl, `constancia-${studentId}.pdf`);
-    } catch { toast.error("Error al generar constancia"); }
+    } catch {
+      toast.error("Error al generar constancia");
+    }
   };
 
   if (!allowed) return null;
+
   return (
     <div className="space-y-4">
       <Card>
@@ -792,31 +940,46 @@ function KardexAndCertificates() {
           <Labeled label="ID/DNI Estudiante" value={studentId} onChange={setStudentId} placeholder="e.g. 71234567" />
           <Labeled label="Período" value={period} onChange={setPeriod} />
           <div className="flex items-end">
-            <Button onClick={fetchKardex} className="gap-2"><SearchIcon className="h-4 w-4" />Consultar</Button>
+            <Button onClick={fetchKardex} className="gap-2">
+              <SearchIcon className="h-4 w-4" /> Consultar
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {data && (
+      {data ? (
         <Card className="border">
           <CardHeader>{sectionHeader({ title: "Resultados" })}</CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <div><strong>Estudiante:</strong> {data.student_name}</div>
-            <div><strong>Carrera:</strong> {data.career_name}</div>
-            <div><strong>Créditos aprobados:</strong> {data.credits_earned}</div>
-            <div><strong>PPA:</strong> {data.gpa ?? "-"}</div>
+            <div>
+              <strong>Estudiante:</strong> {data.student_name}
+            </div>
+            <div>
+              <strong>Carrera:</strong> {data.career_name}
+            </div>
+            <div>
+              <strong>Créditos aprobados:</strong> {data.credits_earned}
+            </div>
+            <div>
+              <strong>PPA:</strong> {data.gpa ?? "-"}
+            </div>
+
             <div className="flex gap-2 mt-2">
-              <Button variant="outline" onClick={genBoleta} className="gap-2"><FileText className="h-4 w-4" />Boleta PDF</Button>
-              <Button variant="outline" onClick={genConstancia} className="gap-2"><FileText className="h-4 w-4" />Constancia PDF</Button>
+              <Button variant="outline" onClick={genBoleta} className="gap-2">
+                <FileText className="h-4 w-4" /> Boleta PDF
+              </Button>
+              <Button variant="outline" onClick={genConstancia} className="gap-2">
+                <FileText className="h-4 w-4" /> Constancia PDF
+              </Button>
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : null}
     </div>
   );
 }
 
-/* ------------- PROCESOS ------------- */
+/* ----------------------------- PROCESOS ----------------------------- */
 function AcademicProcesses() {
   const { hasAny } = useAuth();
   const allowed = hasAny(REQS.processes);
@@ -836,10 +999,13 @@ function AcademicProcesses() {
       await map[type](form);
       toast.success("Solicitud registrada");
       setForm({ student_id: "", period: "2025-I", reason: "", extra: "" });
-    } catch (e) { toast.error(e.message); }
+    } catch (e) {
+      toast.error(e.message || "Error al registrar solicitud");
+    }
   };
 
   if (!allowed) return null;
+
   return (
     <Card>
       <CardHeader>{sectionHeader({ title: "Procesos académicos", Icon: Clock })}</CardHeader>
@@ -847,7 +1013,9 @@ function AcademicProcesses() {
         <div>
           <Label>Tipo</Label>
           <Select value={type} onValueChange={setType}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="RETIRO">Retiro</SelectItem>
               <SelectItem value="RESERVA">Reserva de matrícula</SelectItem>
@@ -857,21 +1025,26 @@ function AcademicProcesses() {
             </SelectContent>
           </Select>
         </div>
+
         <Labeled label="ID/DNI Estudiante" value={form.student_id} onChange={(v) => setForm({ ...form, student_id: v })} />
         <Labeled label="Período" value={form.period} onChange={(v) => setForm({ ...form, period: v })} />
+
         <div className="md:col-span-2">
           <Label>Motivo / Detalle</Label>
           <Textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
         </div>
+
         <div className="md:col-span-2 flex justify-end">
-          <Button onClick={submit} className="gap-2"><Save className="h-4 w-4" />Enviar solicitud</Button>
+          <Button onClick={submit} className="gap-2">
+            <Save className="h-4 w-4" /> Enviar solicitud
+          </Button>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-/* ------------- UTILS UI ------------- */
+/* ----------------------------- UTILS UI ----------------------------- */
 function Labeled({ label, value, onChange, placeholder, type = "text" }) {
   return (
     <div>
@@ -890,84 +1063,96 @@ function Empty({ label = "Sin datos", Icon = Inbox }) {
   );
 }
 
-/* ------------- CONTENEDOR PRINCIPAL ------------- */
-/* ------------- CONTENEDOR PRINCIPAL ------------- */
+/* ----------------------------- CONTENEDOR PRINCIPAL ----------------------------- */
 export default function AcademicModule() {
   const { hasAny } = useAuth();
   const [tab, setTab] = useState("dashboard");
 
-  const tabs = useMemo(() => ([ 
-    { key: "dashboard", label: "Dashboard", need: [] },
-    { key: "plans", label: "Mallas", need: REQS.plans },
-    { key: "load", label: "Carga & Horarios", need: REQS.load },
-    { key: "enroll", label: "Matrícula", need: REQS.enroll },
-    { key: "grades", label: "Notas/Asistencia", need: REQS.grades },
-    { key: "syllabus", label: "Sílabos/Evaluación", need: REQS.syllabus },
-    { key: "kardex", label: "Kárdex", need: REQS.kardex },
-    { key: "reports", label: "Reportes", need: REQS.reports },
-    { key: "proc-inbox", label: "Bandeja procesos", need: REQS.procInbox },
-    { key: "processes", label: "Procesos", need: REQS.processes },
-  ].filter(t => t.need.length === 0 || hasAny(t.need))), [hasAny]);
+  const tabs = useMemo(
+    () =>
+      [
+        { key: "dashboard", label: "Dashboard", need: [] },
+        { key: "plans", label: "Mallas", need: REQS.plans },
+        { key: "load", label: "Carga & Horarios", need: REQS.load },
+        { key: "enroll", label: "Matrícula", need: REQS.enroll },
+        { key: "grades", label: "Notas/Asistencia", need: REQS.grades },
+        { key: "syllabus", label: "Sílabos/Evaluación", need: REQS.syllabus },
+        { key: "kardex", label: "Kárdex", need: REQS.kardex },
+        { key: "reports", label: "Reportes", need: REQS.reports },
+        { key: "proc-inbox", label: "Bandeja procesos", need: REQS.procInbox },
+        { key: "processes", label: "Procesos", need: REQS.processes },
+      ].filter((t) => t.need.length === 0 || hasAny(t.need)),
+    [hasAny]
+  );
 
   useEffect(() => {
-    if (!tabs.find(t => t.key === tab)) setTab(tabs[0]?.key ?? "dashboard");
+    if (!tabs.find((t) => t.key === tab)) setTab(tabs[0]?.key ?? "dashboard");
   }, [tabs, tab]);
 
   return (
     <div style={pageStyle} className="p-6">
-      <div className="rounded-3xl bg-white/70 backdrop-blur-md border border-white/70 shadow-xl p-6 space-y-6"> {/* Fondo blanco con opacidad */}
+      <div className="rounded-3xl bg-white/70 backdrop-blur-md border border-white/70 shadow-xl p-6 space-y-6">
         <div>
           <div className="flex items-center gap-2">
             <GraduationCap className="h-6 w-6 text-primary" />
-            <h1 className="text-2xl font-semibold text-black">
-              Módulo Académico
-            </h1>
+            <h1 className="text-2xl font-semibold text-black">Módulo Académico</h1>
           </div>
-          <p className="text-sm text-gray-700 mt-1">
-            Gestión integral de planes, secciones, matrícula, notas y procesos
-          </p>
+          <p className="text-sm text-gray-700 mt-1">Gestión integral de planes, secciones, matrícula, notas y procesos</p>
         </div>
 
         <Separator />
 
-        {/* TABS */}
         <Tabs value={tab} onValueChange={setTab} className="space-y-6">
-          <TabsList className="w-full flex gap-10  overflow-x-auto bg-white/55 backdrop-blur-md border border-white/20 rounded-2xl p-2 shadow-sm">
-  {tabs.map(t => (
-    <IconTab
-      key={t.key}
-      value={t.key}
-      label={t.label}
-      Icon={tabIcon(t.key)}
-      className="min-w-[200px] text-center"  // Cambié el ancho mínimo y alineación del texto
-    />
-  ))}
-</TabsList>
-
+          <TabsList className="w-full flex gap-10 overflow-x-auto bg-white/55 backdrop-blur-md border border-white/20 rounded-2xl p-2 shadow-sm">
+            {tabs.map((t) => (
+              <IconTab key={t.key} value={t.key} label={t.label} Icon={tabIcon(t.key)} className="min-w-[200px] text-center" />
+            ))}
+          </TabsList>
 
           <TabsContent value="dashboard">
             <AcademicQuickActions go={setTab} />
             <SmallAcademicDashboard />
           </TabsContent>
 
-          <TabsContent value="plans"><PlansAndCurricula /></TabsContent>
-          <TabsContent value="load"><LoadAndSchedules /></TabsContent>
-          <TabsContent value="enroll"><EnrollmentComponent /></TabsContent>
-          <TabsContent value="grades"><GradesAttendanceComponent /></TabsContent>
-          <TabsContent value="syllabus"><SectionSyllabusEvaluation /></TabsContent>
-          <TabsContent value="kardex"><KardexAndCertificates /></TabsContent>
-          <TabsContent value="reports"><AcademicReportsPage /></TabsContent>
-          <TabsContent value="proc-inbox"><AcademicProcessesInbox /></TabsContent>
-          <TabsContent value="processes"><AcademicProcesses /></TabsContent>
+          <TabsContent value="plans">
+            <PlansAndCurricula />
+          </TabsContent>
+          <TabsContent value="load">
+            <LoadAndSchedules />
+          </TabsContent>
+          <TabsContent value="enroll">
+            <EnrollmentComponent />
+          </TabsContent>
+          <TabsContent value="grades">
+            <GradesAttendanceComponent />
+          </TabsContent>
+          <TabsContent value="syllabus">
+            <SectionSyllabusEvaluation />
+          </TabsContent>
+          <TabsContent value="kardex">
+            <KardexAndCertificates />
+          </TabsContent>
+          <TabsContent value="reports">
+            <AcademicReportsPage />
+          </TabsContent>
+          <TabsContent value="proc-inbox">
+            <AcademicProcessesInbox />
+          </TabsContent>
+          <TabsContent value="processes">
+            <AcademicProcesses />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
   );
 }
 
-function IconTab({ value, label, Icon }) {
+function IconTab({ value, label, Icon, className = "" }) {
   return (
-    <TabsTrigger value={value} className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-4 px-4 py-2 rounded-2xl text-sm hover:bg-gray-200 transition-colors">
+    <TabsTrigger
+      value={value}
+      className={`data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-4 px-4 py-2 rounded-2xl text-sm hover:bg-gray-200 transition-colors ${className}`}
+    >
       <Icon className="h-5 w-5" />
       <span className="hidden sm:inline-block">{label}</span>
       <span className="sm:hidden text-xs">{label.slice(0, 8)}</span>
@@ -977,16 +1162,27 @@ function IconTab({ value, label, Icon }) {
 
 function tabIcon(key) {
   switch (key) {
-    case "dashboard": return LayoutGrid;
-    case "plans": return BookOpen;
-    case "load": return Calendar;
-    case "enroll": return GraduationCap;
-    case "grades": return CheckCircle;
-    case "syllabus": return FileText;
-    case "kardex": return Users;
-    case "reports": return BarChart3;
-    case "proc-inbox": return Inbox;
-    case "processes": return Clock;
-    default: return LayoutGrid;
+    case "dashboard":
+      return LayoutGrid;
+    case "plans":
+      return BookOpen;
+    case "load":
+      return Calendar;
+    case "enroll":
+      return GraduationCap;
+    case "grades":
+      return CheckCircle;
+    case "syllabus":
+      return FileText;
+    case "kardex":
+      return Users;
+    case "reports":
+      return BarChart3;
+    case "proc-inbox":
+      return Inbox;
+    case "processes":
+      return Clock;
+    default:
+      return LayoutGrid;
   }
 }

@@ -276,3 +276,88 @@ export const AcademicReports = {
     exportOccupancy: async (params = {}) =>
         asBlobGet("/academic/reports/occupancy.xlsx", params),
 };
+
+/* -------------------------------------------------------
+   Docente / Secciones / Estudiantes / Notas (para módulo docente)
+------------------------------------------------------- */
+export const Teacher = {
+    /**
+     * GET /teachers/:teacher_user_id/sections
+     * Esperado:
+     * - { sections: [...] }
+     * o - [...] (si tu backend devuelve array directo)
+     */
+    sections: async (teacherUserId) => {
+        const data = await asJson("GET", `/teachers/${teacherUserId}/sections`);
+        const arr = pickFirstArray(data, ["sections", "items", "results"]);
+        return { sections: arr };
+    },
+};
+
+export const SectionStudents = {
+    /**
+     * GET /sections/:section_id/students
+     * Esperado:
+     * - { students: [...] }
+     * o - [...]
+     */
+    list: async (sectionId) => {
+        const data = await asJson("GET", `/sections/${sectionId}/students`);
+        const arr = pickFirstArray(data, ["students", "items", "results"]);
+        return { students: arr };
+    },
+};
+
+export const Grades = {
+    /**
+     * GET /sections/:section_id/grades
+     * Esperado:
+     * - { grades: { [studentId]: {PARCIAL_1:..., ...} } }
+     */
+    get: async (sectionId) => asJson("GET", `/sections/${sectionId}/grades`),
+
+    /**
+     * POST /grades/save
+     * payload: { section_id, grades }
+     */
+    save: async (sectionId, grades) =>
+        asJson("POST", "/grades/save", { section_id: sectionId, grades }),
+
+    /**
+     * POST /grades/submit
+     */
+    submit: async (sectionId, grades) =>
+        asJson("POST", "/grades/submit", { section_id: sectionId, grades }),
+
+    /**
+     * POST /grades/reopen
+     */
+    reopen: async (sectionId) =>
+        asJson("POST", "/grades/reopen", { section_id: sectionId }),
+};
+
+export const AttendanceImport = {
+    /**
+     * POST /attendance/import/preview (multipart)
+     * formData: file + section_id
+     */
+    preview: async (sectionId, file) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("section_id", sectionId);
+
+        return asJson("POST", "/attendance/import/preview", fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
+    },
+
+    /**
+     * POST /attendance/import/save
+     * payload: { section_id, attendance_data }
+     */
+    save: async (sectionId, attendanceData) =>
+        asJson("POST", "/attendance/import/save", {
+            section_id: sectionId,
+            attendance_data: attendanceData,
+        }),
+};
