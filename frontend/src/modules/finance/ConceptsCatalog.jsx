@@ -89,7 +89,8 @@ export default function ConceptsCatalog() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-24 sm:pb-6">
+
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-2xl font-bold">Catálogo de conceptos</h2>
@@ -119,7 +120,7 @@ export default function ConceptsCatalog() {
                         <div style={{ 
                             height: "300px",        /* Altura FIJA */
                             overflowY: "auto",      /* Scroll vertical automático */
-                            overflowX: "hidden",    /* Evita scroll horizontal innecesario */
+                            overflowX: "auto",    /* Evita scroll horizontal innecesario */
                             borderBottom: "1px solid #eee" /* Un borde sutil abajo */
                         }}>
                             <table className="w-full text-sm">

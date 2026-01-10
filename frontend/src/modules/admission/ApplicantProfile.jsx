@@ -165,7 +165,8 @@ export default function ApplicantProfile() {
     }
 
     return (
-        <div className="space-y-6">
+       <div className="space-y-6 pb-24 sm:pb-6">
+
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">Mi Perfil de Postulante</h2>
                 <Button variant="outline"><Edit className="h-4 w-4 mr-2" />Editar Perfil</Button>

@@ -92,33 +92,54 @@ export default function ResultsPublication() {
                 <CardTitle>Publicación de Resultados</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="grid md:grid-cols-3 gap-3">
-                    <div>
-                        <label className="text-sm">Convocatoria</label>
-                        <Select value={call?.id?.toString()} onValueChange={(v) => setCall(calls.find(x => x.id.toString() === v))}>
-                            <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                            <SelectContent>
-                                {calls.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div>
-                        <label className="text-sm">Carrera</label>
-                        <Select value={careerId} onValueChange={setCareerId}>
-                            <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                            <SelectContent>
-                                {call?.careers?.map(k => <SelectItem key={k.id} value={k.id.toString()}>{k.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="flex items-end gap-2">
-                        <Button variant="outline" onClick={load}>Refrescar</Button>
-                        <Button variant="outline" onClick={downloadActa} disabled={!rows.length}>Descargar Acta (PDF)</Button>
-                        {!published
-                            ? <Button onClick={publish} disabled={!rows.length}>Publicar</Button>
-                            : <Button onClick={closeProcess} variant="secondary">Cerrar Proceso</Button>}
-                    </div>
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+  <div>
+    <label className="text-sm">Convocatoria</label>
+    <Select value={call?.id?.toString()} onValueChange={(v) => setCall(calls.find(x => x.id.toString() === v))}>
+      <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+      <SelectContent>
+        {calls.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  </div>
+
+  <div>
+    <label className="text-sm">Carrera</label>
+    <Select value={careerId} onValueChange={setCareerId}>
+      <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+      <SelectContent>
+        {call?.careers?.map(k => <SelectItem key={k.id} value={k.id.toString()}>{k.name}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  </div>
+
+  {/* BOTONES RESPONSIVE */}
+  <div className="flex flex-col md:flex-row md:items-end gap-2">
+    <Button className="w-full md:w-auto" variant="outline" onClick={load}>
+      Refrescar
+    </Button>
+
+    <Button
+      className="w-full md:w-auto"
+      variant="outline"
+      onClick={downloadActa}
+      disabled={!rows.length}
+    >
+      Descargar Acta (PDF)
+    </Button>
+
+    {!published ? (
+      <Button className="w-full md:w-auto" onClick={publish} disabled={!rows.length}>
+        Publicar
+      </Button>
+    ) : (
+      <Button className="w-full md:w-auto" onClick={closeProcess} variant="secondary">
+        Cerrar Proceso
+      </Button>
+    )}
+  </div>
+</div>
+
 
                 <div className="border rounded overflow-x-auto">
                     <table className="w-full text-sm">

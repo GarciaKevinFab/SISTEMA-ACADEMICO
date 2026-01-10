@@ -177,8 +177,11 @@ const AccessControlModule = () => {
 
   const defaultTab = canManage ? "users" : canCatalogs ? "catalogs" : canAudit ? "audit" : "users";
 
-  return (
-    <div className="p-6 space-y-6">
+ return (
+    // CAMBIO 1: 'h-full overflow-y-auto' para scroll general.
+    // 'pb-40' deja espacio al final para el botón flotante.
+    // 'p-4' reduce márgenes en móvil.
+    <div className="h-full overflow-y-auto p-4 md:p-6 pb-40 space-y-6">
       <motion.div
         {...fade}
         className="rounded-2xl p-[1px] bg-gradient-to-r from-blue-500/30 via-purple-500/30 to-fuchsia-500/30"
@@ -187,59 +190,63 @@ const AccessControlModule = () => {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Administración</h1>
             <p className="text-sm text-gray-600 dark:text-gray-300">
-              Gestión de usuarios, roles y permisos del Sistema Académico.
+              Gestión de usuarios, roles y permisos.
             </p>
           </div>
           <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 dark:text-gray-300">
             <Database className="h-4 w-4" />
-            <span>Configuración central del sistema</span>
+            <span>Configuración central</span>
           </div>
         </div>
       </motion.div>
 
       <Tabs defaultValue={defaultTab} className="space-y-6">
-        <TabsList className="sticky top-0 z-10 mx-auto w-fit rounded-2xl bg-white/70 dark:bg-neutral-900/60 backdrop-blur border border-white/50 dark:border-white/10 shadow-sm">
-          {canManage && (
-            <TabsTrigger
-              value="users"
-              className="gap-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition"
-            >
-              <Users className="h-4 w-4" /> Usuarios
-            </TabsTrigger>
-          )}
-          {canManage && (
-            <TabsTrigger
-              value="roles"
-              className="gap-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-600 data-[state=active]:to-fuchsia-600 data-[state=active]:text-white"
-            >
-              <Shield className="h-4 w-4" /> Roles
-            </TabsTrigger>
-          )}
-          {canManage && (
-            <TabsTrigger
-              value="permissions"
-              className="gap-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-teal-600 data-[state=active]:text-white"
-            >
-              <KeyRound className="h-4 w-4" /> Permisos
-            </TabsTrigger>
-          )}
+        
+        {/* CAMBIO 2: CONTENEDOR DESLIZABLE PARA LAS PESTAÑAS */}
+        {/* Esto permite hacer scroll horizontal en el menú si no cabe en la pantalla */}
+        <div className="w-full overflow-x-auto pb-2">
+            <TabsList className="inline-flex w-max h-auto p-1 mx-auto rounded-2xl bg-white/70 dark:bg-neutral-900/60 backdrop-blur border border-white/50 dark:border-white/10 shadow-sm">
+            {canManage && (
+                <TabsTrigger
+                value="users"
+                className="gap-2 px-4 py-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition"
+                >
+                <Users className="h-4 w-4" /> Usuarios
+                </TabsTrigger>
+            )}
+            {canManage && (
+                <TabsTrigger
+                value="roles"
+                className="gap-2 px-4 py-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-600 data-[state=active]:to-fuchsia-600 data-[state=active]:text-white"
+                >
+                <Shield className="h-4 w-4" /> Roles
+                </TabsTrigger>
+            )}
+            {canManage && (
+                <TabsTrigger
+                value="permissions"
+                className="gap-2 px-4 py-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-teal-600 data-[state=active]:text-white"
+                >
+                <KeyRound className="h-4 w-4" /> Permisos
+                </TabsTrigger>
+            )}
 
-          {/* ✅ NUEVO: Catálogos */}
-          {canCatalogs && (
-            <TabsTrigger
-              value="catalogs"
-              className="gap-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-800 data-[state=active]:to-slate-600 data-[state=active]:text-white"
-            >
-              <Database className="h-4 w-4" /> Catálogos
-            </TabsTrigger>
-          )}
+            {canCatalogs && (
+                <TabsTrigger
+                value="catalogs"
+                className="gap-2 px-4 py-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-800 data-[state=active]:to-slate-600 data-[state=active]:text-white"
+                >
+                <Database className="h-4 w-4" /> Catálogos
+                </TabsTrigger>
+            )}
 
-          {canAudit && (
-            <TabsTrigger value="audit" className="rounded-xl">
-              Auditoría
-            </TabsTrigger>
-          )}
-        </TabsList>
+            {canAudit && (
+                <TabsTrigger value="audit" className="px-4 py-2 rounded-xl">
+                Auditoría
+                </TabsTrigger>
+            )}
+            </TabsList>
+        </div>
 
         {canManage && (
           <TabsContent value="users" asChild>
@@ -263,7 +270,6 @@ const AccessControlModule = () => {
           </TabsContent>
         )}
 
-        {/* ✅ NUEVO CONTENT: Catálogos */}
         {canCatalogs && (
           <TabsContent value="catalogs" asChild>
             <motion.div {...fade}>
@@ -535,120 +541,147 @@ const UsersTab = () => {
                 </Button>
               </DialogTrigger>
 
-              <DialogContent className="max-w-xl backdrop-blur-md bg-white/85 dark:bg-neutral-900/85 border border-white/50 dark:border-white/10 rounded-2xl">
-                <DialogHeader>
-                  <DialogTitle>Crear Usuario</DialogTitle>
-                  <DialogDescription>Complete los datos básicos</DialogDescription>
-                </DialogHeader>
+              <DialogContent
+  className="
+    w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-xl
+    h-[90vh] overflow-hidden p-0
+    backdrop-blur-md bg-white/85 dark:bg-neutral-900/85
+    border border-white/50 dark:border-white/10 rounded-2xl
+    flex flex-col
+  "
+>
+  {/* HEADER fijo */}
+  <div className="px-6 pt-5 pb-3 border-b flex-none">
+    <DialogHeader>
+      <DialogTitle>Crear Usuario</DialogTitle>
+      <DialogDescription>Complete los datos básicos</DialogDescription>
+    </DialogHeader>
+  </div>
 
-                <motion.form {...scaleIn} onSubmit={handleCreate} className="space-y-4">
-                  <div className="grid gap-3">
-                    <div>
-                      <Label htmlFor="full_name">Nombre completo</Label>
-                      <Input
-                        id="full_name"
-                        className="rounded-xl"
-                        value={form.full_name}
-                        onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-                        required
-                      />
-                    </div>
+  {/* BODY con scroll */}
+  <div
+    className="px-6 py-4 flex-1 overflow-y-auto"
+    style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}
+  >
+    <motion.form {...scaleIn} onSubmit={handleCreate} className="space-y-4">
+      <div className="grid gap-3">
+        <div>
+          <Label htmlFor="full_name">Nombre completo</Label>
+          <Input
+            id="full_name"
+            className="rounded-xl"
+            value={form.full_name}
+            onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+            required
+          />
+        </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <Label htmlFor="username">Usuario</Label>
-                        <Input
-                          id="username"
-                          className="rounded-xl"
-                          value={form.username}
-                          onChange={(e) => setForm({ ...form, username: e.target.value })}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          className="rounded-xl"
-                          value={form.email}
-                          onChange={(e) => setForm({ ...form, email: e.target.value })}
-                          required
-                        />
-                      </div>
-                    </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="username">Usuario</Label>
+            <Input
+              id="username"
+              className="rounded-xl"
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              className="rounded-xl"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              required
+            />
+          </div>
+        </div>
 
-                    <div>
-                      <Label htmlFor="password">Contraseña</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        className="rounded-xl"
-                        value={form.password}
-                        onChange={(e) => setForm({ ...form, password: e.target.value })}
-                        required
-                      />
-                      <PasswordHints feedback={pwdFeedback} />
-                    </div>
+        <div>
+          <Label htmlFor="password">Contraseña</Label>
+          <Input
+            id="password"
+            type="password"
+            className="rounded-xl"
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            required
+          />
+          <PasswordHints feedback={pwdFeedback} />
+        </div>
 
-                    {/* ✅ Roles selector (checkbox, no comas) */}
-                    <div>
-                      <Label>Roles</Label>
-                      <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
-                        {rolesOptions.map((r) => {
-                          const checked = form.roles.includes(r);
-                          return (
-                            <label
-                              key={r}
-                              className={`flex items-center gap-2 p-2 rounded-xl border cursor-pointer ${checked ? "bg-blue-50 border-blue-200" : "hover:bg-muted/40"
-                                }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() =>
-                                  toggleRole(r, form.roles, (newRoles) =>
-                                    setForm({ ...form, roles: newRoles })
-                                  )
-                                }
-                              />
-                              <span className="text-sm">{r}</span>
-                            </label>
-                          );
-                        })}
-                        {rolesOptions.length === 0 && (
-                          <p className="text-xs text-muted-foreground">
-                            No hay roles (o no tienes permisos para listarlos).
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+        {/* Roles */}
+        <div>
+          <Label>Roles</Label>
+          <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
+            {rolesOptions.map((r) => {
+              const checked = form.roles.includes(r);
+              return (
+                <label
+                  key={r}
+                  className={`flex items-center gap-2 p-2 rounded-xl border cursor-pointer ${
+                    checked ? "bg-blue-50 border-blue-200" : "hover:bg-muted/40"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() =>
+                      toggleRole(r, form.roles, (newRoles) =>
+                        setForm({ ...form, roles: newRoles })
+                      )
+                    }
+                  />
+                  <span className="text-sm">{r}</span>
+                </label>
+              );
+            })}
 
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setOpenCreate(false)}
-                      className="rounded-xl"
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      type="submit"
-                      className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 gap-2"
-                    >
-                      <Check className="h-4 w-4" /> Crear
-                    </Button>
-                  </div>
-                </motion.form>
-              </DialogContent>
+            {rolesOptions.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No hay roles (o no tienes permisos para listarlos).
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* espacio final para que no choque con el footer */}
+        <div className="h-8" />
+      </div>
+
+      {/* FOOTER fijo */}
+      <div className="sticky bottom-0 bg-white/85 dark:bg-neutral-900/85 pt-3 pb-2 border-t">
+        <div className="flex flex-col sm:flex-row justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setOpenCreate(false)}
+            className="rounded-xl w-full sm:w-auto"
+          >
+            Cancelar
+          </Button>
+
+          <Button
+            type="submit"
+            className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 gap-2 w-full sm:w-auto"
+          >
+            <Check className="h-4 w-4" /> Crear
+          </Button>
+        </div>
+      </div>
+    </motion.form>
+  </div>
+</DialogContent>
+
             </Dialog>
           </div>
         </div>
 
         {/* Tabla */}
-        <div className="rounded-2xl border border-white/50 dark:border-white/10 overflow-hidden">
+        <div className="rounded-2xl border border-white/50 dark:border-white/10 overflow-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50/80 dark:bg-neutral-800/80 text-black backdrop-blur sticky top-0 z-10">
               <tr className="[&>th]:p-3 [&>th]:text-left">

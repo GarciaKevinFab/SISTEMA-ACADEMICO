@@ -71,6 +71,14 @@ import {
 } from "../../services/mesaPartes.service";
 
 import MesaPartesReports from "./MesaPartesReports";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+
+import { ChevronDown } from "lucide-react";
 
 /* ---------------- helpers ---------------- */
 function formatApiError(err, fallback = "Ocurrió un error") {
@@ -133,60 +141,65 @@ const MesaDePartesDashboardUI = ({ onNew, onSearch, onQR, onReports }) => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight text-black">Mesa de Partes Digital</h2>
-          <p className="text-muted-foreground">Sistema de gestión de trámites documentarios</p>
-        </div>
-      </div>
+    <div className="space-y-6 px-1 sm:px-0">
+  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <div className="min-w-0">
+      <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-black leading-tight">
+        Mesa de Partes Digital
+      </h2>
+      <p className="text-sm sm:text-base text-muted-foreground">
+        Sistema de gestión de trámites documentarios
+      </p>
+    </div>
+  </div>
 
-      {/* Quick Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Trámites Pendientes</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.pending_procedures || 0}</div>
-            <p className="text-xs text-muted-foreground">Requieren atención</p>
-          </CardContent>
-        </Card>
+  {/* Quick Stats */}
+  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <Card className="w-full">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">Trámites Pendientes</CardTitle>
+        <Clock className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{stats.pending_procedures || 0}</div>
+        <p className="text-xs text-muted-foreground">Requieren atención</p>
+      </CardContent>
+    </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completados Hoy</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.completed_today || 0}</div>
-            <p className="text-xs text-muted-foreground">Trámites finalizados</p>
-          </CardContent>
-        </Card>
+    <Card className="w-full">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">Completados Hoy</CardTitle>
+        <CheckCircle className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{stats.completed_today || 0}</div>
+        <p className="text-xs text-muted-foreground">Trámites finalizados</p>
+      </CardContent>
+    </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tiempo Promedio</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.avg_processing_time || "0"} días</div>
-            <p className="text-xs text-muted-foreground">Tiempo de procesamiento</p>
-          </CardContent>
-        </Card>
+    <Card className="w-full">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">Tiempo Promedio</CardTitle>
+        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{stats.avg_processing_time || "0"} días</div>
+        <p className="text-xs text-muted-foreground">Tiempo de procesamiento</p>
+      </CardContent>
+    </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tipos de Trámite</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.procedure_types || 0}</div>
-            <p className="text-xs text-muted-foreground">Tipos disponibles</p>
-          </CardContent>
-        </Card>
-      </div>
+    <Card className="w-full">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">Tipos de Trámite</CardTitle>
+        <FileText className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{stats.procedure_types || 0}</div>
+        <p className="text-xs text-muted-foreground">Tipos disponibles</p>
+      </CardContent>
+    </Card>
+  </div>
+
 
       {/* Acciones rápidas */}
       <Card>
@@ -340,7 +353,8 @@ const ProcedureTypesManagement = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 sm:pb-6">
+
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Tipos de Trámite</h2>
 
@@ -348,7 +362,7 @@ const ProcedureTypesManagement = () => {
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
               <Plus className="h-4 w-4 mr-2" />
-              Nuevo Tipo de Trámite
+              Nuevo 
             </Button>
           </DialogTrigger>
 
@@ -1281,7 +1295,8 @@ const ProceduresManagement = forwardRef((props, ref) => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 sm:pb-6">
+
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Gestión de Trámites</h2>
 
@@ -1402,33 +1417,39 @@ const ProceduresManagement = forwardRef((props, ref) => {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4 items-center">
-        <div className="flex-1 max-w-md">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              placeholder="Buscar por código, nombre o tipo..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-              ref={searchInputRef}
-            />
-          </div>
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filtrar por estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Todos los estados</SelectItem>
-            <SelectItem value="RECEIVED">Recibido</SelectItem>
-            <SelectItem value="IN_REVIEW">En Revisión</SelectItem>
-            <SelectItem value="APPROVED">Aprobado</SelectItem>
-            <SelectItem value="REJECTED">Rechazado</SelectItem>
-            <SelectItem value="COMPLETED">Completado</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+  {/* Buscador */}
+  <div className="w-full min-w-0 sm:flex-1 sm:max-w-md">
+    <div className="relative">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+      <Input
+        placeholder="Buscar por código, nombre o tipo..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        className="pl-10 w-full min-w-0"
+        ref={searchInputRef}
+      />
+    </div>
+  </div>
+
+  {/* Estado */}
+  <div className="w-full sm:w-48 shrink-0">
+    <Select value={statusFilter} onValueChange={setStatusFilter}>
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder="Filtrar por estado" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="ALL">Todos los estados</SelectItem>
+        <SelectItem value="RECEIVED">Recibido</SelectItem>
+        <SelectItem value="IN_REVIEW">En Revisión</SelectItem>
+        <SelectItem value="APPROVED">Aprobado</SelectItem>
+        <SelectItem value="REJECTED">Rechazado</SelectItem>
+        <SelectItem value="COMPLETED">Completado</SelectItem>
+      </SelectContent>
+    </Select>
+  </div>
+</div>
+
 
       {/* List */}
       <Card>
@@ -1576,19 +1597,59 @@ const MesaDePartesModule = () => {
 
           <div className="px-6 pb-6 pt-4">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-              <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
-                <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2">
-                  {tabs.map((t) => (
-                    <TabsTrigger
-                      key={t.key}
-                      value={t.key}
-                      className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                    >
-                      {t.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </div>
+              {/* ===== NAV TABS RESPONSIVE ===== */}
+<div className="pb-1">
+  {/* MÓVIL: tab actual + dropdown */}
+  <div className="sm:hidden">
+    <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
+      <div className="flex items-center gap-2">
+        <TabsList className="flex-1 bg-transparent p-0 shadow-none">
+          <TabsTrigger
+            value={activeTab}
+            className="w-full justify-center rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+          >
+            {tabs.find((t) => t.key === activeTab)?.label ?? "Dashboard"}
+          </TabsTrigger>
+        </TabsList>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon" className="h-10 w-10 rounded-lg shrink-0">
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent align="end" className="w-56">
+            {tabs.map((t) => (
+              <DropdownMenuItem key={t.key} onClick={() => setActiveTab(t.key)}>
+                {t.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  </div>
+
+  {/* TABLET/LAPTOP: tabs normales */}
+  <div className="hidden sm:block">
+    <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
+      <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2">
+        {tabs.map((t) => (
+          <TabsTrigger
+            key={t.key}
+            value={t.key}
+            className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+          >
+            {t.label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </div>
+  </div>
+</div>
+{/* ===== /NAV TABS RESPONSIVE ===== */}
+
 
               {tabs.some((t) => t.key === "dashboard") && (
                 <TabsContent value="dashboard">

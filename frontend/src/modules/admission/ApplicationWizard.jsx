@@ -78,17 +78,26 @@ export default function ApplicationWizard() {
     };
 
     return (
-        <div className="space-y-6">
+       <div className="space-y-6 pb-24 sm:pb-6">
+
             <Card>
                 <CardHeader><CardTitle>Postulación – Asistente</CardTitle></CardHeader>
                 <CardContent className="space-y-6">
                     {/* Paso */}
-                    <div className="flex gap-2 text-xs">
-                        <Badge variant={step >= STEPS.CALL ? "default" : "secondary"}>1. Convocatoria</Badge>
-                        <Badge variant={step >= STEPS.PAYMENT ? "default" : "secondary"}>2. Pago</Badge>
-                        <Badge variant={step >= STEPS.DOCS ? "default" : "secondary"}>3. Documentos</Badge>
-                        <Badge variant={step >= STEPS.REVIEW ? "default" : "secondary"}>4. Revisión</Badge>
-                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+  <Badge className="min-w-[120px] justify-center text-center whitespace-normal" variant={step >= STEPS.CALL ? "default" : "secondary"}>
+    1. Convocatoria
+  </Badge>
+  <Badge className="min-w-[120px] justify-center text-center whitespace-normal" variant={step >= STEPS.PAYMENT ? "default" : "secondary"}>
+    2. Pago
+  </Badge>
+  <Badge className="min-w-[120px] justify-center text-center whitespace-normal" variant={step >= STEPS.DOCS ? "default" : "secondary"}>
+    3. Documentos
+  </Badge>
+  <Badge className="min-w-[120px] justify-center text-center whitespace-normal" variant={step >= STEPS.REVIEW ? "default" : "secondary"}>
+    4. Revisión
+  </Badge>
+</div>
 
                     {step === STEPS.CALL && (
                         <div className="space-y-4">

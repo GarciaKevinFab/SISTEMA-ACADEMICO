@@ -233,196 +233,235 @@ export default function CashBanksDashboard() {
 
   return (
     <div className="flex flex-col w-full min-h-screen bg-slate-50/50 pb-10">
-      
-      {/* 1. CABECERA */}
-      <div className="flex-none px-6 py-4 border-b bg-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
-        <div>
-          <h2 className="text-xl font-bold text-gray-800">Caja y Bancos</h2>
-          <p className="text-xs text-gray-500">Gestión de flujo de efectivo</p>
+
+  {/* 1. CABECERA */}
+  <div className="flex-none px-4 sm:px-6 py-4 border-b bg-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 shadow-sm">
+    <div className="min-w-0">
+      <h2 className="text-xl font-bold text-gray-800">Caja y Bancos</h2>
+      <p className="text-xs text-gray-500">Gestión de flujo de efectivo</p>
+    </div>
+
+    <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2 sm:items-center">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => { loadSessions(); loadMovs(); }}
+        className="h-9 w-full sm:w-auto"
+      >
+        <RefreshCw className="h-3.5 w-3.5 mr-2" /> Actualizar
+      </Button>
+
+      <Button
+        size="sm"
+        onClick={() => setOpenDlg(true)}
+        className="h-9 w-full sm:w-auto"
+      >
+        <Plus className="h-3.5 w-3.5 mr-2" /> Abrir
+      </Button>
+
+      {statusMeta.code === "OPEN" && (
+        <Button
+          size="sm"
+          onClick={() => setCloseDlg(true)}
+          variant="destructive"
+          className="h-9 w-full sm:w-auto"
+        >
+          <Save className="h-3.5 w-3.5 mr-2" /> Cerrar
+        </Button>
+      )}
+    </div>
+  </div>
+
+  {/* 2. CONTENIDO PRINCIPAL */}
+  <div className="p-4 sm:p-6 space-y-5">
+
+    {/* Panel de Control y Totales */}
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <Card className="lg:col-span-1 shadow-sm bg-white">
+        <CardHeader className="pb-2 py-3 px-4">
+          <CardTitle className="text-sm font-medium text-gray-500">Sesión Actual</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          <Select value={currentId ? String(currentId) : undefined} onValueChange={setCurrentId}>
+            <SelectTrigger className="w-full font-medium">
+              <SelectValue placeholder="Seleccionar..." />
+            </SelectTrigger>
+            <SelectContent>
+              {sessions.map((s) => optVal(s.id) && (
+                <SelectItem key={s.id} value={String(s.id)}>
+                  #{s.id} · {toLimaDateTime(s.opened_at).split(",")[0]} ({normStatus(s.status).label})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="mt-3 flex items-center justify-between">
+            <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
+            <span className="text-xs text-gray-400">
+              {current ? toLimaDateTime(current.opened_at).split(",")[1] : ""}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Totales */}
+      {current && (
+        <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Card className="bg-white shadow-sm">
+            <CardContent className="p-4 flex flex-col justify-center h-full">
+              <span className="text-xs font-bold text-gray-500 uppercase">Ingresos</span>
+              <span className="text-xl font-bold text-green-600">{fmtCurrency(totals.ins)}</span>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white shadow-sm">
+            <CardContent className="p-4 flex flex-col justify-center h-full">
+              <span className="text-xs font-bold text-gray-500 uppercase">Egresos</span>
+              <span className="text-xl font-bold text-red-600">{fmtCurrency(totals.outs)}</span>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white shadow-sm ring-1 ring-blue-100">
+            <CardContent className="p-4 flex flex-col justify-center h-full">
+              <span className="text-xs font-bold text-blue-600 uppercase">Saldo Caja</span>
+              <span className="text-2xl font-black text-blue-800">{fmtCurrency(totals.balance)}</span>
+            </CardContent>
+          </Card>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => { loadSessions(); loadMovs(); }} className="h-8">
-            <RefreshCw className="h-3.5 w-3.5 mr-2" /> Actualizar
+      )}
+    </div>
+
+    {/* Formulario */}
+    {statusMeta.code === "OPEN" && current && (
+      <Card className="border-l-4 border-l-blue-600 shadow-sm bg-white">
+        <CardContent className="p-4 flex flex-col md:flex-row gap-3 items-end">
+          <div className="w-full md:w-32">
+            <Label className="text-xs mb-1.5 block">Tipo</Label>
+            <Select value={newMov.type} onValueChange={(v) => setNewMov({ ...newMov, type: v })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="IN">
+                  <span className="text-green-600 font-bold">Ingreso (+)</span>
+                </SelectItem>
+                <SelectItem value="OUT">
+                  <span className="text-red-600 font-bold">Egreso (-)</span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="w-full md:w-40">
+            <Label className="text-xs mb-1.5 block">Monto</Label>
+            <Input
+              type="number"
+              className="font-bold text-right"
+              placeholder="0.00"
+              value={newMov.amount}
+              onChange={(e) => setNewMov({ ...newMov, amount: e.target.value })}
+              onKeyDown={(e) => e.key === "Enter" && addMovement()}
+            />
+          </div>
+
+          <div className="w-full flex-1">
+            <Label className="text-xs mb-1.5 block">Concepto</Label>
+            <Input
+              placeholder="Descripción de la operación..."
+              value={newMov.concept}
+              onChange={(e) => setNewMov({ ...newMov, concept: e.target.value })}
+              onKeyDown={(e) => e.key === "Enter" && addMovement()}
+            />
+          </div>
+
+          <Button
+            className="w-full md:w-auto min-w-[100px] bg-blue-600 hover:bg-blue-700"
+            onClick={addMovement}
+            disabled={busyMov}
+          >
+            {busyMov ? <Loader2 className="animate-spin h-4 w-4" /> : "Guardar"}
           </Button>
-          <Button size="sm" onClick={() => setOpenDlg(true)} className="h-8">
-            <Plus className="h-3.5 w-3.5 mr-2" /> Abrir
-          </Button>
-          {statusMeta.code === "OPEN" && (
-            <Button size="sm" onClick={() => setCloseDlg(true)} variant="destructive" className="h-8">
-              <Save className="h-3.5 w-3.5 mr-2" /> Cerrar
-            </Button>
-          )}
-        </div>
+        </CardContent>
+      </Card>
+    )}
+
+    {/* --- TABLA RESPONSIVE (scroll horizontal + alto móvil) --- */}
+    <Card className="shadow-sm border border-gray-200 bg-white mt-4 flex flex-col">
+      <div className="px-4 py-3 border-b flex justify-between items-center bg-gray-50">
+        <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+          Movimientos ({movs.length})
+        </span>
+        <Badge variant="secondary" className="bg-white border text-gray-600 shadow-sm">
+          Historial
+        </Badge>
       </div>
 
-      {/* 2. CONTENIDO PRINCIPAL */}
-      <div className="p-4 sm:p-6 space-y-5">
-        
-        {/* Panel de Control y Totales */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <Card className="lg:col-span-1 shadow-sm bg-white">
-                <CardHeader className="pb-2 py-3 px-4">
-                    <CardTitle className="text-sm font-medium text-gray-500">Sesión Actual</CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 pb-4">
-                    <Select value={currentId ? String(currentId) : undefined} onValueChange={setCurrentId}>
-                        <SelectTrigger className="w-full font-medium">
-                            <SelectValue placeholder="Seleccionar..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                        {sessions.map((s) => optVal(s.id) && (
-                            <SelectItem key={s.id} value={String(s.id)}>
-                                #{s.id} · {toLimaDateTime(s.opened_at).split(',')[0]} ({normStatus(s.status).label})
-                            </SelectItem>
-                        ))}
-                        </SelectContent>
-                    </Select>
-                    <div className="mt-3 flex items-center justify-between">
-                        <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
-                        <span className="text-xs text-gray-400">
-                            {current ? toLimaDateTime(current.opened_at).split(',')[1] : ''}
-                        </span>
-                    </div>
-                </CardContent>
-            </Card>
+      <div className="w-full overflow-x-auto">
+        <div className="w-full max-h-[55vh] sm:max-h-[400px] overflow-y-auto relative border-b rounded-b-lg bg-white">
+          <table className="w-full min-w-[720px] text-sm text-left border-collapse">
+            <thead className="text-xs text-gray-500 uppercase bg-gray-100 sticky top-0 z-20 shadow-sm ring-1 ring-gray-200/50">
+              <tr>
+                <th className="px-4 py-3 font-semibold w-24 bg-gray-100 border-b">Hora</th>
+                <th className="px-4 py-3 font-semibold w-24 bg-gray-100 border-b">Tipo</th>
+                <th className="px-4 py-3 font-semibold bg-gray-100 border-b">Concepto</th>
+                <th className="px-4 py-3 font-semibold text-right w-32 bg-gray-100 border-b">Monto</th>
+              </tr>
+            </thead>
 
-            {/* Totales */}
-            {current && (
-                <div className="lg:col-span-2 grid grid-cols-3 gap-3">
-                    <Card className="bg-white shadow-sm">
-                        <CardContent className="p-4 flex flex-col justify-center h-full">
-                            <span className="text-xs font-bold text-gray-500 uppercase">Ingresos</span>
-                            <span className="text-xl font-bold text-green-600">{fmtCurrency(totals.ins)}</span>
-                        </CardContent>
-                    </Card>
-                    <Card className="bg-white shadow-sm">
-                        <CardContent className="p-4 flex flex-col justify-center h-full">
-                            <span className="text-xs font-bold text-gray-500 uppercase">Egresos</span>
-                            <span className="text-xl font-bold text-red-600">{fmtCurrency(totals.outs)}</span>
-                        </CardContent>
-                    </Card>
-                    <Card className="bg-white shadow-sm ring-1 ring-blue-100">
-                        <CardContent className="p-4 flex flex-col justify-center h-full">
-                            <span className="text-xs font-bold text-blue-600 uppercase">Saldo Caja</span>
-                            <span className="text-2xl font-black text-blue-800">{fmtCurrency(totals.balance)}</span>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {movs.map((m, index) => {
+                const tmeta = normType(m.type);
+                let timeStr = "-";
+                try {
+                  timeStr = toLimaDateTime(m.date).split(" ")[1];
+                } catch (e) {
+                  timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                }
+
+                return (
+                  <tr key={m.id || index} className="hover:bg-blue-50/40 transition-colors">
+                    <td className="px-4 py-3 whitespace-nowrap text-gray-500 font-mono text-xs border-r border-transparent">
+                      {timeStr}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] px-2 py-0.5 border ${
+                          tmeta.code === "IN"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-rose-50 text-rose-700 border-rose-200"
+                        }`}
+                      >
+                        {tmeta.label}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 font-medium">
+                      {safeText(m.concept)}
+                    </td>
+                    <td className={`px-4 py-3 text-right font-bold whitespace-nowrap ${tmeta.code === "IN" ? "text-emerald-600" : "text-rose-600"}`}>
+                      {tmeta.code === "IN" ? "+" : "-"} {fmtCurrency(m.amount)}
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {movs.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="h-40 text-center text-gray-400">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <span className="text-sm italic">Sin movimientos registrados</span>
+                    </div>
+                  </td>
+                </tr>
+              )}
+
+              {movs.length > 0 && <tr className="h-8 bg-transparent border-none"></tr>}
+            </tbody>
+          </table>
         </div>
-
-        {/* Formulario */}
-        {statusMeta.code === "OPEN" && current && (
-            <Card className="border-l-4 border-l-blue-600 shadow-sm bg-white">
-                <CardContent className="p-4 flex flex-col md:flex-row gap-3 items-end">
-                    <div className="w-full md:w-32">
-                        <Label className="text-xs mb-1.5 block">Tipo</Label>
-                        <Select value={newMov.type} onValueChange={(v) => setNewMov({ ...newMov, type: v })}>
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="IN">
-                                    <span className="text-green-600 font-bold">Ingreso (+)</span>
-                                </SelectItem>
-                                <SelectItem value="OUT">
-                                    <span className="text-red-600 font-bold">Egreso (-)</span>
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="w-full md:w-40">
-                        <Label className="text-xs mb-1.5 block">Monto</Label>
-                        <Input 
-                            type="number" className="font-bold text-right" 
-                            placeholder="0.00"
-                            value={newMov.amount} onChange={(e) => setNewMov({ ...newMov, amount: e.target.value })}
-                            onKeyDown={(e) => e.key === 'Enter' && addMovement()}
-                        />
-                    </div>
-                    <div className="w-full flex-1">
-                        <Label className="text-xs mb-1.5 block">Concepto</Label>
-                        <Input 
-                            placeholder="Descripción de la operación..." 
-                            value={newMov.concept} onChange={(e) => setNewMov({ ...newMov, concept: e.target.value })}
-                            onKeyDown={(e) => e.key === 'Enter' && addMovement()}
-                        />
-                    </div>
-                    <Button className="w-full md:w-auto min-w-[100px] bg-blue-600 hover:bg-blue-700" onClick={addMovement} disabled={busyMov}>
-                        {busyMov ? <Loader2 className="animate-spin h-4 w-4"/> : "Guardar"}
-                    </Button>
-                </CardContent>
-            </Card>
-        )}
-
-        {/* --- TABLA CON SCROLL CORREGIDO --- */}
-        <Card className="shadow-sm border border-gray-200 bg-white mt-4 flex flex-col">
-            <div className="px-4 py-3 border-b flex justify-between items-center bg-gray-50">
-                <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                    Movimientos ({movs.length})
-                </span>
-                <Badge variant="secondary" className="bg-white border text-gray-600 shadow-sm">
-                    Historial
-                </Badge>
-            </div>
-            
-            <div className="w-full h-[400px] overflow-y-auto relative border-b rounded-b-lg bg-white">
-                <table className="w-full text-sm text-left border-collapse">
-                    <thead className="text-xs text-gray-500 uppercase bg-gray-100 sticky top-0 z-20 shadow-sm ring-1 ring-gray-200/50">
-                        <tr>
-                            <th className="px-4 py-3 font-semibold w-24 bg-gray-100 border-b">Hora</th>
-                            <th className="px-4 py-3 font-semibold w-24 bg-gray-100 border-b">Tipo</th>
-                            <th className="px-4 py-3 font-semibold bg-gray-100 border-b">Concepto</th>
-                            <th className="px-4 py-3 font-semibold text-right w-32 bg-gray-100 border-b">Monto</th>
-                        </tr>
-                    </thead>
-
-                    <tbody className="divide-y divide-gray-100 bg-white">
-                        {movs.map((m, index) => {
-                            const tmeta = normType(m.type);
-                            let timeStr = "-";
-                            try {
-                                timeStr = toLimaDateTime(m.date).split(' ')[1];
-                            } catch(e) {
-                                timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                            }
-
-                            return (
-                                <tr key={m.id || index} className="hover:bg-blue-50/40 transition-colors">
-                                    <td className="px-4 py-3 whitespace-nowrap text-gray-500 font-mono text-xs border-r border-transparent">
-                                        {timeStr}
-                                    </td>
-                                    <td className="px-4 py-3 whitespace-nowrap">
-                                        <Badge variant="outline" className={`text-[10px] px-2 py-0.5 border ${tmeta.code === 'IN' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
-                                            {tmeta.label}
-                                        </Badge>
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-700 font-medium">
-                                        {safeText(m.concept)}
-                                    </td>
-                                    <td className={`px-4 py-3 text-right font-bold whitespace-nowrap ${tmeta.code === 'IN' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                        {tmeta.code === 'IN' ? '+' : '-'} {fmtCurrency(m.amount)}
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                        
-                        {movs.length === 0 && (
-                            <tr>
-                                <td colSpan={4} className="h-40 text-center text-gray-400">
-                                    <div className="flex flex-col items-center justify-center gap-2">
-                                        <span className="text-sm italic">Sin movimientos registrados</span>
-                                    </div>
-                                </td>
-                            </tr>
-                        )}
-                        {/* Espacio extra al final para el scroll */}
-                        {movs.length > 0 && <tr className="h-8 bg-transparent border-none"></tr>}
-                    </tbody>
-                </table>
-            </div>
-        </Card>
       </div>
+    </Card>
+  </div>
 
       {/* MODALES */}
       <Dialog open={openDlg} onOpenChange={(v) => !busyOpen && setOpenDlg(v)}>

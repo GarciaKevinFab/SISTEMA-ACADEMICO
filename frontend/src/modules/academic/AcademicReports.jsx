@@ -34,38 +34,78 @@ export default function AcademicReportsPage() {
             <Card>
                 <CardHeader><CardTitle>Reportes Académicos</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="grid md:grid-cols-5 gap-3">
-                        <div>
-                            <label className="text-sm">Desde</label>
-                            <Input type="date" value={filters.from} onChange={e => on("from", e.target.value)} />
-                        </div>
-                        <div>
-                            <label className="text-sm">Hasta</label>
-                            <Input type="date" value={filters.to} onChange={e => on("to", e.target.value)} />
-                        </div>
-                        <div>
-                            <label className="text-sm">Período</label>
-                            <Input value={filters.period} onChange={e => on("period", e.target.value)} />
-                        </div>
-                        <div>
-                            <label className="text-sm">Carrera</label>
-                            <Select
-                                value={filters.career_id === "" ? "ALL" : String(filters.career_id)}
-                                onValueChange={(v) => on("career_id", v === "ALL" ? "" : v)}
-                            >
-                                <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="ALL">Todas</SelectItem>
-                                    {/* Si luego cargas carreras, agrégalas aquí con value=String(id) */}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="flex items-end gap-2">
-                            <Button onClick={load}>Ver resumen</Button>
-                            <Button variant="outline" onClick={() => dl(AcademicReports.exportPerformance, "rendimiento.xlsx")}>Rendimiento</Button>
-                            <Button variant="outline" onClick={() => dl(AcademicReports.exportOccupancy, "ocupacion.xlsx")}>Ocupación</Button>
-                        </div>
-                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+  <div className="w-full min-w-0">
+    <label className="text-sm">Desde</label>
+    <Input
+      className="w-full"
+      type="date"
+      value={filters.from}
+      onChange={(e) => on("from", e.target.value)}
+    />
+  </div>
+
+  <div className="w-full min-w-0">
+    <label className="text-sm">Hasta</label>
+    <Input
+      className="w-full"
+      type="date"
+      value={filters.to}
+      onChange={(e) => on("to", e.target.value)}
+    />
+  </div>
+
+  <div className="w-full min-w-0">
+    <label className="text-sm">Período</label>
+    <Input
+      className="w-full"
+      value={filters.period}
+      onChange={(e) => on("period", e.target.value)}
+    />
+  </div>
+
+  <div className="w-full min-w-0">
+    <label className="text-sm">Carrera</label>
+    <Select
+      value={filters.career_id === "" ? "ALL" : String(filters.career_id)}
+      onValueChange={(v) => on("career_id", v === "ALL" ? "" : v)}
+    >
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder="Todas" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="ALL">Todas</SelectItem>
+        {/* Si luego cargas carreras, agrégalas aquí con value=String(id) */}
+      </SelectContent>
+    </Select>
+  </div>
+
+  {/* Botonera responsive */}
+  <div className="w-full min-w-0 md:col-span-1">
+    <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-1 gap-2">
+      <Button className="w-full" onClick={load}>
+        Ver resumen
+      </Button>
+
+      <Button
+        className="w-full"
+        variant="outline"
+        onClick={() => dl(AcademicReports.exportPerformance, "rendimiento.xlsx")}
+      >
+        Rendimiento
+      </Button>
+
+      <Button
+        className="w-full"
+        variant="outline"
+        onClick={() => dl(AcademicReports.exportOccupancy, "ocupacion.xlsx")}
+      >
+        Ocupación
+      </Button>
+    </div>
+  </div>
+</div>
+
 
                     {summary && (
                         <div className="grid md:grid-cols-4 gap-4">

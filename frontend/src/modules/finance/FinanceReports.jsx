@@ -102,88 +102,95 @@ export default function FinanceReports() {
   const safeRows = Array.isArray(rows) ? rows : []; // <— usa siempre este en el render
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Reportes de ingresos</h2>
-          <p className="text-sm text-gray-600">Por concepto / período / carrera</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={load}>
-            <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
-            Actualizar
-          </Button>
-          <Button onClick={exportPdf} disabled={exporting}>
-            {exporting ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
-                Generando…
-              </>
-            ) : (
-              <>
-                <Download className="h-4 w-4 mr-2" aria-hidden="true" />
-                Exportar PDF
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
+   <div className="space-y-6 pb-24 sm:pb-6">
+
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+  <div className="min-w-0">
+    <h2 className="text-xl md:text-2xl font-bold">Reportes de ingresos</h2>
+    <p className="text-sm text-gray-600">Por concepto / período / carrera</p>
+  </div>
+
+  <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+    <Button variant="outline" onClick={load} className="w-full sm:w-auto">
+      <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
+      Actualizar
+    </Button>
+
+    <Button onClick={exportPdf} disabled={exporting} className="w-full sm:w-auto">
+      {exporting ? (
+        <>
+          <RefreshCw className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+          Generando…
+        </>
+      ) : (
+        <>
+          <Download className="h-4 w-4 mr-2" aria-hidden="true" />
+          Exportar PDF
+        </>
+      )}
+    </Button>
+  </div>
+</div>
 
       <Card>
         <CardHeader>
           <CardTitle>Filtros</CardTitle>
           <CardDescription>Refina los resultados</CardDescription>
         </CardHeader>
-        <CardContent className="grid md:grid-cols-5 gap-3">
-          <div>
-            <label className="text-sm">Desde</label>
-            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-          </div>
-          <div>
-            <label className="text-sm">Hasta</label>
-            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-          </div>
-          <div>
-            <label className="text-sm">Concepto</label>
-            <Select value={conceptId} onValueChange={setConceptId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Todos</SelectItem>
-                {concepts.map((c) => {
-                  const v = optVal(c.id);
-                  if (!v) return null;
-                  return (
-                    <SelectItem key={v} value={v}>
-                      {c.name}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="md:col-span-2">
-            <label className="text-sm">Carrera</label>
-            <Select value={careerId} onValueChange={setCareerId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todas" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Todas</SelectItem>
-                {careers.map((c) => {
-                  const v = optVal(c.id);
-                  if (!v) return null;
-                  return (
-                    <SelectItem key={v} value={v}>
-                      {c.name}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
+        <CardContent className="grid grid-cols-1 md:grid-cols-5 gap-3">
+  <div>
+    <label className="text-sm">Desde</label>
+    <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+  </div>
+
+  <div>
+    <label className="text-sm">Hasta</label>
+    <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+  </div>
+
+  <div>
+    <label className="text-sm">Concepto</label>
+    <Select value={conceptId} onValueChange={setConceptId}>
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder="Todos" />
+      </SelectTrigger>
+      <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+        <SelectItem value="ALL">Todos</SelectItem>
+        {concepts.map((c) => {
+          const v = optVal(c.id);
+          if (!v) return null;
+          return (
+            <SelectItem key={v} value={v}>
+              {c.name}
+            </SelectItem>
+          );
+        })}
+      </SelectContent>
+    </Select>
+  </div>
+
+  <div className="md:col-span-2">
+    <label className="text-sm">Carrera</label>
+    <Select value={careerId} onValueChange={setCareerId}>
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder="Todas" />
+      </SelectTrigger>
+      <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+        <SelectItem value="ALL">Todas</SelectItem>
+        {careers.map((c) => {
+          const v = optVal(c.id);
+          if (!v) return null;
+          return (
+            <SelectItem key={v} value={v}>
+              {c.name}
+            </SelectItem>
+          );
+        })}
+      </SelectContent>
+    </Select>
+  </div>
+</CardContent>
+
       </Card>
 
       <Card>

@@ -77,7 +77,8 @@ export default function ResearchCallsModule() {
     const sum = rubric.reduce((a, b) => a + (+b.weight || 0), 0);
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-24 sm:pb-6">
+
             <div className="flex justify-between items-center">
                 <div>
                     <h2 className="text-2xl font-bold">Convocatorias</h2>

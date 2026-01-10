@@ -15,13 +15,16 @@ const Layout = ({ children }) => {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-100 font-sans text-slate-900">
+   <div className="flex flex-col xl:flex-row min-h-[100dvh] bg-gray-100 font-sans text-slate-900">
+
+
       
       {/* NAVEGACIÓN LATERAL (Fija o adaptable según tu componente SideNav) */}
       <SideNav />
 
       {/* CONTENEDOR DERECHO */}
-      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 transition-all duration-300 ease-in-out">
+
 
         {/* HEADER MEJORADO 
             - Sticky: Se queda pegado arriba.
@@ -87,8 +90,9 @@ const Layout = ({ children }) => {
             - animate-in: Suaviza la aparición del contenido.
             - p-6: Un poco más de espacio que p-4 para que respire.
         */}
-        <main className="flex-1 overflow-auto p-4 md:p-6 animate-in fade-in duration-500">
-          <div className="mx-auto w-full max-w-[1920px]">
+        <main className="flex-1 min-h-0 overflow-visible p-4 md:p-6 animate-in fade-in duration-500">
+
+          <div className="w-full min-w-0">
              {children || <Outlet />}
           </div>
         </main>

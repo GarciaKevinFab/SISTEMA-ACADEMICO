@@ -113,7 +113,8 @@ const ActsTab = () => {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-24 sm:pb-6">
+
             <Section
                 title={<><ClipboardList className="h-5 w-5 text-blue-600" />Acta académica por sección</>}
                 desc="Genera el acta oficial de evaluación (cierre de actas) para una sección específica."
@@ -212,7 +213,8 @@ const SlipsConstanciesTab = () => {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-24 sm:pb-6">
+
             <Section
                 title={<><BookOpenCheck className="h-5 w-5 text-blue-600" />Boleta de Notas & Constancia de Matrícula</>}
                 desc="Documentos por alumno y periodo."
@@ -287,7 +289,8 @@ const KardexTab = () => {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-24 sm:pb-6">
+
             <Section
                 title={<><GraduationCap className="h-5 w-5 text-blue-600" />Kárdex del Estudiante</>}
                 desc="Historial académico consolidado del estudiante."
@@ -346,7 +349,8 @@ const CertificatesTab = () => {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-24 sm:pb-6">
+
             <Section
                 title={<><Stamp className="h-5 w-5 text-blue-600" />Certificados Oficiales</>}
                 desc="Emisión de certificados parametrizables."
@@ -423,7 +427,8 @@ const ExcelExportsTab = () => {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-24 sm:pb-6">
+
             <Section
                 title={<><FileSpreadsheet className="h-5 w-5 text-blue-600" />Exportaciones Excel</>}
                 desc="Descarga listados y reportes en formato XLSX."

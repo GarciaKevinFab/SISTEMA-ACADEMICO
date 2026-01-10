@@ -74,7 +74,8 @@ export default function DocumentReview() {
     return (
         <Card>
             <CardHeader><CardTitle>Revisión de Documentos</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 px-4 sm:px-6">
+
                 <div className="grid md:grid-cols-3 gap-3">
                     <div>
                         <label className="text-sm">Convocatoria</label>
@@ -94,12 +95,26 @@ export default function DocumentReview() {
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="flex items-end gap-2">
-                        <Button variant="outline" onClick={loadApplications}>Refrescar</Button>
-                        <Button variant="outline" disabled={!current} onClick={markComplete} data-testid="btn-mark-complete">
-                            Marcar expediente completo
-                        </Button>
-                    </div>
+                   <div className="flex flex-col md:flex-row md:items-end gap-2">
+  <Button
+    className="w-full md:w-auto"
+    variant="outline"
+    onClick={loadApplications}
+  >
+    Refrescar
+  </Button>
+
+  <Button
+    className="w-full md:w-auto"
+    variant="outline"
+    disabled={!current}
+    onClick={markComplete}
+    data-testid="btn-mark-complete"
+  >
+    Marcar expediente 
+  </Button>
+</div>
+
                 </div>
 
                 <div className="grid lg:grid-cols-3 gap-4">

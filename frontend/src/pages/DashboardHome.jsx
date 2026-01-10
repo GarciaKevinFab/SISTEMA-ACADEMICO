@@ -104,69 +104,65 @@ export default function DashboardHome() {
         users: null,
     });
 
-    useEffect(() => {
-        let alive = true;
+    // --- NUEVA LÓGICA DE CARGA REUTILIZABLE ---
+    const loadDashboardData = async () => {
+        setLoading(true);
+        setErr("");
 
-        (async () => {
-            setLoading(true);
-            setErr("");
+        try {
+            // Hacemos todas las peticiones de nuevo
+            const [
+                admission,
+                academic,
+                finance,
+                mpv,
+                minedu,
+                research,
+                users,
+            ] = await Promise.allSettled([
+                getAdmissionDashboardStats(),
+                AcademicReports.summary(),
+                FinanceDashboard.stats(),
+                ProcedureReports.summary(),
+                MineduStats.dashboard(),
+                ResearchReports.summary({}),
+                UsersService.list({ page: 1, page_size: 1 }),
+            ]);
 
-            try {
-                const [
-                    admission,
-                    academic,
-                    finance,
-                    mpv,
-                    minedu,
-                    research,
-                    users,
-                ] = await Promise.allSettled([
-                    getAdmissionDashboardStats(),
-                    AcademicReports.summary(),
-                    FinanceDashboard.stats(),
-                    ProcedureReports.summary(),
-                    MineduStats.dashboard(),
-                    ResearchReports.summary({}),
-                    // truco: pedir poco pero obtener "count" si hay paginación
-                    UsersService.list({ page: 1, page_size: 1 }),
-                ]);
+            // Guardamos los datos en el estado
+            setData({
+                admission: admission.status === "fulfilled" ? admission.value : null,
+                academic: academic.status === "fulfilled" ? academic.value : null,
+                finance: finance.status === "fulfilled" ? finance.value : null,
+                mpv: mpv.status === "fulfilled" ? mpv.value : null,
+                minedu: minedu.status === "fulfilled" ? minedu.value : null,
+                research: research.status === "fulfilled" ? research.value : null,
+                users: users.status === "fulfilled" ? users.value : null,
+            });
 
-                if (!alive) return;
+            // Verificamos si todo falló
+            const allFailed =
+                admission.status === "rejected" &&
+                academic.status === "rejected" &&
+                finance.status === "rejected" &&
+                mpv.status === "rejected" &&
+                minedu.status === "rejected" &&
+                research.status === "rejected" &&
+                users.status === "rejected";
 
-                setData({
-                    admission: admission.status === "fulfilled" ? admission.value : null,
-                    academic: academic.status === "fulfilled" ? academic.value : null,
-                    finance: finance.status === "fulfilled" ? finance.value : null,
-                    mpv: mpv.status === "fulfilled" ? mpv.value : null,
-                    minedu: minedu.status === "fulfilled" ? minedu.value : null,
-                    research: research.status === "fulfilled" ? research.value : null,
-                    users: users.status === "fulfilled" ? users.value : null,
-                });
-
-                const allFailed =
-                    admission.status === "rejected" &&
-                    academic.status === "rejected" &&
-                    finance.status === "rejected" &&
-                    mpv.status === "rejected" &&
-                    minedu.status === "rejected" &&
-                    research.status === "rejected" &&
-                    users.status === "rejected";
-
-                if (allFailed) {
-                    setErr("No se pudieron cargar estadísticas. Revisa conexión y endpoints.");
-                }
-            } catch (e) {
-                if (!alive) return;
-                setErr(e?.message || "Error cargando dashboard");
-            } finally {
-                if (!alive) return;
-                setLoading(false);
+            if (allFailed) {
+                setErr("No se pudieron cargar estadísticas. Revisa conexión y endpoints.");
             }
-        })();
+        } catch (e) {
+            setErr(e?.message || "Error cargando dashboard");
+        } finally {
+            setLoading(false);
+        }
+    };
 
-        return () => {
-            alive = false;
-        };
+    // Usamos useEffect solo para llamar a la función al iniciar
+    useEffect(() => {
+        loadDashboardData();
     }, []);
 
     // --- Normalización de KPI (para no depender 100% del shape del backend) ---
@@ -354,12 +350,12 @@ export default function DashboardHome() {
                 </div>
 
                 <button
-                    onClick={() => window.location.reload()}
-                    className="group inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-md active:scale-95 transition-all duration-200 font-bold text-slate-600 shadow-sm w-full sm:w-auto"
-                >
-                    <TrendingUp size={18} className="text-slate-400 group-hover:text-indigo-600 transition-colors" />
-                    Actualizar
-                </button>
+        onClick={loadDashboardData} // <--- AQUÍ ESTÁ EL CAMBIO MÁGICO
+        className="group inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-md active:scale-95 transition-all duration-200 font-bold text-slate-600 shadow-sm w-full sm:w-auto"
+    >
+        <TrendingUp size={18} className="text-slate-400 group-hover:text-indigo-600 transition-colors" />
+        Actualizar
+    </button>
             </div>
 
             {/* ERROR */}

@@ -17,6 +17,13 @@ import StudentAccountsDashboard from "./StudentAccountsDashboard";
 import FinanceReports from "./FinanceReports";
 import { fmtCurrency, formatApiError } from "../../utils/format";
 import { PERMS } from "../../auth/permissions";
+import { ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "../../components/ui/dropdown-menu";
 
 // ---- Helper seguro para toasts de error ----
 const showApiError = (e, fallbackMsg) => {
@@ -86,7 +93,8 @@ const FinanceModule = () => {
     const activeEmployees = dashboardStats?.active_employees;
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 pb-24 sm:pb-6">
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {canCashBanks && (
             <Card className="border-l-4 border-l-green-500">
@@ -218,124 +226,208 @@ const FinanceModule = () => {
   if (!user) return <div className="text-center py-12">Acceso no autorizado</div>;
 
   return (
-    <div className="p-6">
-      <div className="rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10">
-        <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)]">
-          <div className="px-6 pt-5">
-            <h1 className="text-xl font-bold text-slate-900">Tesorería y Administración</h1>
-            <p className="text-sm text-slate-700">Sistema integral — {roleLabel}</p>
-            <div className="mt-3 h-px w-full bg-white/60" />
-          </div>
+<Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+  <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
+    {/* ===== MÓVIL: tab actual + dropdown ===== */}
+    <div className="sm:hidden">
+      <div className="flex items-center gap-2">
+        <Button
+  type="button"
+  variant="outline"
+  className="flex-1 justify-center h-10 rounded-lg bg-white/70"
+>
+  {(() => {
+    const current = [
+      { key: "dashboard", label: "Dashboard" },
+      ...(canCashBanks ? [{ key: "cash-banks", label: "Caja y Bancos" }, { key: "receipts", label: "Boletas" }] : []),
+      ...(canStdAccounts ? [{ key: "student-accounts", label: "Estados de Cuenta" }] : []),
+      ...(canConcepts ? [{ key: "concepts", label: "Conceptos" }] : []),
+      ...(canReconcile ? [{ key: "reconciliation", label: "Conciliación" }] : []),
+      ...(canReports ? [{ key: "reports", label: "Reportes" }] : []),
+      ...(canInventory ? [{ key: "inventory", label: "Inventario" }] : []),
+      ...(canLogistics ? [{ key: "logistics", label: "Logística" }] : []),
+      ...(canHR ? [{ key: "hr", label: "RRHH" }] : []),
+    ].find((t) => t.key === activeTab);
 
-          <div className="px-6 pb-6 pt-4">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-              <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
-                <TabsList className="h-auto w-full justify-center bg-transparent p-1 flex flex-wrap gap-3">
-                  <TabsTrigger value="dashboard" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                    <span className="inline-flex items-center gap-2">
-                      <BarChart3 className="h-4 w-4" aria-hidden="true" />
-                      Dashboard
-                    </span>
-                  </TabsTrigger>
+    return current?.label ?? "Dashboard";
+  })()}
+</Button>
 
-                  {canCashBanks && (
-                    <>
-                      <TabsTrigger value="cash-banks" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                        <span className="inline-flex items-center gap-2">
-                          <Banknote className="h-4 w-4" aria-hidden="true" />
-                          Caja y Bancos
-                        </span>
-                      </TabsTrigger>
 
-                      <TabsTrigger value="receipts" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                        <span className="inline-flex items-center gap-2">
-                          <Receipt className="h-4 w-4" aria-hidden="true" />
-                          Boletas
-                        </span>
-                      </TabsTrigger>
-                    </>
-                  )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon" className="h-10 w-10 rounded-lg shrink-0 bg-white/70">
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
 
-                  {canStdAccounts && (
-                    <TabsTrigger value="student-accounts" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                      <span className="inline-flex items-center gap-2">
-                        <Coins className="h-4 w-4" aria-hidden="true" />
-                        Estados de Cuenta
-                      </span>
-                    </TabsTrigger>
-                  )}
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem onClick={() => setActiveTab("dashboard")}>Dashboard</DropdownMenuItem>
 
-                  {canConcepts && (
-                    <TabsTrigger value="concepts" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                      <span className="inline-flex items-center gap-2">
-                        <FileText className="h-4 w-4" aria-hidden="true" />
-                        Conceptos
-                      </span>
-                    </TabsTrigger>
-                  )}
+            {canCashBanks && (
+              <>
+                <DropdownMenuItem onClick={() => setActiveTab("cash-banks")}>Caja y Bancos</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActiveTab("receipts")}>Boletas</DropdownMenuItem>
+              </>
+            )}
 
-                  {canReconcile && (
-                    <TabsTrigger value="reconciliation" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                      <span className="inline-flex items-center gap-2">
-                        <Banknote className="h-4 w-4" aria-hidden="true" />
-                        Conciliación
-                      </span>
-                    </TabsTrigger>
-                  )}
+            {canStdAccounts && (
+              <DropdownMenuItem onClick={() => setActiveTab("student-accounts")}>Estados de Cuenta</DropdownMenuItem>
+            )}
 
-                  {canReports && (
-                    <TabsTrigger value="reports" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                      <span className="inline-flex items-center gap-2">
-                        <BarChart3 className="h-4 w-4" aria-hidden="true" />
-                        Reportes
-                      </span>
-                    </TabsTrigger>
-                  )}
+            {canConcepts && (
+              <DropdownMenuItem onClick={() => setActiveTab("concepts")}>Conceptos</DropdownMenuItem>
+            )}
 
-                  {canInventory && (
-                    <TabsTrigger value="inventory" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                      <span className="inline-flex items-center gap-2">
-                        <Package className="h-4 w-4" aria-hidden="true" />
-                        Inventario
-                      </span>
-                    </TabsTrigger>
-                  )}
+            {canReconcile && (
+              <DropdownMenuItem onClick={() => setActiveTab("reconciliation")}>Conciliación</DropdownMenuItem>
+            )}
 
-                  {canLogistics && (
-                    <TabsTrigger value="logistics" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                      <span className="inline-flex items-center gap-2">
-                        <Truck className="h-4 w-4" aria-hidden="true" />
-                        Logística
-                      </span>
-                    </TabsTrigger>
-                  )}
+            {canReports && (
+              <DropdownMenuItem onClick={() => setActiveTab("reports")}>Reportes</DropdownMenuItem>
+            )}
 
-                  {canHR && (
-                    <TabsTrigger value="hr" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                      <span className="inline-flex items-center gap-2">
-                        <Users className="h-4 w-4" aria-hidden="true" />
-                        RRHH
-                      </span>
-                    </TabsTrigger>
-                  )}
-                </TabsList>
-              </div>
+            {canInventory && (
+              <DropdownMenuItem onClick={() => setActiveTab("inventory")}>Inventario</DropdownMenuItem>
+            )}
 
-              <TabsContent value="dashboard">{renderMainDashboard()}</TabsContent>
-              <TabsContent value="cash-banks">{canCashBanks ? <CashBanksDashboard /> : <div className="text-center py-8">No tienes permisos</div>}</TabsContent>
-              <TabsContent value="receipts">{canReceipts ? <ReceiptsDashboard /> : <div className="text-center py-8">No tienes permisos</div>}</TabsContent>
-              <TabsContent value="student-accounts">{canStdAccounts ? <StudentAccountsDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}</TabsContent>
-              <TabsContent value="concepts">{canConcepts ? <ConceptsCatalog /> : <div className="text-center py-8">No tienes permisos…</div>}</TabsContent>
-              <TabsContent value="reconciliation">{canReconcile ? <ReconciliationDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}</TabsContent>
-              <TabsContent value="reports">{canReports ? <FinanceReports /> : <div className="text-center py-8">No tienes permisos…</div>}</TabsContent>
-              <TabsContent value="inventory">{canInventory ? <InventoryDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}</TabsContent>
-              <TabsContent value="logistics">{canLogistics ? <LogisticsDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}</TabsContent>
-              <TabsContent value="hr">{canHR ? <HRDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}</TabsContent>
-            </Tabs>
-          </div>
-        </div>
+            {canLogistics && (
+              <DropdownMenuItem onClick={() => setActiveTab("logistics")}>Logística</DropdownMenuItem>
+            )}
+
+            {canHR && (
+              <DropdownMenuItem onClick={() => setActiveTab("hr")}>RRHH</DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
+
+    {/* ===== TABLET/LAPTOP: tabs normales ===== */}
+    <div className="hidden sm:block">
+      <TabsList className="h-auto w-full justify-center bg-transparent p-1 flex flex-wrap gap-3">
+        <TabsTrigger value="dashboard" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+          <span className="inline-flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" aria-hidden="true" />
+            Dashboard
+          </span>
+        </TabsTrigger>
+
+        {canCashBanks && (
+          <>
+            <TabsTrigger value="cash-banks" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+              <span className="inline-flex items-center gap-2">
+                <Banknote className="h-4 w-4" aria-hidden="true" />
+                Caja y Bancos
+              </span>
+            </TabsTrigger>
+
+            <TabsTrigger value="receipts" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+              <span className="inline-flex items-center gap-2">
+                <Receipt className="h-4 w-4" aria-hidden="true" />
+                Boletas
+              </span>
+            </TabsTrigger>
+          </>
+        )}
+
+        {canStdAccounts && (
+          <TabsTrigger value="student-accounts" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            <span className="inline-flex items-center gap-2">
+              <Coins className="h-4 w-4" aria-hidden="true" />
+              Estados de Cuenta
+            </span>
+          </TabsTrigger>
+        )}
+
+        {canConcepts && (
+          <TabsTrigger value="concepts" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            <span className="inline-flex items-center gap-2">
+              <FileText className="h-4 w-4" aria-hidden="true" />
+              Conceptos
+            </span>
+          </TabsTrigger>
+        )}
+
+        {canReconcile && (
+          <TabsTrigger value="reconciliation" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            <span className="inline-flex items-center gap-2">
+              <Banknote className="h-4 w-4" aria-hidden="true" />
+              Conciliación
+            </span>
+          </TabsTrigger>
+        )}
+
+        {canReports && (
+          <TabsTrigger value="reports" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            <span className="inline-flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" aria-hidden="true" />
+              Reportes
+            </span>
+          </TabsTrigger>
+        )}
+
+        {canInventory && (
+          <TabsTrigger value="inventory" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            <span className="inline-flex items-center gap-2">
+              <Package className="h-4 w-4" aria-hidden="true" />
+              Inventario
+            </span>
+          </TabsTrigger>
+        )}
+
+        {canLogistics && (
+          <TabsTrigger value="logistics" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            <span className="inline-flex items-center gap-2">
+              <Truck className="h-4 w-4" aria-hidden="true" />
+              Logística
+            </span>
+          </TabsTrigger>
+        )}
+
+        {canHR && (
+          <TabsTrigger value="hr" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            <span className="inline-flex items-center gap-2">
+              <Users className="h-4 w-4" aria-hidden="true" />
+              RRHH
+            </span>
+          </TabsTrigger>
+        )}
+      </TabsList>
+    </div>
+  </div>
+
+  <TabsContent value="dashboard">{renderMainDashboard()}</TabsContent>
+  <TabsContent value="cash-banks">
+    {canCashBanks ? <CashBanksDashboard /> : <div className="text-center py-8">No tienes permisos</div>}
+  </TabsContent>
+  <TabsContent value="receipts">
+    {canReceipts ? <ReceiptsDashboard /> : <div className="text-center py-8">No tienes permisos</div>}
+  </TabsContent>
+  <TabsContent value="student-accounts">
+    {canStdAccounts ? <StudentAccountsDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
+  </TabsContent>
+  <TabsContent value="concepts">
+    {canConcepts ? <ConceptsCatalog /> : <div className="text-center py-8">No tienes permisos…</div>}
+  </TabsContent>
+  <TabsContent value="reconciliation">
+    {canReconcile ? <ReconciliationDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
+  </TabsContent>
+  <TabsContent value="reports">
+    {canReports ? <FinanceReports /> : <div className="text-center py-8">No tienes permisos…</div>}
+  </TabsContent>
+  <TabsContent value="inventory">
+    {canInventory ? <InventoryDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
+  </TabsContent>
+  <TabsContent value="logistics">
+    {canLogistics ? <LogisticsDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
+  </TabsContent>
+  <TabsContent value="hr">
+    {canHR ? <HRDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
+  </TabsContent>
+</Tabs>
+
+
   );
 };
 

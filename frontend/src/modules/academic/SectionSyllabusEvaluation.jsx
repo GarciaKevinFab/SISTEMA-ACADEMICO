@@ -70,7 +70,8 @@ export default function SectionSyllabusEvaluation() {
     };
 
     return (
-        <div className="space-y-6">
+       <div className="space-y-6 pb-24 sm:pb-6">
+
             <Card>
                 <CardHeader>
                     <CardTitle>Configuración por Sección</CardTitle>

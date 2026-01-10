@@ -850,7 +850,8 @@ const HRDashboard = () => {
   // =========================
   // UI
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 sm:pb-6">
+
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="border-l-4 border-l-blue-500">
@@ -907,258 +908,269 @@ const HRDashboard = () => {
         </TabsList>
 
         {/* ===================== EMPLOYEES ===================== */}
-        <TabsContent value="employees">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+<TabsContent value="employees">
+  <Card>
+    <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <CardTitle>Gestión de Personal</CardTitle>
+        <CardDescription>Registro y control de empleados</CardDescription>
+      </div>
+
+      <Dialog
+        open={openDialogs.newEmployee}
+        onOpenChange={(open) => setOpenDialogs((p) => ({ ...p, newEmployee: open }))}
+      >
+        <DialogTrigger asChild>
+          <Button className="w-full sm:w-auto">
+            <Plus className="h-4 w-4 mr-2" />
+            Nuevo Empleado
+          </Button>
+        </DialogTrigger>
+
+        {/* ✅ RESPONSIVE: ancho + alto + scroll */}
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-auto max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="pr-6">
+            <DialogTitle>Registrar Nuevo Empleado</DialogTitle>
+            <DialogDescription>Complete los datos del nuevo empleado</DialogDescription>
+          </DialogHeader>
+
+          {/* ✅ Scroll interno suave */}
+          <div className="space-y-4">
+            {/* 1 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <CardTitle>Gestión de Personal</CardTitle>
-                <CardDescription>Registro y control de empleados</CardDescription>
+                <Label htmlFor="first_name">Nombres *</Label>
+                <Input
+                  id="first_name"
+                  value={newEmployee.first_name}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, first_name: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="last_name">Apellidos *</Label>
+                <Input
+                  id="last_name"
+                  value={newEmployee.last_name}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, last_name: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* 2 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="document_number">DNI *</Label>
+                <Input
+                  id="document_number"
+                  value={newEmployee.document_number}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, document_number: e.target.value })}
+                  maxLength={8}
+                />
+              </div>
+              <div>
+                <Label htmlFor="birth_date">Fecha de Nacimiento</Label>
+                <Input
+                  id="birth_date"
+                  type="date"
+                  value={newEmployee.birth_date}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, birth_date: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* 3 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={newEmployee.email}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="phone">Teléfono</Label>
+                <Input
+                  id="phone"
+                  value={newEmployee.phone}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, phone: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* 4 */}
+            <div>
+              <Label htmlFor="address">Dirección</Label>
+              <Textarea
+                id="address"
+                value={newEmployee.address}
+                onChange={(e) => setNewEmployee({ ...newEmployee, address: e.target.value })}
+              />
+            </div>
+
+            {/* 5 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="position">Cargo *</Label>
+                <Input
+                  id="position"
+                  value={newEmployee.position}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, position: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="department">Departamento</Label>
+                <Select
+                  value={newEmployee.department}
+                  onValueChange={(value) => setNewEmployee({ ...newEmployee, department: value })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Seleccionar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept} value={dept}>
+                        {dept}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* 6 */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="hire_date">Fecha de Ingreso</Label>
+                <Input
+                  id="hire_date"
+                  type="date"
+                  value={newEmployee.hire_date}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, hire_date: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="contract_type">Tipo de Contrato</Label>
+                <Select
+                  value={newEmployee.contract_type}
+                  onValueChange={(value) => setNewEmployee({ ...newEmployee, contract_type: value })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(contractTypes).map(([key, label]) => (
+                      <SelectItem key={key} value={key}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="salary">Salario</Label>
+                <Input
+                  id="salary"
+                  type="number"
+                  step="0.01"
+                  value={newEmployee.salary}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, salary: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* 7 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="emergency_contact_name">Contacto de Emergencia</Label>
+                <Input
+                  id="emergency_contact_name"
+                  value={newEmployee.emergency_contact_name}
+                  onChange={(e) =>
+                    setNewEmployee({ ...newEmployee, emergency_contact_name: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="emergency_contact_phone">Teléfono de Emergencia</Label>
+                <Input
+                  id="emergency_contact_phone"
+                  value={newEmployee.emergency_contact_phone}
+                  onChange={(e) =>
+                    setNewEmployee({ ...newEmployee, emergency_contact_phone: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4">
+            <Button
+              className="w-full sm:w-auto"
+              onClick={createEmployee}
+              disabled={
+                !newEmployee.first_name ||
+                !newEmployee.last_name ||
+                !newEmployee.document_number ||
+                !newEmployee.position
+              }
+            >
+              Crear Empleado
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </CardHeader>
+
+    <CardContent>
+      {/* LISTA CON SCROLL */}
+      <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+        {employees.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">No hay empleados registrados</div>
+        ) : (
+          employees.map((employee) => (
+            <div
+              key={employee.id}
+              className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 border rounded-lg hover:bg-gray-50"
+            >
+              <div className="flex items-start sm:items-center gap-4 min-w-0">
+                <Users className="h-8 w-8 text-blue-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-semibold truncate">
+                    {employee.first_name} {employee.last_name}
+                  </p>
+                  <p className="text-sm text-gray-600 truncate">{employee.position}</p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {employee.employee_code || "—"} - {employee.department || "—"}
+                  </p>
+                </div>
               </div>
 
-              <Dialog
-                open={openDialogs.newEmployee}
-                onOpenChange={(open) => setOpenDialogs((p) => ({ ...p, newEmployee: open }))}
-              >
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nuevo Empleado
-                  </Button>
-                </DialogTrigger>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                <div className="text-left sm:text-right">
+                  <p className="text-sm text-gray-600">
+                    {contractTypes[employee.contract_type] || employee.contract_type || "—"}
+                  </p>
+                  <p className="text-xs text-gray-500">Ingreso: {formatDate(employee.hire_date)}</p>
+                </div>
 
-                <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Registrar Nuevo Empleado</DialogTitle>
-                    <DialogDescription>Complete los datos del nuevo empleado</DialogDescription>
-                  </DialogHeader>
+                <Badge className={`${employeeStatuses[employee.status]?.color || "bg-gray-500"} text-white w-fit`}>
+                  {employeeStatuses[employee.status]?.label || employee.status || "—"}
+                </Badge>
 
-                  <div className="space-y-4 max-h-96 overflow-y-auto">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="first_name">Nombres *</Label>
-                        <Input
-                          id="first_name"
-                          value={newEmployee.first_name}
-                          onChange={(e) => setNewEmployee({ ...newEmployee, first_name: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="last_name">Apellidos *</Label>
-                        <Input
-                          id="last_name"
-                          value={newEmployee.last_name}
-                          onChange={(e) => setNewEmployee({ ...newEmployee, last_name: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="document_number">DNI *</Label>
-                        <Input
-                          id="document_number"
-                          value={newEmployee.document_number}
-                          onChange={(e) => setNewEmployee({ ...newEmployee, document_number: e.target.value })}
-                          maxLength={8}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="birth_date">Fecha de Nacimiento</Label>
-                        <Input
-                          id="birth_date"
-                          type="date"
-                          value={newEmployee.birth_date}
-                          onChange={(e) => setNewEmployee({ ...newEmployee, birth_date: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          value={newEmployee.email}
-                          onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="phone">Teléfono</Label>
-                        <Input
-                          id="phone"
-                          value={newEmployee.phone}
-                          onChange={(e) => setNewEmployee({ ...newEmployee, phone: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="address">Dirección</Label>
-                      <Textarea
-                        id="address"
-                        value={newEmployee.address}
-                        onChange={(e) => setNewEmployee({ ...newEmployee, address: e.target.value })}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="position">Cargo *</Label>
-                        <Input
-                          id="position"
-                          value={newEmployee.position}
-                          onChange={(e) => setNewEmployee({ ...newEmployee, position: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="department">Departamento</Label>
-                        <Select
-                          value={newEmployee.department}
-                          onValueChange={(value) => setNewEmployee({ ...newEmployee, department: value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {departments.map((dept) => (
-                              <SelectItem key={dept} value={dept}>
-                                {dept}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <Label htmlFor="hire_date">Fecha de Ingreso</Label>
-                        <Input
-                          id="hire_date"
-                          type="date"
-                          value={newEmployee.hire_date}
-                          onChange={(e) => setNewEmployee({ ...newEmployee, hire_date: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="contract_type">Tipo de Contrato</Label>
-                        <Select
-                          value={newEmployee.contract_type}
-                          onValueChange={(value) => setNewEmployee({ ...newEmployee, contract_type: value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(contractTypes).map(([key, label]) => (
-                              <SelectItem key={key} value={key}>
-                                {label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label htmlFor="salary">Salario</Label>
-                        <Input
-                          id="salary"
-                          type="number"
-                          step="0.01"
-                          value={newEmployee.salary}
-                          onChange={(e) => setNewEmployee({ ...newEmployee, salary: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="emergency_contact_name">Contacto de Emergencia</Label>
-                        <Input
-                          id="emergency_contact_name"
-                          value={newEmployee.emergency_contact_name}
-                          onChange={(e) =>
-                            setNewEmployee({ ...newEmployee, emergency_contact_name: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="emergency_contact_phone">Teléfono de Emergencia</Label>
-                        <Input
-                          id="emergency_contact_phone"
-                          value={newEmployee.emergency_contact_phone}
-                          onChange={(e) =>
-                            setNewEmployee({ ...newEmployee, emergency_contact_phone: e.target.value })
-                          }
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <DialogFooter>
-                    <Button
-                      onClick={createEmployee}
-                      disabled={
-                        !newEmployee.first_name ||
-                        !newEmployee.last_name ||
-                        !newEmployee.document_number ||
-                        !newEmployee.position
-                      }
-                    >
-                      Crear Empleado
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </CardHeader>
-
-            <CardContent>
-              {/* LISTA CON SCROLL: Muestra aprox 4 y hace scroll */}
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                {employees.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">No hay empleados registrados</div>
-                ) : (
-                  employees.map((employee) => (
-                    <div
-                      key={employee.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
-                    >
-                      <div className="flex items-center space-x-4">
-                        <Users className="h-8 w-8 text-blue-500" />
-                        <div>
-                          <p className="font-semibold">
-                            {employee.first_name} {employee.last_name}
-                          </p>
-                          <p className="text-sm text-gray-600">{employee.position}</p>
-                          <p className="text-xs text-gray-500">
-                            {employee.employee_code || "—"} - {employee.department || "—"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-4">
-                        <div className="text-right">
-                          <p className="text-sm text-gray-600">
-                            {contractTypes[employee.contract_type] || employee.contract_type || "—"}
-                          </p>
-                          <p className="text-xs text-gray-500">Ingreso: {formatDate(employee.hire_date)}</p>
-                        </div>
-
-                        <Badge className={`${employeeStatuses[employee.status]?.color || "bg-gray-500"} text-white`}>
-                          {employeeStatuses[employee.status]?.label || employee.status || "—"}
-                        </Badge>
-
-                        <Button size="sm" variant="outline" onClick={() => viewEmployee(employee)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
+                <Button size="sm" variant="outline" onClick={() => viewEmployee(employee)} className="w-full sm:w-auto">
+                  <Eye className="h-4 w-4" />
+                </Button>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          ))
+        )}
+      </div>
+    </CardContent>
+  </Card>
+</TabsContent>
+
 
        {/* ===================== ATTENDANCE ===================== */}
         <TabsContent value="attendance">
@@ -1436,29 +1448,43 @@ const HRDashboard = () => {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 justify-end">
-                          <Badge className={`${contractStatuses[status]?.color || "bg-gray-600"} text-white`}>
-                            {contractStatuses[status]?.label || status}
-                          </Badge>
+                        <div className="flex items-center gap-2 justify-end relative z-30">
+  <Badge className={`${contractStatuses[status]?.color || "bg-gray-600"} text-white`}>
+    {contractStatuses[status]?.label || status}
+  </Badge>
 
-                          <Button size="sm" variant="outline" onClick={() => openViewContract(c)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
+  <Button
+    type="button"
+    size="sm"
+    variant="outline"
+    className="h-9 w-9 p-0"
+    onClick={() => openViewContract(c)}
+  >
+    <Eye className="h-4 w-4" />
+  </Button>
 
-                          <Button size="sm" variant="outline" onClick={() => openEditContract(c)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
+  <Button
+    type="button"
+    size="sm"
+    variant="outline"
+    className="h-9 w-9 p-0"
+    onClick={() => openEditContract(c)}
+  >
+    <Edit className="h-4 w-4" />
+  </Button>
 
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => terminateContract(c)}
-                            disabled={status === "TERMINATED"}
-                            className="border-red-300"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-600" />
-                          </Button>
-                        </div>
+  <Button
+    type="button"
+    size="sm"
+    variant="outline"
+    className="h-9 w-9 p-0 border-red-300"
+    onClick={() => terminateContract(c)}
+    disabled={status === "TERMINATED"}
+  >
+    <Trash2 className="h-4 w-4 text-red-600" />
+  </Button>
+</div>
+
                       </div>
                     );
                   })}
@@ -1467,263 +1493,275 @@ const HRDashboard = () => {
             </CardContent>
           </Card>
 
-          {/* New Contract Dialog */}
-          <Dialog
-            open={openDialogs.newContract}
-            onOpenChange={(open) => setOpenDialogs((p) => ({ ...p, newContract: open }))}
+         {/* New Contract Dialog */}
+<Dialog
+  open={openDialogs.newContract}
+  onOpenChange={(open) => setOpenDialogs((p) => ({ ...p, newContract: open }))}
+>
+  <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[85vh] overflow-hidden">
+    <DialogHeader>
+      <DialogTitle>Nuevo Contrato</DialogTitle>
+      <DialogDescription>Registre un contrato para un empleado</DialogDescription>
+    </DialogHeader>
+
+    {/* ✅ SCROLL AQUÍ */}
+    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+      <div>
+        <Label>Empleado *</Label>
+        <Select
+          value={contractForm.employee_id}
+          onValueChange={(v) => setContractForm((p) => ({ ...p, employee_id: v }))}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Seleccionar empleado" />
+          </SelectTrigger>
+          <SelectContent>
+            {employees.map((e) => (
+              <SelectItem key={e.id} value={String(e.id)}>
+                {e.first_name} {e.last_name} - {e.position}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <Label>Tipo</Label>
+          <Select
+            value={contractForm.contract_type}
+            onValueChange={(v) => setContractForm((p) => ({ ...p, contract_type: v }))}
           >
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Nuevo Contrato</DialogTitle>
-                <DialogDescription>Registre un contrato para un empleado</DialogDescription>
-              </DialogHeader>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(contractTypes).map(([k, lbl]) => (
+                <SelectItem key={k} value={k}>
+                  {lbl}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-              <div className="space-y-4">
-                <div>
-                  <Label>Empleado *</Label>
-                  <Select
-                    value={contractForm.employee_id}
-                    onValueChange={(v) => setContractForm((p) => ({ ...p, employee_id: v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar empleado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {employees.map((e) => (
-                        <SelectItem key={e.id} value={String(e.id)}>
-                          {e.first_name} {e.last_name} - {e.position}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+        <div>
+          <Label>Estado</Label>
+          <Select
+            value={contractForm.status}
+            onValueChange={(v) => setContractForm((p) => ({ ...p, status: v }))}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ACTIVE">Vigente</SelectItem>
+              <SelectItem value="EXPIRED">Vencido</SelectItem>
+              <SelectItem value="TERMINATED">Terminado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label>Tipo</Label>
-                    <Select
-                      value={contractForm.contract_type}
-                      onValueChange={(v) => setContractForm((p) => ({ ...p, contract_type: v }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(contractTypes).map(([k, lbl]) => (
-                          <SelectItem key={k} value={k}>
-                            {lbl}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+        <div>
+          <Label>Salario</Label>
+          <Input
+            type="number"
+            step="0.01"
+            value={contractForm.salary}
+            onChange={(e) => setContractForm((p) => ({ ...p, salary: e.target.value }))}
+            placeholder="Ej: 1500"
+          />
+        </div>
+      </div>
 
-                  <div>
-                    <Label>Estado</Label>
-                    <Select
-                      value={contractForm.status}
-                      onValueChange={(v) => setContractForm((p) => ({ ...p, status: v }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ACTIVE">Vigente</SelectItem>
-                        <SelectItem value="EXPIRED">Vencido</SelectItem>
-                        <SelectItem value="TERMINATED">Terminado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label>Fecha inicio *</Label>
+          <Input
+            type="date"
+            value={contractForm.start_date}
+            onChange={(e) => setContractForm((p) => ({ ...p, start_date: e.target.value }))}
+          />
+        </div>
+        <div>
+          <Label>Fecha fin</Label>
+          <Input
+            type="date"
+            value={contractForm.end_date}
+            onChange={(e) => setContractForm((p) => ({ ...p, end_date: e.target.value }))}
+          />
+        </div>
+      </div>
 
-                  <div>
-                    <Label>Salario</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={contractForm.salary}
-                      onChange={(e) => setContractForm((p) => ({ ...p, salary: e.target.value }))}
-                      placeholder="Ej: 1500"
-                    />
-                  </div>
-                </div>
+      <div>
+        <Label>URL del documento (opcional)</Label>
+        <Input
+          value={contractForm.document_url}
+          onChange={(e) => setContractForm((p) => ({ ...p, document_url: e.target.value }))}
+          placeholder="https://..."
+        />
+      </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Fecha inicio *</Label>
-                    <Input
-                      type="date"
-                      value={contractForm.start_date}
-                      onChange={(e) => setContractForm((p) => ({ ...p, start_date: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <Label>Fecha fin</Label>
-                    <Input
-                      type="date"
-                      value={contractForm.end_date}
-                      onChange={(e) => setContractForm((p) => ({ ...p, end_date: e.target.value }))}
-                    />
-                  </div>
-                </div>
+      <div>
+        <Label>Notas</Label>
+        <Textarea
+          value={contractForm.notes}
+          onChange={(e) => setContractForm((p) => ({ ...p, notes: e.target.value }))}
+          placeholder="Observaciones..."
+        />
+      </div>
 
-                <div>
-                  <Label>URL del documento (opcional)</Label>
-                  <Input
-                    value={contractForm.document_url}
-                    onChange={(e) => setContractForm((p) => ({ ...p, document_url: e.target.value }))}
-                    placeholder="https://..."
-                  />
-                </div>
+      {/* ✅ separador para que no se tape con el footer */}
+      <div className="h-2" />
+    </div>
 
-                <div>
-                  <Label>Notas</Label>
-                  <Textarea
-                    value={contractForm.notes}
-                    onChange={(e) => setContractForm((p) => ({ ...p, notes: e.target.value }))}
-                    placeholder="Observaciones..."
-                  />
-                </div>
-              </div>
+    {/* ✅ Footer fijo */}
+    <DialogFooter className="mt-3">
+      <Button variant="outline" onClick={() => setOpenDialogs((p) => ({ ...p, newContract: false }))}>
+        Cancelar
+      </Button>
+      <Button onClick={createContract}>
+        <FileSignature className="h-4 w-4 mr-2" />
+        Crear Contrato
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setOpenDialogs((p) => ({ ...p, newContract: false }))}>
-                  Cancelar
-                </Button>
-                <Button onClick={createContract}>
-                  <FileSignature className="h-4 w-4 mr-2" />
-                  Crear Contrato
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
 
           {/* Edit Contract Dialog */}
-          <Dialog
-            open={openDialogs.editContract}
-            onOpenChange={(open) => setOpenDialogs((p) => ({ ...p, editContract: open }))}
+<Dialog
+  open={openDialogs.editContract}
+  onOpenChange={(open) => setOpenDialogs((p) => ({ ...p, editContract: open }))}
+>
+  <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[85vh] overflow-hidden">
+    <DialogHeader>
+      <DialogTitle>Editar Contrato</DialogTitle>
+      <DialogDescription>Actualice datos del contrato</DialogDescription>
+    </DialogHeader>
+
+    {/* ✅ SCROLL AQUÍ (CUERPO DEL MODAL) */}
+    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+      <div>
+        <Label>Empleado *</Label>
+        <Select
+          value={contractForm.employee_id}
+          onValueChange={(v) => setContractForm((p) => ({ ...p, employee_id: v }))}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Seleccionar empleado" />
+          </SelectTrigger>
+          <SelectContent>
+            {employees.map((e) => (
+              <SelectItem key={e.id} value={String(e.id)}>
+                {e.first_name} {e.last_name} - {e.position}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <Label>Tipo</Label>
+          <Select
+            value={contractForm.contract_type}
+            onValueChange={(v) => setContractForm((p) => ({ ...p, contract_type: v }))}
           >
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Editar Contrato</DialogTitle>
-                <DialogDescription>Actualice datos del contrato</DialogDescription>
-              </DialogHeader>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(contractTypes).map(([k, lbl]) => (
+                <SelectItem key={k} value={k}>
+                  {lbl}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-              <div className="space-y-4">
-                <div>
-                  <Label>Empleado *</Label>
-                  <Select
-                    value={contractForm.employee_id}
-                    onValueChange={(v) => setContractForm((p) => ({ ...p, employee_id: v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar empleado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {employees.map((e) => (
-                        <SelectItem key={e.id} value={String(e.id)}>
-                          {e.first_name} {e.last_name} - {e.position}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+        <div>
+          <Label>Estado</Label>
+          <Select
+            value={contractForm.status}
+            onValueChange={(v) => setContractForm((p) => ({ ...p, status: v }))}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ACTIVE">Vigente</SelectItem>
+              <SelectItem value="EXPIRED">Vencido</SelectItem>
+              <SelectItem value="TERMINATED">Terminado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label>Tipo</Label>
-                    <Select
-                      value={contractForm.contract_type}
-                      onValueChange={(v) => setContractForm((p) => ({ ...p, contract_type: v }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(contractTypes).map(([k, lbl]) => (
-                          <SelectItem key={k} value={k}>
-                            {lbl}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+        <div>
+          <Label>Salario</Label>
+          <Input
+            type="number"
+            step="0.01"
+            value={contractForm.salary}
+            onChange={(e) => setContractForm((p) => ({ ...p, salary: e.target.value }))}
+          />
+        </div>
+      </div>
 
-                  <div>
-                    <Label>Estado</Label>
-                    <Select
-                      value={contractForm.status}
-                      onValueChange={(v) => setContractForm((p) => ({ ...p, status: v }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ACTIVE">Vigente</SelectItem>
-                        <SelectItem value="EXPIRED">Vencido</SelectItem>
-                        <SelectItem value="TERMINATED">Terminado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label>Fecha inicio *</Label>
+          <Input
+            type="date"
+            value={contractForm.start_date}
+            onChange={(e) => setContractForm((p) => ({ ...p, start_date: e.target.value }))}
+          />
+        </div>
+        <div>
+          <Label>Fecha fin</Label>
+          <Input
+            type="date"
+            value={contractForm.end_date}
+            onChange={(e) => setContractForm((p) => ({ ...p, end_date: e.target.value }))}
+          />
+        </div>
+      </div>
 
-                  <div>
-                    <Label>Salario</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={contractForm.salary}
-                      onChange={(e) => setContractForm((p) => ({ ...p, salary: e.target.value }))}
-                    />
-                  </div>
-                </div>
+      <div>
+        <Label>URL del documento (opcional)</Label>
+        <Input
+          value={contractForm.document_url}
+          onChange={(e) => setContractForm((p) => ({ ...p, document_url: e.target.value }))}
+          placeholder="https://..."
+        />
+      </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Fecha inicio *</Label>
-                    <Input
-                      type="date"
-                      value={contractForm.start_date}
-                      onChange={(e) => setContractForm((p) => ({ ...p, start_date: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <Label>Fecha fin</Label>
-                    <Input
-                      type="date"
-                      value={contractForm.end_date}
-                      onChange={(e) => setContractForm((p) => ({ ...p, end_date: e.target.value }))}
-                    />
-                  </div>
-                </div>
+      <div>
+        <Label>Notas</Label>
+        <Textarea
+          value={contractForm.notes}
+          onChange={(e) => setContractForm((p) => ({ ...p, notes: e.target.value }))}
+        />
+      </div>
 
-                <div>
-                  <Label>URL del documento (opcional)</Label>
-                  <Input
-                    value={contractForm.document_url}
-                    onChange={(e) => setContractForm((p) => ({ ...p, document_url: e.target.value }))}
-                    placeholder="https://..."
-                  />
-                </div>
+      {/* ✅ pequeño espacio para que no quede tapado por el footer */}
+      <div className="h-2" />
+    </div>
 
-                <div>
-                  <Label>Notas</Label>
-                  <Textarea
-                    value={contractForm.notes}
-                    onChange={(e) => setContractForm((p) => ({ ...p, notes: e.target.value }))}
-                  />
-                </div>
-              </div>
+    {/* ✅ Footer siempre visible */}
+    <DialogFooter className="mt-3">
+      <Button variant="outline" onClick={() => setOpenDialogs((p) => ({ ...p, editContract: false }))}>
+        Cancelar
+      </Button>
+      <Button onClick={updateContract}>
+        <Edit className="h-4 w-4 mr-2" />
+        Guardar Cambios
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setOpenDialogs((p) => ({ ...p, editContract: false }))}>
-                  Cancelar
-                </Button>
-                <Button onClick={updateContract}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  Guardar Cambios
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
 
           {/* View Contract Dialog */}
           <Dialog

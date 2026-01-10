@@ -150,23 +150,32 @@ export default function StudentAccountsDashboard() {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-bold">Estados de cuenta</h2>
-                    <p className="text-sm text-gray-600">Cargos, pagos, morosidad y constancia</p>
-                </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" onClick={exportPdf} disabled={exporting}>
-                        <FileText className="h-4 w-4 mr-2" aria-hidden="true" />
-                        {exporting ? "Generando…" : "PDF"}
-                    </Button>
-                    <Button onClick={payLink}>
-                        <CreditCard className="h-4 w-4 mr-2" aria-hidden="true" />
-                        Generar link de pago
-                    </Button>
-                </div>
-            </div>
+       <div className="space-y-6 pb-24 sm:pb-6">
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div>
+    <h2 className="text-2xl font-bold">Estados de cuenta</h2>
+    <p className="text-sm text-gray-600">Cargos, pagos, morosidad y constancia</p>
+  </div>
+
+  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+    <Button
+      variant="outline"
+      onClick={exportPdf}
+      disabled={exporting}
+      className="w-full sm:w-auto"
+    >
+      <FileText className="h-4 w-4 mr-2" aria-hidden="true" />
+      {exporting ? "Generando…" : "PDF"}
+    </Button>
+
+    <Button onClick={payLink} className="w-full sm:w-auto">
+      <CreditCard className="h-4 w-4 mr-2" aria-hidden="true" />
+      Generar link de pago
+    </Button>
+  </div>
+</div>
+
 
             <Card>
                 <CardHeader>
@@ -225,125 +234,143 @@ export default function StudentAccountsDashboard() {
                         </CardContent>
                     </Card>
 
-                    <div className="grid lg:grid-cols-2 gap-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Registrar cargo</CardTitle>
-                                <CardDescription>Cuotas, certificados, etc.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="grid md:grid-cols-3 gap-3">
-                                <div className="md:col-span-2">
-                                    <Label>Concepto</Label>
-                                    <Select
-                                        value={charge.concept_id}
-                                        onValueChange={(v) => {
-                                            const c = concepts.find((x) => String(x.id) === v);
-                                            setCharge({
-                                                ...charge,
-                                                concept_id: v,
-                                                amount:
-                                                    charge.amount !== ""
-                                                        ? charge.amount
-                                                        : c?.default_amount != null
-                                                            ? String(c.default_amount)
-                                                            : "",
-                                            });
-                                        }}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Seleccione..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {concepts.map((c) => {
-                                                const v = optVal(c.id);
-                                                if (!v) return null;
-                                                return (
-                                                    <SelectItem key={v} value={String(v)}>
-                                                        {c.name} ({c.type})
-                                                    </SelectItem>
-                                                );
-                                            })}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div>
-                                    <Label>Monto</Label>
-                                    <Input
-                                        type="number"
-                                        step="0.01"
-                                        value={charge.amount}
-                                        onChange={(e) => setCharge({ ...charge, amount: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Vence</Label>
-                                    <Input
-                                        type="date"
-                                        value={charge.due_date}
-                                        onChange={(e) => setCharge({ ...charge, due_date: e.target.value })}
-                                    />
-                                </div>
-                                <div className="md:col-span-2 flex items-end justify-end">
-                                    <Button onClick={createCharge}>
-                                        <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
-                                        Agregar cargo
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
+                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <Card>
+    <CardHeader>
+      <CardTitle>Registrar cargo</CardTitle>
+      <CardDescription>Cuotas, certificados, etc.</CardDescription>
+    </CardHeader>
 
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Registrar pago</CardTitle>
-                            </CardHeader>
-                            <CardContent className="grid md:grid-cols-4 gap-3">
-                                <div>
-                                    <Label>Monto</Label>
-                                    <Input
-                                        type="number"
-                                        step="0.01"
-                                        value={payment.amount}
-                                        onChange={(e) => setPayment({ ...payment, amount: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Método</Label>
-                                    <Select value={payment.method} onValueChange={(v) => setPayment({ ...payment, method: v })}>
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="CASH">Efectivo</SelectItem>
-                                            <SelectItem value="CARD">Tarjeta</SelectItem>
-                                            <SelectItem value="TRANSFER">Transferencia</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div>
-                                    <Label>Ref.</Label>
-                                    <Input
-                                        value={payment.ref}
-                                        onChange={(e) => setPayment({ ...payment, ref: e.target.value })}
-                                        placeholder="operación / voucher"
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Fecha</Label>
-                                    <Input
-                                        type="date"
-                                        value={payment.date}
-                                        onChange={(e) => setPayment({ ...payment, date: e.target.value })}
-                                    />
-                                </div>
-                                <div className="md:col-span-4 flex justify-end">
-                                    <Button onClick={registerPayment}>
-                                        <Save className="h-4 w-4 mr-2" aria-hidden="true" />
-                                        Guardar pago
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
+    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="md:col-span-2">
+        <Label>Concepto</Label>
+        <Select
+          value={charge.concept_id}
+          onValueChange={(v) => {
+            const c = concepts.find((x) => String(x.id) === v);
+            setCharge({
+              ...charge,
+              concept_id: v,
+              amount:
+                charge.amount !== ""
+                  ? charge.amount
+                  : c?.default_amount != null
+                    ? String(c.default_amount)
+                    : "",
+            });
+          }}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Seleccione..." />
+          </SelectTrigger>
+
+          <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+            {!concepts || concepts.length === 0 ? (
+              <SelectItem value="__empty" disabled>
+                No hay conceptos registrados
+              </SelectItem>
+            ) : (
+              concepts.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.name} ({c.type})
+                </SelectItem>
+              ))
+            )}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label>Monto</Label>
+        <Input
+          type="number"
+          step="0.01"
+          value={charge.amount}
+          onChange={(e) => setCharge({ ...charge, amount: e.target.value })}
+          className="w-full"
+        />
+      </div>
+
+      <div>
+        <Label>Vence</Label>
+        <Input
+          type="date"
+          value={charge.due_date}
+          onChange={(e) => setCharge({ ...charge, due_date: e.target.value })}
+          className="w-full"
+        />
+      </div>
+
+      <div className="md:col-span-3 flex justify-end">
+        <Button onClick={createCharge} className="w-full md:w-auto">
+          <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
+          Agregar cargo
+        </Button>
+      </div>
+    </CardContent>
+  </Card>
+
+  <Card>
+    <CardHeader>
+      <CardTitle>Registrar pago</CardTitle>
+    </CardHeader>
+
+    <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div className="md:col-span-1">
+        <Label>Monto</Label>
+        <Input
+          type="number"
+          step="0.01"
+          value={payment.amount}
+          onChange={(e) => setPayment({ ...payment, amount: e.target.value })}
+          className="w-full"
+        />
+      </div>
+
+      <div className="md:col-span-1">
+        <Label>Método</Label>
+        <Select value={payment.method} onValueChange={(v) => setPayment({ ...payment, method: v })}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+            <SelectItem value="CASH">Efectivo</SelectItem>
+            <SelectItem value="CARD">Tarjeta</SelectItem>
+            <SelectItem value="TRANSFER">Transferencia</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="md:col-span-1">
+        <Label>Ref.</Label>
+        <Input
+          value={payment.ref}
+          onChange={(e) => setPayment({ ...payment, ref: e.target.value })}
+          placeholder="operación / voucher"
+          className="w-full"
+        />
+      </div>
+
+      <div className="md:col-span-1">
+        <Label>Fecha</Label>
+        <Input
+          type="date"
+          value={payment.date}
+          onChange={(e) => setPayment({ ...payment, date: e.target.value })}
+          className="w-full"
+        />
+      </div>
+
+      <div className="md:col-span-4 flex justify-end">
+        <Button onClick={registerPayment} className="w-full md:w-auto">
+          <Save className="h-4 w-4 mr-2" aria-hidden="true" />
+          Guardar pago
+        </Button>
+      </div>
+    </CardContent>
+  </Card>
+</div>
+
 
                     <Card>
                         <CardHeader>

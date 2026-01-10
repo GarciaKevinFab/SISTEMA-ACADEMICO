@@ -28,7 +28,8 @@ return (
         </div>
 
         {/* Contenido */}
-        <div className="space-y-6">
+       <div className="space-y-6 pb-24 sm:pb-6">
+
         {children}
         </div>
 

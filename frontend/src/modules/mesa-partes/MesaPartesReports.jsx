@@ -68,7 +68,8 @@ export default function MesaPartesReports() {
                     <CardTitle>Reportes – Mesa de Partes</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="grid md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 min-w-0">
+
                         <div>
                             <label className="text-sm">Desde</label>
                             <Input
@@ -106,24 +107,37 @@ export default function MesaPartesReports() {
                             </Select>
                         </div>
 
-                        <div className="flex items-end gap-2">
-                            <Button onClick={load}>Ver resumen</Button>
-                            <Button
-                                variant="outline"
-                                onClick={() => dl(ProcedureReports.exportSLA, "sla.xlsx")}
-                            >
-                                Exportar SLA
-                            </Button>
-                            <Button
-                                variant="outline"
-                                onClick={() => dl(ProcedureReports.exportVolume, "volumen.xlsx")}
-                            >
-                                Exportar Volúmenes
-                            </Button>
-                            <Button variant="ghost" onClick={reset}>
-                                Limpiar
-                            </Button>
-                        </div>
+                        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-2 w-full min-w-0 md:col-span-4 md:justify-end">
+  <Button onClick={load} className="w-full sm:w-auto shrink-0">
+    Ver resumen
+  </Button>
+
+  <Button
+    variant="outline"
+    onClick={() => dl(ProcedureReports.exportSLA, "sla.xlsx")}
+    className="w-full sm:w-auto shrink-0"
+  >
+    Exportar SLA
+  </Button>
+
+  <Button
+    variant="outline"
+    onClick={() => dl(ProcedureReports.exportVolume, "volumen.xlsx")}
+    className="w-full sm:w-auto shrink-0"
+  >
+    Exportar Volúmenes
+  </Button>
+
+  <Button
+    variant="ghost"
+    onClick={reset}
+    className="w-full sm:w-auto shrink-0"
+  >
+    Limpiar
+  </Button>
+</div>
+
+
                     </div>
 
                     {summary && (

@@ -238,48 +238,62 @@ export default function AdmissionCallsManagement() {
     }
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-gray-900">Gestión de Convocatorias</h2>
-                <Dialog open={openCreate} onOpenChange={setOpenCreate}>
-                    <DialogTrigger asChild>
-                        <Button className="bg-blue-600 hover:bg-blue-700">
-                            <Plus className="h-4 w-4 mr-2" /> Nueva Convocatoria
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                        <DialogHeader>
-                            <DialogTitle>Crear Nueva Convocatoria</DialogTitle>
-                            <DialogDescription>Configure los parámetros del proceso</DialogDescription>
-                        </DialogHeader>
+ <div className="space-y-6 pb-24 sm:pb-6">
 
-                        <form onSubmit={submit} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <Label>Nombre *</Label>
-                                    <Input
-                                        value={form.name}
-                                        onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Año Académico *</Label>
-                                    <Input
-                                        type="number"
-                                        min="2024"
-                                        max="2035"
-                                        value={form.academic_year}
-                                        onChange={(e) =>
-                                            setForm({
-                                                ...form,
-                                                academic_year: parseInt(e.target.value || "0", 10),
-                                            })
-                                        }
-                                        required
-                                    />
-                                </div>
-                            </div>
+    {/* HEADER RESPONSIVE */}
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <h2 className="text-lg sm:text-2xl font-bold text-gray-900">
+        Gestión de Convocatorias
+      </h2>
+
+      <Dialog open={openCreate} onOpenChange={setOpenCreate}>
+        <DialogTrigger asChild>
+          <Button className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
+            <Plus className="h-4 w-4 mr-2" />
+            <span className="sm:hidden">Nueva</span>
+            <span className="hidden sm:inline">Nueva Convocatoria</span>
+          </Button>
+        </DialogTrigger>
+
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Crear Nueva Convocatoria</DialogTitle>
+            <DialogDescription>
+              Configure los parámetros del proceso
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={submit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Nombre *</Label>
+                <Input
+                  value={form.name}
+                  onChange={(e) =>
+                    setForm({ ...form, name: e.target.value })
+                  }
+                  required
+                />
+              </div>
+
+              <div>
+                <Label>Año Académico *</Label>
+                <Input
+                  type="number"
+                  min="2024"
+                  max="2035"
+                  value={form.academic_year}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      academic_year: parseInt(e.target.value || "0", 10),
+                    })
+                  }
+                  required
+                />
+              </div>
+            </div>
+
 
                             <div>
                                 <Label>Descripción</Label>

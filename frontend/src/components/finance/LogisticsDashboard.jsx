@@ -200,7 +200,8 @@ const InventoryDashboard = () => {
     .toFixed(2);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 sm:pb-6">
+
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="border-l-4 border-l-blue-500">
@@ -294,115 +295,131 @@ const InventoryDashboard = () => {
                   </Button>
                 </DialogTrigger>
 
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Crear Nuevo Item</DialogTitle>
-                    <DialogDescription>Complete los datos del nuevo producto</DialogDescription>
-                  </DialogHeader>
+                <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-md h-[90dvh] overflow-hidden p-0 flex flex-col">
+  {/* HEADER sticky (siempre visible) */}
+  <div className="px-6 pt-5 pb-3 border-b flex-none sticky top-0 bg-background z-10">
+    <DialogHeader>
+      <DialogTitle>Crear Nuevo Item</DialogTitle>
+      <DialogDescription>Complete los datos del nuevo producto</DialogDescription>
+    </DialogHeader>
+  </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="code">Código *</Label>
-                      <Input
-                        id="code"
-                        value={newItem.code}
-                        onChange={(e) => setNewItem({ ...newItem, code: e.target.value })}
-                        placeholder="ITM001"
-                      />
-                    </div>
+  {/* BODY con scroll */}
+  <div
+    className="px-6 py-4 flex-1 overflow-y-auto"
+    style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}
+  >
+    <div className="space-y-4">
+      <div>
+        <Label htmlFor="code">Código *</Label>
+        <Input
+          id="code"
+          value={newItem.code}
+          onChange={(e) => setNewItem({ ...newItem, code: e.target.value })}
+          placeholder="ITM001"
+        />
+      </div>
 
-                    <div>
-                      <Label htmlFor="name">Nombre *</Label>
-                      <Input
-                        id="name"
-                        value={newItem.name}
-                        onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                        placeholder="Papel Bond A4"
-                      />
-                    </div>
+      <div>
+        <Label htmlFor="name">Nombre *</Label>
+        <Input
+          id="name"
+          value={newItem.name}
+          onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+          placeholder="Papel Bond A4"
+        />
+      </div>
 
-                    <div>
-                      <Label htmlFor="description">Descripción</Label>
-                      <Textarea
-                        id="description"
-                        value={newItem.description}
-                        onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-                        placeholder="Descripción detallada del producto"
-                      />
-                    </div>
+      <div>
+        <Label htmlFor="description">Descripción</Label>
+        <Textarea
+          id="description"
+          value={newItem.description}
+          onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+          placeholder="Descripción detallada del producto"
+        />
+      </div>
 
-                    <div>
-                      <Label htmlFor="category">Categoría</Label>
-                      <Input
-                        id="category"
-                        value={newItem.category}
-                        onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                        placeholder="Materiales de Oficina"
-                      />
-                    </div>
+      <div>
+        <Label htmlFor="category">Categoría</Label>
+        <Input
+          id="category"
+          value={newItem.category}
+          onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
+          placeholder="Materiales de Oficina"
+        />
+      </div>
 
-                    <div>
-                      <Label htmlFor="unit_of_measure">Unidad de Medida *</Label>
-                      <Select
-                        value={newItem.unit_of_measure}
-                        onValueChange={(value) => setNewItem({ ...newItem, unit_of_measure: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(unitOfMeasures).map(([key, label]) => (
-                            <SelectItem key={key} value={key}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+      <div>
+        <Label htmlFor="unit_of_measure">Unidad de Medida *</Label>
+        <Select
+          value={newItem.unit_of_measure}
+          onValueChange={(value) => setNewItem({ ...newItem, unit_of_measure: value })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+            {Object.entries(unitOfMeasures).map(([key, label]) => (
+              <SelectItem key={key} value={key}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="min_stock">Stock Mínimo</Label>
-                        <Input
-                          id="min_stock"
-                          type="number"
-                          value={newItem.min_stock}
-                          onChange={(e) => setNewItem({ ...newItem, min_stock: e.target.value })}
-                          placeholder="10"
-                        />
-                      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="min_stock">Stock Mínimo</Label>
+          <Input
+            id="min_stock"
+            type="number"
+            value={newItem.min_stock}
+            onChange={(e) => setNewItem({ ...newItem, min_stock: e.target.value })}
+            placeholder="10"
+          />
+        </div>
 
-                      <div>
-                        <Label htmlFor="max_stock">Stock Máximo</Label>
-                        <Input
-                          id="max_stock"
-                          type="number"
-                          value={newItem.max_stock}
-                          onChange={(e) => setNewItem({ ...newItem, max_stock: e.target.value })}
-                          placeholder="100"
-                        />
-                      </div>
-                    </div>
+        <div>
+          <Label htmlFor="max_stock">Stock Máximo</Label>
+          <Input
+            id="max_stock"
+            type="number"
+            value={newItem.max_stock}
+            onChange={(e) => setNewItem({ ...newItem, max_stock: e.target.value })}
+            placeholder="100"
+          />
+        </div>
+      </div>
 
-                    <div>
-                      <Label htmlFor="unit_cost">Costo Unitario</Label>
-                      <Input
-                        id="unit_cost"
-                        type="number"
-                        step="0.01"
-                        value={newItem.unit_cost}
-                        onChange={(e) => setNewItem({ ...newItem, unit_cost: e.target.value })}
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
+      <div>
+        <Label htmlFor="unit_cost">Costo Unitario</Label>
+        <Input
+          id="unit_cost"
+          type="number"
+          step="0.01"
+          value={newItem.unit_cost}
+          onChange={(e) => setNewItem({ ...newItem, unit_cost: e.target.value })}
+          placeholder="0.00"
+        />
+      </div>
 
-                  <DialogFooter>
-                    <Button onClick={createItem} disabled={!newItem.code || !newItem.name}>
-                      Crear Item
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
+      {/* espacio extra para que no choque con el footer */}
+      <div className="h-10" />
+    </div>
+  </div>
+
+  {/* FOOTER fijo (botón siempre visible) */}
+  <div className="px-6 py-4 border-t bg-background flex-none">
+    <DialogFooter className="w-full">
+      <Button className="w-full" onClick={createItem} disabled={!newItem.code || !newItem.name}>
+        Crear Item
+      </Button>
+    </DialogFooter>
+  </div>
+</DialogContent>
+
               </Dialog>
             </CardHeader>
 
@@ -483,128 +500,147 @@ const InventoryDashboard = () => {
                   </Button>
                 </DialogTrigger>
 
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Registrar Movimiento</DialogTitle>
-                    <DialogDescription>Complete los datos del movimiento de inventario</DialogDescription>
-                  </DialogHeader>
+                <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-lg h-[90dvh] overflow-hidden p-0 flex flex-col">
+  {/* HEADER fijo */}
+  <div className="px-6 pt-5 pb-3 border-b flex-none sticky top-0 bg-background z-10">
 
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="item_select">Item *</Label>
-                      <Select
-                        value={newMovement.item_id}
-                        onValueChange={(value) => setNewMovement({ ...newMovement, item_id: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar item" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {items.map((item) => (
-                            <SelectItem key={item.id} value={item.id}>
-                              {item.code} - {item.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+    <DialogHeader>
+      
+      
+      <DialogTitle>Registrar Movimiento</DialogTitle>
+    </DialogHeader>
+  </div>
 
-                    <div>
-                      <Label htmlFor="movement_type">Tipo de Movimiento *</Label>
-                      <Select
-                        value={newMovement.movement_type}
-                        onValueChange={(value) => setNewMovement({ ...newMovement, movement_type: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(movementTypes).map(([key, label]) => (
-                            <SelectItem key={key} value={key}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+  {/* BODY con scroll */}
+  <div
+    className="flex-1 min-h-0 px-6 py-4 overflow-y-auto"
+    style={{ WebkitOverflowScrolling: "touch" }}
+  >
+    <div className="space-y-4">
+      <div>
+        <Label htmlFor="item_select">Item *</Label>
+        <Select
+          value={newMovement.item_id}
+          onValueChange={(value) => setNewMovement({ ...newMovement, item_id: value })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Seleccionar item" />
+          </SelectTrigger>
+          <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+            {items.map((item) => (
+              <SelectItem key={item.id} value={String(item.id)}>
+                {item.code} - {item.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="quantity">Cantidad *</Label>
-                        <Input
-                          id="quantity"
-                          type="number"
-                          value={newMovement.quantity}
-                          onChange={(e) => setNewMovement({ ...newMovement, quantity: e.target.value })}
-                          placeholder="1"
-                        />
-                      </div>
+      <div>
+        <Label htmlFor="movement_type">Tipo de Movimiento *</Label>
+        <Select
+          value={newMovement.movement_type}
+          onValueChange={(value) => setNewMovement({ ...newMovement, movement_type: value })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+            {Object.entries(movementTypes).map(([key, label]) => (
+              <SelectItem key={key} value={key}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-                      <div>
-                        <Label htmlFor="unit_cost">Costo Unitario</Label>
-                        <Input
-                          id="unit_cost"
-                          type="number"
-                          step="0.01"
-                          value={newMovement.unit_cost}
-                          onChange={(e) => setNewMovement({ ...newMovement, unit_cost: e.target.value })}
-                          placeholder="0.00"
-                        />
-                      </div>
-                    </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="quantity">Cantidad *</Label>
+          <Input
+            id="quantity"
+            type="number"
+            value={newMovement.quantity}
+            onChange={(e) => setNewMovement({ ...newMovement, quantity: e.target.value })}
+            placeholder="1"
+          />
+        </div>
 
-                    <div>
-                      <Label htmlFor="reason">Motivo *</Label>
-                      <Input
-                        id="reason"
-                        value={newMovement.reason}
-                        onChange={(e) => setNewMovement({ ...newMovement, reason: e.target.value })}
-                        placeholder="Compra, venta, ajuste, etc."
-                      />
-                    </div>
+        <div>
+          <Label htmlFor="unit_cost">Costo Unitario</Label>
+          <Input
+            id="unit_cost"
+            type="number"
+            step="0.01"
+            value={newMovement.unit_cost}
+            onChange={(e) => setNewMovement({ ...newMovement, unit_cost: e.target.value })}
+            placeholder="0.00"
+          />
+        </div>
+      </div>
 
-                    <div>
-                      <Label htmlFor="notes">Observaciones</Label>
-                      <Textarea
-                        id="notes"
-                        value={newMovement.notes}
-                        onChange={(e) => setNewMovement({ ...newMovement, notes: e.target.value })}
-                        placeholder="Observaciones adicionales"
-                      />
-                    </div>
+      <div>
+        <Label htmlFor="reason">Motivo *</Label>
+        <Input
+          id="reason"
+          value={newMovement.reason}
+          onChange={(e) => setNewMovement({ ...newMovement, reason: e.target.value })}
+          placeholder="Compra, venta, ajuste, etc."
+        />
+      </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="batch_number">Número de Lote</Label>
-                        <Input
-                          id="batch_number"
-                          value={newMovement.batch_number}
-                          onChange={(e) => setNewMovement({ ...newMovement, batch_number: e.target.value })}
-                          placeholder="LT001"
-                        />
-                      </div>
+      <div>
+        <Label htmlFor="notes">Observaciones</Label>
+        <Textarea
+          id="notes"
+          value={newMovement.notes}
+          onChange={(e) => setNewMovement({ ...newMovement, notes: e.target.value })}
+          placeholder="Observaciones adicionales"
+        />
+      </div>
 
-                      <div>
-                        <Label htmlFor="expiry_date">Fecha de Vencimiento</Label>
-                        <Input
-                          id="expiry_date"
-                          type="date"
-                          value={newMovement.expiry_date}
-                          onChange={(e) => setNewMovement({ ...newMovement, expiry_date: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                  </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="batch_number">Número de Lote</Label>
+          <Input
+            id="batch_number"
+            value={newMovement.batch_number}
+            onChange={(e) => setNewMovement({ ...newMovement, batch_number: e.target.value })}
+            placeholder="LT001"
+          />
+        </div>
 
-                  <DialogFooter>
-                    <Button
-                      onClick={createMovement}
-                      disabled={!newMovement.item_id || !newMovement.quantity || !newMovement.reason}
-                    >
-                      Registrar Movimiento
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
+        <div>
+          <Label htmlFor="expiry_date">Fecha de Vencimiento</Label>
+          <Input
+            id="expiry_date"
+            type="date"
+            value={newMovement.expiry_date}
+            onChange={(e) => setNewMovement({ ...newMovement, expiry_date: e.target.value })}
+          />
+        </div>
+      </div>
+
+      {/* espacio final para que el último input no quede pegado */}
+      <div className="h-6" />
+    </div>
+  </div>
+
+  {/* FOOTER fijo */}
+  <div className="px-6 py-4 border-t bg-background flex-none">
+    <DialogFooter className="w-full">
+      <Button
+        className="w-full sm:w-auto"
+        onClick={createMovement}
+        disabled={!newMovement.item_id || !newMovement.quantity || !newMovement.reason}
+      >
+        Registrar Movimiento
+      </Button>
+    </DialogFooter>
+  </div>
+</DialogContent>
+
               </Dialog>
             </CardHeader>
 

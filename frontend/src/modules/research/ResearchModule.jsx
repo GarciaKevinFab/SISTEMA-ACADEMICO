@@ -26,6 +26,13 @@ import {
     Catalog, Projects, Schedule, Deliverables, Evaluations, Reports,
 } from "../../services/research.service";
 import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
+import { ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "../../components/ui/dropdown-menu";
 
 /* ---------------- helpers ---------------- */
 function formatApiError(err, fallback = "Ocurrió un error") {
@@ -344,11 +351,15 @@ const ProjectsManagement = () => {
 
             {/* create modal */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                <DialogContent className="max-w-3xl">
-                    <DialogHeader>
-                        <DialogTitle>Nuevo Proyecto</DialogTitle>
-                        <DialogDescription>Registra los datos del proyecto</DialogDescription>
-                    </DialogHeader>
+                <DialogContent className="w-[95vw] sm:max-w-3xl max-h-[90dvh] overflow-y-auto">
+
+                    <DialogHeader className="mt-2">
+  <DialogTitle>Nuevo Proyecto</DialogTitle>
+  <DialogDescription>
+    Registra los datos del proyecto
+  </DialogDescription>
+</DialogHeader>
+
                     <form onSubmit={submitCreate} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="md:col-span-2">
                             <Label>Título *</Label>
@@ -951,34 +962,62 @@ const ReportsModule = () => {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-bold text-black">Reportes de Investigación</h2>
-                    <p className="text-gray-600">Avance, estados y productos</p>
-                </div>
-                <div className="flex gap-2 items-center">
-                    <Select value={year} onValueChange={setYear}>
-                        <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="2025">2025</SelectItem>
-                            <SelectItem value="2024">2024</SelectItem>
-                            <SelectItem value="2023">2023</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <Select value={status} onValueChange={setStatus}>
-                        <SelectTrigger className="w-48"><SelectValue placeholder="Estado" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="ALL">Todos</SelectItem>
-                            {Object.keys(STATUS_CFG).map((s) => (
-                                <SelectItem key={s} value={s}>{STATUS_CFG[s].label}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />Actualizar</Button>
-                    <Button onClick={exportPdf}><Download className="h-4 w-4 mr-2" />Exportar PDF</Button>
-                </div>
-            </div>
+        <div className="space-y-6 pb-24 sm:pb-6">
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div className="min-w-0">
+    <h2 className="text-2xl font-bold text-black">Reportes de Investigación</h2>
+    <p className="text-gray-600">Avance, estados y productos</p>
+  </div>
+
+  {/* Filtros + acciones responsive */}
+  <div className="w-full sm:w-auto">
+    <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+
+      {/* Selects */}
+      <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:gap-2">
+        <Select value={year} onValueChange={setYear}>
+          <SelectTrigger className="w-full sm:w-28">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="2025">2025</SelectItem>
+            <SelectItem value="2024">2024</SelectItem>
+            <SelectItem value="2023">2023</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger className="w-full sm:w-48">
+            <SelectValue placeholder="Estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Todos</SelectItem>
+            {Object.keys(STATUS_CFG).map((s) => (
+              <SelectItem key={s} value={s}>
+                {STATUS_CFG[s].label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Botones */}
+      <div className="grid grid-cols-1 gap-2 w-full sm:w-auto sm:flex sm:gap-2">
+        <Button onClick={load} variant="outline" className="w-full sm:w-auto">
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Actualizar
+        </Button>
+
+        <Button onClick={exportPdf} className="w-full sm:w-auto">
+          <Download className="h-4 w-4 mr-2" />
+          Exportar PDF
+        </Button>
+      </div>
+
+    </div>
+  </div>
+</div>
 
             <Card>
                 <CardHeader>
@@ -991,7 +1030,8 @@ const ReportsModule = () => {
                             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
                         </div>
                     ) : (
-                        <div className="grid md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
                             <StatTile icon={BookOpen} color="text-blue-600" title="Proyectos" value={summary.total_projects ?? 0} />
                             <StatTile icon={Users} color="text-purple-600" title="Asesores" value={summary.total_advisors ?? 0} />
                             <StatTile icon={ClipboardList} color="text-amber-600" title="Entregables" value={summary.total_deliverables ?? 0} />
@@ -1110,54 +1150,84 @@ const CatalogsTab = () => {
     };
 
     return (
-        <div className="space-y-6">
-            {/* LÍNEAS */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h3 className="text-2xl font-bold text-black">Líneas de investigación</h3>
-                    <p className="text-sm text-gray-600">Base para clasificar proyectos</p>
-                </div>
-                <Button onClick={openCreateLine}><Plus className="h-4 w-4 mr-2" />Nueva línea</Button>
-            </div>
+       <div className="space-y-6 pb-24 sm:pb-6">
 
-           <Card>
-  <CardContent className="p-0">
-    {loading ? (
-      <div className="flex items-center justify-center h-36">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
-      </div>
-    ) : (
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-slate-500 border-b"> {/* Fondo gris claro para la primera fila */}
-            <tr>
-              <th className="p-2 text-left text-black">Nombre</th>  {/* Texto en negro */}
-              <th className="p-2 text-left text-black w-32">Acciones</th>  {/* Texto en negro */}
-            </tr>
-          </thead>
-          <tbody className="divide-y bg-white">
-            {lines.map(l => (
-              <tr key={l.id}>
-                <td className="p-2 text-black">{l.name}</td>  {/* Texto en negro */}
-                <td className="p-2">
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => openEditLine(l)}>
-                      <Edit3 className="h-4 w-4" />
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => removeLine(l)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </td>
+  {/* LÍNEAS */}
+  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h3 className="text-xl sm:text-2xl font-bold text-black">Líneas de investigación</h3>
+      <p className="text-sm text-gray-600">Base para clasificar proyectos</p>
+    </div>
+
+    <Button
+      onClick={openCreateLine}
+      className="w-full sm:w-auto justify-center"
+    >
+      <Plus className="h-4 w-4 mr-2" />
+      Nueva línea
+    </Button>
+  </div>
+
+  <Card>
+    <CardContent className="p-0">
+      {loading ? (
+        <div className="flex items-center justify-center h-36">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+        </div>
+      ) : (
+        <div className="w-full overflow-x-auto">
+          <table className="w-full min-w-[420px]">
+            <thead className="bg-slate-500 border-b">
+              <tr>
+                <th className="p-2 text-left text-black">Nombre</th>
+                <th className="p-2 text-left text-black w-[140px]">Acciones</th>
               </tr>
-            ))}
-            {lines.length === 0 && <tr><td className="p-4 text-center text-gray-500" colSpan={2}>Sin líneas</td></tr>}
-          </tbody>
-        </table>
-      </div>
-    )}
-  </CardContent>
-</Card>
+            </thead>
+
+            <tbody className="divide-y bg-white">
+              {lines.map((l) => (
+                <tr key={l.id}>
+                  <td className="p-2 text-black whitespace-nowrap">
+                    {l.name}
+                  </td>
+
+                  <td className="p-2">
+                    <div className="flex gap-2 justify-start">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 w-9 p-0"
+                        onClick={() => openEditLine(l)}
+                      >
+                        <Edit3 className="h-4 w-4" />
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 w-9 p-0"
+                        onClick={() => removeLine(l)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+
+              {lines.length === 0 && (
+                <tr>
+                  <td className="p-4 text-center text-gray-500" colSpan={2}>
+                    Sin líneas
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </CardContent>
+  </Card>
 
 
 
@@ -1180,14 +1250,24 @@ const CatalogsTab = () => {
                 </DialogContent>
             </Dialog>
 
-            {/* ASESORES */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h3 className="text-2xl font-bold text-black">Asesores</h3>
-                    <p className="text-sm text-gray-600">Docentes/investigadores que asesoran proyectos</p>
-                </div>
-                <Button onClick={openCreateAdvisor}><Plus className="h-4 w-4 mr-2" />Nuevo asesor</Button>
-            </div>
+           {/* ASESORES */}
+<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div>
+    <h3 className="text-xl sm:text-2xl font-bold text-black">Asesores</h3>
+    <p className="text-sm text-gray-600">
+      Docentes/investigadores que asesoran proyectos
+    </p>
+  </div>
+
+  <Button
+    onClick={openCreateAdvisor}
+    className="w-full sm:w-auto justify-center"
+  >
+    <Plus className="h-4 w-4 mr-2" />
+    Nuevo asesor
+  </Button>
+</div>
+
 
        <Card>
   <CardContent className="p-0">
@@ -1271,16 +1351,35 @@ const CatalogsTab = () => {
 const CallsModule = () => {
     const [items, setItems] = useState([]);
     return (
-        <div className="space-y-4">
-            <h2 className="text-2xl font-bold text-black">Convocatorias</h2>
-            <p className="text-gray-600">Publica y gestiona convocatorias de proyectos.</p>
-            <Card>
-                <CardHeader><CardTitle>Listado</CardTitle></CardHeader>
-                <CardContent className="text-sm text-gray-600">
-                    {items.length === 0 ? "Aún no hay convocatorias." : JSON.stringify(items)}
-                </CardContent>
-            </Card>
+        <div className="space-y-4 px-1 sm:px-0">
+  <div className="space-y-1">
+    <h2 className="text-xl sm:text-2xl font-bold text-black">
+      Convocatorias
+    </h2>
+    <p className="text-sm sm:text-base text-gray-600">
+      Publica y gestiona convocatorias de proyectos.
+    </p>
+  </div>
+
+  <Card>
+    <CardHeader className="pb-2">
+      <CardTitle className="text-base sm:text-lg">
+        Listado
+      </CardTitle>
+    </CardHeader>
+
+    <CardContent className="text-sm text-gray-600 overflow-x-auto">
+      {items.length === 0 ? (
+        <div className="py-6 text-center text-gray-500">
+          Aún no hay convocatorias.
         </div>
+      ) : (
+        JSON.stringify(items)
+      )}
+    </CardContent>
+  </Card>
+</div>
+
     );
 };
 
@@ -1288,6 +1387,8 @@ const CallsModule = () => {
    MAIN MODULE
 ========================================================= */
 const ResearchModule = () => {
+const [tab, setTab] = React.useState("projects");
+
   return (
 <div className="p-6">
   {/* CONTENEDOR CLARO (como Administración) */}
@@ -1295,21 +1396,67 @@ const ResearchModule = () => {
     className="rounded-3xl border p-4 md:p-6 shadow-sm"
     style={{ background: "rgba(255, 255, 255, 0.74)" }} 
   >
-    <Tabs defaultValue="projects" className="space-y-6">
-      <TabsList className="grid w-full grid-cols-4 bg-slate-200/70 p-1 rounded-2xl">
-        <TabsTrigger value="projects" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow">
+    <Tabs value={tab} onValueChange={setTab} className="space-y-6">
+
+      {/* 📱 MOBILE */}
+<div className="sm:hidden">
+  <div className="bg-slate-200/70 p-2 rounded-2xl">
+    <div className="flex items-center gap-2">
+      <TabsList className="flex-1 bg-transparent p-0 shadow-none">
+        <TabsTrigger
+          value="projects"
+          className="w-full h-11 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow"
+        >
           Proyectos
         </TabsTrigger>
-        <TabsTrigger value="reports" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow">
-          Reportes
-        </TabsTrigger>
-        <TabsTrigger value="catalogs" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow">
-          Catálogos
-        </TabsTrigger>
-        <TabsTrigger value="calls" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow">
-          Convocatorias
-        </TabsTrigger>
       </TabsList>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-11 w-11 rounded-xl shrink-0"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuItem onClick={() => setTab("reports")}>
+            Reportes
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setTab("catalogs")}>
+            Catálogos
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setTab("calls")}>
+            Convocatorias
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  </div>
+</div>
+
+{/* 💻 LAPTOP / TABLET */}
+<div className="hidden sm:block">
+  <TabsList className="w-full flex gap-2 bg-slate-200/70 p-2 rounded-2xl">
+    <TabsTrigger value="projects" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow">
+      Proyectos
+    </TabsTrigger>
+    <TabsTrigger value="reports" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow">
+      Reportes
+    </TabsTrigger>
+    <TabsTrigger value="catalogs" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow">
+      Catálogos
+    </TabsTrigger>
+    <TabsTrigger value="calls" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow">
+      Convocatorias
+    </TabsTrigger>
+  </TabsList>
+</div>
+
+
 
       <TabsContent value="projects"><ProjectsManagement /></TabsContent>
       <TabsContent value="reports"><ReportsModule /></TabsContent>

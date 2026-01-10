@@ -182,57 +182,136 @@ const CareersManagement = () => {
     </div>
   );
 
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Gestión de Carreras Profesionales</h2>
-        <Button onClick={() => setOpenCreate(true)} className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="h-4 w-4 mr-2" /> Nueva Carrera
-        </Button>
-      </div>
+ return (
+ <div className="space-y-6 pb-24 sm:pb-6">
 
-      {/* Crear */}
-      {openCreate && (
-        <Card className="p-4">
-          <form onSubmit={submitCreate} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>Nombre *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></div>
-              <div><Label>Código *</Label><Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} required /></div>
+    {/* Header responsive */}
+    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
+        Gestión de Carreras Profesionales
+      </h2>
+
+      <Button
+        onClick={() => setOpenCreate(true)}
+        className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
+      >
+        <Plus className="h-4 w-4 mr-2" /> Nueva Carrera
+      </Button>
+    </div>
+
+    {/* Crear */}
+    {openCreate && (
+      <Card className="p-4">
+        <form onSubmit={submitCreate} className="space-y-4">
+          {/* 2 campos: móvil 1 col, sm 2 col */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label>Nombre *</Label>
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                required
+              />
             </div>
-            <div><Label>Descripción</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
-            <div className="grid grid-cols-4 gap-4">
-              <div><Label>Duración (sem.) *</Label><Input type="number" min="1" max="20" value={form.duration_semesters} onChange={e => setForm({ ...form, duration_semesters: e.target.value })} /></div>
-              <div><Label>Vacantes *</Label><Input type="number" min="0" value={form.vacancies} onChange={e => setForm({ ...form, vacancies: e.target.value })} /></div>
-              <div>
-                <Label>Tipo de Grado *</Label>
-                <Select value={form.degree_type} onValueChange={(v) => setForm({ ...form, degree_type: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="BACHELOR">Bachiller</SelectItem>
-                    <SelectItem value="TECHNICAL">Técnico</SelectItem>
-                    <SelectItem value="PROFESSIONAL">Profesional</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Modalidad *</Label>
-                <Select value={form.modality} onValueChange={(v) => setForm({ ...form, modality: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PRESENCIAL">Presencial</SelectItem>
-                    <SelectItem value="VIRTUAL">Virtual</SelectItem>
-                    <SelectItem value="SEMIPRESENCIAL">Semipresencial</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+
+            <div>
+              <Label>Código *</Label>
+              <Input
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+                required
+              />
             </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setOpenCreate(false)}>Cancelar</Button>
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-700">Crear</Button>
+          </div>
+
+          <div>
+            <Label>Descripción</Label>
+            <Textarea
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+            />
+          </div>
+
+          {/* 4 campos: móvil 1 col, sm 2 col, lg 4 col */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <Label>Duración (sem.) *</Label>
+              <Input
+                type="number"
+                min="1"
+                max="20"
+                value={form.duration_semesters}
+                onChange={(e) => setForm({ ...form, duration_semesters: e.target.value })}
+              />
             </div>
-          </form>
-        </Card>
-      )}
+
+            <div>
+              <Label>Vacantes *</Label>
+              <Input
+                type="number"
+                min="0"
+                value={form.vacancies}
+                onChange={(e) => setForm({ ...form, vacancies: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <Label>Tipo de Grado *</Label>
+              <Select
+                value={form.degree_type}
+                onValueChange={(v) => setForm({ ...form, degree_type: v })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BACHELOR">Bachiller</SelectItem>
+                  <SelectItem value="TECHNICAL">Técnico</SelectItem>
+                  <SelectItem value="PROFESSIONAL">Profesional</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Modalidad *</Label>
+              <Select
+                value={form.modality}
+                onValueChange={(v) => setForm({ ...form, modality: v })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PRESENCIAL">Presencial</SelectItem>
+                  <SelectItem value="VIRTUAL">Virtual</SelectItem>
+                  <SelectItem value="SEMIPRESENCIAL">Semipresencial</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Botones: móvil columna, desktop fila */}
+          <div className="flex flex-col sm:flex-row sm:justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setOpenCreate(false)}
+            >
+              Cancelar
+            </Button>
+
+            <Button
+              type="submit"
+              className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
+            >
+              Crear
+            </Button>
+          </div>
+        </form>
+      </Card>
+    )}
+
 
       {/* Tabla */}
       <Card>
@@ -478,7 +557,8 @@ const ApplicantsManagement = () => {
   );
 
   return (
-    <div className="space-y-6">
+   <div className="space-y-6 pb-24 sm:pb-6">
+
       {/* Header + acciones */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <h2 className="text-2xl font-bold">Gestión de Postulantes</h2>
@@ -669,10 +749,12 @@ export default function CompleteAdmissionModule() {
 return (
   <div className="p-6 box-border flex justify-center">
     {/* 1. CONTENEDOR: Usamos 'max-h' en vez de 'h' para que no ocupe espacio vacío */}
-    <div className="w-full rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10 max-h-[calc(100vh-3rem)] flex flex-col">
+    <div className="w-full rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10 flex flex-col md:max-h-[calc(100vh-3rem)]">
+
       
       {/* 2. TARJETA: Restauramos color 70 y ajustamos el flex */}
-      <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)] flex flex-col overflow-hidden max-h-full">
+      <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)] flex flex-col md:overflow-hidden">
+
         
         {/* HEADER (Se queda quieto) */}
         <div className="px-6 pt-5 flex-none">
@@ -720,7 +802,8 @@ return (
           </div>
 
           {/* 3. ZONA DE CONTENIDO */}
-          <div className="overflow-y-auto pb-6 pr-1 custom-scrollbar flex-1">
+          <div className="pb-6 pr-1 custom-scrollbar flex-1 md:overflow-y-auto">
+
             <TabsContent value="dashboard" className="mt-0"><AdmissionDashboard /></TabsContent>
             <TabsContent value="careers" className="mt-0"><CareersManagement /></TabsContent>
             <TabsContent value="calls" className="mt-0"><AdmissionCallsManagement /></TabsContent>

@@ -1,12 +1,10 @@
-// src/modules/admin/AuditTab.jsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { AuditService } from "../../services/audit.service";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
-import { Label } from "../../components/ui/label";
 import { motion } from "framer-motion";
-import { Search, RefreshCw, Download, Calendar, Copy, Filter, X } from "lucide-react";
+import { Search, RefreshCw, Download, Calendar, Copy, X } from "lucide-react";
 import { toast } from "sonner";
 
 /* ---------- Animations ---------- */
@@ -98,16 +96,14 @@ const AuditTab = () => {
     } catch {
       toast.error("No se pudo cargar la bitácora");
     } finally { setLoading(false); }
-  }, [filters]);
+  }, [filters]); 
 
   useEffect(() => {
-    // carga inicial
     fetchData(filters);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    // búsqueda reactiva con debounce
     fetchData({
       q: debounced.q, actor: debounced.actor, action: debounced.action, entity: debounced.entity,
       from: debounced.from, to: debounced.to
@@ -126,158 +122,135 @@ const AuditTab = () => {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Toolbar pill */}
+        {/* Toolbar de filtros (Adaptado para móvil) */}
         <div className="rounded-2xl p-3 border border-white/50 dark:border-white/10 bg-gradient-to-r from-slate-100 to-white dark:from-neutral-800 dark:to-neutral-900">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center">
-            <div className="relative flex-1">
+          <div className="flex flex-col gap-2">
+            {/* Buscador principal */}
+            <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-60" />
               <Input
                 value={filters.q}
                 onChange={(e) => setFilters((s) => ({ ...s, q: e.target.value }))}
-                placeholder="Buscar en detalle, actor, IP, ReqId…"
-                className="pl-9 rounded-xl"
+                placeholder="Buscar..."
+                className="pl-9 rounded-xl w-full"
               />
             </div>
-            <div className="grid grid-cols-2 md:flex md:flex-row gap-2">
-              <Input
-                value={filters.actor}
-                onChange={(e) => setFilters((s) => ({ ...s, actor: e.target.value }))}
-                placeholder="Actor"
-                className="rounded-xl"
-              />
-              <Input
-                value={filters.action}
-                onChange={(e) => setFilters((s) => ({ ...s, action: e.target.value }))}
-                placeholder="Acción (create/update/delete/login)"
-                className="rounded-xl"
-              />
-              <Input
-                value={filters.entity}
-                onChange={(e) => setFilters((s) => ({ ...s, entity: e.target.value }))}
-                placeholder="Entidad (user, role, applicant...)"
-                className="rounded-xl"
-              />
+            
+            {/* Filtros secundarios en grid para que no se rompan */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <Input value={filters.actor} onChange={(e) => setFilters((s) => ({ ...s, actor: e.target.value }))} placeholder="Actor" className="rounded-xl" />
+                <Input value={filters.action} onChange={(e) => setFilters((s) => ({ ...s, action: e.target.value }))} placeholder="Acción" className="rounded-xl" />
+                <Input value={filters.entity} onChange={(e) => setFilters((s) => ({ ...s, entity: e.target.value }))} placeholder="Entidad" className="rounded-xl" />
+            </div>
+
+            {/* Fechas y Botones */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div className="relative">
+                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-60" />
+                   <Input type="datetime-local" value={filters.from} onChange={(e) => setFilters((s) => ({ ...s, from: e.target.value }))} className="pl-9 rounded-xl w-full" />
+                </div>
+                <div className="relative">
+                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-60" />
+                   <Input type="datetime-local" value={filters.to} onChange={(e) => setFilters((s) => ({ ...s, to: e.target.value }))} className="pl-9 rounded-xl w-full" />
+                </div>
+
+                <div className="flex items-center gap-2 justify-end">
+                    <Button variant="outline" onClick={() => fetchData()} className="rounded-xl gap-2 h-10 w-full sm:w-auto">
+                        <RefreshCw className="h-4 w-4" /> <span className="sm:hidden lg:inline">Buscar</span>
+                    </Button>
+                    <Button variant="outline" onClick={clearFilters} className="rounded-xl gap-2 h-10 w-full sm:w-auto">
+                        <X className="h-4 w-4" />
+                    </Button>
+                    <Button onClick={() => exportCSV(rows)} className="rounded-xl gap-2 h-10 w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-teal-600">
+                        <Download className="h-4 w-4" />
+                    </Button>
+                </div>
             </div>
           </div>
 
-          <div className="mt-2 grid md:grid-cols-3 gap-2">
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-60" />
-              <Input
-                type="datetime-local"
-                value={filters.from}
-                onChange={(e) => setFilters((s) => ({ ...s, from: e.target.value }))}
-                className="pl-9 rounded-xl"
-                placeholder="Desde"
-              />
-            </div>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-60" />
-              <Input
-                type="datetime-local"
-                value={filters.to}
-                onChange={(e) => setFilters((s) => ({ ...s, to: e.target.value }))}
-                className="pl-9 rounded-xl"
-                placeholder="Hasta"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 justify-end">
-              <Button variant="outline" onClick={() => fetchData()} className="rounded-xl gap-2">
-                <RefreshCw className="h-4 w-4" /> Buscar
-              </Button>
-              <Button variant="outline" onClick={clearFilters} className="rounded-xl gap-2">
-                <X className="h-4 w-4" /> Limpiar
-              </Button>
-              <Button onClick={() => exportCSV(rows)} className="rounded-xl gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700">
-                <Download className="h-4 w-4" /> Exportar CSV
-              </Button>
-            </div>
-          </div>
-
-          {/* Chips del filtro activo */}
           <div className="mt-3 flex flex-wrap gap-2">
             {filters.q && <Pill>q: {filters.q}</Pill>}
-            {filters.actor && <Pill>actor: {filters.actor}</Pill>}
-            {filters.action && <Pill>action: {filters.action}</Pill>}
-            {filters.entity && <Pill>entity: {filters.entity}</Pill>}
-            {filters.from && <Pill>desde: {filters.from.replace("T"," ")}</Pill>}
-            {filters.to && <Pill>hasta: {filters.to.replace("T"," ")}</Pill>}
             <span className="ml-auto text-xs text-muted-foreground">Total: {total}</span>
           </div>
         </div>
 
-        {/* Tabla */}
-      
-<div className="rounded-2xl border border-white/50 dark:border-white/10 overflow-auto">
-  <table className="w-full text-sm">
-    <thead className="bg-gray-200 text-black"> {/* Primera fila gris y texto negro */}
-      <tr>
-        <th className="p-2 text-left">Fecha</th>
-        <th className="p-2 text-left">Actor</th>
-        <th className="p-2 text-left">Acción</th>
-        <th className="p-2 text-left">Entidad</th>
-        <th className="p-2 text-left">Detalle</th>
-        <th className="p-2 text-left">IP</th>
-        <th className="p-2 text-left">ReqId</th>
-      </tr>
-    </thead>
-    <tbody className="bg-white text-black"> {/* Resto de las filas en blanco y texto negro */}
-      {loading && Array.from({ length: 8 }).map((_, i) => (
-        <tr key={`sk-${i}`} className="border-t border-white/40 dark:border-white/10">
-          <td className="p-2"><div className="h-4 w-36 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
-          <td className="p-2"><div className="h-4 w-28 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
-          <td className="p-2"><div className="h-4 w-20 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
-          <td className="p-2"><div className="h-4 w-24 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
-          <td className="p-2"><div className="h-4 w-[22rem] rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
-          <td className="p-2"><div className="h-4 w-20 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
-          <td className="p-2"><div className="h-4 w-28 rounded bg-gray-200 dark:bg-white/10 animate-pulse" /></td>
-        </tr>
-      ))}
-
-      {!loading && rows.length === 0 && (
-        <tr>
-          <td className="p-6 text-center text-gray-500" colSpan={7}>Sin registros</td>
-        </tr>
-      )}
-
-      {!loading && rows.map((r, i) => (
-        <motion.tr
-          key={r.id || r.request_id || i}
-          {...fade}
-          className="border-t border-white/40 dark:border-white/10 even:bg-white hover:bg-blue-50/60 dark:hover:bg-blue-900/20 transition-colors"
+        {/* ====================================================================
+            AQUÍ ESTÁ LA SOLUCIÓN DEFINITIVA PARA EL RESPONSIVE
+            ====================================================================
+            1. overflowX: 'auto' -> Permite deslizar.
+            2. minWidth: '1200px' -> Obliga a la tabla a ser ancha, activando el scroll.
+        */}
+        <div 
+            className="rounded-2xl border border-white/50 dark:border-white/10" 
+            style={{ overflowX: "auto", maxWidth: "100%" }}
         >
-          <td className="p-2 whitespace-nowrap">{toLocal(r.timestamp || r.created_at)}</td>
-          <td className="p-2">{r.actor_name || r.actor_id}</td>
-          <td className="p-2"><ActionBadge action={r.action} /></td>
-          <td className="p-2 whitespace-nowrap">
-            {r.entity}{r.entity_id ? <span className="opacity-70">#{r.entity_id}</span> : ""}
-          </td>
-          <td className="p-2 max-w-[40ch]">
-            <span title={r.summary || r.detail} className="line-clamp-2">
-              {r.summary || r.detail}
-            </span>
-          </td>
-          <td className="p-2">{r.ip}</td>
-          <td className="p-2">
-            <div className="flex items-center gap-1">
-              <code className="text-xs bg-black/5 dark:bg-white/10 rounded px-1.5 py-0.5">{r.request_id || "—"}</code>
-              {r.request_id && (
-                <button
-                  className="p-1 rounded hover:bg-black/5 dark:hover:bg-white/10"
-                  title="Copiar Request ID"
-                  onClick={() => { navigator.clipboard.writeText(r.request_id); toast.success("ReqId copiado"); }}
-                >
-                  <Copy className="h-4 w-4" />
-                </button>
+          <table 
+            className="w-full text-sm" 
+            style={{ minWidth: "1200px" }}
+          >
+            <thead className="bg-gray-200 text-black"> 
+              <tr>
+                <th className="p-2 text-left w-40">Fecha</th>
+                <th className="p-2 text-left w-32">Actor</th>
+                <th className="p-2 text-left w-24">Acción</th>
+                <th className="p-2 text-left w-32">Entidad</th>
+                <th className="p-2 text-left">Detalle</th>
+                <th className="p-2 text-left w-32">IP</th>
+                <th className="p-2 text-left w-32">ReqId</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white text-black">
+              {loading && Array.from({ length: 8 }).map((_, i) => (
+                <tr key={`sk-${i}`} className="border-t border-white/40 dark:border-white/10">
+                  <td className="p-2" colSpan={7}>
+                     <div className="h-6 w-full rounded bg-gray-100 animate-pulse" />
+                  </td>
+                </tr>
+              ))}
+
+              {!loading && rows.length === 0 && (
+                <tr>
+                  <td className="p-6 text-center text-gray-500" colSpan={7}>Sin registros</td>
+                </tr>
               )}
-            </div>
-          </td>
-        </motion.tr>
-      ))}
-    </tbody>
-  </table>
-</div>
+
+              {!loading && rows.map((r, i) => (
+                <motion.tr
+                  key={r.id || r.request_id || i}
+                  {...fade}
+                  className="border-t border-white/40 dark:border-white/10 even:bg-white hover:bg-blue-50/60 dark:hover:bg-blue-900/20 transition-colors"
+                >
+                  <td className="p-2 whitespace-nowrap">{toLocal(r.timestamp || r.created_at)}</td>
+                  <td className="p-2">{r.actor_name || r.actor_id}</td>
+                  <td className="p-2"><ActionBadge action={r.action} /></td>
+                  <td className="p-2 whitespace-nowrap">
+                    {r.entity}{r.entity_id ? <span className="opacity-70">#{r.entity_id}</span> : ""}
+                  </td>
+                  <td className="p-2 max-w-[40ch]">
+                    <span title={r.summary || r.detail} className="line-clamp-2">
+                      {r.summary || r.detail}
+                    </span>
+                  </td>
+                  <td className="p-2">{r.ip}</td>
+                  <td className="p-2">
+                    <div className="flex items-center gap-1">
+                      <code className="text-xs bg-black/5 dark:bg-white/10 rounded px-1.5 py-0.5">{r.request_id || "—"}</code>
+                      {r.request_id && (
+                        <button
+                          className="p-1 rounded hover:bg-black/5 dark:hover:bg-white/10"
+                          title="Copiar Request ID"
+                          onClick={() => { navigator.clipboard.writeText(r.request_id); toast.success("ReqId copiado"); }}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </motion.tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
       </CardContent>
     </Card>

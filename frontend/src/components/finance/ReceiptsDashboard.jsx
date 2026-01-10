@@ -282,7 +282,8 @@ const ReceiptsDashboard = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 sm:pb-6">
+
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="border-l-4 border-l-yellow-500">
@@ -373,7 +374,21 @@ const ReceiptsDashboard = () => {
                   </Button>
                 </DialogTrigger>
 
-                <DialogContent className="max-w-md">
+                <DialogContent
+  className="
+    w-[95vw] 
+    max-w-md 
+    max-h-[85vh] 
+    overflow-y-auto
+    [&>button]:h-10
+    [&>button]:w-10
+    [&>button]:p-2
+    [&>button]:top-3
+    [&>button]:right-3
+  "
+>
+
+
                   <DialogHeader>
                     <DialogTitle>Crear Nueva Boleta</DialogTitle>
                     <DialogDescription>

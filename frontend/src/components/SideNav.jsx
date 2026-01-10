@@ -33,6 +33,20 @@ const SideNav = () => {
   useEffect(() => {
     setIsMobileOpen(false);
   }, [location.pathname]);
+useEffect(() => {
+  // Evita scroll del fondo cuando el menú móvil está abierto (iOS friendly)
+  if (isMobileOpen) {
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+  } else {
+    document.body.style.overflow = "";
+    document.body.style.touchAction = "";
+  }
+  return () => {
+    document.body.style.overflow = "";
+    document.body.style.touchAction = "";
+  };
+}, [isMobileOpen]);
 
   const hasRole = (...codes) => codes.some((r) => roles.includes(r));
   const isActive = (path) =>
@@ -234,7 +248,7 @@ const SideNav = () => {
   return (
     <>
       {/* --- HEADER MÓVIL (Solo visible en pantallas pequeñas) --- */}
-      <div className="lg:hidden bg-[#0f172a] text-white p-4 flex items-center justify-between border-b border-slate-800 sticky top-0 z-[60]">
+      <div className="xl:hidden bg-[#0f172a] text-white p-4 flex items-center justify-between border-b border-slate-800 sticky top-0 z-[60]">
         <div className="flex items-center gap-2">
           <img
             src="/logo.png"
@@ -254,24 +268,28 @@ const SideNav = () => {
 
       {/* --- OVERLAY MÓVIL (Fondo oscuro al abrir en móvil) --- */}
       {isMobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] lg:hidden transition-opacity"
-          onClick={() => setIsMobileOpen(false)}
-        />
-      )}
+  <div
+    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] xl:hidden transition-opacity"
+    onClick={() => setIsMobileOpen(false)}
+  />
+)}
+
+
 
       {/* --- SIDEBAR --- */}
       <aside
-        className={`
-          fixed inset-y-0 left-0 z-[80] lg:relative lg:z-0
-          flex flex-col bg-[#0f172a] text-slate-300 border-r border-slate-800 shadow-2xl
-          transition-[width,transform] duration-300 ease-in-out
-          ${isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-          ${isCollapsed ? "lg:w-20" : "lg:w-72 w-[280px]"}
-        `}
-      >
+  className={`
+    fixed inset-y-0 left-0 z-[80] xl:relative xl:z-0
+    flex flex-col bg-[#0f172a] text-slate-300 border-r border-slate-800 shadow-2xl
+    transition-[width,transform] duration-300 ease-in-out
+    ${isMobileOpen ? "translate-x-0" : "-translate-x-full xl:translate-x-0"}
+    ${isCollapsed ? "xl:w-20" : "xl:w-72 w-[280px]"}
+  `}
+>
+
         {/* Toggle Button (Solo Desktop) - "Manija" visible */}
-        <div className="hidden lg:block absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-[90]">
+        <div className="hidden xl:block absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-[90]">
+
           <button
             type="button"
             onClick={() => setIsCollapsed((v) => !v)}

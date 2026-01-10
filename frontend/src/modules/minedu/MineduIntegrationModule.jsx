@@ -157,21 +157,26 @@ const MineduDashboard = () => {
   const breakdown = stats?.data_breakdown ?? {};
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-            Integración MINEDU
-          </h2>
-          <p className="text-slate-600">
-            SIA/SIAGIE – exportación, validación y monitoreo
-          </p>
-        </div>
-        <Button variant="outline" onClick={fetchDashboardStats}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Actualizar
-        </Button>
-      </div>
+    <div className="space-y-6 pb-24 sm:pb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div className="min-w-0">
+    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+      Integración MINEDU
+    </h2>
+    <p className="text-sm sm:text-base text-slate-600">
+      SIA/SIAGIE – exportación, validación y monitoreo
+    </p>
+  </div>
+
+  <Button
+    variant="outline"
+    onClick={fetchDashboardStats}
+    className="w-full sm:w-auto shrink-0"
+  >
+    <RefreshCw className="h-4 w-4 mr-2" />
+    Actualizar
+  </Button>
+</div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -316,115 +321,123 @@ const ExportDataModule = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">Exportación de Datos</h2>
+  <div className="space-y-6 pb-32 sm:pb-8">
+    <h2 className="text-2xl font-bold text-gray-900">Exportación de Datos</h2>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Exportar a MINEDU</CardTitle>
-          <CardDescription>Seleccione tipo y período</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleExport} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <Label>Tipo *</Label>
-                <Select value={exportType} onValueChange={setExportType}>
-                  <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Datos a exportar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="enrollments">
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4" />
-                        Matrículas
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="grades">
-                      <div className="flex items-center gap-2">
-                        <Award className="h-4 w-4" />
-                        Calificaciones
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Exportar a MINEDU</CardTitle>
+        <CardDescription>Seleccione tipo y período</CardDescription>
+      </CardHeader>
 
-              <div>
-                <Label>Año *</Label>
-                <Select value={academicYear} onValueChange={setAcademicYear}>
-                  <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Año" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="2025">2025</SelectItem>
-                    <SelectItem value="2024">2024</SelectItem>
-                    <SelectItem value="2023">2023</SelectItem>
-                    <SelectItem value="2022">2022</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Período *</Label>
-                <Select value={academicPeriod} onValueChange={setAcademicPeriod}>
-                  <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Período" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="I">I Semestre</SelectItem>
-                    <SelectItem value="II">II Semestre</SelectItem>
-                    <SelectItem value="III">III Semestre</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+      <CardContent>
+        <form onSubmit={handleExport} className="space-y-6">
+          {/* ✅ responsive grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="min-w-0">
+              <Label>Tipo *</Label>
+              <Select value={exportType} onValueChange={setExportType}>
+                <SelectTrigger className="mt-2 w-full">
+                  <SelectValue placeholder="Datos a exportar" />
+                </SelectTrigger>
+                <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+                  <SelectItem value="enrollments">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Matrículas
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="grades">
+                    <div className="flex items-center gap-2">
+                      <Award className="h-4 w-4" />
+                      Calificaciones
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start gap-3 text-sm text-blue-700">
-                <AlertTriangle className="h-5 w-5 mt-0.5" />
-                <span>
-                  <b>Importante:</b> valide catálogos y mapeos antes de exportar.
-                </span>
-              </div>
+            <div className="min-w-0">
+              <Label>Año *</Label>
+              <Select value={academicYear} onValueChange={setAcademicYear}>
+                <SelectTrigger className="mt-2 w-full">
+                  <SelectValue placeholder="Año" />
+                </SelectTrigger>
+                <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+                  <SelectItem value="2025">2025</SelectItem>
+                  <SelectItem value="2024">2024</SelectItem>
+                  <SelectItem value="2023">2023</SelectItem>
+                  <SelectItem value="2022">2022</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="flex justify-end gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setExportType("");
-                  setAcademicPeriod("");
-                  setAcademicYear("2024");
-                }}
-              >
-                Limpiar
-              </Button>
-
-              <Button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700"
-                disabled={submitting}
-              >
-                {submitting ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Encolando...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Iniciar Exportación
-                  </>
-                )}
-              </Button>
+            <div className="min-w-0">
+              <Label>Período *</Label>
+              <Select value={academicPeriod} onValueChange={setAcademicPeriod}>
+                <SelectTrigger className="mt-2 w-full">
+                  <SelectValue placeholder="Período" />
+                </SelectTrigger>
+                <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+                  <SelectItem value="I">I Semestre</SelectItem>
+                  <SelectItem value="II">II Semestre</SelectItem>
+                  <SelectItem value="III">III Semestre</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start gap-3 text-sm text-blue-700">
+              <AlertTriangle className="h-5 w-5 mt-0.5" />
+              <span>
+                <b>Importante:</b> valide catálogos y mapeos antes de exportar.
+              </span>
+            </div>
+          </div>
+
+          {/* ✅ botones responsive + no tapa el “Star” */}
+          <div className="flex flex-col sm:flex-row sm:justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                setExportType("");
+                setAcademicPeriod("");
+                setAcademicYear("2024");
+              }}
+            >
+              Limpiar
+            </Button>
+
+            <Button
+              type="submit"
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
+              disabled={submitting}
+            >
+              {submitting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Encolando...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Iniciar Exportación
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* ✅ spacer extra para que el footer “Star” no tape nada */}
+          <div className="h-10 sm:h-0" />
+        </form>
+      </CardContent>
+    </Card>
+  </div>
+);
+
 };
 
 /* =========================================================
@@ -524,7 +537,8 @@ const ExportHistoryModule = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 sm:pb-6">
+
       {/* Dialog Detalle */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-3xl">
@@ -593,73 +607,84 @@ const ExportHistoryModule = () => {
         </DialogContent>
       </Dialog>
 
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Historial de Exportaciones</h2>
-        <Button onClick={fetchExports} variant="outline">
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Actualizar
-        </Button>
-      </div>
+     {/* HEADER */}
+<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <h2 className="text-2xl font-bold text-gray-900">Historial de Exportaciones</h2>
 
-      <div className="flex flex-wrap gap-4 items-center">
-        <div className="w-48">
-          <Label className="sr-only">Estado</Label>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Estado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Todos</SelectItem>
-              <SelectItem value="PENDING">Pendiente</SelectItem>
-              <SelectItem value="PROCESSING">Procesando</SelectItem>
-              <SelectItem value="COMPLETED">Completado</SelectItem>
-              <SelectItem value="FAILED">Fallido</SelectItem>
-              <SelectItem value="RETRYING">Reintentando</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+  <Button onClick={fetchExports} variant="outline" className="w-full sm:w-auto">
+    <RefreshCw className="h-4 w-4 mr-2" />
+    Actualizar
+  </Button>
+</div>
 
-        <div className="w-48">
-          <Label className="sr-only">Tipo</Label>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Todos</SelectItem>
-              <SelectItem value="ENROLLMENT">Matrículas</SelectItem>
-              <SelectItem value="GRADES">Calificaciones</SelectItem>
-              <SelectItem value="STUDENTS">Estudiantes</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+{/* FILTROS */}
+<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4">
+  <div className="w-full sm:w-48 min-w-0">
+    <Label className="sr-only">Estado</Label>
+    <Select value={statusFilter} onValueChange={setStatusFilter}>
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder="Estado" />
+      </SelectTrigger>
+      <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+        <SelectItem value="ALL">Todos</SelectItem>
+        <SelectItem value="PENDING">Pendiente</SelectItem>
+        <SelectItem value="PROCESSING">Procesando</SelectItem>
+        <SelectItem value="COMPLETED">Completado</SelectItem>
+        <SelectItem value="FAILED">Fallido</SelectItem>
+        <SelectItem value="RETRYING">Reintentando</SelectItem>
+      </SelectContent>
+    </Select>
+  </div>
 
-        <div className="text-sm text-gray-600 ml-auto">
-          Mostrando: <b>{filtered.length}</b>
-        </div>
-      </div>
+  <div className="w-full sm:w-48 min-w-0">
+    <Label className="sr-only">Tipo</Label>
+    <Select value={typeFilter} onValueChange={setTypeFilter}>
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder="Tipo" />
+      </SelectTrigger>
+      <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+        <SelectItem value="ALL">Todos</SelectItem>
+        <SelectItem value="ENROLLMENT">Matrículas</SelectItem>
+        <SelectItem value="GRADES">Calificaciones</SelectItem>
+        <SelectItem value="STUDENTS">Estudiantes</SelectItem>
+      </SelectContent>
+    </Select>
+  </div>
+
+  {/* Contador: abajo en móvil, a la derecha en desktop */}
+  <div className="text-sm text-gray-600 sm:ml-auto">
+    Mostrando: <b>{filtered.length}</b>
+  </div>
+
+  {/* Mostrando: en móvil se queda abajo, en desktop se va a la derecha */}
+  <div className="text-sm text-gray-600 sm:ml-auto">
+    Mostrando: <b>{filtered.length}</b>
+  </div>
+</div>
+
+{/* TABLA */}
 <Card>
   <CardContent className="p-0">
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead className="bg-gray-200 border-b"> {/* Fondo gris para la primera fila */}
+    <div className="w-full overflow-x-auto">
+      <table className="w-full min-w-[820px]">
+        <thead className="bg-gray-200 border-b">
           <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider whitespace-nowrap">
               Tipo
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider whitespace-nowrap">
               Período
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider whitespace-nowrap">
               Estado
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider whitespace-nowrap">
               Registros
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider whitespace-nowrap">
               Fecha
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider whitespace-nowrap">
               Acciones
             </th>
           </tr>
@@ -669,9 +694,10 @@ const ExportHistoryModule = () => {
           {filtered.map((exp) => {
             const cfg = statusCfg(exp.status);
             const Icon = cfg.Icon;
+
             return (
               <tr key={exp.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-black"> {/* Letra negra */}
+                <td className="px-4 py-4 whitespace-nowrap text-black">
                   <div className="flex items-center gap-2">
                     {exp.data_type === "ENROLLMENT" ? (
                       <Users className="h-4 w-4 text-blue-600" />
@@ -684,12 +710,11 @@ const ExportHistoryModule = () => {
                   </div>
                 </td>
 
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
-                  {exp.record_data?.academic_year ?? "—"}-
-                  {exp.record_data?.academic_period ?? "—"}
+                <td className="px-4 py-4 whitespace-nowrap text-sm text-black">
+                  {exp.record_data?.academic_year ?? "—"}-{exp.record_data?.academic_period ?? "—"}
                 </td>
 
-                <td className="px-6 py-4 whitespace-nowrap text-black">
+                <td className="px-4 py-4 whitespace-nowrap text-black">
                   <Badge variant="secondary" className={cfg.className}>
                     <span className="flex items-center gap-1">
                       <Icon className="h-3 w-3" />
@@ -698,32 +723,22 @@ const ExportHistoryModule = () => {
                   </Badge>
                 </td>
 
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                <td className="px-4 py-4 whitespace-nowrap text-sm text-black">
                   {exp.total_records ?? "N/A"}
                 </td>
 
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                <td className="px-4 py-4 whitespace-nowrap text-sm text-black">
                   {safeDate(exp.created_at)}
                 </td>
 
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-black">
+                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-black">
                   <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      title="Ver detalle"
-                      onClick={() => openDetail(exp)}
-                    >
+                    <Button variant="ghost" size="sm" title="Ver detalle" onClick={() => openDetail(exp)}>
                       <Eye className="h-4 w-4" />
                     </Button>
 
                     {exp.status === "FAILED" && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => retry(exp.id)}
-                        title="Reintentar"
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => retry(exp.id)} title="Reintentar">
                         <RefreshCw className="h-4 w-4" />
                       </Button>
                     )}
@@ -776,7 +791,7 @@ const DataValidationModule = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 sm:pb-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Validación de Integridad</h2>
 
@@ -806,7 +821,8 @@ const DataValidationModule = () => {
         </CardHeader>
         <CardContent>
           {validation ? (
-            <div className="space-y-6">
+           <div className="space-y-6 pb-24 sm:pb-6">
+
               <div
                 className={`p-4 rounded-lg border ${validation.valid
                     ? "bg-green-50 border-green-200"
@@ -972,7 +988,8 @@ const MappingsModule = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 sm:pb-6">
+
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 className="text-2xl font-bold text-black">Mapeo de Catálogos MINEDU</h2>
         <div className="flex gap-2 items-center">
@@ -1247,7 +1264,8 @@ const JobsLogsModule = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 sm:pb-6">
+
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 className="text-2xl font-bold">Jobs Programados & Bitácora</h2>
         <div className="flex gap-2">
@@ -1264,60 +1282,82 @@ const JobsLogsModule = () => {
 
       {isCreateOpen && (
         <Card className="border-2 border-blue-100">
-          <CardHeader>
-            <CardTitle>Crear Job</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={createJob} className="grid md:grid-cols-3 gap-4">
-              <div>
-                <Label>Tipo</Label>
-                <Select
-                  value={form.type}
-                  onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}
-                >
-                  <SelectTrigger className="mt-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {JOB_TYPES.map((j) => (
-                      <SelectItem key={j.value} value={j.value}>
-                        {j.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+  <CardHeader>
+    <CardTitle>Crear Job</CardTitle>
+  </CardHeader>
 
-              <div>
-                <Label>CRON</Label>
-                <input
-                  className="w-full border rounded h-9 px-3 mt-2 text-sm"
-                  value={form.cron}
-                  onChange={(e) => setForm((f) => ({ ...f, cron: e.target.value }))}
-                  placeholder="0 3 * * *"
-                />
-                <p className="text-xs text-gray-500 mt-1">Ej. 0 3 * * * (3am diario)</p>
-              </div>
+  <CardContent>
+    <form
+      onSubmit={createJob}
+      className="grid grid-cols-1 md:grid-cols-3 gap-4"
+    >
+      <div className="min-w-0">
+        <Label>Tipo</Label>
+        <Select
+          value={form.type}
+          onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}
+        >
+          <SelectTrigger className="mt-2 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+            {JOB_TYPES.map((j) => (
+              <SelectItem key={j.value} value={j.value}>
+                {j.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-              <div className="flex items-end gap-2 mt-2 md:mt-8">
-                <label className="text-sm flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={form.enabled}
-                    onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.checked }))}
-                  />
-                  Habilitado
-                </label>
-                <Button type="submit" className="ml-auto bg-blue-600 hover:bg-blue-700">
-                  Guardar
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+      <div className="min-w-0">
+        <Label>CRON</Label>
+        <input
+          className="w-full border rounded h-9 px-3 mt-2 text-sm"
+          value={form.cron}
+          onChange={(e) => setForm((f) => ({ ...f, cron: e.target.value }))}
+          placeholder="0 3 * * *"
+        />
+        <p className="text-xs text-gray-500 mt-1">Ej. 0 3 * * * (3am diario)</p>
+      </div>
+
+      {/* acciones: en móvil se apila, en desktop queda al final */}
+      <div className="min-w-0 md:self-end">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <label className="text-sm flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={form.enabled}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, enabled: e.target.checked }))
+              }
+            />
+            Habilitado
+          </label>
+
+          <div className="flex flex-col sm:flex-row gap-2 sm:ml-auto">
+            <Button
+              type="submit"
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
+            >
+              Guardar
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setIsCreateOpen(false)}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      </div>
+    </form>
+  </CardContent>
+</Card>
+
       )}
 
    <Card>
@@ -1528,6 +1568,9 @@ const JobsLogsModule = () => {
 const MineduIntegrationModule = () => {
   const { user, hasPerm } = useAuth();
 
+  // ✅ Hooks SIEMPRE arriba (antes de if/returns)
+  const [activeTab, setActiveTab] = useState("dashboard");
+
   const roles = Array.isArray(user?.roles) ? user.roles : [];
 
   const canByRole =
@@ -1567,8 +1610,26 @@ const MineduIntegrationModule = () => {
           shadow-md
         "
       >
-        <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 bg-white/60">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          {/* ===================== MOBILE (dropdown) ===================== */}
+          <div className="block sm:hidden">
+            <Select value={activeTab} onValueChange={setActiveTab}>
+              <SelectTrigger className="w-full bg-white/60">
+                <SelectValue placeholder="Seleccionar módulo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="dashboard">Dashboard</SelectItem>
+                <SelectItem value="mappings">Mapeos</SelectItem>
+                <SelectItem value="export">Exportar</SelectItem>
+                <SelectItem value="history">Historial</SelectItem>
+                <SelectItem value="jobs">Jobs & Logs</SelectItem>
+                <SelectItem value="validation">Validación</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* ===================== DESKTOP (tabs normal) ===================== */}
+          <TabsList className="hidden sm:grid w-full grid-cols-6 bg-white/60">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="mappings">Mapeos</TabsTrigger>
             <TabsTrigger value="export">Exportar</TabsTrigger>

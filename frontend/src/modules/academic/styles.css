@@ -1,22 +1,36 @@
 /* Eliminar scroll innecesario */
-body, .main, .container, .card, .overflow-x-auto, .overflow-auto {
-  overflow-x: hidden !important; /* Eliminar scroll horizontal */
-  overflow-y: hidden !important; /* Eliminar scroll vertical */
+/* Reset básico sin matar el scroll */
+html, body {
   margin: 0;
   padding: 0;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
+
+/* NO bloquear overflow de utilidades tailwind */
+.overflow-auto,
+.overflow-y-auto,
+.overflow-x-auto {
+  overflow: auto !important;
+}
+
+
+/* NO tocar overflow de clases utilitarias de Tailwind */
+
 
 /* Eliminar scroll innecesario en las tablas */
-table {
+/*table {
   overflow-x: hidden !important; /* Eliminar el scroll horizontal */
-  overflow-y: hidden !important; /* Eliminar el scroll vertical */
-}
+  /*overflow-y: hidden !important; /* Eliminar el scroll vertical */
+/*}
 
 /* Para las secciones de contenido con scroll */
-.card-custom-background, .table-custom-background, .table-header-background {
+/*.card-custom-background, .table-custom-background, .table-header-background {
   overflow-x: hidden !important; /* Eliminar scroll horizontal */
-  overflow-y: hidden !important; /* Eliminar scroll vertical */
-}
+  /*overflow-y: hidden !important; /* Eliminar scroll vertical */
+
 
 main {
   background-color: #1C2A44 !important; /* Azul marino */
@@ -26,11 +40,12 @@ main {
 }
 
 /* Fondo de las tarjetas (donde se muestran las estadísticas) */
-.card {
-  background-color: #1C2A44 !important; /* Azul marino */
-  color: #1C2A44 !important; /* Texto blanco */
-  border: 1px solid #1C2A44 !important; /* Bordes más claros para un buen contraste */
+.app-card {
+  background-color: #1C2A44 !important;
+  color: #ffffff !important;
+  border: 1px solid #1C2A44 !important;
 }
+
 
 /* Fondo de las tablas y otras secciones */
 table {

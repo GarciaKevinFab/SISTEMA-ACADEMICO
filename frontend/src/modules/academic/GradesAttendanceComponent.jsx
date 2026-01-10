@@ -303,108 +303,119 @@ export default function GradesAttendanceComponent() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 sm:pb-6">
+
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Calificaciones y Asistencia</h2>
+     {/* Header */}
+<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+    Calificaciones y Asistencia
+  </h2>
 
-        {/* Section Selector */}
-        <div className="flex items-center space-x-4">
-          <Label htmlFor="section-select">Sección:</Label>
-          <Select
-            value={selectedSection?.id ? String(selectedSection.id) : ""}
-            onValueChange={(value) => {
-              const section = sections.find((s) => String(s.id) === value);
-              setSelectedSection(section || null);
-            }}
-          >
-            <SelectTrigger className="w-64">
-              <SelectValue placeholder="Seleccionar sección" />
-            </SelectTrigger>
+  {/* Section Selector */}
+  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+    <Label htmlFor="section-select" className="text-sm">
+      Sección:
+    </Label>
 
-            <SelectContent>
-              {sections.map((section) => (
-                <SelectItem key={section.id} value={String(section.id)}>
-                  {(section.course_name || section.course_code || "Curso")} - {(section.section_code || section.label || `SEC-${section.id}`)}
-                </SelectItem>
-              ))}
+    <Select
+      value={selectedSection?.id ? String(selectedSection.id) : ""}
+      onValueChange={(value) => {
+        const section = sections.find((s) => String(s.id) === value);
+        setSelectedSection(section || null);
+      }}
+    >
+      <SelectTrigger className="w-full sm:w-64">
+        <SelectValue placeholder="Seleccionar sección" />
+      </SelectTrigger>
 
-              {sections.length === 0 && (
-                <div className="p-3 text-sm text-gray-500">
-                  No tienes secciones asignadas (o el backend devolvió 0).
-                </div>
-              )}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <SelectContent>
+        {sections.map((section) => (
+          <SelectItem key={section.id} value={String(section.id)}>
+            {(section.course_name || section.course_code || "Curso")} -{" "}
+            {(section.section_code || section.label || `SEC-${section.id}`)}
+          </SelectItem>
+        ))}
+
+        {sections.length === 0 && (
+          <div className="p-3 text-sm text-gray-500">
+            No tienes secciones asignadas (o el backend devolvió 0).
+          </div>
+        )}
+      </SelectContent>
+    </Select>
+  </div>
+</div>
 
       {selectedSection && (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="grades">Calificaciones</TabsTrigger>
-            <TabsTrigger value="attendance">Asistencia</TabsTrigger>
-          </TabsList>
+         <TabsList className="w-full sm:w-auto overflow-x-auto flex flex-nowrap gap-2">
+  <TabsTrigger value="grades" className="shrink-0">Calificaciones</TabsTrigger>
+  <TabsTrigger value="attendance" className="shrink-0">Asistencia</TabsTrigger>
+</TabsList>
+
 
           {/* Grades Tab */}
           <TabsContent value="grades">
             <Card>
               <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Registro de Calificaciones</CardTitle>
-                    <CardDescription>
-                      Sección: {selectedSection.course_name || selectedSection.course_code} - {selectedSection.section_code || selectedSection.label}
-                    </CardDescription>
-                  </div>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+  <div className="min-w-0">
+    <CardTitle>Registro de Calificaciones</CardTitle>
+    <CardDescription className="break-words">
+      Sección: {selectedSection.course_name || selectedSection.course_code} -{" "}
+      {selectedSection.section_code || selectedSection.label}
+    </CardDescription>
+  </div>
 
-                  <div className="flex space-x-2">
-                    <Button data-testid="grade-save" variant="outline" onClick={saveGrades} disabled={isSaving}>
-                      {isSaving ? (
-                        <>
-                          <Clock className="h-4 w-4 mr-2 animate-spin" />
-                          Guardando...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="h-4 w-4 mr-2" />
-                          Guardar
-                        </>
-                      )}
-                    </Button>
+  <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 w-full lg:w-auto">
+    <Button data-testid="grade-save" variant="outline" onClick={saveGrades} disabled={isSaving} className="w-full sm:w-auto">
+      {isSaving ? (
+        <>
+          <Clock className="h-4 w-4 mr-2 animate-spin" />
+          Guardando...
+        </>
+      ) : (
+        <>
+          <Save className="h-4 w-4 mr-2" />
+          Guardar
+        </>
+      )}
+    </Button>
 
-                    <Button
-                      data-testid="grade-submit"
-                      onClick={submitGrades}
-                      disabled={isSubmitting}
-                      className="bg-blue-600 hover:bg-blue-700"
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <Clock className="h-4 w-4 mr-2 animate-spin" />
-                          Enviando...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="h-4 w-4 mr-2" />
-                          Enviar y Cerrar
-                        </>
-                      )}
-                    </Button>
+    <Button
+      data-testid="grade-submit"
+      onClick={submitGrades}
+      disabled={isSubmitting}
+      className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
+    >
+      {isSubmitting ? (
+        <>
+          <Clock className="h-4 w-4 mr-2 animate-spin" />
+          Enviando...
+        </>
+      ) : (
+        <>
+          <Send className="h-4 w-4 mr-2" />
+          Enviar y Cerrar
+        </>
+      )}
+    </Button>
 
-                    {(user?.role === "REGISTRAR" || user?.role === "ADMIN_ACADEMIC") ? (
-                      <Button data-testid="grade-reopen" variant="outline" onClick={reopenGrades}>
-                        <Unlock className="h-4 w-4 mr-2" />
-                        Reabrir
-                      </Button>
-                    ) : null}
+    {(user?.role === "REGISTRAR" || user?.role === "ADMIN_ACADEMIC") ? (
+      <Button data-testid="grade-reopen" variant="outline" onClick={reopenGrades} className="w-full sm:w-auto">
+        <Unlock className="h-4 w-4 mr-2" />
+        Reabrir
+      </Button>
+    ) : null}
 
-                    <Button data-testid="act-generate-pdf" variant="outline" onClick={generateActaPDF}>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Generar Acta
-                    </Button>
-                  </div>
-                </div>
+    <Button data-testid="act-generate-pdf" variant="outline" onClick={generateActaPDF} className="w-full sm:w-auto">
+      <FileText className="h-4 w-4 mr-2" />
+      Generar Acta
+    </Button>
+  </div>
+</div>
+
               </CardHeader>
 
               <CardContent className="space-y-4">
@@ -456,7 +467,8 @@ export default function GradesAttendanceComponent() {
                   </table>
                 </div>
 
-                <div className="flex items-end gap-3">
+               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+
                   <div>
                     <Label>Fecha de sesión</Label>
                     <Input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} />
