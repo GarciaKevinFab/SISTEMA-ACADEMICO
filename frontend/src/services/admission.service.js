@@ -4,48 +4,30 @@ import api from "../lib/api";
 /* ------------------------------------------
    Helpers
 -------------------------------------------*/
-/**
- * Convierte valores provenientes de inputs type=datetime-local a ISO.
- * Acepta ISO, Date o strings 'YYYY-MM-DDTHH:MM[:SS]'.
- * Devuelve null si no se puede parsear.
- */
 export const toISO = (v) => {
     if (!v) return null;
     if (v instanceof Date && !isNaN(v.getTime())) return v.toISOString();
 
     const s = String(v).trim();
-    // Compatibilidad con datetime-local (sin zona)
-    // 'YYYY-MM-DDTHH:MM' o 'YYYY-MM-DDTHH:MM:SS'
     const m = s.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::(\d{2}))?$/);
     if (m) {
         const secs = m[3] ? `:${m[3]}` : ":00";
-        // Interpretamos como hora local del navegador
         const d = new Date(`${m[1]}T${m[2]}${secs}`);
         return isNaN(d.getTime()) ? null : d.toISOString();
     }
-    // ISO nativo
     const d = new Date(s);
     return isNaN(d.getTime()) ? null : d.toISOString();
 };
 
-/** Extrae listas desde respuestas de backend que vienen en formatos distintos */
 const extractList = (data) => {
     if (Array.isArray(data)) return data;
-    return (
-        data?.admission_calls ||
-        data?.calls ||
-        data?.items ||
-        data?.results ||
-        data?.data ||
-        []
-    );
+    return data?.admission_calls || data?.calls || data?.items || data?.results || data?.data || [];
 };
 
 /* ------------------------------------------
    Dashboard
 -------------------------------------------*/
-export const getAdmissionDashboardStats = async () =>
-    (await api.get("/admission/dashboard")).data;
+export const getAdmissionDashboardStats = async () => (await api.get("/admission/dashboard")).data;
 
 /* ------------------------------------------
    Convocatorias
@@ -74,7 +56,10 @@ const normalizeCall = (c) => {
         maximum_age: c.maximum_age ?? null,
         required_documents: c.required_documents ?? [],
         careers,
-        // opcional si el backend lo manda (si no, portal lo calcula)
+
+        // ✅ campos opcionales que podrían venir
+        regulation_url: c.regulation_url ?? c.reglamento_url ?? c.rules_url ?? c.regulation_pdf ?? c.reglamento_pdf ?? null,
+
         career_vacancies: c.career_vacancies ?? c.vacancies_map ?? null,
         total_applications: c.total_applications ?? c.applications_count ?? 0,
         status: c.status ?? c.state ?? "OPEN",
@@ -83,10 +68,6 @@ const normalizeCall = (c) => {
 
 export const listAdmissionCalls = async () => (await api.get("/admission-calls")).data;
 
-/**
- * Crea una convocatoria; enviamos nombres oficiales y sinónimos
- * para que calce con el backend stub o con uno real.
- */
 export const createAdmissionCall = async (form) => {
     const careersArray = (form.available_careers || []).map((id) => ({
         id,
@@ -95,7 +76,6 @@ export const createAdmissionCall = async (form) => {
     }));
 
     const payload = {
-        // nombres usados por el FE
         name: form.name,
         description: form.description || "",
         academic_year: form.academic_year,
@@ -111,7 +91,7 @@ export const createAdmissionCall = async (form) => {
         maximum_age: Number(form.maximum_age || 0),
         required_documents: form.required_documents || [],
 
-        // sinónimos frecuentes
+        // sinónimos
         year: form.academic_year,
         period: form.academic_period,
         start_date: toISO(form.registration_start),
@@ -126,8 +106,8 @@ export const createAdmissionCall = async (form) => {
 export const AdmissionCalls = {
     listPublic: async () => {
         const endpoints = [
-            "/admission-calls/public",        // ✅ primero el real
-            "/portal/public/admission-calls", // fallback si existe en algún proxy
+            "/admission-calls/public",
+            "/portal/public/admission-calls",
         ];
 
         let lastErr = null;
@@ -136,18 +116,54 @@ export const AdmissionCalls = {
             try {
                 const { data } = await api.get(url);
                 const raw = extractList(data);
-
-                // ✅ si este endpoint devuelve vacío, prueba el siguiente
                 if (Array.isArray(raw) && raw.length === 0) continue;
-
                 return raw.map(normalizeCall);
             } catch (e) {
                 lastErr = e;
             }
         }
 
-        // si todos fallan o dan vacío:
+        // Si todos fallan:
+        if (lastErr) console.error("listPublic failed:", lastErr);
         return [];
+    },
+
+    // ✅ NUEVO: obtener por id (si backend lo soporta) + fallback a buscar en listPublic
+    getPublicById: async (id) => {
+        const endpoints = [
+            `/admission-calls/public/${id}`,
+            `/portal/public/admission-calls/${id}`,
+            `/admission-calls/${id}`, // (si existiera sin auth; si no, caerá al fallback)
+        ];
+
+        let lastErr = null;
+
+        // 1) intentar endpoints directos
+        for (const url of endpoints) {
+            try {
+                const { data } = await api.get(url);
+                // Si backend devuelve objeto directo:
+                if (data && typeof data === "object" && !Array.isArray(data)) {
+                    // a veces viene {call: {...}} o {data: {...}}
+                    const maybe = data.call || data.data || data.item || data;
+                    if (maybe && typeof maybe === "object") return normalizeCall(maybe);
+                }
+            } catch (e) {
+                lastErr = e;
+            }
+        }
+
+        // 2) fallback: buscar en la lista pública
+        try {
+            const list = await AdmissionCalls.listPublic();
+            const found = list.find((c) => String(c.id) === String(id));
+            if (found) return found;
+        } catch (e) {
+            lastErr = e;
+        }
+
+        if (lastErr) console.error("getPublicById failed:", lastErr);
+        return null;
     },
 
     listAdmin: async () => {
@@ -156,7 +172,6 @@ export const AdmissionCalls = {
         return raw.map(normalizeCall);
     },
 };
-
 
 /* ------------------------------------------
    Carreras
@@ -249,11 +264,7 @@ const normalizeDoc = (d) => ({
 export const ApplicantDocs = {
     async list(applicationId) {
         const { data } = await api.get(`/applications/${applicationId}/documents`);
-        const arr = Array.isArray(data?.documents)
-            ? data.documents
-            : Array.isArray(data)
-                ? data
-                : [];
+        const arr = Array.isArray(data?.documents) ? data.documents : Array.isArray(data) ? data : [];
         return arr.map(normalizeDoc);
     },
 
@@ -266,7 +277,6 @@ export const ApplicantDocs = {
     },
 };
 
-// Alias por compatibilidad con código previo
 ApplicantDocs.listMine = (applicationId) => ApplicantDocs.list(applicationId);
 
 /* ------------------------------------------

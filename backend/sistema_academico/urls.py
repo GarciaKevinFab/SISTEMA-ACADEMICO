@@ -24,6 +24,7 @@ urlpatterns = [
     path("api/", include("reports.urls")),
     path("api/", include("security_mfa.urls")),
     path("api/", include("users.urls")),
+    path("api/", include("students.urls")),
     path("api/", include("academic.urls")),
     path("api/", include("admission.urls")),
     path("api/", include("mesa_partes.urls")),

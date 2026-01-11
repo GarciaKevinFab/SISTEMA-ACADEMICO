@@ -10,6 +10,9 @@ from rest_framework.response import Response
 from acl.models import Role
 from .serializers import UserSerializer, UserCreateSerializer, UserUpdateSerializer
 
+# ✅ NUEVO: Students
+from students.models import Student
+
 User = get_user_model()
 
 
@@ -31,6 +34,56 @@ def _require_staff(request):
     return None
 
 
+def _split_full_name(full_name: str, fallback: str = ""):
+    full = (full_name or "").strip()
+    if not full:
+        full = (fallback or "").strip()
+
+    if not full:
+        return "", ""
+
+    parts = [p for p in full.split() if p]
+    if len(parts) == 1:
+        return parts[0], ""
+    if len(parts) >= 3:
+        # últimos 2 = apellidos (común)
+        nombres = " ".join(parts[:-2])
+        apellidos = " ".join(parts[-2:])
+        return nombres, apellidos
+    return parts[0], parts[1]
+
+
+def _ensure_student_for_user(user: User):
+    """
+    Si el usuario tiene rol STUDENT, asegurar Student enlazado.
+    Crea Student con DNI/COD temporales para cumplir unique.
+    """
+    # ya tiene
+    if hasattr(user, "student_profile"):
+        return None
+
+    full_name = getattr(user, "full_name", "") or ""
+    username = getattr(user, "username", "") or ""
+    email = getattr(user, "email", "") or ""
+
+    nombres, apellidos = _split_full_name(full_name, fallback=username)
+
+    # DNI/Código temporales (luego se corrigen en el módulo Estudiante)
+    temp_dni = "99" + get_random_string(6, allowed_chars="0123456789")   # 8 dígitos
+    temp_cod = "TMP-" + get_random_string(8).upper()
+
+    st = Student.objects.create(
+        user=user,
+        codigo_estudiante=temp_cod,
+        dni=temp_dni,
+        nombres=nombres or username,
+        apellidos=apellidos,
+        email=email,
+        estado="activo",
+    )
+    return st
+
+
 # ---------- AUTH ----------
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
@@ -47,6 +100,11 @@ def auth_me(request):
             u.roles.values_list("permissions__code", flat=True).distinct()
         )
 
+    # ✅ NUEVO: student_id si está enlazado
+    student_id = None
+    if hasattr(u, "student_profile"):
+        student_id = u.student_profile.id
+
     return Response({
         "id": u.id,
         "username": u.username,
@@ -57,6 +115,7 @@ def auth_me(request):
         "is_superuser": u.is_superuser,
         "roles": roles,
         "permissions": perm_codes,
+        "student_id": student_id,
     })
 
 
@@ -99,6 +158,11 @@ def users_collection(request):
             role_objs.append(r)
         user.roles.set(role_objs)
 
+        # ✅ si lo creas como STUDENT desde aquí, también crea su Student
+        role_names = [r.name.upper() for r in role_objs]
+        if "STUDENT" in role_names:
+            _ensure_student_for_user(user)
+
     return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
 
@@ -140,7 +204,6 @@ def users_search(request):
     GET /api/users/search?q=...
     Alias de listado
     """
-    # Re-usa la misma lógica del GET sin “llamar” otra vista
     q = (request.query_params.get("q") or "").strip()
     qs = User.objects.all().order_by("id")
     if q:
@@ -233,4 +296,10 @@ def users_assign_roles(request, pk: int):
         role_objs.append(r)
 
     user.roles.set(role_objs)
+
+    # ✅ MEJORA: si se asigna STUDENT, crear Student automáticamente
+    role_names = [r.name.upper() for r in role_objs]
+    if "STUDENT" in role_names:
+        _ensure_student_for_user(user)
+
     return Response({"status": "roles_assigned", "roles": [r.name for r in role_objs]})

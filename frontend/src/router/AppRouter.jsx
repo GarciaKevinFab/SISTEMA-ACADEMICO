@@ -18,6 +18,7 @@ import DashboardHome from "../pages/DashboardHome";
 
 /* Módulos */
 import PublicAdmissionCalls from "../modules/admission/PublicAdmissionCalls";
+import PublicAdmissionCallDetails from "../modules/admission/PublicAdmissionCallDetails"; // ✅ NUEVO
 import AccessControlModule from "../modules/admin/AccessControlModule";
 
 import CompleteAdmissionModule from "../modules/admission/CompleteAdmissionModule";
@@ -33,6 +34,9 @@ import MineduIntegrationModule from "../modules/minedu/MineduIntegrationModule";
 import SecurityModule from "../modules/security/SecurityModule";
 import PublicProcedureTracking from "../modules/mesa-partes/PublicProcedureTracking";
 import ResearchModule from "../modules/research/ResearchModule";
+
+// ✅ NUEVO: Módulo Estudiante
+import StudentModule from "../modules/student/StudentModule";
 
 /* Spinner inicial para sesión */
 const ProtectedRoute = ({ children }) => {
@@ -54,7 +58,10 @@ export default function AppRouter() {
             {/* Públicas */}
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
+
             <Route path="/public/admission" element={<PublicAdmissionCalls />} />
+            <Route path="/public/admission/:id" element={<PublicAdmissionCallDetails />} /> {/* ✅ NUEVO */}
+
             <Route path="/public/procedures/track" element={<PublicProcedureTracking />} />
 
             {/* 403 */}
@@ -83,7 +90,29 @@ export default function AppRouter() {
                     }
                 />
 
-                {/* Académico (ver módulo si tiene cualquiera) */}
+                {/* ✅ NUEVO: Estudiante */}
+                <Route
+                    path="/dashboard/student"
+                    element={
+                        <RequireAuth>
+                            <RequirePerm
+                                any={[
+                                    PERMS["student.profile.view"],
+                                    PERMS["admin.access.manage"],
+                                    PERMS["admin.catalogs.view"],
+                                    PERMS["admin.catalogs.manage"],
+                                    PERMS["admin.audit.view"],
+                                    PERMS["academic.view"],
+                                ].filter(Boolean)}
+                                fallback={<Navigate to="/403" replace />}
+                            >
+                                <StudentModule />
+                            </RequirePerm>
+                        </RequireAuth>
+                    }
+                />
+
+                {/* Académico */}
                 <Route
                     path="/dashboard/academic"
                     element={
@@ -161,13 +190,7 @@ export default function AppRouter() {
                 <Route
                     path="/dashboard/procedures"
                     element={
-                        <RequirePerm
-                            any={[
-                                PERMS["mpv.processes.review"],
-                                PERMS["mpv.processes.resolve"],
-                                PERMS["mpv.reports.view"],
-                            ]}
-                        >
+                        <RequirePerm any={[PERMS["mpv.processes.review"], PERMS["mpv.processes.resolve"], PERMS["mpv.reports.view"]]}>
                             <MesaDePartesModule />
                         </RequirePerm>
                     }
@@ -175,13 +198,7 @@ export default function AppRouter() {
                 <Route
                     path="/dashboard/mesa-partes"
                     element={
-                        <RequirePerm
-                            any={[
-                                PERMS["mpv.processes.review"],
-                                PERMS["mpv.processes.resolve"],
-                                PERMS["mpv.reports.view"],
-                            ]}
-                        >
+                        <RequirePerm any={[PERMS["mpv.processes.review"], PERMS["mpv.processes.resolve"], PERMS["mpv.reports.view"]]}>
                             <MesaDePartesModule />
                         </RequirePerm>
                     }
@@ -198,7 +215,6 @@ export default function AppRouter() {
                                 PERMS["fin.student.accounts.view"],
                                 PERMS["fin.reports.view"],
                                 PERMS["fin.concepts.manage"],
-                                // operativos (dejarán pasar cuando agregues subpantallas)
                                 PERMS["fin.payments.receive"],
                                 PERMS["fin.electronic.invoice.issue"],
                                 PERMS["fin.cash.movements"],

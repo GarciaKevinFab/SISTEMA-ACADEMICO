@@ -18,6 +18,7 @@ import {
   UserCircle,
   Menu,
   X,
+  GraduationCap, // ✅ NUEVO
 } from "lucide-react";
 import { PERMS, PERM_ALIASES } from "../auth/permissions";
 
@@ -33,20 +34,21 @@ const SideNav = () => {
   useEffect(() => {
     setIsMobileOpen(false);
   }, [location.pathname]);
-useEffect(() => {
-  // Evita scroll del fondo cuando el menú móvil está abierto (iOS friendly)
-  if (isMobileOpen) {
-    document.body.style.overflow = "hidden";
-    document.body.style.touchAction = "none";
-  } else {
-    document.body.style.overflow = "";
-    document.body.style.touchAction = "";
-  }
-  return () => {
-    document.body.style.overflow = "";
-    document.body.style.touchAction = "";
-  };
-}, [isMobileOpen]);
+
+  useEffect(() => {
+    // Evita scroll del fondo cuando el menú móvil está abierto (iOS friendly)
+    if (isMobileOpen) {
+      document.body.style.overflow = "hidden";
+      document.body.style.touchAction = "none";
+    } else {
+      document.body.style.overflow = "";
+      document.body.style.touchAction = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.touchAction = "";
+    };
+  }, [isMobileOpen]);
 
   const hasRole = (...codes) => codes.some((r) => roles.includes(r));
   const isActive = (path) =>
@@ -66,17 +68,40 @@ useEffect(() => {
   }, [permissions]);
 
   const canAny = (...req) => {
-    // si no está logueado, no ve nada salvo que explícitamente lo permitas
     if (!user) return false;
     if (!req || req.length === 0) return true;
     return req.some((p) => grantedPerms.has(p));
   };
 
+  // ✅ NUEVO: Mostrar "Estudiante" si:
+  // - rol STUDENT o ADMIN_SYSTEM
+  // - o permisos admin/academic (por si roles no llegan pero permisos sí)
+  const canSeeStudentModule = useMemo(() => {
+    if (!user) return false;
+
+    const roleOk =
+      hasRole("STUDENT", "ADMIN_SYSTEM") ||
+      roles.some((r) => String(r).toUpperCase().includes("STUDENT")) ||
+      roles.some((r) => String(r).toUpperCase().includes("ADMIN_SYSTEM"));
+
+    const permOk = canAny(
+      PERMS["student.profile.view"], // si lo agregas luego en backend
+      PERMS["admin.access.manage"],
+      PERMS["admin.catalogs.view"],
+      PERMS["admin.catalogs.manage"],
+      PERMS["admin.audit.view"],
+      PERMS["academic.view"]
+    );
+
+    return roleOk || permOk;
+  }, [user, roles, grantedPerms]); // grantedPerms cambia cuando cambian permisos
+
   /**
-   * ✅ Política de menú (decidida y clara):
+   * ✅ Política de menú:
    * - Dashboard: cualquier usuario logueado.
    * - Seguridad: admin/auditoría/sesiones/políticas.
    * - Administración: gestión de accesos, catálogos, auditoría.
+   * - Estudiante: STUDENT/ADMIN_SYSTEM (o permisos).
    * - Académico: cualquier permiso académico relevante.
    * - Admisión: cualquier permiso de admisión.
    * - Investigación: cualquier permiso research.
@@ -108,7 +133,6 @@ useEffect(() => {
             title: "Seguridad",
             path: "/dashboard/security",
             icon: ShieldCheck,
-            // ✅ Seguridad
             anyPerms: [
               PERMS["security.policies.manage"],
               PERMS["security.sessions.inspect"],
@@ -127,7 +151,6 @@ useEffect(() => {
             title: "Administración",
             path: "/dashboard/admin",
             icon: Settings,
-            // ✅ Administración / Accesos / Catálogos
             anyPerms: [
               PERMS["admin.access.manage"],
               PERMS["admin.catalogs.view"],
@@ -153,7 +176,6 @@ useEffect(() => {
             path: "/dashboard/academic",
             icon: BookOpenCheck,
             show: canAny(
-              // base / compat
               PERMS["academic.view"],
               PERMS["academic.sections.view"],
               PERMS["academic.plans.view"],
@@ -163,6 +185,16 @@ useEffect(() => {
               PERMS["academic.attendance.view"]
             ),
           },
+
+          // ✅ NUEVO: Estudiante
+          {
+            id: "student",
+            title: "Estudiante",
+            path: "/dashboard/student",
+            icon: GraduationCap,
+            show: canSeeStudentModule,
+          },
+
           {
             id: "admission",
             title: "Admisión",
@@ -206,7 +238,6 @@ useEffect(() => {
               PERMS["mpv.processes.resolve"],
               PERMS["mpv.files.upload"],
               PERMS["mpv.reports.view"],
-              // legacy por si el backend aún devuelve desk.*
               PERMS["desk.intake.manage"],
               PERMS["desk.reports.view"],
               PERMS["desk.track.view"]
@@ -242,12 +273,12 @@ useEffect(() => {
         ],
       },
     ],
-    [user, grantedPerms] // grantedPerms cambia cuando cambian permisos
+    [user, grantedPerms, canSeeStudentModule]
   );
 
   return (
     <>
-      {/* --- HEADER MÓVIL (Solo visible en pantallas pequeñas) --- */}
+      {/* --- HEADER MÓVIL --- */}
       <div className="xl:hidden bg-[#0f172a] text-white p-4 flex items-center justify-between border-b border-slate-800 sticky top-0 z-[60]">
         <div className="flex items-center gap-2">
           <img
@@ -266,30 +297,26 @@ useEffect(() => {
         </button>
       </div>
 
-      {/* --- OVERLAY MÓVIL (Fondo oscuro al abrir en móvil) --- */}
+      {/* --- OVERLAY MÓVIL --- */}
       {isMobileOpen && (
-  <div
-    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] xl:hidden transition-opacity"
-    onClick={() => setIsMobileOpen(false)}
-  />
-)}
-
-
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] xl:hidden transition-opacity"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
 
       {/* --- SIDEBAR --- */}
       <aside
-  className={`
-    fixed inset-y-0 left-0 z-[80] xl:relative xl:z-0
-    flex flex-col bg-[#0f172a] text-slate-300 border-r border-slate-800 shadow-2xl
-    transition-[width,transform] duration-300 ease-in-out
-    ${isMobileOpen ? "translate-x-0" : "-translate-x-full xl:translate-x-0"}
-    ${isCollapsed ? "xl:w-20" : "xl:w-72 w-[280px]"}
-  `}
->
-
-        {/* Toggle Button (Solo Desktop) - "Manija" visible */}
+        className={`
+          fixed inset-y-0 left-0 z-[80] xl:relative xl:z-0
+          flex flex-col bg-[#0f172a] text-slate-300 border-r border-slate-800 shadow-2xl
+          transition-[width,transform] duration-300 ease-in-out
+          ${isMobileOpen ? "translate-x-0" : "-translate-x-full xl:translate-x-0"}
+          ${isCollapsed ? "xl:w-20" : "xl:w-72 w-[280px]"}
+        `}
+      >
+        {/* Toggle Button (Desktop) */}
         <div className="hidden xl:block absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-[90]">
-
           <button
             type="button"
             onClick={() => setIsCollapsed((v) => !v)}
@@ -300,12 +327,8 @@ useEffect(() => {
                        ring-1 ring-white/10 border border-slate-950/40
                        hover:bg-indigo-500 active:scale-95 transition-all"
           >
-            {/* Grip */}
             <span className="absolute -left-2 top-1/2 -translate-y-1/2 h-7 w-1.5 rounded-full bg-white/25" />
-
             {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-
-            {/* Tooltip */}
             <span
               className="pointer-events-none absolute right-full mr-3 px-2 py-1 rounded-md
                          bg-black/70 text-white text-[11px] font-semibold whitespace-nowrap

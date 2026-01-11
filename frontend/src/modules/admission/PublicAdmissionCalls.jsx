@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -33,6 +34,7 @@ function formatApiError(err, fallback = "Ocurrió un error") {
 
 const PublicAdmissionCalls = () => {
   const { api } = useAuth();
+  const navigate = useNavigate();
 
   const [admissionCalls, setAdmissionCalls] = useState([]);
   const [searchResults, setSearchResults] = useState(null);
@@ -124,9 +126,33 @@ const PublicAdmissionCalls = () => {
   };
 
   const fmtDate = (d) =>
-    d
-      ? new Date(d).toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" })
-      : "-";
+    d ? new Date(d).toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" }) : "-";
+
+  const getReglamentoUrl = (call) => {
+    const candidate =
+      call?.regulation_url ||
+      call?.reglamento_url ||
+      call?.rules_url ||
+      call?.regulationPdf ||
+      call?.regulation_pdf ||
+      call?.reglamento_pdf ||
+      call?.documents?.reglamento ||
+      call?.documents?.rules ||
+      null;
+
+    return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
+  };
+
+  const handleOpenReglamento = (call) => {
+    const url = getReglamentoUrl(call);
+    if (!url) return toast.error("Esta convocatoria no tiene reglamento cargado.");
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleViewDetails = (call) => {
+    if (!call?.id) return toast.error("No se pudo abrir el detalle: falta el ID.");
+    navigate(`/public/admission/${call.id}`);
+  };
 
   if (loading) {
     return (
@@ -153,6 +179,7 @@ const PublicAdmissionCalls = () => {
           </div>
 
           <Button
+            type="button"
             variant="ghost"
             onClick={() => (window.location.href = "/login")}
             className="text-blue-700 hover:text-blue-800 hover:bg-blue-50 font-medium"
@@ -181,7 +208,9 @@ const PublicAdmissionCalls = () => {
                     Actualmente no contamos con procesos de admisión abiertos. Revise nuevamente más tarde.
                   </p>
                   <div className="mt-6">
-                    <Button variant="outline" onClick={fetchPublicAdmissionCalls}>Reintentar</Button>
+                    <Button type="button" variant="outline" onClick={fetchPublicAdmissionCalls}>
+                      Reintentar
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -264,8 +293,10 @@ const PublicAdmissionCalls = () => {
                       )}
 
                       <div className="flex items-center gap-3 shrink-0">
-                        <Button variant="outline" className="h-10 px-5">Reglamento</Button>
-                        <Button className="h-10 px-6 bg-blue-600 hover:bg-blue-700 text-white">
+                        <Button type="button" variant="outline" className="h-10 px-5" onClick={() => handleOpenReglamento(call)}>
+                          Reglamento
+                        </Button>
+                        <Button type="button" className="h-10 px-6 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleViewDetails(call)}>
                           Ver Detalles <ChevronRight className="ml-2 h-4 w-4" />
                         </Button>
                       </div>
@@ -276,7 +307,7 @@ const PublicAdmissionCalls = () => {
             )}
           </div>
 
-          {/* Sidebar (lo dejo igual que tu código original, no afecta al bug principal) */}
+          {/* Sidebar igual */}
           <div className="space-y-8 mt-2 xl:mt-0">
             <Card className="border border-gray-200 shadow-lg rounded-xl overflow-hidden bg-white sticky top-24">
               <CardHeader>

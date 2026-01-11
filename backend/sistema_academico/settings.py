@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     "users",
     "acl",
     "catalogs",
+    "students",
     "academic",
     "admission",
     "mesa_partes",

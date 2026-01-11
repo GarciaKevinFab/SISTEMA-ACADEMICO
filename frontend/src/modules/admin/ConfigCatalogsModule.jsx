@@ -1368,12 +1368,32 @@ const BackupTab = () => {
 
     const exportDataset = async (ds) => {
         try {
-            await Backup.exportDataset(ds);
-            toast.success("Exportación generada (ver descargas del backend)");
+            const res = await Backup.exportDataset(ds);
+            toast.success("Exportación generada");
+
+            // refresca el historial para ver el nuevo zip
+            await load();
+
+            // descarga automática
+            const id = res?.backup_id;
+            if (id) {
+                const downloadRes = await Backup.download(id);
+
+                const cd = downloadRes.headers?.["content-disposition"];
+                const fallback = `export_${ds.toLowerCase()}_${id}.zip`;
+                const filename = filenameFromContentDisposition(cd, fallback);
+
+                const blob = new Blob([downloadRes.data], {
+                    type: downloadRes.headers?.["content-type"] || "application/octet-stream",
+                });
+
+                saveBlobAsFile(blob, filename);
+            }
         } catch (e) {
             toast.error(formatApiError(e));
         }
     };
+
 
     // ✅ FIX: descarga real con Bearer (blob) usando Backup.download(id)
     const downloadBackup = async (b) => {

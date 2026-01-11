@@ -18,6 +18,9 @@ from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+# ✅ NUEVO: ACL real (Role + UserRole)
+from acl.models import Role, UserRole
+
 from .models import (
     Plan, PlanCourse, Course, CoursePrereq,
     Teacher, Classroom,
@@ -73,57 +76,49 @@ def _get_full_name(u):
     return (getattr(u, "username", "") or getattr(u, "email", "") or f"User {getattr(u,'id','')}").strip()
 
 
-def list_teacher_users_qs():
+# ───────────────────────── ACL-aware role helpers (✅ IMPLEMENTADO) ─────────────────────────
+def list_users_by_role_names(role_names):
+    """
+    Retorna queryset de usuarios (activos) que tengan cualquiera de los roles por name,
+    usando el ACL real: Role + UserRole.
+    """
     User = get_user_model()
-    qs = User.objects.filter(is_active=True)
+
+    role_ids = list(Role.objects.filter(name__in=role_names).values_list("id", flat=True))
+    if not role_ids:
+        return User.objects.none()
+
+    user_ids = (
+        UserRole.objects
+        .filter(role_id__in=role_ids)
+        .values_list("user_id", flat=True)
+        .distinct()
+    )
+    return User.objects.filter(id__in=user_ids, is_active=True)
+
+
+def list_teacher_users_qs():
     teacher_names = ["TEACHER", "DOCENTE", "PROFESOR"]
-
-    base = qs.filter(roles__name__in=teacher_names).distinct()
-    if base.exists():
-        return base
-
-    try:
-        alt = qs.filter(roles__code__in=teacher_names).distinct()
-        if alt.exists():
-            return alt
-    except FieldError:
-        pass
-
-    return qs.none()
+    return list_users_by_role_names(teacher_names)
 
 
 def list_student_users_qs():
-    User = get_user_model()
-    qs = User.objects.filter(is_active=True)
     student_names = ["STUDENT", "ALUMNO", "ESTUDIANTE"]
-
-    base = qs.filter(roles__name__in=student_names).distinct()
-    if base.exists():
-        return base
-
-    try:
-        alt = qs.filter(roles__code__in=student_names).distinct()
-        if alt.exists():
-            return alt
-    except FieldError:
-        pass
-
-    return qs.none()
+    return list_users_by_role_names(student_names)
 
 
 def user_has_any_role(user, names):
+    """
+    True si el usuario tiene cualquiera de esos roles (por name) o es superuser.
+    """
     if not user:
         return False
     if getattr(user, "is_superuser", False):
         return True
     try:
-        if user.roles.filter(name__in=names).exists():
-            return True
-        if user.roles.filter(code__in=names).exists():
-            return True
+        return UserRole.objects.filter(user=user, role__name__in=names).exists()
     except Exception:
-        pass
-    return False
+        return False
 
 
 def resolve_teacher(teacher_id):
@@ -152,7 +147,6 @@ def resolve_teacher(teacher_id):
     u = get_object_or_404(User, id=tid)
     t, _ = Teacher.objects.get_or_create(user=u)
     return t
-
 
 
 def resolve_classroom(room_id, code=None, capacity=None):
@@ -184,6 +178,9 @@ def resolve_classroom(room_id, code=None, capacity=None):
 
 
 def count_teachers():
+    """
+    Cuenta docentes por ACL (roles) y si no hay ninguno, cae al modelo Teacher.
+    """
     qs = list_teacher_users_qs()
     if qs.exists():
         return qs.count()
@@ -1105,14 +1102,17 @@ class ProcessFileDeleteView(APIView):
         return ok(success=True)
 
 
-# ───────────────────── Reportes académicos (dummy) ─────────────────────
+# ───────────────────── Reportes académicos (✅ YA NO DUMMY) ─────────────────────
 class AcademicReportsSummaryView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        # ✅ IMPLEMENTADO: cuenta usuarios activos con rol STUDENT
+        students_count = list_student_users_qs().count()
+
         return ok(summary={
-            "students": 1200,
+            "students": students_count,
             "sections": Section.objects.count(),
             "teachers": count_teachers(),
             "occupancy": 0.76,
@@ -1122,7 +1122,7 @@ class AcademicReportsSummaryView(APIView):
 
 def _xlsx_response(filename="reporte.xlsx"):
     content = b"Dummy,Excel\n1,2\n"
-    resp = HttpResponse(content, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp = HttpResponse(content, content_type="application/vndopenxmlformats-officedocument.spreadsheetml.sheet")
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
 
@@ -1171,7 +1171,7 @@ class TeacherSectionsView(APIView):
                 "id": s.id,
                 "course_name": crs.name,
                 "course_code": crs.code,
-                "section_code": s.label,  # ✅ esto usa tu dropdown
+                "section_code": s.label,
                 "label": s.label,
                 "period": s.period,
                 "plan_course_id": s.plan_course_id,
@@ -1179,7 +1179,6 @@ class TeacherSectionsView(APIView):
             })
 
         return ok(sections=sections)
-
 
 
 class SectionStudentsView(APIView):
