@@ -1,7 +1,17 @@
 # mesa_partes/views.py
-import uuid, datetime as dt
+import uuid
+import datetime as dt
+import io
+import csv
+
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.db.models import F, Count
+from django.db.models.functions import TruncDate
+from django.utils.dateparse import parse_date
+from django.utils import timezone
+from django.http import HttpResponse
+
 from rest_framework import viewsets, mixins, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -12,11 +22,6 @@ from .serializers import (
     OfficeSer, ProcedureTypeSer, ProcedureSer,
     ProcedureEventSer, ProcedureFileSer
 )
-from django.db.models import Avg, F
-from django.db.models.functions import ExtractDay
-from django.utils.dateparse import parse_date
-from django.http import HttpResponse
-import io, csv
 
 def _track_code():
     # MP-AAAA-XXXXXX
@@ -44,7 +49,9 @@ class ProcedureTypeViewSet(viewsets.ModelViewSet):
 # ---------- Trámites ----------
 class ProcedureViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
-    queryset = Procedure.objects.select_related("procedure_type", "current_office", "assignee").all().order_by("-created_at")
+    queryset = Procedure.objects.select_related(
+        "procedure_type", "current_office", "assignee"
+    ).all().order_by("-created_at")
     serializer_class = ProcedureSer
 
     def list(self, request, *args, **kwargs):
@@ -60,6 +67,7 @@ class ProcedureViewSet(viewsets.ModelViewSet):
         ser = self.get_serializer(data=data)
         ser.is_valid(raise_exception=True)
         obj = ser.save()
+
         ProcedureEvent.objects.create(
             procedure=obj, type="CREATED", description="Trámite creado", actor=request.user
         )
@@ -67,7 +75,10 @@ class ProcedureViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"])
     def code(self, request):
+        # ✅ se usa como /procedures/code?code=MP-...
         code = request.query_params.get("code")
+        if not code:
+            return Response({"detail": "code requerido"}, status=400)
         try:
             p = Procedure.objects.get(tracking_code=code)
         except Procedure.DoesNotExist:
@@ -108,8 +119,32 @@ class ProcedureViewSet(viewsets.ModelViewSet):
             p.status = new_status
             p.save()
             ProcedureEvent.objects.create(
-                procedure=p, type="STATUS_CHANGED", description=f"{new_status}. {note}", actor=request.user
+                procedure=p, type="STATUS_CHANGED",
+                description=f"{new_status}. {note}", actor=request.user
             )
+        return Response({"ok": True})
+
+    # ✅ NOTES (antes tu front lo llamaba pero no existía)
+    @action(detail=True, methods=["post"], url_path="notes")
+    def notes(self, request, pk=None):
+        p = self.get_object()
+        note = request.data.get("note", "")
+        if not note:
+            return Response({"detail": "note requerido"}, status=400)
+
+        ProcedureEvent.objects.create(
+            procedure=p, type="NOTE", description=note, actor=request.user
+        )
+        return Response({"ok": True})
+
+    # ✅ NOTIFY (dummy, pero existe)
+    @action(detail=True, methods=["post"], url_path="notify")
+    def notify(self, request, pk=None):
+        p = self.get_object()
+        # Aquí podrías enviar email / whatsapp / etc.
+        ProcedureEvent.objects.create(
+            procedure=p, type="NOTIFIED", description="Notificación enviada", actor=request.user
+        )
         return Response({"ok": True})
 
     # ---- Archivos
@@ -166,6 +201,7 @@ class ProcedureViewSet(viewsets.ModelViewSet):
 
 # ---------- Dashboard ----------
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def dashboard_stats(request):
     pending = Procedure.objects.exclude(status__in=["COMPLETED", "REJECTED"]).count()
     completed_today = Procedure.objects.filter(
@@ -220,48 +256,97 @@ def public_track(request):
     data["timeline"] = ProcedureEventSer(p.events.order_by("-at"), many=True).data
     return Response({"procedure": data})
 
+# ---------- Reportes (summary / sla / volume) ----------
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def procedures_summary(request):
+    """
+    Devuelve:
+      - summary: { total, avg_days, overdue, in_review }
+      - dashboard: { total, open, sla_breached, by_status, trend }
+    Compatible con SQLite (sin ExtractDay de DurationField).
+    """
     qs = Procedure.objects.all()
-
     q = request.query_params
+
     d_from = parse_date(q.get("from") or "")
     d_to   = parse_date(q.get("to") or "")
-    status = q.get("status")
+    status_param = q.get("status")
 
     if d_from:
         qs = qs.filter(created_at__date__gte=d_from)
     if d_to:
         qs = qs.filter(created_at__date__lte=d_to)  # inclusivo
-    if status:
-        qs = qs.filter(status=status)
+    if status_param:
+        qs = qs.filter(status=status_param)
 
     total = qs.count()
-    # promedio días (ajusta a completed_at si lo tienes)
-    avg_days = (
-        qs.annotate(days=ExtractDay(F("updated_at") - F("created_at")))
-          .aggregate(v=Avg("days"))["v"]
-    )
+
+    # ✅ avg_days calculado en Python (SQLite safe)
+    if total > 0:
+        # solo traemos lo necesario (optimiza)
+        rows = qs.values_list("created_at", "updated_at")
+        total_seconds = 0
+        for created_at, updated_at in rows:
+            delta = (updated_at - created_at)
+            total_seconds += delta.total_seconds()
+        avg_days = round((total_seconds / total) / 86400, 2)
+    else:
+        avg_days = None
+
     overdue = qs.filter(
         deadline_at__isnull=False,
         deadline_at__lt=F("updated_at")
     ).exclude(status="COMPLETED").count()
+
     in_review = qs.filter(status="IN_REVIEW").count()
+
+    # --- Dashboard-friendly extras ---
+    open_count = qs.exclude(status__in=["COMPLETED", "REJECTED"]).count()
+
+    now = timezone.now()
+    sla_breached = qs.filter(
+        deadline_at__isnull=False,
+        deadline_at__lt=now
+    ).exclude(status__in=["COMPLETED", "REJECTED"]).count()
+
+    by_status_rows = (
+        qs.values("status")
+          .annotate(count=Count("id"))
+          .order_by("-count")
+    )
+    by_status = [{"name": r["status"], "value": r["count"]} for r in by_status_rows]
+
+    since = timezone.now().date() - dt.timedelta(days=14)
+    trend_rows = (
+        qs.filter(created_at__date__gte=since)
+          .annotate(d=TruncDate("created_at"))
+          .values("d")
+          .annotate(count=Count("id"))
+          .order_by("d")
+    )
+    trend = [{"date": str(r["d"]), "value": r["count"]} for r in trend_rows]
 
     return Response({
         "summary": {
             "total": total,
-            "avg_days": round(avg_days, 2) if avg_days is not None else None,
+            "avg_days": avg_days,
             "overdue": overdue,
             "in_review": in_review,
+        },
+        "dashboard": {
+            "total": total,
+            "open": open_count,
+            "sla_breached": sla_breached,
+            "by_status": by_status,
+            "trend": trend,
         }
     })
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def procedures_report_sla(request):
-    # DUMMY: crea un CSV con cabeceras; si usas XLSX real, reemplázalo por openpyxl/xlsxwriter
+    # DUMMY: crea un CSV con cabeceras (content-type xlsx solo para que tu front lo baje como .xlsx)
     buffer = io.StringIO()
     w = csv.writer(buffer)
     w.writerow(["procedure_id", "tracking_code", "dias"])
@@ -276,7 +361,6 @@ def procedures_report_sla(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def procedures_report_volume(request):
-    # DUMMY simple
     buffer = io.StringIO()
     w = csv.writer(buffer)
     w.writerow(["fecha", "cantidad"])
@@ -286,98 +370,3 @@ def procedures_report_volume(request):
     res = HttpResponse(out, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     res["Content-Disposition"] = 'attachment; filename="volume.xlsx"'
     return res
-
-def get_model(app_label, candidates):
-    for name in candidates:
-        try:
-            return apps.get_model(app_label, name)
-        except Exception:
-            continue
-    return None
-
-def has_field(model, name: str) -> bool:
-    try:
-        model._meta.get_field(name)
-        return True
-    except Exception:
-        return False
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def procedures_reports_summary(request):
-    """
-    Shape para tu DashboardHome:
-      total, open, sla_breached, by_status, trend
-    """
-
-    Procedure = get_model("mesa_partes", ["Procedure", "Tramite", "Process", "ProcedureModel"])
-
-    if not Procedure:
-        return Response({
-            "total": 0,
-            "open": 0,
-            "sla_breached": 0,
-            "by_status": [],
-            "trend": [],
-        })
-
-    total = Procedure.objects.count()
-
-    status_field = "status" if has_field(Procedure, "status") else None
-
-    open_count = 0
-    by_status = []
-    if status_field:
-        rows = (
-            Procedure.objects.values(status_field)
-            .annotate(count=Count("id"))
-            .order_by("-count")
-        )
-        by_status = [{"name": r[status_field], "value": r["count"]} for r in rows]
-
-        open_count = Procedure.objects.filter(**{f"{status_field}__in": ["OPEN", "PENDING", "IN_PROGRESS"]}).count()
-    else:
-        open_count = total
-
-    # SLA breached: deadline_at / due_at / expires_at
-    deadline_field = None
-    for fld in ["deadline_at", "due_at", "expires_at", "limit_at"]:
-        if has_field(Procedure, fld):
-            deadline_field = fld
-            break
-
-    sla_breached = 0
-    if deadline_field and status_field:
-        now = timezone.now()
-        sla_breached = Procedure.objects.filter(
-            **{
-                f"{deadline_field}__lt": now,
-            }
-        ).exclude(**{f"{status_field}__in": ["CLOSED", "DONE", "RESOLVED"]}).count()
-
-    # Trend: últimos 14 días por created_at/date
-    date_field = None
-    for fld in ["created_at", "created", "date", "registered_at"]:
-        if has_field(Procedure, fld):
-            date_field = fld
-            break
-
-    trend = []
-    if date_field:
-        since = timezone.now() - timedelta(days=14)
-        qs = (
-            Procedure.objects.filter(**{f"{date_field}__gte": since})
-            .annotate(d=TruncDate(date_field))
-            .values("d")
-            .annotate(count=Count("id"))
-            .order_by("d")
-        )
-        trend = [{"date": str(r["d"]), "value": r["count"]} for r in qs]
-
-    return Response({
-        "total": total,
-        "open": open_count,
-        "sla_breached": sla_breached,
-        "by_status": by_status,   # ✅ tu PieChart lo usa directo
-        "trend": trend,
-    })

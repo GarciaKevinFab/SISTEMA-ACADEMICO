@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
 
 <head>
     <meta charset="utf-8" />
@@ -9,72 +9,79 @@
 
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
-    <meta name="description" content="A product of emergent.sh" />
-    <title>IESPP | PORTAL ACADEMICO</title>
+
+    <meta name="description"
+        content="Portal Académico del IESPP Allende: acceso a servicios académicos, información institucional y gestiones del estudiante." />
+
+    <title>IESPP | PORTAL ACADÉMICO</title>
 </head>
+
 <style>
-  /* Force Star Insights badge look in production */
-  #emergent-badge{
-    background: #ffffff !important;
-    background-color: #ffffff !important;
-    opacity: 1 !important;
-    filter: none !important;
-    -webkit-filter: none !important;
+    /* Estilo del badge en producción */
+    #starinsights-badge {
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        opacity: 1 !important;
+        filter: none !important;
+        -webkit-filter: none !important;
 
-    border: 1px solid rgba(255,255,255,0.25) !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+        border: 1px solid rgba(255, 255, 255, 0.25) !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
 
-    z-index: 2147483647 !important; /* por si algo lo tapa */
-    isolation: isolate !important;  /* evita efectos raros de mezcla */
-  }
+        z-index: 2147483647 !important;
+        isolation: isolate !important;
+    }
 
-  #emergent-badge p{
-    color: #000000 !important;
-  }
+    #starinsights-badge p {
+        color: #000000 !important;
+    }
 
-  #emergent-badge img{
-    display: block !important;
-  }
+    #starinsights-badge img {
+        display: block !important;
+    }
 </style>
 
 <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <a id="emergent-badge" target="_blank" href="https://sisac.pe/" style="
-                display: flex !important;
-                align-items: center !important;
-                position: fixed !important;
-                bottom: 20px;
-                right: 20px;
-                text-decoration: none;
-                padding: 6px 10px;
-                font-family: -apple-system, BlinkMacSystemFont,
-                    &quot;Segoe UI&quot;, Roboto, Oxygen, Ubuntu, Cantarell,
-                    &quot;Open Sans&quot;, &quot;Helvetica Neue&quot;,
-                    sans-serif !important;
-                font-size: 12px !important;
-                z-index: 9999 !important;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
-                border-radius: 8px !important;
-                background-color: #ffffff !important;
-                border: 1px solid rgba(255, 255, 255, 0.25) !important;
-            ">
+
+    <a id="starinsights-badge" target="_blank" href="https://sisac.pe/" style="
+      display: flex !important;
+      align-items: center !important;
+      position: fixed !important;
+      bottom: 20px;
+      right: 20px;
+      text-decoration: none;
+      padding: 6px 10px;
+      font-family: -apple-system, BlinkMacSystemFont,
+        &quot;Segoe UI&quot;, Roboto, Oxygen, Ubuntu, Cantarell,
+        &quot;Open Sans&quot;, &quot;Helvetica Neue&quot;,
+        sans-serif !important;
+      font-size: 12px !important;
+      z-index: 9999 !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+      border-radius: 8px !important;
+      background-color: #ffffff !important;
+      border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    ">
         <div style="display: flex; flex-direction: row; align-items: center">
-            <img style="width: 30px; height: 30px; margin-right: 8px" src="/img/StarInsightsIT.png" />
+            <img style="width: 30px; height: 30px; margin-right: 8px" src="/img/StarInsightsIT.png"
+                alt="Star Insights IT" />
             <p style="
-                        color: #000000;
-                        font-family: -apple-system, BlinkMacSystemFont,
-                            &quot;Segoe UI&quot;, Roboto, Oxygen, Ubuntu,
-                            Cantarell, &quot;Open Sans&quot;,
-                            &quot;Helvetica Neue&quot;, sans-serif !important;
-                        font-size: 12px !important;
-                        align-items: center;
-                        margin-bottom: 0;
-                    ">
+        color: #000000;
+        font-family: -apple-system, BlinkMacSystemFont,
+          &quot;Segoe UI&quot;, Roboto, Oxygen, Ubuntu, Cantarell,
+          &quot;Open Sans&quot;, &quot;Helvetica Neue&quot;,
+          sans-serif !important;
+        font-size: 12px !important;
+        align-items: center;
+        margin-bottom: 0;
+      ">
                 Developed by Star Insights IT
             </p>
         </div>
     </a>
+
     <script>
         !(function (t, e) {
             var o, n, p, r;
@@ -86,48 +93,29 @@
                             var o = e.split(".");
                             2 == o.length && ((t = t[o[0]]), (e = o[1])),
                                 (t[e] = function () {
-                                    t.push(
-                                        [e].concat(
-                                            Array.prototype.slice.call(
-                                                arguments,
-                                                0,
-                                            ),
-                                        ),
-                                    );
+                                    t.push([e].concat(Array.prototype.slice.call(arguments, 0)));
                                 });
                         }
-                        ((p = t.createElement("script")).type =
-                            "text/javascript"),
+                        ((p = t.createElement("script")).type = "text/javascript"),
                             (p.crossOrigin = "anonymous"),
                             (p.async = !0),
                             (p.src =
-                                s.api_host.replace(
-                                    ".i.posthog.com",
-                                    "-assets.i.posthog.com",
-                                ) + "/static/array.js"),
-                            (r =
-                                t.getElementsByTagName(
-                                    "script",
-                                )[0]).parentNode.insertBefore(p, r);
+                                s.api_host.replace(".i.posthog.com", "-assets.i.posthog.com") +
+                                "/static/array.js"),
+                            (r = t.getElementsByTagName("script")[0]).parentNode.insertBefore(p, r);
                         var u = e;
                         for (
                             void 0 !== a ? (u = e[a] = []) : (a = "posthog"),
                             u.people = u.people || [],
                             u.toString = function (t) {
                                 var e = "posthog";
-                                return (
-                                    "posthog" !== a && (e += "." + a),
-                                    t || (e += " (stub)"),
-                                    e
-                                );
+                                return ("posthog" !== a && (e += "." + a), t || (e += " (stub)"), e);
                             },
                             u.people.toString = function () {
                                 return u.toString(1) + ".people (stub)";
                             },
                             o =
-                            "init me ws ys ps bs capture je Di ks register register_once register_for_session unregister unregister_for_session Ps getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey canRenderSurveyAsync identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty Es $s createPersonProfile Is opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing Ss debug xs getPageViewId captureTraceFeedback captureTraceMetric".split(
-                                " ",
-                            ),
+                            "init me ws ys ps bs capture je Di ks register register_once register_for_session unregister unregister_for_session Ps getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey canRenderSurveyAsync identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty Es $s createPersonProfile Is opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing Ss debug xs getPageViewId captureTraceFeedback captureTraceMetric".split(" "),
                             n = 0;
                             n < o.length;
                             n++
@@ -139,7 +127,7 @@
         })(document, window.posthog || []);
         posthog.init("phc_yJW1VjHGGwmCbbrtczfqqNxgBDbhlhOWcdzcIJEOTFE", {
             api_host: "https://us.i.posthog.com",
-            person_profiles: "identified_only", // or 'always' to create profiles for anonymous users as well
+            person_profiles: "identified_only",
         });
     </script>
 </body>

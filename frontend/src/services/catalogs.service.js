@@ -59,13 +59,21 @@ export const Institution = {
 
 // ------------------ Importadores ------------------
 export const Imports = {
-    template: (type) => `${api.defaults.baseURL}/catalogs/imports/templates/${type}`,
+    // OJO: NO usar <a href> para esto si requiere JWT, porque el navegador NO manda Authorization.
+    templatePath: (type) => `/catalogs/imports/templates/${type}`,
+
+    // devuelve response completo para leer headers y armar filename
+    downloadTemplate: async (type) => {
+        return api.get(Imports.templatePath(type), { responseType: "blob" });
+    },
+
     start: async (type, file, mapping) => {
         const fd = new FormData();
         fd.append("file", file);
         if (mapping) fd.append("mapping", JSON.stringify(mapping));
         return getData(api.post(`/catalogs/imports/${type}`, fd));
     },
+
     status: (jobId) => getData(api.get(`/catalogs/imports/status/${jobId}`)),
 };
 
@@ -73,6 +81,10 @@ export const Imports = {
 export const Backup = {
     list: () => getData(api.get("/catalogs/exports/backups")),
     create: (scope = "FULL") => getData(api.post("/catalogs/exports/backups", { scope })),
-    downloadUrl: (id) => `${api.defaults.baseURL}/catalogs/exports/backups/${id}/download`,
+
+    // ✅ descarga protegida con Bearer (NO usar <a href>)
+    download: (id) =>
+        api.get(`/catalogs/exports/backups/${id}/download`, { responseType: "blob" }),
+
     exportDataset: (dataset) => getData(api.post("/catalogs/exports/dataset", { dataset })),
 };

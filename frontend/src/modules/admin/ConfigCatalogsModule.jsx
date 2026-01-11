@@ -58,16 +58,17 @@ import {
     Imports,
     Backup,
 } from "../../services/catalogs.service";
+
 import {
-  AlertDialog,
-  AlertDialogTrigger,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-  AlertDialogAction,
+    AlertDialog,
+    AlertDialogTrigger,
+    AlertDialogContent,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogCancel,
+    AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 
 // ------- helpers -------
@@ -90,6 +91,25 @@ function formatApiError(err, fallback = "Ocurrió un error") {
     if (typeof data?.message === "string") return data.message;
     if (typeof err?.message === "string") return err.message;
     return fallback;
+}
+
+// ✅ helper para descargar blob y guardar archivo
+function saveBlobAsFile(blob, filename) {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+function filenameFromContentDisposition(cd, fallback) {
+    if (!cd) return fallback;
+    const m = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(cd);
+    if (!m?.[1]) return fallback;
+    return m[1].replace(/['"]/g, "").trim() || fallback;
 }
 
 const Field = ({ label, children }) => (
@@ -424,7 +444,6 @@ const CampusesSection = () => {
             const res = await Classrooms.list(selCampus ? { campus_id: selCampus } : undefined);
             setClassrooms(res?.items ?? res ?? []);
         } catch (e) {
-            // si falla, al menos muéstralo
             toast.error(formatApiError(e, "No se pudo cargar aulas"));
         }
     }, [selCampus]);
@@ -446,7 +465,7 @@ const CampusesSection = () => {
         }
     };
 
-    // ✅ FIX REAL: backend suele esperar "campus" (FK), no "campus_id"
+    // backend espera "campus" (FK), no "campus_id"
     const saveClass = async () => {
         try {
             if (!classForm.code?.trim()) return toast.error("Código de aula es requerido");
@@ -459,7 +478,7 @@ const CampusesSection = () => {
                 code: classForm.code,
                 name: classForm.name,
                 capacity: Number(classForm.capacity || 0),
-                campus: campusPk, // 👈 clave correcta para DRF ModelSerializer (FK)
+                campus: campusPk,
             };
 
             await Classrooms.create(payload);
@@ -682,7 +701,6 @@ const TeachersSection = () => {
     };
 
     const remove = async (id) => {
-        
         try {
             await Teachers.remove(id);
             load();
@@ -764,39 +782,38 @@ const TeachersSection = () => {
                                 <td className="px-6 py-3">{r.email || "-"}</td>
                                 <td className="px-6 py-3">{r.phone || "-"}</td>
                                 <td className="px-6 py-3">{r.specialization || "-"}</td>
-                               <td className="px-6 py-3">
-  <AlertDialog>
-    <AlertDialogTrigger asChild>
-      <Button size="sm" variant="outline" className="rounded-xl">
-        Eliminar
-      </Button>
-    </AlertDialogTrigger>
+                                <td className="px-6 py-3">
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button size="sm" variant="outline" className="rounded-xl">
+                                                Eliminar
+                                            </Button>
+                                        </AlertDialogTrigger>
 
-    <AlertDialogContent className="max-w-[92vw] sm:max-w-md">
-      <AlertDialogHeader>
-        <AlertDialogTitle>¿Eliminar docente?</AlertDialogTitle>
-        <AlertDialogDescription>
-          Esta acción no se puede deshacer. Se eliminará el docente{" "}
-          <span className="font-semibold">{r.full_name}</span>.
-        </AlertDialogDescription>
-      </AlertDialogHeader>
+                                        <AlertDialogContent className="max-w-[92vw] sm:max-w-md">
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>¿Eliminar docente?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Esta acción no se puede deshacer. Se eliminará el docente{" "}
+                                                    <span className="font-semibold">{r.full_name}</span>.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
 
-      <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-        <AlertDialogCancel className="w-full sm:w-auto">
-          Cancelar
-        </AlertDialogCancel>
+                                            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                                <AlertDialogCancel className="w-full sm:w-auto">
+                                                    Cancelar
+                                                </AlertDialogCancel>
 
-        <AlertDialogAction
-          className="w-full sm:w-auto bg-red-600 hover:bg-red-700"
-          onClick={() => remove(r.id)}
-        >
-          Sí, eliminar
-        </AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
-</td>
-
+                                                <AlertDialogAction
+                                                    className="w-full sm:w-auto bg-red-600 hover:bg-red-700"
+                                                    onClick={() => remove(r.id)}
+                                                >
+                                                    Sí, eliminar
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                </td>
                             </tr>
                         ))}
 
@@ -901,7 +918,6 @@ const InstitutionSection = () => {
             const r = await Institution.uploadMedia(kind, file);
             toast.success("Archivo subido");
 
-            // si tu serializer no retorna url como "url", ajusta aquí.
             const url = r?.url || r?.file || r?.file_url;
 
             setSettings((s) => ({
@@ -918,254 +934,213 @@ const InstitutionSection = () => {
     };
 
     return (
-  <Section
-    title={
-      <>
-        <Settings className="h-5 w-5 text-blue-600" />
-        Parámetros de institución
-      </>
-    }
-    desc="Datos generales, ubicación y medios (logo/firma)."
-  >
-    {!settings ? (
-      <div className="flex justify-center py-10">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
-      </div>
-    ) : (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* ===================== DATOS GENERALES ===================== */}
-        <Card className="lg:col-span-2 rounded-2xl">
-          <CardHeader>
-            <CardTitle>Datos generales</CardTitle>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            {/* Nombre + RUC */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="min-w-0">
-                <Field label="Nombre *">
-                  <Input
-                    className="w-full"
-                    value={settings.name || ""}
-                    onChange={(e) =>
-                      setSettings({ ...settings, name: e.target.value })
-                    }
-                  />
-                </Field>
-              </div>
-
-              <div className="min-w-0">
-                <Field label="RUC">
-                  <Input
-                    className="w-full"
-                    value={settings.ruc || ""}
-                    onChange={(e) =>
-                      setSettings({ ...settings, ruc: e.target.value })
-                    }
-                  />
-                </Field>
-              </div>
-            </div>
-
-            {/* Dirección */}
-            <div className="min-w-0">
-              <Field label="Dirección">
-                <Input
-                  className="w-full"
-                  value={settings.address || ""}
-                  onChange={(e) =>
-                    setSettings({ ...settings, address: e.target.value })
-                  }
-                />
-              </Field>
-            </div>
-
-            {/* Ubigeo */}
-<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-  {/* DEPARTAMENTO */}
-  <div className="min-w-0">
-    <Field label="Departamento">
-      <Select
-        value={dept}
-        onValueChange={async (v) => {
-          setDept(v);
-          setProv("");
-          setDist("");
-
-          const pv = await Ubigeo.provs(v);
-          setProvs(pv?.items ?? pv ?? []);
-          setDists([]);
-        }}
-      >
-        <SelectTrigger className="w-full min-w-0">
-          <SelectValue placeholder="Seleccionar" />
-        </SelectTrigger>
-
-        <SelectContent
-          position="popper"
-          className="z-[99999] max-h-60 overflow-y-auto w-[var(--radix-select-trigger-width)]"
+        <Section
+            title={
+                <>
+                    <Settings className="h-5 w-5 text-blue-600" />
+                    Parámetros de institución
+                </>
+            }
+            desc="Datos generales, ubicación y medios (logo/firma)."
         >
-          {deps.map((d) => {
-            const value = String(d?.code ?? d?.id ?? d?.name ?? d);
-            const label = d?.name ?? String(d);
-            return (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            );
-          })}
-        </SelectContent>
-      </Select>
-    </Field>
-  </div>
+            {!settings ? (
+                <div className="flex justify-center py-10">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <Card className="lg:col-span-2 rounded-2xl">
+                        <CardHeader>
+                            <CardTitle>Datos generales</CardTitle>
+                        </CardHeader>
 
-  {/* PROVINCIA */}
-  <div className="min-w-0">
-    <Field label="Provincia">
-      <Select
-        value={prov}
-        onValueChange={async (v) => {
-          setProv(v);
-          setDist("");
+                        <CardContent className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="min-w-0">
+                                    <Field label="Nombre *">
+                                        <Input
+                                            className="w-full"
+                                            value={settings.name || ""}
+                                            onChange={(e) => setSettings({ ...settings, name: e.target.value })}
+                                        />
+                                    </Field>
+                                </div>
 
-          const ds = await Ubigeo.dists(dept, v);
-          setDists(ds?.items ?? ds ?? []);
-        }}
-        disabled={!dept}
-      >
-        <SelectTrigger className="w-full min-w-0">
-          <SelectValue placeholder={!dept ? "Elige departamento" : "Seleccionar"} />
-        </SelectTrigger>
+                                <div className="min-w-0">
+                                    <Field label="RUC">
+                                        <Input
+                                            className="w-full"
+                                            value={settings.ruc || ""}
+                                            onChange={(e) => setSettings({ ...settings, ruc: e.target.value })}
+                                        />
+                                    </Field>
+                                </div>
+                            </div>
 
-        <SelectContent
-          position="popper"
-          className="z-[99999] max-h-60 overflow-y-auto w-[var(--radix-select-trigger-width)]"
-        >
-          {provs.map((p) => {
-            const value = String(p?.code ?? p?.id ?? p?.name ?? p);
-            const label = p?.name ?? String(p);
-            return (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            );
-          })}
-        </SelectContent>
-      </Select>
-    </Field>
-  </div>
+                            <div className="min-w-0">
+                                <Field label="Dirección">
+                                    <Input
+                                        className="w-full"
+                                        value={settings.address || ""}
+                                        onChange={(e) => setSettings({ ...settings, address: e.target.value })}
+                                    />
+                                </Field>
+                            </div>
 
-  {/* DISTRITO */}
-  <div className="min-w-0">
-    <Field label="Distrito">
-      <Select
-        value={dist}
-        onValueChange={setDist}
-        disabled={!dept || !prov}
-      >
-        <SelectTrigger className="w-full min-w-0">
-          <SelectValue
-            placeholder={!dept ? "Elige departamento" : !prov ? "Elige provincia" : "Seleccionar"}
-          />
-        </SelectTrigger>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                <div className="min-w-0">
+                                    <Field label="Departamento">
+                                        <Select
+                                            value={dept}
+                                            onValueChange={async (v) => {
+                                                setDept(v);
+                                                setProv("");
+                                                setDist("");
+                                                const pv = await Ubigeo.provs(v);
+                                                setProvs(pv?.items ?? pv ?? []);
+                                                setDists([]);
+                                            }}
+                                        >
+                                            <SelectTrigger className="w-full min-w-0">
+                                                <SelectValue placeholder="Seleccionar" />
+                                            </SelectTrigger>
 
-        <SelectContent
-          position="popper"
-          className="z-[99999] max-h-60 overflow-y-auto w-[var(--radix-select-trigger-width)]"
-        >
-          {dists.map((d) => {
-            const value = String(d?.code ?? d?.id ?? d?.name ?? d);
-            const label = d?.name ?? String(d);
-            return (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            );
-          })}
-        </SelectContent>
-      </Select>
-    </Field>
-  </div>
-</div>
+                                            <SelectContent
+                                                position="popper"
+                                                className="z-[99999] max-h-60 overflow-y-auto w-[var(--radix-select-trigger-width)]"
+                                            >
+                                                {deps.map((d) => {
+                                                    const value = String(d?.code ?? d?.id ?? d?.name ?? d);
+                                                    const label = d?.name ?? String(d);
+                                                    return (
+                                                        <SelectItem key={value} value={value}>
+                                                            {label}
+                                                        </SelectItem>
+                                                    );
+                                                })}
+                                            </SelectContent>
+                                        </Select>
+                                    </Field>
+                                </div>
 
+                                <div className="min-w-0">
+                                    <Field label="Provincia">
+                                        <Select
+                                            value={prov}
+                                            onValueChange={async (v) => {
+                                                setProv(v);
+                                                setDist("");
+                                                const ds = await Ubigeo.dists(dept, v);
+                                                setDists(ds?.items ?? ds ?? []);
+                                            }}
+                                            disabled={!dept}
+                                        >
+                                            <SelectTrigger className="w-full min-w-0">
+                                                <SelectValue placeholder={!dept ? "Elige departamento" : "Seleccionar"} />
+                                            </SelectTrigger>
 
-            {/* Web / Email / Teléfono */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div className="min-w-0">
-                <Field label="Web">
-                  <Input
-                    className="w-full"
-                    value={settings.website || ""}
-                    onChange={(e) =>
-                      setSettings({ ...settings, website: e.target.value })
-                    }
-                  />
-                </Field>
-              </div>
+                                            <SelectContent
+                                                position="popper"
+                                                className="z-[99999] max-h-60 overflow-y-auto w-[var(--radix-select-trigger-width)]"
+                                            >
+                                                {provs.map((p) => {
+                                                    const value = String(p?.code ?? p?.id ?? p?.name ?? p);
+                                                    const label = p?.name ?? String(p);
+                                                    return (
+                                                        <SelectItem key={value} value={value}>
+                                                            {label}
+                                                        </SelectItem>
+                                                    );
+                                                })}
+                                            </SelectContent>
+                                        </Select>
+                                    </Field>
+                                </div>
 
-              <div className="min-w-0">
-                <Field label="Email">
-                  <Input
-                    className="w-full"
-                    value={settings.email || ""}
-                    onChange={(e) =>
-                      setSettings({ ...settings, email: e.target.value })
-                    }
-                  />
-                </Field>
-              </div>
+                                <div className="min-w-0">
+                                    <Field label="Distrito">
+                                        <Select value={dist} onValueChange={setDist} disabled={!dept || !prov}>
+                                            <SelectTrigger className="w-full min-w-0">
+                                                <SelectValue
+                                                    placeholder={!dept ? "Elige departamento" : !prov ? "Elige provincia" : "Seleccionar"}
+                                                />
+                                            </SelectTrigger>
 
-              <div className="min-w-0">
-                <Field label="Teléfono">
-                  <Input
-                    className="w-full"
-                    value={settings.phone || ""}
-                    onChange={(e) =>
-                      setSettings({ ...settings, phone: e.target.value })
-                    }
-                  />
-                </Field>
-              </div>
-            </div>
+                                            <SelectContent
+                                                position="popper"
+                                                className="z-[99999] max-h-60 overflow-y-auto w-[var(--radix-select-trigger-width)]"
+                                            >
+                                                {dists.map((d) => {
+                                                    const value = String(d?.code ?? d?.id ?? d?.name ?? d);
+                                                    const label = d?.name ?? String(d);
+                                                    return (
+                                                        <SelectItem key={value} value={value}>
+                                                            {label}
+                                                        </SelectItem>
+                                                    );
+                                                })}
+                                            </SelectContent>
+                                        </Select>
+                                    </Field>
+                                </div>
+                            </div>
 
-            {/* Botón */}
-            <div className="flex justify-end">
-              <Button onClick={update} className="rounded-xl w-full sm:w-auto">
-                Guardar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                <div className="min-w-0">
+                                    <Field label="Web">
+                                        <Input
+                                            className="w-full"
+                                            value={settings.website || ""}
+                                            onChange={(e) => setSettings({ ...settings, website: e.target.value })}
+                                        />
+                                    </Field>
+                                </div>
 
-        {/* ===================== MEDIOS ===================== */}
-        <Card className="rounded-2xl">
-          <CardHeader>
-            <CardTitle>Medios</CardTitle>
-            <CardDescription>Suba logos y firma digital (PNG/SVG).</CardDescription>
-          </CardHeader>
+                                <div className="min-w-0">
+                                    <Field label="Email">
+                                        <Input
+                                            className="w-full"
+                                            value={settings.email || ""}
+                                            onChange={(e) => setSettings({ ...settings, email: e.target.value })}
+                                        />
+                                    </Field>
+                                </div>
 
-          <CardContent className="space-y-4">
-            <MediaUpload
-              label="Logo principal"
-              url={settings.logo_url}
-              onChange={(f) => onUpload("LOGO", f)}
-            />
-            <MediaUpload
-              label="Logo alterno"
-              url={settings.logo_alt_url}
-              onChange={(f) => onUpload("LOGO_ALT", f)}
-            />
-            <MediaUpload
-              label="Firma (autoridad)"
-              url={settings.signature_url}
-              onChange={(f) => onUpload("SIGNATURE", f)}
-            />
-          </CardContent>
-        </Card>
-      </div>
-    )}
-  </Section>
-);
+                                <div className="min-w-0">
+                                    <Field label="Teléfono">
+                                        <Input
+                                            className="w-full"
+                                            value={settings.phone || ""}
+                                            onChange={(e) => setSettings({ ...settings, phone: e.target.value })}
+                                        />
+                                    </Field>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end">
+                                <Button onClick={update} className="rounded-xl w-full sm:w-auto">
+                                    Guardar
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="rounded-2xl">
+                        <CardHeader>
+                            <CardTitle>Medios</CardTitle>
+                            <CardDescription>Suba logos y firma digital (PNG/SVG).</CardDescription>
+                        </CardHeader>
+
+                        <CardContent className="space-y-4">
+                            <MediaUpload label="Logo principal" url={settings.logo_url} onChange={(f) => onUpload("LOGO", f)} />
+                            <MediaUpload label="Logo alterno" url={settings.logo_alt_url} onChange={(f) => onUpload("LOGO_ALT", f)} />
+                            <MediaUpload label="Firma (autoridad)" url={settings.signature_url} onChange={(f) => onUpload("SIGNATURE", f)} />
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+        </Section>
+    );
 };
 
 // ===================================================================
@@ -1212,9 +1187,28 @@ const ImportersTab = () => {
         }
     };
 
-    return (
-       <div className="space-y-6 pb-24 sm:pb-6">
+    const downloadTemplate = async () => {
+        try {
+            // ✅ debe existir en service: Imports.downloadTemplate(type)
+            const res = await Imports.downloadTemplate(type);
 
+            const cd = res.headers?.["content-disposition"];
+            const fallback = `${type}_template.xlsx`;
+            const filename = filenameFromContentDisposition(cd, fallback);
+
+            const blob = new Blob([res.data], {
+                type: res.headers?.["content-type"] || "application/octet-stream",
+            });
+
+            saveBlobAsFile(blob, filename);
+            toast.success("Plantilla descargada");
+        } catch (e) {
+            toast.error(formatApiError(e, "No se pudo descargar la plantilla"));
+        }
+    };
+
+    return (
+        <div className="space-y-6 pb-24 sm:pb-6">
             <Section
                 title={
                     <>
@@ -1237,12 +1231,15 @@ const ImportersTab = () => {
                     </Field>
 
                     <Field label="Plantilla (descargar)">
-                        <a
-                            href={Imports.template(type)}
-                            className="inline-flex items-center gap-2 text-blue-600 hover:underline"
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="rounded-xl inline-flex items-center gap-2"
+                            onClick={downloadTemplate}
                         >
-                            <Download className="h-4 w-4" /> Descargar plantilla
-                        </a>
+                            <Download className="h-4 w-4" />
+                            Descargar plantilla
+                        </Button>
                     </Field>
 
                     <Field label="Archivo Excel/CSV">
@@ -1378,9 +1375,28 @@ const BackupTab = () => {
         }
     };
 
-    return (
-       <div className="space-y-6 pb-24 sm:pb-6">
+    // ✅ FIX: descarga real con Bearer (blob) usando Backup.download(id)
+    const downloadBackup = async (b) => {
+        try {
+            const res = await Backup.download(b.id);
 
+            const cd = res.headers?.["content-disposition"];
+            const fallback = `backup_${b.id}.zip`;
+            const filename = filenameFromContentDisposition(cd, fallback);
+
+            const blob = new Blob([res.data], {
+                type: res.headers?.["content-type"] || "application/octet-stream",
+            });
+
+            saveBlobAsFile(blob, filename);
+            toast.success("Backup descargado");
+        } catch (e) {
+            toast.error(formatApiError(e, "No se pudo descargar el backup"));
+        }
+    };
+
+    return (
+        <div className="space-y-6 pb-24 sm:pb-6">
             <Section
                 title={
                     <>
@@ -1442,12 +1458,14 @@ const BackupTab = () => {
                                                     <td className="px-6 py-3">{b.scope || "-"}</td>
                                                     <td className="px-6 py-3">{b.size ? `${(b.size / (1024 * 1024)).toFixed(2)} MB` : "-"}</td>
                                                     <td className="px-6 py-3">
-                                                        <a
-                                                            className="inline-flex items-center gap-1 text-blue-600 hover:underline"
-                                                            href={Backup.downloadUrl(b.id)}
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            className="rounded-xl inline-flex items-center gap-1"
+                                                            onClick={() => downloadBackup(b)}
                                                         >
                                                             <Download className="h-4 w-4" /> Descargar
-                                                        </a>
+                                                        </Button>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -1532,8 +1550,7 @@ const ConfigCatalogsModule = () => {
                 </TabsList>
 
                 <TabsContent value="catalogs">
-                   <div className="space-y-6 pb-24 sm:pb-6">
-
+                    <div className="space-y-6 pb-24 sm:pb-6">
                         <PeriodsSection />
                         <CampusesSection />
                         <TeachersSection />

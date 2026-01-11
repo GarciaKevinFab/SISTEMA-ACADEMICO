@@ -1,3 +1,4 @@
+// AcademicModule.jsx
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import "./styles.css";
 
@@ -42,11 +43,20 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+
 // Utils
 import { generatePDFWithPolling, downloadFile } from "@/utils/pdfQrPolling";
 
-// Servicios (académico)
-import { Careers, Plans, Sections, Kardex, Processes } from "@/services/academic.service";
+// ✅ Servicios (académico)
+import {
+  Careers,
+  Plans,
+  Sections,
+  Kardex,
+  Processes,
+  AcademicReports,     // ✅ NUEVO
+  ProcessesInbox,      // ✅ NUEVO
+} from "@/services/academic.service";
 
 // Catálogos
 import { Teachers as CatalogTeachers, Classrooms as CatalogClassrooms } from "@/services/catalogs.service";
@@ -103,17 +113,13 @@ function AcademicQuickActions({ go }) {
 
   if (actions.length === 0) return null;
 
-  // Colapsable en móvil: mostramos solo 4 al inicio
   const previewCount = 4;
   const hasMore = actions.length > previewCount;
-
-  // En móvil (sm:hidden) usamos visible; en sm+ mostramos todo
   const visibleMobile = open ? actions : actions.slice(0, previewCount);
 
   return (
     <Card className="border-0 shadow-none">
       <CardContent className="px-0">
-        {/* Header + botón SOLO en móvil */}
         <div className="sm:hidden flex items-center justify-between px-3 pt-2">
           <div className="text-sm font-semibold text-black">Acciones rápidas</div>
           {hasMore ? (
@@ -129,7 +135,6 @@ function AcademicQuickActions({ go }) {
           ) : null}
         </div>
 
-        {/* GRID móvil (colapsable) */}
         <div className="grid grid-cols-2 gap-2 p-3 sm:hidden">
           {visibleMobile.map(({ key, label, Icon }) => (
             <TooltipProvider key={key} delayDuration={100}>
@@ -153,7 +158,6 @@ function AcademicQuickActions({ go }) {
           ))}
         </div>
 
-        {/* Botón extra abajo SOLO en móvil (mejor UX) */}
         {hasMore ? (
           <div className="sm:hidden px-3 pb-2">
             <Button
@@ -167,7 +171,6 @@ function AcademicQuickActions({ go }) {
           </div>
         ) : null}
 
-        {/* GRID tablet/desktop (siempre completo) */}
         <div className="hidden sm:grid sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3 p-3 sm:p-4">
           {actions.map(({ key, label, Icon }) => (
             <TooltipProvider key={key} delayDuration={100}>
@@ -195,12 +198,47 @@ function AcademicQuickActions({ go }) {
   );
 }
 
-
-/* ----------------------------- DASHBOARD PEQUEÑO ----------------------------- */
+/* ----------------------------- DASHBOARD PEQUEÑO (✅ CON DATOS REALES) ----------------------------- */
 function SmallAcademicDashboard() {
   const [stats, setStats] = useState({ sections: 0, teachers: 0, students: 0, openProcesses: 0 });
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    setStats((s) => s);
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+      try {
+        const [sumRes, procRes] = await Promise.all([
+          AcademicReports.summary(),      // GET /academic/reports/summary
+          ProcessesInbox.listAll(),       // GET /processes
+        ]);
+
+        const summary = sumRes?.summary ?? sumRes ?? {};
+        const processes = Array.isArray(procRes?.processes) ? procRes.processes : [];
+
+        const open = processes.filter(
+          (p) => String(p?.status || "").toUpperCase() === "PENDIENTE"
+        ).length;
+
+        const next = {
+          sections: Number(summary?.sections ?? 0),
+          teachers: Number(summary?.teachers ?? 0),
+          students: Number(summary?.students ?? 0),
+          openProcesses: Number(open ?? 0),
+        };
+
+        if (!cancelled) setStats(next);
+      } catch (e) {
+        if (!cancelled) toast.error(e?.message || "Error al cargar dashboard");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const items = [
@@ -219,7 +257,7 @@ function SmallAcademicDashboard() {
             <k.Icon className={`h-5 w-5 ${k.iconColor}`} />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold tracking-tight">{k.value}</div>
+            <div className="text-2xl font-bold tracking-tight">{loading ? "…" : k.value}</div>
           </CardContent>
         </Card>
       ))}
@@ -338,7 +376,7 @@ function PlansAndCurricula() {
           </CardHeader>
 
           <CardContent className="px-6 pb-6 space-y-4">
-           <form onSubmit={createPlan} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <form onSubmit={createPlan} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
               <div className="sm:col-span-2 lg:col-span-2">
                 <Label>Nombre *</Label>
                 <Input value={pform.name} onChange={(e) => setPform({ ...pform, name: e.target.value })} required />
@@ -429,278 +467,233 @@ function PlansAndCurricula() {
           </Card>
 
           <Card className="border">
-  <CardHeader>
-    {sectionHeader({
-      title: `Cursos del Plan ${selectedPlan ? `– ${selectedPlan.name}` : ""}`,
-      description: "Alta rápida + prerrequisitos",
-      Icon: ClipboardList,
-    })}
-  </CardHeader>
-
-  <CardContent className="space-y-4 overflow-x-hidden">
-  {/* FORM (full width, alineado a la izquierda) */}
-  <form onSubmit={createCourse} className="w-full grid grid-cols-1 gap-3">
-  {/* Nombre */}
-  <div className="min-w-0">
-    <Label className="block text-left">Nombre *</Label>
-    <Input
-      className="w-full max-w-[420px] h-9 text-sm"
-      value={cform.name}
-      onChange={(e) => setCform({ ...cform, name: e.target.value })}
-      required
-    />
-  </div>
-
-  {/* Código */}
-  <div className="min-w-0">
-    <Label className="block text-left">Código *</Label>
-    <Input
-      className="w-full max-w-[240px] h-9 text-sm"
-      value={cform.code}
-      onChange={(e) => setCform({ ...cform, code: e.target.value })}
-      required
-    />
-  </div>
-
-  {/* Créditos */}
-  <div className="min-w-0">
-    <Label className="block text-left">Créditos</Label>
-    <Input
-      className="w-full max-w-[120px] h-9 text-sm"
-      type="number"
-      min="0"
-      inputMode="numeric"
-      value={cform.credits}
-      onChange={(e) => setCform({ ...cform, credits: +e.target.value || 0 })}
-    />
-  </div>
-
-  {/* Hrs/Sem */}
-  <div className="min-w-0">
-    <Label className="block text-left">Hrs/Sem</Label>
-    <Input
-      className="w-full max-w-[120px] h-9 text-sm"
-      type="number"
-      min="0"
-      inputMode="numeric"
-      value={cform.weekly_hours}
-      onChange={(e) =>
-        setCform({ ...cform, weekly_hours: +e.target.value || 0 })
-      }
-    />
-  </div>
-
-  {/* Semestre */}
-  <div className="min-w-0">
-    <Label className="block text-left">Semestre</Label>
-    <Input
-      className="w-full max-w-[120px] h-9 text-sm"
-      type="number"
-      min="1"
-      inputMode="numeric"
-      value={cform.semester}
-      onChange={(e) =>
-        setCform({ ...cform, semester: +e.target.value || 1 })
-      }
-    />
-  </div>
-
-  {/* Tipo */}
-  <div className="min-w-0">
-    <Label className="block text-left">Tipo</Label>
-    <Select
-      value={cform.type}
-      onValueChange={(v) => setCform({ ...cform, type: v })}
-    >
-      <SelectTrigger className="w-full max-w-[240px] h-9 text-sm">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent className="z-[9999]">
-        <SelectItem value="MANDATORY">Obligatorio</SelectItem>
-        <SelectItem value="ELECTIVE">Electivo</SelectItem>
-      </SelectContent>
-    </Select>
-  </div>
-
-  {/* Botón */}
-  <div className="flex justify-start">
-    <Button
-      disabled={!selectedPlan}
-      type="submit"
-      className="w-full max-w-[240px] gap-2"
-    >
-      <Save className="h-4 w-4" />
-      Guardar curso
-    </Button>
-  </div>
-</form>
-
-
-  {/* 👇 desde aquí tu TABLA y lo demás NO lo toques */}
-{/* ===================== DESKTOP: TABLA ===================== */}
-<div className="hidden sm:block border rounded-xl overflow-x-auto">
-  <table className="w-full text-sm">
-    <thead className="bg-gray-200">
-      <tr>
-        <th className="p-2 text-left text-black">Código</th>
-        <th className="p-2 text-left text-black">Curso</th>
-        <th className="p-2 text-center text-black">Cred.</th>
-        <th className="p-2 text-center text-black">Sem.</th>
-        <th className="p-2 text-center text-black">Tipo</th>
-        <th className="p-2 text-right text-black">Acciones</th>
-      </tr>
-    </thead>
-
-    <tbody className="bg-white">
-      {(Array.isArray(courses) ? courses : []).map((c) => (
-        <tr key={c.id} className="border-t hover:bg-gray-50">
-          <td className="p-2 font-mono text-xs text-black">{c.code}</td>
-          <td className="p-2 text-black">{c.name}</td>
-          <td className="p-2 text-center text-black">{c.credits}</td>
-          <td className="p-2 text-center text-black">{c.semester}</td>
-          <td className="p-2 text-center text-black">
-            <Badge variant="outline">
-              {c.type === "ELECTIVE" ? "Electivo" : "Obligatorio"}
-            </Badge>
-          </td>
-          <td className="p-2 text-right">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setPrereqFor(c);
-                setPrereqs(
-                  Array.isArray(c.prerequisites)
-                    ? c.prerequisites.map((p) => p.id)
-                    : []
-                );
-              }}
-            >
-              <ClipboardList className="h-4 w-4" /> Prerrequisitos
-            </Button>
-          </td>
-        </tr>
-      ))}
-
-      {selectedPlan && (Array.isArray(courses) ? courses : []).length === 0 && (
-        <tr>
-          <td colSpan={6} className="p-3 text-center text-gray-500">
-            Sin cursos
-          </td>
-        </tr>
-      )}
-    </tbody>
-  </table>
-</div>
-
-
-
-   {/* ===================== MOBILE: LISTADO ===================== */}
-<div className="block sm:hidden space-y-2">
-  {(Array.isArray(courses) ? courses : []).map((c) => (
-    <div
-      key={c.id}
-      className="border rounded-lg p-3 bg-white flex justify-between items-start gap-3"
-    >
-      <div className="min-w-0">
-        <div className="font-mono text-xs text-gray-500">{c.code}</div>
-        <div className="font-medium text-sm truncate">{c.name}</div>
-
-        <div className="mt-1 text-xs text-gray-600 flex flex-wrap gap-3">
-          <span>Cred: {c.credits}</span>
-          <span>Sem: {c.semester}</span>
-          <span>{c.type === "ELECTIVE" ? "Electivo" : "Obligatorio"}</span>
-        </div>
-      </div>
-
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => {
-          setPrereqFor(c);
-          setPrereqs(
-            Array.isArray(c.prerequisites)
-              ? c.prerequisites.map((p) => p.id)
-              : []
-          );
-        }}
-        className="shrink-0 h-8 px-2"
-      >
-        <ClipboardList className="h-4 w-4" />
-      </Button>
-    </div>
-  ))}
-
-  {selectedPlan && (Array.isArray(courses) ? courses : []).length === 0 && (
-    <div className="text-center text-sm text-gray-500 py-4">
-      Sin cursos
-    </div>
-  )}
-</div>
-
-
-
-
-    {/* PRERREQUISITOS */}
-    {prereqFor ? (
-      <div className="border rounded-2xl p-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="font-medium truncate">
-            Prerrequisitos de: {prereqFor.name}
-          </div>
-
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setPrereqFor(null);
-              setPrereqs([]);
-            }}
-          >
-            ✕
-          </Button>
-        </div>
-
-        <ScrollArea className="h-56 mt-2 pr-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {(Array.isArray(courses) ? courses : [])
-              .filter((c) => c.id !== prereqFor.id)
-              .map((c) => {
-                const checked = prereqs.includes(c.id);
-                return (
-                  <label
-                    key={c.id}
-                    className={`border rounded-xl p-2 flex items-center gap-2 text-sm ${
-                      checked ? "bg-primary/5 border-primary/40" : ""
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) =>
-                        setPrereqs((prev) =>
-                          e.target.checked
-                            ? [...prev, c.id]
-                            : prev.filter((id) => id !== c.id)
-                        )
-                      }
-                    />
-                    <span className="font-mono text-xs">{c.code}</span> – {c.name}
-                  </label>
-                );
+            <CardHeader>
+              {sectionHeader({
+                title: `Cursos del Plan ${selectedPlan ? `– ${selectedPlan.name}` : ""}`,
+                description: "Alta rápida + prerrequisitos",
+                Icon: ClipboardList,
               })}
-          </div>
-        </ScrollArea>
+            </CardHeader>
 
-        <div className="mt-3 flex justify-end">
-          <Button onClick={savePrereqs} className="gap-2 w-full sm:w-auto">
-            <Save className="h-4 w-4" /> Guardar prerrequisitos
-          </Button>
-        </div>
-      </div>
-    ) : null}
-  </CardContent>
-</Card>
+            <CardContent className="space-y-4 overflow-x-hidden">
+              <form onSubmit={createCourse} className="w-full grid grid-cols-1 gap-3">
+                <div className="min-w-0">
+                  <Label className="block text-left">Nombre *</Label>
+                  <Input
+                    className="w-full max-w-[420px] h-9 text-sm"
+                    value={cform.name}
+                    onChange={(e) => setCform({ ...cform, name: e.target.value })}
+                    required
+                  />
+                </div>
 
+                <div className="min-w-0">
+                  <Label className="block text-left">Código *</Label>
+                  <Input
+                    className="w-full max-w-[240px] h-9 text-sm"
+                    value={cform.code}
+                    onChange={(e) => setCform({ ...cform, code: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="min-w-0">
+                  <Label className="block text-left">Créditos</Label>
+                  <Input
+                    className="w-full max-w-[120px] h-9 text-sm"
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    value={cform.credits}
+                    onChange={(e) => setCform({ ...cform, credits: +e.target.value || 0 })}
+                  />
+                </div>
+
+                <div className="min-w-0">
+                  <Label className="block text-left">Hrs/Sem</Label>
+                  <Input
+                    className="w-full max-w-[120px] h-9 text-sm"
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    value={cform.weekly_hours}
+                    onChange={(e) => setCform({ ...cform, weekly_hours: +e.target.value || 0 })}
+                  />
+                </div>
+
+                <div className="min-w-0">
+                  <Label className="block text-left">Semestre</Label>
+                  <Input
+                    className="w-full max-w-[120px] h-9 text-sm"
+                    type="number"
+                    min="1"
+                    inputMode="numeric"
+                    value={cform.semester}
+                    onChange={(e) => setCform({ ...cform, semester: +e.target.value || 1 })}
+                  />
+                </div>
+
+                <div className="min-w-0">
+                  <Label className="block text-left">Tipo</Label>
+                  <Select value={cform.type} onValueChange={(v) => setCform({ ...cform, type: v })}>
+                    <SelectTrigger className="w-full max-w-[240px] h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="z-[9999]">
+                      <SelectItem value="MANDATORY">Obligatorio</SelectItem>
+                      <SelectItem value="ELECTIVE">Electivo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex justify-start">
+                  <Button disabled={!selectedPlan} type="submit" className="w-full max-w-[240px] gap-2">
+                    <Save className="h-4 w-4" />
+                    Guardar curso
+                  </Button>
+                </div>
+              </form>
+
+              {/* ===================== DESKTOP: TABLA ===================== */}
+              <div className="hidden sm:block border rounded-xl overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-200">
+                    <tr>
+                      <th className="p-2 text-left text-black">Código</th>
+                      <th className="p-2 text-left text-black">Curso</th>
+                      <th className="p-2 text-center text-black">Cred.</th>
+                      <th className="p-2 text-center text-black">Sem.</th>
+                      <th className="p-2 text-center text-black">Tipo</th>
+                      <th className="p-2 text-right text-black">Acciones</th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="bg-white">
+                    {(Array.isArray(courses) ? courses : []).map((c) => (
+                      <tr key={c.id} className="border-t hover:bg-gray-50">
+                        <td className="p-2 font-mono text-xs text-black">{c.code}</td>
+                        <td className="p-2 text-black">{c.name}</td>
+                        <td className="p-2 text-center text-black">{c.credits}</td>
+                        <td className="p-2 text-center text-black">{c.semester}</td>
+                        <td className="p-2 text-center text-black">
+                          <Badge variant="outline">
+                            {c.type === "ELECTIVE" ? "Electivo" : "Obligatorio"}
+                          </Badge>
+                        </td>
+                        <td className="p-2 text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setPrereqFor(c);
+                              setPrereqs(Array.isArray(c.prerequisites) ? c.prerequisites.map((p) => p.id) : []);
+                            }}
+                          >
+                            <ClipboardList className="h-4 w-4" /> Prerrequisitos
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {selectedPlan && (Array.isArray(courses) ? courses : []).length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="p-3 text-center text-gray-500">
+                          Sin cursos
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* ===================== MOBILE: LISTADO ===================== */}
+              <div className="block sm:hidden space-y-2">
+                {(Array.isArray(courses) ? courses : []).map((c) => (
+                  <div key={c.id} className="border rounded-lg p-3 bg-white flex justify-between items-start gap-3">
+                    <div className="min-w-0">
+                      <div className="font-mono text-xs text-gray-500">{c.code}</div>
+                      <div className="font-medium text-sm truncate">{c.name}</div>
+
+                      <div className="mt-1 text-xs text-gray-600 flex flex-wrap gap-3">
+                        <span>Cred: {c.credits}</span>
+                        <span>Sem: {c.semester}</span>
+                        <span>{c.type === "ELECTIVE" ? "Electivo" : "Obligatorio"}</span>
+                      </div>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setPrereqFor(c);
+                        setPrereqs(Array.isArray(c.prerequisites) ? c.prerequisites.map((p) => p.id) : []);
+                      }}
+                      className="shrink-0 h-8 px-2"
+                    >
+                      <ClipboardList className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+
+                {selectedPlan && (Array.isArray(courses) ? courses : []).length === 0 && (
+                  <div className="text-center text-sm text-gray-500 py-4">Sin cursos</div>
+                )}
+              </div>
+
+              {/* PRERREQUISITOS */}
+              {prereqFor ? (
+                <div className="border rounded-2xl p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="font-medium truncate">Prerrequisitos de: {prereqFor.name}</div>
+
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setPrereqFor(null);
+                        setPrereqs([]);
+                      }}
+                    >
+                      ✕
+                    </Button>
+                  </div>
+
+                  <ScrollArea className="h-56 mt-2 pr-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {(Array.isArray(courses) ? courses : [])
+                        .filter((c) => c.id !== prereqFor.id)
+                        .map((c) => {
+                          const checked = prereqs.includes(c.id);
+                          return (
+                            <label
+                              key={c.id}
+                              className={`border rounded-xl p-2 flex items-center gap-2 text-sm ${checked ? "bg-primary/5 border-primary/40" : ""
+                                }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) =>
+                                  setPrereqs((prev) =>
+                                    e.target.checked ? [...prev, c.id] : prev.filter((id) => id !== c.id)
+                                  )
+                                }
+                              />
+                              <span className="font-mono text-xs">{c.code}</span> – {c.name}
+                            </label>
+                          );
+                        })}
+                    </div>
+                  </ScrollArea>
+
+                  <div className="mt-3 flex justify-end">
+                    <Button onClick={savePrereqs} className="gap-2 w-full sm:w-auto">
+                      <Save className="h-4 w-4" /> Guardar prerrequisitos
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </IfPerm>
@@ -853,7 +846,6 @@ function LoadAndSchedules() {
 
   return (
     <div className="space-y-6 pb-24 sm:pb-6">
-
       <Card className="border shadow-sm bg-white rounded-xl">
         <CardHeader className="px-6 pt-6">
           {sectionHeader({
@@ -961,76 +953,70 @@ function LoadAndSchedules() {
             </div>
           </div>
 
-         <div className="border rounded-2xl p-3">
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:items-end gap-2">
-    {/* Día */}
-    <div className="w-full sm:col-span-1 lg:w-44">
-      <Label>Día</Label>
-      <Select value={newSlot.day} onValueChange={(v) => setNewSlot((s) => ({ ...s, day: v }))}>
-        <SelectTrigger className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {["MON", "TUE", "WED", "THU", "FRI", "SAT"].map((d) => (
-            <SelectItem key={d} value={d}>
-              {d}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+          <div className="border rounded-2xl p-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:items-end gap-2">
+              <div className="w-full sm:col-span-1 lg:w-44">
+                <Label>Día</Label>
+                <Select value={newSlot.day} onValueChange={(v) => setNewSlot((s) => ({ ...s, day: v }))}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["MON", "TUE", "WED", "THU", "FRI", "SAT"].map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-    {/* Inicio */}
-    <div className="w-full sm:col-span-1 lg:w-44">
-      <Labeled
-        type="time"
-        label="Inicio"
-        value={newSlot.start}
-        onChange={(v) => setNewSlot((s) => ({ ...s, start: v }))}
-      />
-    </div>
+              <div className="w-full sm:col-span-1 lg:w-44">
+                <Labeled
+                  type="time"
+                  label="Inicio"
+                  value={newSlot.start}
+                  onChange={(v) => setNewSlot((s) => ({ ...s, start: v }))}
+                />
+              </div>
 
-    {/* Fin */}
-    <div className="w-full sm:col-span-1 lg:w-44">
-      <Labeled
-        type="time"
-        label="Fin"
-        value={newSlot.end}
-        onChange={(v) => setNewSlot((s) => ({ ...s, end: v }))}
-      />
-    </div>
+              <div className="w-full sm:col-span-1 lg:w-44">
+                <Labeled
+                  type="time"
+                  label="Fin"
+                  value={newSlot.end}
+                  onChange={(v) => setNewSlot((s) => ({ ...s, end: v }))}
+                />
+              </div>
 
-    {/* Botón */}
-    <div className="w-full sm:col-span-2 lg:w-auto lg:ml-auto">
-      <Button onClick={addSlot} className="gap-2 w-full lg:w-auto">
-        <Plus className="h-4 w-4" /> Agregar franja
-      </Button>
-    </div>
-  </div>
+              <div className="w-full sm:col-span-2 lg:w-auto lg:ml-auto">
+                <Button onClick={addSlot} className="gap-2 w-full lg:w-auto">
+                  <Plus className="h-4 w-4" /> Agregar franja
+                </Button>
+              </div>
+            </div>
 
-  {form.slots.length > 0 ? (
-    <div className="mt-3">
-      <div className="flex flex-wrap gap-2">
-        {form.slots.map((s, i) => (
-          <Badge key={i} variant="outline" className="rounded-full">
-            {s.day} {s.start}-{s.end}
-          </Badge>
-        ))}
-      </div>
-    </div>
-  ) : null}
-</div>
-
+            {form.slots.length > 0 ? (
+              <div className="mt-3">
+                <div className="flex flex-wrap gap-2">
+                  {form.slots.map((s, i) => (
+                    <Badge key={i} variant="outline" className="rounded-full">
+                      {s.day} {s.start}-{s.end}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:justify-end">
-  <Button variant="outline" onClick={check} className="gap-2 w-full">
-    <Plus className="h-4 w-4 rotate-45" /> Verificar conflictos
-  </Button>
-  <Button onClick={createSection} className="gap-2 w-full">
-    <Save className="h-4 w-4" /> Crear sección
-  </Button>
-</div>
-
+            <Button variant="outline" onClick={check} className="gap-2 w-full">
+              <Plus className="h-4 w-4 rotate-45" /> Verificar conflictos
+            </Button>
+            <Button onClick={createSection} className="gap-2 w-full">
+              <Save className="h-4 w-4" /> Crear sección
+            </Button>
+          </div>
 
           {conflicts.length > 0 ? (
             <div className="mt-2 p-3 border rounded-2xl bg-destructive/5">
@@ -1049,7 +1035,6 @@ function LoadAndSchedules() {
         <CardHeader>{sectionHeader({ title: "Secciones (Período 2025-I)" })}</CardHeader>
 
         <CardContent className="overflow-x-auto">
-          {/* ✅ CORREGIDO: thead/tbody sin whitespace nodes */}
           <table className="w-full text-sm">
             <thead className="bg-gray-200">
               <tr>
@@ -1064,9 +1049,7 @@ function LoadAndSchedules() {
             <tbody className="bg-white">
               {(Array.isArray(sections) ? sections : []).map((s) => (
                 <tr key={s.id} className="border-t hover:bg-gray-50">
-                  <td className="p-2 text-black">
-                    {s.course_code} – {s.course_name}
-                  </td>
+                  <td className="p-2 text-black">{s.course_code} – {s.course_name}</td>
                   <td className="p-2 text-black">{s.teacher_name}</td>
                   <td className="p-2 text-black">{s.room_name}</td>
                   <td className="p-2 text-black">
@@ -1151,18 +1134,10 @@ function KardexAndCertificates() {
         <Card className="border">
           <CardHeader>{sectionHeader({ title: "Resultados" })}</CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <div>
-              <strong>Estudiante:</strong> {data.student_name}
-            </div>
-            <div>
-              <strong>Carrera:</strong> {data.career_name}
-            </div>
-            <div>
-              <strong>Créditos aprobados:</strong> {data.credits_earned}
-            </div>
-            <div>
-              <strong>PPA:</strong> {data.gpa ?? "-"}
-            </div>
+            <div><strong>Estudiante:</strong> {data.student_name}</div>
+            <div><strong>Carrera:</strong> {data.career_name}</div>
+            <div><strong>Créditos aprobados:</strong> {data.credits_earned}</div>
+            <div><strong>PPA:</strong> {data.gpa ?? "-"}</div>
 
             <div className="flex gap-2 mt-2">
               <Button variant="outline" onClick={genBoleta} className="gap-2">
@@ -1213,9 +1188,7 @@ function AcademicProcesses() {
         <div>
           <Label>Tipo</Label>
           <Select value={type} onValueChange={setType}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="RETIRO">Retiro</SelectItem>
               <SelectItem value="RESERVA">Reserva de matrícula</SelectItem>
@@ -1265,7 +1238,6 @@ function Empty({ label = "Sin datos", Icon = Inbox }) {
 
 /* ==================================================================================
    BLOQUE COMPLETO: MÓDULO + COMPONENTES AUXILIARES
-   (Copia esto reemplazando desde 'export default function AcademicModule' hasta el final)
    ================================================================================== */
 
 export default function AcademicModule() {
@@ -1295,17 +1267,10 @@ export default function AcademicModule() {
 
   return (
     <div
-  style={pageStyle}
-  className="min-h-[100dvh] w-full min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain p- sm:p-4 md:p-6 pb-24 md:pb-40"
-
->
-
+      style={pageStyle}
+      className="min-h-[100dvh] w-full min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain p-3 sm:p-4 md:p-6 pb-24 md:pb-40"
+    >
       <div className="w-full min-w-0 rounded-2xl md:rounded-3xl bg-white/70 backdrop-blur-md border border-white/70 shadow-xl p-4 md:p-6 space-y-6">
-
-
-
-        
-        {/* Encabezado */}
         <div>
           <div className="flex items-center gap-2">
             <GraduationCap className="h-6 w-6 text-primary" />
@@ -1319,102 +1284,92 @@ export default function AcademicModule() {
         <Separator className="bg-gray-200/50" />
 
         <Tabs value={tab} onValueChange={setTab} className="space-y-6">
-          
-          {/* === NAVEGACIÓN RESPONSIVE (sin scroll horizontal en móvil) === */}
-<div className="pb-3">
-  {/* MÓVIL: 2 tabs + botón Ver más */}
-  <div className="sm:hidden">
-  <div className="w-full bg-white/55 backdrop-blur-md border border-white/20 rounded-2xl shadow-sm p-2">
-    <div className="flex items-center gap-2">
-      {/* Tabs (2) */}
-      <TabsList className="flex-1 inline-flex items-center h-10 gap-2 bg-transparent p-0 shadow-none">
-        {tabs.slice(0, 2).map((t) => (
-          <IconTab
-            key={t.key}
-            value={t.key}
-            label={t.label}
-            Icon={tabIcon(t.key)}
-            className="shrink-0"
-          />
-        ))}
-      </TabsList>
+          <div className="pb-3">
+            <div className="sm:hidden">
+              <div className="w-full bg-white/55 backdrop-blur-md border border-white/20 rounded-2xl shadow-sm p-2">
+                <div className="flex items-center gap-2">
+                  <TabsList className="flex-1 inline-flex items-center h-10 gap-2 bg-transparent p-0 shadow-none">
+                    {tabs.slice(0, 2).map((t) => (
+                      <IconTab
+                        key={t.key}
+                        value={t.key}
+                        label={t.label}
+                        Icon={tabIcon(t.key)}
+                        className="shrink-0"
+                      />
+                    ))}
+                  </TabsList>
 
-      {/* Ver más */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-  <Button
-    variant="outline"
-    size="icon"
-    className="h-10 w-10 rounded-xl shrink-0"
-    aria-label="Ver más pestañas"
-  >
-    <ChevronDown className="h-4 w-4" />
-  </Button>
-</DropdownMenuTrigger>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10 rounded-xl shrink-0"
+                        aria-label="Ver más pestañas"
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
 
+                    <DropdownMenuContent align="end" className="w-64">
+                      {tabs.slice(2).map((t) => {
+                        const I = tabIcon(t.key);
+                        return (
+                          <DropdownMenuItem
+                            key={t.key}
+                            onClick={() => setTab(t.key)}
+                            className="flex items-center gap-2"
+                          >
+                            <I className="h-4 w-4" />
+                            <span>{t.label}</span>
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            </div>
 
-        <DropdownMenuContent align="end" className="w-64">
-          {tabs.slice(2).map((t) => {
-            const I = tabIcon(t.key);
-            return (
-              <DropdownMenuItem
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className="flex items-center gap-2"
-              >
-                <I className="h-4 w-4" />
-                <span>{t.label}</span>
-              </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  </div>
-</div>
+            <div className="hidden sm:block">
+              <div className="w-full overflow-x-auto">
+                <TabsList className="flex flex-wrap w-full items-center h-auto p-2 gap-2 bg-white/55 backdrop-blur-md border border-white/20 rounded-2xl shadow-sm">
+                  {tabs.map((t) => (
+                    <IconTab
+                      key={t.key}
+                      value={t.key}
+                      label={t.label}
+                      Icon={tabIcon(t.key)}
+                      className="shrink-0"
+                    />
+                  ))}
+                </TabsList>
+              </div>
+            </div>
+          </div>
 
-
-  {/* TABLET/PC: tabs normales */}
-  <div className="hidden sm:block">
-    <div className="w-full overflow-x-auto">
-      <TabsList className="flex flex-wrap w-full items-center h-auto p-2 gap-2 bg-white/55 backdrop-blur-md border border-white/20 rounded-2xl shadow-sm">
-  {tabs.map((t) => (
-    <IconTab
-      key={t.key}
-      value={t.key}
-      label={t.label}
-      Icon={tabIcon(t.key)}
-      className="shrink-0"
-    />
-  ))}
-</TabsList>
-
-    </div>
-  </div>
-</div>
-{/* ============================================================ */}
-
-          {/* Contenido de las Pestañas */}
           <TabsContent value="dashboard">
             <AcademicQuickActions go={setTab} />
             <SmallAcademicDashboard />
           </TabsContent>
-          <TabsContent value="plans"> <PlansAndCurricula /> </TabsContent>
-          <TabsContent value="load"> <LoadAndSchedules /> </TabsContent>
-          <TabsContent value="enroll"> <EnrollmentComponent /> </TabsContent>
-          <TabsContent value="grades"> <GradesAttendanceComponent /> </TabsContent>
-          <TabsContent value="syllabus"> <SectionSyllabusEvaluation /> </TabsContent>
-          <TabsContent value="kardex"> <KardexAndCertificates /> </TabsContent>
-          <TabsContent value="reports"> <AcademicReportsPage /> </TabsContent>
-          <TabsContent value="proc-inbox"> <AcademicProcessesInbox /> </TabsContent>
-          <TabsContent value="processes"> <AcademicProcesses /> </TabsContent>
+
+          <TabsContent value="plans"><PlansAndCurricula /></TabsContent>
+          <TabsContent value="load"><LoadAndSchedules /></TabsContent>
+          <TabsContent value="enroll"><EnrollmentComponent /></TabsContent>
+          <TabsContent value="grades"><GradesAttendanceComponent /></TabsContent>
+          <TabsContent value="syllabus"><SectionSyllabusEvaluation /></TabsContent>
+          <TabsContent value="kardex"><KardexAndCertificates /></TabsContent>
+          <TabsContent value="reports"><AcademicReportsPage /></TabsContent>
+          <TabsContent value="proc-inbox"><AcademicProcessesInbox /></TabsContent>
+          <TabsContent value="processes"><AcademicProcesses /></TabsContent>
         </Tabs>
       </div>
     </div>
   );
 }
 
-/* --- ESTA ES LA FUNCIÓN ICON TAB ARREGLADA --- */
+/* --- ICON TAB --- */
 function IconTab({ value, label, Icon, className = "" }) {
   return (
     <TabsTrigger
@@ -1429,7 +1384,7 @@ function IconTab({ value, label, Icon, className = "" }) {
   );
 }
 
-/* --- ESTA ES LA FUNCIÓN QUE TE FALTABA --- */
+/* --- ICONOS POR TAB --- */
 function tabIcon(key) {
   switch (key) {
     case "dashboard": return LayoutGrid;

@@ -101,6 +101,7 @@ const asBlobOrJson = async (client, method, url, payload = null, config = {}) =>
    Dashboard
 ------------------------------------------------------- */
 export const MesaPartesDashboard = {
+    // lo dejo como lo tenías; backend ahora acepta con o sin slash
     stats: async () => asJson(api, "GET", "/dashboard/stats/"),
 };
 
@@ -155,8 +156,9 @@ export const Procedures = {
 
     get: async (id) => asJson(api, "GET", `/procedures/${id}`),
 
+    // ✅ CORRECCIÓN: tu backend usa query param (?code=...), no /code/:code
     getByCode: async (code) =>
-        asJson(api, "GET", `/procedures/code/${encodeURIComponent(code)}`),
+        asJson(api, "GET", `/procedures/code`, null, { params: { code } }),
 
     route: async (id, { to_office_id, assignee_id, note, deadline_at }) =>
         asJson(api, "POST", `/procedures/${id}/route`, {
@@ -171,8 +173,11 @@ export const Procedures = {
 
     timeline: async (id) => asJson(api, "GET", `/procedures/${id}/timeline`),
 
-    addNote: async (id, { note }) => asJson(api, "POST", `/procedures/${id}/notes`, { note }),
+    // ✅ ahora backend sí tiene /notes
+    addNote: async (id, { note }) =>
+        asJson(api, "POST", `/procedures/${id}/notes`, { note }),
 
+    // ✅ ahora backend sí tiene /notify
     notify: async (id, payload) => asJson(api, "POST", `/procedures/${id}/notify`, payload),
 
     coverPDF: async (id) => asJson(api, "POST", `/procedures/${id}/cover`, {}),
@@ -238,6 +243,7 @@ export const PublicIntake = {
    Reportes (SLA/volúmenes)
 ------------------------------------------------------- */
 export const ProcedureReports = {
+    // ✅ backend ahora acepta con o sin slash
     summary: async (params = {}) =>
         asJson(api, "GET", `/procedures/reports/summary`, null, { params }),
 
