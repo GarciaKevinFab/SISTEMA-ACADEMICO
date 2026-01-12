@@ -6,7 +6,20 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Badge } from "../../components/ui/badge";
-import { Calendar, Clock, FileText, Search, Award, MapPin, Phone, Mail, ChevronRight, School } from "lucide-react";
+import { 
+  Calendar,
+  Clock,
+  FileText,
+  Search,
+  Award,
+  MapPin,
+  Phone,
+  Mail,
+  ChevronRight,
+  School,
+  ArrowLeft 
+} from "lucide-react";
+
 import { toast } from "sonner";
 import { AdmissionCalls } from "../../services/admission.service";
 
@@ -61,31 +74,44 @@ const PublicAdmissionCalls = () => {
   }, [fetchPublicAdmissionCalls]);
 
   const handleResultSearch = useCallback(
-    async (e) => {
-      e.preventDefault();
-      const { admissionCallId, documentNumber } = searchData;
-      if (!admissionCallId || !documentNumber) {
-        toast.error("Por favor complete todos los campos");
-        return;
-      }
+  async (e) => {
+    e.preventDefault();
 
-      setSearchLoading(true);
-      setSearchResults(null);
-      try {
-        const { data } = await api.get(`/admission-results/public/${admissionCallId}/${documentNumber}`);
-        setSearchResults(data);
-      } catch (error) {
-        if (error?.response?.status === 404) {
-          setSearchResults({ error: "No se encontraron resultados para los datos ingresados." });
-        } else {
-          setSearchResults({ error: formatApiError(error, "Error al consultar resultados.") });
-        }
-      } finally {
-        setSearchLoading(false);
+    const { admissionCallId, documentNumber } = searchData;
+
+    if (!admissionCallId || !documentNumber) {
+      toast.error("Por favor complete todos los campos");
+      return;
+    }
+
+    setSearchLoading(true);
+    setSearchResults(null);
+
+    try {
+      const { data } = await api.get(
+        `/admission-results/public/${admissionCallId}/${documentNumber}`
+      );
+      setSearchResults(data);
+    } catch (error) {
+      if (error?.response?.status === 404) {
+        setSearchResults({
+          error: "No se encontraron resultados para los datos ingresados.",
+        });
+      } else {
+        setSearchResults({
+          error: formatApiError(
+            error,
+            "Error al consultar resultados."
+          ),
+        });
       }
-    },
-    [api, searchData]
-  );
+    } finally {
+      setSearchLoading(false);
+    }
+  },
+  [api, searchData]
+);
+
 
   const getCallStatusBadge = (call) => {
     const now = new Date();
@@ -165,29 +191,59 @@ const PublicAdmissionCalls = () => {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-[#F8F9FA] flex flex-col font-sans text-slate-800">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="w-full px-6 py-4 md:px-12 flex items-center justify-between">
-          <div className="flex items-center gap-5">
-            <img src="/logo.png" alt="Logo Institucional" className="h-14 w-auto object-contain" />
-            <div className="hidden md:block h-10 w-px bg-gray-200"></div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Portal de Admisión</h1>
-              <p className="text-sm text-slate-500 font-medium tracking-wide">IESPP "Gustavo Allende Llavería"</p>
-            </div>
-          </div>
+ return (
+  <div className="min-h-screen bg-[#F8F9FA] flex flex-col font-sans text-slate-800">
+  <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <div className="w-full px-6 py-4 md:px-12 flex items-center justify-between">
 
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => (window.location.href = "/login")}
-            className="text-blue-700 hover:text-blue-800 hover:bg-blue-50 font-medium"
-          >
-            Acceso al Sistema
-          </Button>
+      {/* IZQUIERDA: Logo + Título + Volver */}
+      <div className="flex items-center gap-4 min-w-0">
+
+        {/* LOGO */}
+        <img
+          src="/logo.png"
+          alt="Logo Institucional"
+          className="h-14 w-auto object-contain shrink-0"
+        />
+
+        <div className="hidden md:block h-10 w-px bg-gray-200"></div>
+
+        {/* TÍTULO */}
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-white tracking-tight leading-tight">
+  Portal de Admisión
+</h1>
+<p className="text-sm text-white/80 font-medium tracking-wide">
+  IESPP "Gustavo Allende Llavería"
+</p>
+
         </div>
-      </header>
+
+        {/* BOTÓN VOLVER (a la derecha del título, sin romper layout) */}
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="ml-2 p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-slate-700"
+          aria-label="Volver"
+          title="Volver"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* DERECHA: Acceso al sistema */}
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => (window.location.href = "/login")}
+        className="text-blue-700 hover:text-blue-800 hover:bg-blue-50 font-medium shrink-0"
+      >
+        Acceso al Sistema
+      </Button>
+
+    </div>
+  </header>
+
 
       <div className="w-full px-6 py-10 md:px-12 flex-1">
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-10 h-full">

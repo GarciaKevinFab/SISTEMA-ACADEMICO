@@ -349,16 +349,19 @@ const Landing = () => {
                 </section>
 
                 {/* Secciones (las tuyas igual) */}
-                <section id="nosotros" className="py-12 sm:py-16">
+                <section id="nosotros" className="py-12 sm:py-16 bg-blue-950">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="text-center max-w-3xl mx-auto">
-                            <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900">Nosotros</h2>
-                            <p className="mt-3 text-gray-600 text-sm sm:text-base">
-                                Formación pedagógica pública con enfoque humano, excelencia académica y compromiso social.
-                            </p>
+                        <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
+                            Nosotros
+                            </h2>
+                        <p className="mt-3 text-blue-100 text-sm sm:text-base">
+                        Formación pedagógica pública con enfoque humano, excelencia académica y compromiso social.
+                        </p>
                         </div>
-                    </div>
-                </section>
+                            </div>
+                                </section>
+
 
                 <section id="carreras" className="py-12 sm:py-16 bg-gray-50">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -417,16 +420,17 @@ const Landing = () => {
                 <section id="contacto" className="py-12 sm:py-16">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <div className="rounded-xl border border-gray-100 shadow-sm p-6">
-                                <h3 className="text-lg font-semibold text-gray-900">Contáctanos</h3>
-                                <p className="mt-2 text-sm text-gray-600">
-                                    Av. Hiroshi Takahashi Nro. 162 Km. 4 Carretera Central Pomachaca, Tarma - Junín, Perú
-                                </p>
-                                <div className="mt-4 space-y-2 text-sm text-gray-700">
-                                    <div><b>Tel:</b> +51 64 621199</div>
-                                    <div><b>Email:</b> admin@iesppallende.edu.pe</div>
-                                </div>
-                            </div>
+                            <div className="rounded-xl bg-gray-900 text-white p-6">
+                            <h3 className="text-lg font-semibold text-white">Contáctanos</h3>
+                            <p className="mt-2 text-sm text-blue-100">
+    Av. Hiroshi Takahashi Nro. 162 Km. 4 Carretera Central Pomachaca, Tarma - Junín, Perú
+    </p>
+  <div className="mt-4 space-y-2 text-sm text-blue-100">
+    <div><b className="text-white">Tel:</b> +51 64 621199</div>
+    <div><b className="text-white">Email:</b> admin@iesppallende.edu.pe</div>
+  </div>
+</div>
+
 
                             <div className="rounded-xl bg-gray-900 text-white p-6">
                                 <h3 className="text-lg font-semibold">Horarios</h3>
