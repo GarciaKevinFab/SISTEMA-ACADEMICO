@@ -88,12 +88,28 @@ ASGI_APPLICATION = "sistema_academico.asgi.application"
 # -----------------------
 # DATABASE
 # -----------------------
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+DB_ENGINE = os.getenv("DB_ENGINE", "sqlite").lower()
+
+if DB_ENGINE == "postgres":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("DB_NAME", "sistema_academico"),
+            "USER": os.getenv("DB_USER", "postgres"),
+            "PASSWORD": os.getenv("DB_PASSWORD", ""),
+            "HOST": os.getenv("DB_HOST", "127.0.0.1"),
+            "PORT": os.getenv("DB_PORT", "5432"),
+            "CONN_MAX_AGE": 60,
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+            "OPTIONS": {"timeout": 30},
+        }
+    }
 
 # -----------------------
 # AUTH
@@ -128,14 +144,13 @@ MEDIA_ROOT = BASE_DIR / "media"
 # -----------------------
 # CORS
 # -----------------------
-CORS_ALLOWED_ORIGINS = [
-    o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()
-]
-if not CORS_ALLOWED_ORIGINS:
-    CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_HEADERS = list(default_headers) + [
+    "authorization",
+    "content-type",
     "idempotency-key",
 ]
+CORS_ALLOW_CREDENTIALS = True
+
 # -----------------------
 # I18N / TZ
 # -----------------------

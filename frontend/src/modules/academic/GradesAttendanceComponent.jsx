@@ -11,6 +11,17 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { toast } from "sonner";
 import { Upload, Save, Send, Lock, Unlock, FileText, Users, Calendar, Clock } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 import { generatePDFWithPolling, generateQRWithPolling, downloadFile } from "../../utils/pdfQrPolling";
 import { Attendance, Teacher, SectionStudents, Grades, AttendanceImport } from "../../services/academic.service";
@@ -226,21 +237,15 @@ export default function GradesAttendanceComponent() {
   const reopenGrades = async () => {
     if (!selectedSection) return showToast("error", "Seleccione una sección");
 
-    const confirmElement = document.createElement("div");
-    confirmElement.setAttribute("data-testid", "dialog-confirm");
-    confirmElement.textContent = "Confirmar reapertura";
-    document.body.appendChild(confirmElement);
-
+    setIsSubmitting(true);
     try {
-      if (!window.confirm("¿Está seguro de reabrir las calificaciones?")) return;
-
       await Grades.reopen(selectedSection.id);
       showToast("success", "Calificaciones reabiertas");
       await fetchGrades();
     } catch (e) {
       showToast("error", e.message || "Error al reabrir calificaciones");
     } finally {
-      if (document.body.contains(confirmElement)) document.body.removeChild(confirmElement);
+      setIsSubmitting(false);
     }
   };
 
@@ -306,53 +311,53 @@ export default function GradesAttendanceComponent() {
     <div className="space-y-6 pb-24 sm:pb-6">
 
       {/* Header */}
-     {/* Header */}
-<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-    Calificaciones y Asistencia
-  </h2>
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+          Calificaciones y Asistencia
+        </h2>
 
-  {/* Section Selector */}
-  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-    <Label htmlFor="section-select" className="text-sm">
-      Sección:
-    </Label>
+        {/* Section Selector */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <Label htmlFor="section-select" className="text-sm">
+            Sección:
+          </Label>
 
-    <Select
-      value={selectedSection?.id ? String(selectedSection.id) : ""}
-      onValueChange={(value) => {
-        const section = sections.find((s) => String(s.id) === value);
-        setSelectedSection(section || null);
-      }}
-    >
-      <SelectTrigger className="w-full sm:w-64">
-        <SelectValue placeholder="Seleccionar sección" />
-      </SelectTrigger>
+          <Select
+            value={selectedSection?.id ? String(selectedSection.id) : ""}
+            onValueChange={(value) => {
+              const section = sections.find((s) => String(s.id) === value);
+              setSelectedSection(section || null);
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-64">
+              <SelectValue placeholder="Seleccionar sección" />
+            </SelectTrigger>
 
-      <SelectContent>
-        {sections.map((section) => (
-          <SelectItem key={section.id} value={String(section.id)}>
-            {(section.course_name || section.course_code || "Curso")} -{" "}
-            {(section.section_code || section.label || `SEC-${section.id}`)}
-          </SelectItem>
-        ))}
+            <SelectContent>
+              {sections.map((section) => (
+                <SelectItem key={section.id} value={String(section.id)}>
+                  {(section.course_name || section.course_code || "Curso")} -{" "}
+                  {(section.section_code || section.label || `SEC-${section.id}`)}
+                </SelectItem>
+              ))}
 
-        {sections.length === 0 && (
-          <div className="p-3 text-sm text-gray-500">
-            No tienes secciones asignadas (o el backend devolvió 0).
-          </div>
-        )}
-      </SelectContent>
-    </Select>
-  </div>
-</div>
+              {sections.length === 0 && (
+                <div className="p-3 text-sm text-gray-500">
+                  No tienes secciones asignadas (o el backend devolvió 0).
+                </div>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       {selectedSection && (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-         <TabsList className="w-full sm:w-auto overflow-x-auto flex flex-nowrap gap-2">
-  <TabsTrigger value="grades" className="shrink-0">Calificaciones</TabsTrigger>
-  <TabsTrigger value="attendance" className="shrink-0">Asistencia</TabsTrigger>
-</TabsList>
+          <TabsList className="w-full sm:w-auto overflow-x-auto flex flex-nowrap gap-2">
+            <TabsTrigger value="grades" className="shrink-0">Calificaciones</TabsTrigger>
+            <TabsTrigger value="attendance" className="shrink-0">Asistencia</TabsTrigger>
+          </TabsList>
 
 
           {/* Grades Tab */}
@@ -360,61 +365,89 @@ export default function GradesAttendanceComponent() {
             <Card>
               <CardHeader>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-  <div className="min-w-0">
-    <CardTitle>Registro de Calificaciones</CardTitle>
-    <CardDescription className="break-words">
-      Sección: {selectedSection.course_name || selectedSection.course_code} -{" "}
-      {selectedSection.section_code || selectedSection.label}
-    </CardDescription>
-  </div>
+                  <div className="min-w-0">
+                    <CardTitle>Registro de Calificaciones</CardTitle>
+                    <CardDescription className="break-words">
+                      Sección: {selectedSection.course_name || selectedSection.course_code} -{" "}
+                      {selectedSection.section_code || selectedSection.label}
+                    </CardDescription>
+                  </div>
 
-  <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 w-full lg:w-auto">
-    <Button data-testid="grade-save" variant="outline" onClick={saveGrades} disabled={isSaving} className="w-full sm:w-auto">
-      {isSaving ? (
-        <>
-          <Clock className="h-4 w-4 mr-2 animate-spin" />
-          Guardando...
-        </>
-      ) : (
-        <>
-          <Save className="h-4 w-4 mr-2" />
-          Guardar
-        </>
-      )}
-    </Button>
+                  <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 w-full lg:w-auto">
+                    <Button data-testid="grade-save" variant="outline" onClick={saveGrades} disabled={isSaving} className="w-full sm:w-auto">
+                      {isSaving ? (
+                        <>
+                          <Clock className="h-4 w-4 mr-2 animate-spin" />
+                          Guardando...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4 mr-2" />
+                          Guardar
+                        </>
+                      )}
+                    </Button>
 
-    <Button
-      data-testid="grade-submit"
-      onClick={submitGrades}
-      disabled={isSubmitting}
-      className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
-    >
-      {isSubmitting ? (
-        <>
-          <Clock className="h-4 w-4 mr-2 animate-spin" />
-          Enviando...
-        </>
-      ) : (
-        <>
-          <Send className="h-4 w-4 mr-2" />
-          Enviar y Cerrar
-        </>
-      )}
-    </Button>
+                    <Button
+                      data-testid="grade-submit"
+                      onClick={submitGrades}
+                      disabled={isSubmitting}
+                      className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Clock className="h-4 w-4 mr-2 animate-spin" />
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="h-4 w-4 mr-2" />
+                          Enviar y Cerrar
+                        </>
+                      )}
+                    </Button>
 
-    {(user?.role === "REGISTRAR" || user?.role === "ADMIN_ACADEMIC") ? (
-      <Button data-testid="grade-reopen" variant="outline" onClick={reopenGrades} className="w-full sm:w-auto">
-        <Unlock className="h-4 w-4 mr-2" />
-        Reabrir
-      </Button>
-    ) : null}
+                    {(user?.role === "REGISTRAR" || user?.role === "ADMIN_ACADEMIC") ? (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button data-testid="grade-reopen" variant="outline" className="w-full sm:w-auto">
+                            <Unlock className="h-4 w-4 mr-2" />
+                            Reabrir
+                          </Button>
+                        </AlertDialogTrigger>
 
-    <Button data-testid="act-generate-pdf" variant="outline" onClick={generateActaPDF} className="w-full sm:w-auto">
-      <FileText className="h-4 w-4 mr-2" />
-      Generar Acta
-    </Button>
-  </div>
-</div>
+                        <AlertDialogContent className="max-w-[92vw] sm:max-w-md">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>¿Reabrir calificaciones?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Esto desbloquea la sección para editar notas nuevamente. Úsalo solo si es necesario.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+
+                          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                            <AlertDialogCancel className="w-full sm:w-auto">
+                              Cancelar
+                            </AlertDialogCancel>
+
+                            <AlertDialogAction
+                              className="w-full sm:w-auto"
+                              onClick={reopenGrades}
+                              disabled={isSubmitting}
+                            >
+                              Sí, reabrir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    ) : null}
+
+
+                    <Button data-testid="act-generate-pdf" variant="outline" onClick={generateActaPDF} className="w-full sm:w-auto">
+                      <FileText className="h-4 w-4 mr-2" />
+                      Generar Acta
+                    </Button>
+                  </div>
+                </div>
 
               </CardHeader>
 
@@ -467,7 +500,7 @@ export default function GradesAttendanceComponent() {
                   </table>
                 </div>
 
-               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
 
                   <div>
                     <Label>Fecha de sesión</Label>
@@ -557,10 +590,37 @@ export default function GradesAttendanceComponent() {
                         <Save className="h-4 w-4 mr-2" />
                         Guardar
                       </Button>
-                      <Button onClick={closeAttendance} className="bg-blue-600 hover:bg-blue-700">
-                        <Lock className="h-4 w-4 mr-2" />
-                        Cerrar sesión
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button className="bg-blue-600 hover:bg-blue-700">
+                            <Lock className="h-4 w-4 mr-2" />
+                            Cerrar sesión
+                          </Button>
+                        </AlertDialogTrigger>
+
+                        <AlertDialogContent className="max-w-[92vw] sm:max-w-md">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>¿Cerrar sesión de asistencia?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Se guardará la asistencia y la sesión quedará cerrada. Luego ya no podrás editarla.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+
+                          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                            <AlertDialogCancel className="w-full sm:w-auto">
+                              Cancelar
+                            </AlertDialogCancel>
+
+                            <AlertDialogAction
+                              className="w-full sm:w-auto"
+                              onClick={closeAttendance}
+                            >
+                              Sí, cerrar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+
                     </div>
                   </div>
                 )}

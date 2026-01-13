@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 const Landing = () => {
     const [menuOpen, setMenuOpen] = useState(false);
-    const [activeSection, setActiveSection] = useState("#inicio");
+    const [activeSection, setActiveSection] = useState("");
     const drawerRef = useRef(null);
 
     // Cerrar con ESC
@@ -57,9 +57,9 @@ const Landing = () => {
         };
     }, [menuOpen]);
 
-    // ✅ Active section por scroll
+    // ✅ Active section por scroll (YA NO incluye "nosotros")
     useEffect(() => {
-        const ids = ["inicio", "nosotros", "carreras", "admision", "contacto"];
+        const ids = ["inicio", "carreras", "admision", "contacto"];
         const els = ids
             .map((id) => document.getElementById(id))
             .filter(Boolean);
@@ -68,7 +68,6 @@ const Landing = () => {
 
         const obs = new IntersectionObserver(
             (entries) => {
-                // Agarramos el más visible
                 const visible = entries
                     .filter((e) => e.isIntersecting)
                     .sort((a, b) => (b.intersectionRatio ?? 0) - (a.intersectionRatio ?? 0))[0];
@@ -78,7 +77,7 @@ const Landing = () => {
             {
                 root: null,
                 threshold: [0.2, 0.35, 0.5, 0.65],
-                rootMargin: "-15% 0px -70% 0px", // prioriza sección de arriba
+                rootMargin: "-15% 0px -70% 0px",
             }
         );
 
@@ -87,12 +86,16 @@ const Landing = () => {
     }, []);
 
     const handleNavClick = (href) => (e) => {
-        // scroll suave + offset por sticky header
+        // ✅ si es link externo (Inicio), navega normal
+        const isExternal = /^https?:\/\//i.test(href);
+        if (isExternal) return;
+
+        // ✅ si es interno, scroll suave
         e.preventDefault();
         const el = document.querySelector(href);
         if (!el) return;
 
-        const headerOffset = 96; // ajustado (tu header)
+        const headerOffset = 96;
         const top = el.getBoundingClientRect().top + window.scrollY - headerOffset;
 
         window.scrollTo({ top, behavior: "smooth" });
@@ -100,10 +103,9 @@ const Landing = () => {
         setMenuOpen(false);
     };
 
+    // ✅ Navbar SOLO Inicio (externo)
     const links = [
-        ["#inicio", "Inicio"],
-        ["#nosotros", "Nosotros"],
-        ["#carreras", "Carreras"],
+        ["https://iesppallende.edu.pe/", "Inicio"],
     ];
 
     const NavLinks = ({ isMobile = false }) => (
@@ -111,7 +113,6 @@ const Landing = () => {
             {links.map(([href, label]) => {
                 const active = activeSection === href;
 
-                // Animación tipo "pill + underline"
                 const base =
                     "relative font-medium transition-all duration-300 outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded-md";
                 const desktop =
@@ -119,9 +120,7 @@ const Landing = () => {
                 const mobile =
                     "w-full px-3 py-3 rounded-lg";
 
-                const color = active
-                    ? "text-white"
-                    : "text-blue-200 hover:text-white";
+                const color = "text-blue-200 hover:text-white";
 
                 return (
                     <a
@@ -136,10 +135,8 @@ const Landing = () => {
                             active && !isMobile ? "drop-shadow-[0_0_10px_rgba(255,255,255,0.25)]" : "",
                         ].join(" ")}
                     >
-                        {/* texto */}
                         <span className="relative z-10">{label}</span>
 
-                        {/* pill hover */}
                         {!isMobile && (
                             <span
                                 className={[
@@ -150,7 +147,6 @@ const Landing = () => {
                             />
                         )}
 
-                        {/* underline animado */}
                         <span
                             className={[
                                 "pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-0 h-[2px] rounded-full transition-all duration-300",
@@ -164,15 +160,16 @@ const Landing = () => {
     );
 
     return (
-        // ✅ Layout real
         <div className="h-[100dvh] bg-white flex flex-col overflow-y-auto overflow-x-hidden overscroll-contain">
-            {/* Header sticky + mejor contraste */}
             <header className="sticky top-0 z-50">
                 <div className="bg-blue-950/85 backdrop-blur-md border-b border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.25)]">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="flex justify-between items-center py-4 sm:py-5">
-                            {/* Brand */}
-                            <a href="#inicio" onClick={handleNavClick("#inicio")} className="flex items-center gap-3 min-w-0 group">
+                            {/* Brand (click también manda a la web) */}
+                            <a
+                                href="https://iesppallende.edu.pe/"
+                                className="flex items-center gap-3 min-w-0 group"
+                            >
                                 <img
                                     className="h-14 w-14 sm:h-16 sm:w-16 lg:h-20 lg:w-20 object-contain shrink-0 drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)]"
                                     src="/logo.png"
@@ -253,6 +250,7 @@ const Landing = () => {
                                     touchAction: "pan-y",
                                 }}
                             >
+                                {/* ✅ SOLO Inicio */}
                                 <nav className="flex flex-col gap-2">
                                     <NavLinks isMobile />
                                 </nav>
@@ -291,7 +289,6 @@ const Landing = () => {
                         backgroundRepeat: "no-repeat",
                     }}
                 >
-                    {/* overlay más pro para que se note mejor */}
                     <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/45 to-black/60" />
 
                     <div className="relative z-10">
@@ -348,21 +345,7 @@ const Landing = () => {
                     </div>
                 </section>
 
-                {/* Secciones (las tuyas igual) */}
-                <section id="nosotros" className="py-12 sm:py-16 bg-blue-950">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="text-center max-w-3xl mx-auto">
-                        <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
-                            Nosotros
-                            </h2>
-                        <p className="mt-3 text-blue-100 text-sm sm:text-base">
-                        Formación pedagógica pública con enfoque humano, excelencia académica y compromiso social.
-                        </p>
-                        </div>
-                            </div>
-                                </section>
-
-
+                {/* ✅ Programas (antes "carreras") - 3 + 1 agregada */}
                 <section id="carreras" className="py-12 sm:py-16 bg-gray-50">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="text-center mb-10 sm:mb-12">
@@ -376,9 +359,10 @@ const Landing = () => {
 
                         <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
                             {[
+                                { title: "Comunicación", desc: "Forma docentes con enfoque en comunicación, lenguaje y habilidades expresivas." },
                                 { title: "Educación Inicial", desc: "Forma docentes especializados en la educación de niños de 0 a 5 años." },
                                 { title: "Educación Primaria", desc: "Prepara educadores para la enseñanza integral de niños de 6 a 12 años." },
-                                { title: "Educación Física", desc: "Forma profesionales en educación física y promoción de la salud." },
+                                { title: "Educación Física", desc: "Forma profesionales en educación física y promoción de la salud." }, // ✅ agregada
                             ].map((c) => (
                                 <div
                                     key={c.title}
@@ -421,16 +405,15 @@ const Landing = () => {
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                             <div className="rounded-xl bg-gray-900 text-white p-6">
-                            <h3 className="text-lg font-semibold text-white">Contáctanos</h3>
-                            <p className="mt-2 text-sm text-blue-100">
-    Av. Hiroshi Takahashi Nro. 162 Km. 4 Carretera Central Pomachaca, Tarma - Junín, Perú
-    </p>
-  <div className="mt-4 space-y-2 text-sm text-blue-100">
-    <div><b className="text-white">Tel:</b> +51 64 621199</div>
-    <div><b className="text-white">Email:</b> admin@iesppallende.edu.pe</div>
-  </div>
-</div>
-
+                                <h3 className="text-lg font-semibold text-white">Contáctanos</h3>
+                                <p className="mt-2 text-sm text-blue-100">
+                                    Av. Hiroshi Takahashi Nro. 162 Km. 4 Carretera Central Pomachaca, Tarma - Junín, Perú
+                                </p>
+                                <div className="mt-4 space-y-2 text-sm text-blue-100">
+                                    <div><b className="text-white">Tel:</b> +51 64 621199</div>
+                                    <div><b className="text-white">Email:</b> admin@iesppallende.edu.pe</div>
+                                </div>
+                            </div>
 
                             <div className="rounded-xl bg-gray-900 text-white p-6">
                                 <h3 className="text-lg font-semibold">Horarios</h3>
@@ -442,7 +425,6 @@ const Landing = () => {
                 </section>
             </main>
 
-            {/* Footer (tu footer igual, ya está bien) */}
             <footer className="bg-gray-800">
                 <div className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
@@ -471,6 +453,7 @@ const Landing = () => {
                             </div>
                         </div>
 
+                        {/* ✅ Enlaces SOLO Inicio */}
                         <div>
                             <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase">Enlaces</h3>
                             <div className="mt-4 space-y-2">
@@ -478,7 +461,6 @@ const Landing = () => {
                                     <a
                                         key={href}
                                         href={href}
-                                        onClick={handleNavClick(href)}
                                         className="text-gray-300 hover:text-white text-sm block transition"
                                     >
                                         {label}

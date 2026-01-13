@@ -567,22 +567,60 @@ def calls_ranking_export(request, callId: int):
 # ==============================
 # Reportes
 # ==============================
+from django.db.models import FloatField
+from django.db.models.functions import Cast
+
+def _safe_avg_rubric_total(qs_projects):
+    """
+    Promedio robusto de rubric.total:
+    - Soporta rubric.total como number o string numérico.
+    - Evita crashear si hay '' / None / 'N/A'.
+    - 1) Intenta AVG en SQL (rápido).
+    - 2) Si falla por datos raros, cae a promedio en Python (seguro).
+    """
+    base = Evaluation.objects.filter(project__in=qs_projects)
+
+    # 1) Intento SQL (Postgres)
+    try:
+        val = base.exclude(rubric__total__isnull=True).exclude(rubric__total="").aggregate(
+            a=Avg(Cast("rubric__total", FloatField()))
+        ).get("a")
+        return float(val or 0)
+    except Exception:
+        # 2) Fallback Python (no falla nunca)
+        totals = list(base.values_list("rubric__total", flat=True))
+        nums = []
+        for t in totals:
+            try:
+                nums.append(float(t))
+            except (TypeError, ValueError):
+                pass
+        return (sum(nums) / len(nums)) if nums else 0.0
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def reports_summary(request):
     year = request.query_params.get('year')
     status_f = request.query_params.get('status')
+
     qs = Project.objects.all()
-    if status_f: qs = qs.filter(status=status_f)
-    if year: qs = qs.filter(start_date__year=year)
+    if status_f:
+        qs = qs.filter(status=status_f)
+    if year:
+        qs = qs.filter(start_date__year=year)
+
+    avg_score = _safe_avg_rubric_total(qs)
+
     data = {
         "total_projects": qs.count(),
         "total_advisors": Advisor.objects.filter(project__in=qs).distinct().count(),
         "total_deliverables": Deliverable.objects.filter(project__in=qs).count(),
-        "avg_score": Evaluation.objects.filter(project__in=qs).aggregate(a=Avg('rubric__total'))['a'] or 0,
+        "avg_score": avg_score,
         "by_status": list(qs.values('status').order_by().annotate(count=Count('id'))),
     }
     return Response(data)
+
 
 @api_view(['POST','GET'])
 @permission_classes([IsAuthenticated])

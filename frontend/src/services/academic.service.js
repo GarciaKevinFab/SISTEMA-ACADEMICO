@@ -160,14 +160,25 @@ export const Sections = {
    Kárdex / PDFs
 ------------------------------------------------------- */
 export const Kardex = {
-    ofStudent: async (studentId) => asJson("GET", `/kardex/${studentId}`),
+    ofStudent: (studentKey) =>
+        api.get(`/academic/kardex/${studentKey}`).then((r) => r.data),
 
-    // estos devuelven PDF (blob)
-    boletaPDF: async (studentId, period) =>
-        asBlobGet(`/kardex/${studentId}/boleta/pdf`, { academic_period: period }),
+    exportXlsx: (studentKey, params) =>
+        api.get(`/academic/kardex/${studentKey}/export/xlsx`, {
+            params,
+            responseType: "blob",
+        }),
 
-    constanciaPDF: async (studentId) =>
-        asBlobGet(`/kardex/${studentId}/constancia/pdf`),
+    exportPdf: (studentKey, params) =>
+        api.get(`/academic/kardex/${studentKey}/boleta/pdf`, {
+            params,
+            responseType: "blob",
+        }),
+
+    exportConstanciaPdf: (studentKey) =>
+        api.get(`/academic/kardex/${studentKey}/constancia/pdf`, {
+            responseType: "blob",
+        }),
 };
 
 /* -------------------------------------------------------

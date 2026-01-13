@@ -25,7 +25,7 @@ const RAW =
     fromRuntime ||
     fromCRA ||
     fromMeta ||
-    "http://127.0.0.1:8000"; // default dev
+    "https://sis.iesppallende.edu.pe"; // default dev
 
 export const BACKEND_URL = RAW.replace(/\/+$/, "");
 export const API_BASE = `${BACKEND_URL}/api`;

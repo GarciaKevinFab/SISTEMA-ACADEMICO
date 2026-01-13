@@ -5,11 +5,11 @@
 // ============================
 export const PERMS = {
     /* === ADMINISTRACIÓN / ACCESOS / SEGURIDAD === */
-    "admin.access.manage": "admin.access.manage", // gestionar usuarios/roles/permisos
-    "admin.audit.view": "admin.audit.view", // ver auditoría / logs
-    "admin.audit.export": "admin.audit.export", // exportar bitácora (CSV/JSON)
+    "admin.access.manage": "admin.access.manage",
+    "admin.audit.view": "admin.audit.view",
+    "admin.audit.export": "admin.audit.export",
 
-    // ✅ Catálogos (nuevo)
+    // ✅ Catálogos
     "admin.catalogs.view": "admin.catalogs.view",
     "admin.catalogs.manage": "admin.catalogs.manage",
 
@@ -45,6 +45,24 @@ export const PERMS = {
     "academic.grades.manage": "academic.grades.manage",
     "academic.attendance.manage": "academic.attendance.manage",
     "academic.processes.inbox.view": "academic.processes.inbox.view",
+
+    /* ============================
+     * ✅ ESTUDIANTE (SELF vs MANAGE)
+     * ============================ */
+
+    // SELF: el estudiante solo ve/edita lo suyo
+    "student.self.dashboard.view": "student.self.dashboard.view",
+    "student.self.profile.view": "student.self.profile.view",
+    "student.self.profile.edit": "student.self.profile.edit",
+    "student.self.kardex.view": "student.self.kardex.view",
+    "student.self.enrollment.view": "student.self.enrollment.view",
+
+    // MANAGE: admin académico / admin system gestionan estudiantes
+    "student.manage.list": "student.manage.list",
+    "student.manage.view": "student.manage.view",
+    "student.manage.edit": "student.manage.edit",
+    "student.manage.enrollment": "student.manage.enrollment",
+    "student.manage.kardex": "student.manage.kardex",
 
     /* === ADMISIÓN === */
     "admission.calls.view": "admission.calls.view",
@@ -129,8 +147,6 @@ export const ROLE_POLICIES = {
         "admin.access.manage",
         "admin.audit.view",
         "admin.audit.export",
-
-        // ✅ que también pueda ver/gestionar catálogos (si aplica en tu negocio)
         "admin.catalogs.view",
         "admin.catalogs.manage",
     ],
@@ -174,6 +190,13 @@ export const ROLE_POLICIES = {
         "academic.grades.manage",
         "academic.attendance.manage",
         "academic.processes.inbox.view",
+
+        // ✅ NUEVO: puede listar/escoger/modificar estudiantes
+        "student.manage.list",
+        "student.manage.view",
+        "student.manage.edit",
+        "student.manage.enrollment",
+        "student.manage.kardex",
     ],
 
     REGISTRAR: [
@@ -190,9 +213,12 @@ export const ROLE_POLICIES = {
         "academic.view",
         "academic.sections.manage",
 
-        // ✅ catálogos (registraría normalmente necesita)
         "admin.catalogs.view",
         "admin.catalogs.manage",
+
+        // (opcional) si secretaría también gestiona estudiantes:
+        // "student.manage.list",
+        // "student.manage.view",
     ],
 
     TEACHER: [
@@ -208,7 +234,15 @@ export const ROLE_POLICIES = {
         "academic.attendance.manage",
     ],
 
+    // ✅ Actualizado: STUDENT ahora usa student.self.*
     STUDENT: [
+        "student.self.dashboard.view",
+        "student.self.profile.view",
+        "student.self.profile.edit",
+        "student.self.kardex.view",
+        "student.self.enrollment.view",
+
+        // compat con tu backend actual (si aún depende de academic.*)
         "academic.enrollment.view",
         "academic.enrollment.commit",
         "academic.kardex.view",
@@ -329,6 +363,10 @@ export const PERM_ALIASES = {
     "academic.grades.manage": "academic.grades.edit",
     "academic.attendance.manage": "academic.attendance.edit",
     "academic.view": "academic.sections.view",
+
+    // ✅ Estudiante (compat opcional: student.self.* -> academic.*)
+    "student.self.enrollment.view": "academic.enrollment.view",
+    "student.self.kardex.view": "academic.kardex.view",
 
     // Minedu
     "minedu.integrations.run": "minedu.integration.export",

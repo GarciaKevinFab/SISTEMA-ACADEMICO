@@ -18,7 +18,7 @@ import {
   UserCircle,
   Menu,
   X,
-  GraduationCap, // ✅ NUEVO
+  GraduationCap,
 } from "lucide-react";
 import { PERMS, PERM_ALIASES } from "../auth/permissions";
 
@@ -26,17 +26,12 @@ const SideNav = () => {
   const { user, roles = [], logout, permissions = [] } = useAuth();
   const location = useLocation();
 
-  // Estados para el control de visibilidad
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  // Cerrar el menú móvil cuando cambie la ruta
-  useEffect(() => {
-    setIsMobileOpen(false);
-  }, [location.pathname]);
+  useEffect(() => setIsMobileOpen(false), [location.pathname]);
 
   useEffect(() => {
-    // Evita scroll del fondo cuando el menú móvil está abierto (iOS friendly)
     if (isMobileOpen) {
       document.body.style.overflow = "hidden";
       document.body.style.touchAction = "none";
@@ -51,6 +46,7 @@ const SideNav = () => {
   }, [isMobileOpen]);
 
   const hasRole = (...codes) => codes.some((r) => roles.includes(r));
+
   const isActive = (path) =>
     path === "/dashboard"
       ? location.pathname === "/dashboard"
@@ -59,7 +55,6 @@ const SideNav = () => {
   // ✅ Permisos efectivos (incluye aliases)
   const grantedPerms = useMemo(() => {
     const set = new Set((permissions || []).filter(Boolean));
-    // si tengo X, también tengo su alias/implicado
     for (const p of set) {
       const implied = PERM_ALIASES?.[p];
       if (implied) set.add(implied);
@@ -73,9 +68,7 @@ const SideNav = () => {
     return req.some((p) => grantedPerms.has(p));
   };
 
-  // ✅ NUEVO: Mostrar "Estudiante" si:
-  // - rol STUDENT o ADMIN_SYSTEM
-  // - o permisos admin/academic (por si roles no llegan pero permisos sí)
+  // ✅ Estudiante: visible si es STUDENT, ADMIN_SYSTEM o tiene permisos student.*
   const canSeeStudentModule = useMemo(() => {
     if (!user) return false;
 
@@ -85,30 +78,21 @@ const SideNav = () => {
       roles.some((r) => String(r).toUpperCase().includes("ADMIN_SYSTEM"));
 
     const permOk = canAny(
-      PERMS["student.profile.view"], // si lo agregas luego en backend
-      PERMS["admin.access.manage"],
-      PERMS["admin.catalogs.view"],
-      PERMS["admin.catalogs.manage"],
-      PERMS["admin.audit.view"],
-      PERMS["academic.view"]
+      // self
+      PERMS["student.self.dashboard.view"],
+      PERMS["student.self.profile.view"],
+      PERMS["student.self.profile.edit"],
+      PERMS["student.self.kardex.view"],
+      PERMS["student.self.enrollment.view"],
+
+      // manage
+      PERMS["student.manage.list"],
+      PERMS["student.manage.view"],
+      PERMS["student.manage.edit"]
     );
 
     return roleOk || permOk;
-  }, [user, roles, grantedPerms]); // grantedPerms cambia cuando cambian permisos
-
-  /**
-   * ✅ Política de menú:
-   * - Dashboard: cualquier usuario logueado.
-   * - Seguridad: admin/auditoría/sesiones/políticas.
-   * - Administración: gestión de accesos, catálogos, auditoría.
-   * - Estudiante: STUDENT/ADMIN_SYSTEM (o permisos).
-   * - Académico: cualquier permiso académico relevante.
-   * - Admisión: cualquier permiso de admisión.
-   * - Investigación: cualquier permiso research.
-   * - Mesa de Partes: cualquier permiso mpv (o legacy desk.* si lo usan).
-   * - Finanzas: cualquier permiso fin.* o dashboard fin.
-   * - MINEDU: cualquier permiso minedu.*
-   */
+  }, [user, roles, grantedPerms]); // ok
 
   const menuGroups = useMemo(
     () => [
@@ -133,12 +117,6 @@ const SideNav = () => {
             title: "Seguridad",
             path: "/dashboard/security",
             icon: ShieldCheck,
-            anyPerms: [
-              PERMS["security.policies.manage"],
-              PERMS["security.sessions.inspect"],
-              PERMS["admin.audit.view"],
-              PERMS["admin.audit.export"],
-            ],
             show: canAny(
               PERMS["security.policies.manage"],
               PERMS["security.sessions.inspect"],
@@ -151,12 +129,6 @@ const SideNav = () => {
             title: "Administración",
             path: "/dashboard/admin",
             icon: Settings,
-            anyPerms: [
-              PERMS["admin.access.manage"],
-              PERMS["admin.catalogs.view"],
-              PERMS["admin.catalogs.manage"],
-              PERMS["admin.audit.view"],
-            ],
             show: canAny(
               PERMS["admin.access.manage"],
               PERMS["admin.catalogs.view"],
@@ -186,7 +158,6 @@ const SideNav = () => {
             ),
           },
 
-          // ✅ NUEVO: Estudiante
           {
             id: "student",
             title: "Estudiante",
@@ -278,7 +249,7 @@ const SideNav = () => {
 
   return (
     <>
-      {/* --- HEADER MÓVIL --- */}
+      {/* HEADER MÓVIL */}
       <div className="xl:hidden bg-[#0f172a] text-white p-4 flex items-center justify-between border-b border-slate-800 sticky top-0 z-[60]">
         <div className="flex items-center gap-2">
           <img
@@ -297,7 +268,7 @@ const SideNav = () => {
         </button>
       </div>
 
-      {/* --- OVERLAY MÓVIL --- */}
+      {/* OVERLAY MÓVIL */}
       {isMobileOpen && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] xl:hidden transition-opacity"
@@ -305,7 +276,7 @@ const SideNav = () => {
         />
       )}
 
-      {/* --- SIDEBAR --- */}
+      {/* SIDEBAR */}
       <aside
         className={`
           fixed inset-y-0 left-0 z-[80] xl:relative xl:z-0

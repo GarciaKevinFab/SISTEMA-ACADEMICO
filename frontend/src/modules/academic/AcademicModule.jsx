@@ -54,8 +54,8 @@ import {
   Sections,
   Kardex,
   Processes,
-  AcademicReports,     // ✅ NUEVO
-  ProcessesInbox,      // ✅ NUEVO
+  AcademicReports,
+  ProcessesInbox,
 } from "@/services/academic.service";
 
 // Catálogos
@@ -68,6 +68,18 @@ import SectionSyllabusEvaluation from "./SectionSyllabusEvaluation";
 import AcademicProcessesInbox from "./AcademicProcessesInbox";
 import AcademicReportsPage from "./AcademicReports";
 
+/* ---------- Debounce (✅ requerido por Planes) ---------- */
+const useDebounce = (value, delay = 350) => {
+  const [v, setV] = useState(value);
+
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+
+  return v;
+};
+
 /* ----------------------------- UI HELPERS ----------------------------- */
 const sectionHeader = ({ title, description, Icon }) => (
   <div className="flex items-start justify-between">
@@ -76,7 +88,9 @@ const sectionHeader = ({ title, description, Icon }) => (
         {Icon ? <Icon className="h-5 w-5 text-[#2196F3]" /> : null}
         <CardTitle className="text-[#2196F3]">{title}</CardTitle>
       </div>
-      {description ? <CardDescription className="mt-1 text-[#1976D2]">{description}</CardDescription> : null}
+      {description ? (
+        <CardDescription className="mt-1 text-[#1976D2]">{description}</CardDescription>
+      ) : null}
     </div>
   </div>
 );
@@ -93,7 +107,6 @@ const REQS = {
   processes: [PERMS["academic.reports.view"]],
 };
 
-/* ----------------------------- ACCIONES RÁPIDAS ----------------------------- */
 /* ----------------------------- ACCIONES RÁPIDAS (SOLO RESPONSIVE) ----------------------------- */
 function AcademicQuickActions({ go }) {
   const { hasAny } = useAuth();
@@ -210,16 +223,14 @@ function SmallAcademicDashboard() {
       setLoading(true);
       try {
         const [sumRes, procRes] = await Promise.all([
-          AcademicReports.summary(),      // GET /academic/reports/summary
-          ProcessesInbox.listAll(),       // GET /processes
+          AcademicReports.summary(),
+          ProcessesInbox.listAll(),
         ]);
 
         const summary = sumRes?.summary ?? sumRes ?? {};
         const processes = Array.isArray(procRes?.processes) ? procRes.processes : [];
 
-        const open = processes.filter(
-          (p) => String(p?.status || "").toUpperCase() === "PENDIENTE"
-        ).length;
+        const open = processes.filter((p) => String(p?.status || "").toUpperCase() === "PENDIENTE").length;
 
         const next = {
           sections: Number(summary?.sections ?? 0),
@@ -267,7 +278,7 @@ function SmallAcademicDashboard() {
 
 export { AcademicQuickActions, SmallAcademicDashboard };
 
-/* ----------------------------- PLANES / MALLAS ----------------------------- */
+/* ----------------------------- PLANES / MALLAS (✅ PAGINACIÓN POR SEMESTRE) ----------------------------- */
 function PlansAndCurricula() {
   const [list, setList] = useState([]);
   const [careers, setCareers] = useState([]);
@@ -282,6 +293,15 @@ function PlansAndCurricula() {
   });
 
   const [courses, setCourses] = useState([]);
+
+  // índice semestres (backend)
+  const [semesterIndex, setSemesterIndex] = useState([]); // [{semester,total}]
+  const [selectedSemester, setSelectedSemester] = useState(1);
+
+  // búsqueda dentro del plan
+  const [courseQ, setCourseQ] = useState("");
+  const debouncedCourseQ = useDebounce(courseQ, 350);
+
   const [cform, setCform] = useState({
     code: "",
     name: "",
@@ -302,17 +322,7 @@ function PlansAndCurricula() {
       setList(plans);
       setCareers(careersArr);
     } catch (e) {
-      toast.error(e.message || "Error al cargar planes");
-    }
-  }, []);
-
-  const loadCourses = useCallback(async (planId) => {
-    try {
-      const c = await Plans.listCourses(planId);
-      const coursesArr = Array.isArray(c?.courses) ? c.courses : Array.isArray(c) ? c : [];
-      setCourses(coursesArr);
-    } catch (e) {
-      toast.error(e.message || "Error al cargar cursos");
+      toast.error(e?.message || "Error al cargar planes");
     }
   }, []);
 
@@ -320,48 +330,130 @@ function PlansAndCurricula() {
     load();
   }, [load]);
 
+  // ✅ 1) Cargar solo el índice de semestres del plan
+  const loadSemesterIndex = useCallback(async (planId) => {
+    try {
+      const idxRes = await Plans.listCourses(planId); // sin semester => semesters
+      const idx = Array.isArray(idxRes?.semesters) ? idxRes.semesters : [];
+      setSemesterIndex(idx);
+
+      const firstSem = idx?.[0]?.semester ? Number(idx[0].semester) : 1;
+      setSelectedSemester(firstSem);
+      setCform((prev) => ({ ...prev, semester: firstSem }));
+    } catch (e) {
+      toast.error(e?.message || "Error al cargar índice de semestres");
+      setSemesterIndex([]);
+      setSelectedSemester(1);
+      setCform((prev) => ({ ...prev, semester: 1 }));
+    }
+  }, []);
+
+  // ✅ 2) Traer cursos SOLO del semestre actual (único fetch de cursos)
+  const fetchCourses = useCallback(async () => {
+    if (!selectedPlan?.id) return;
+
+    try {
+      const res = await Plans.listCourses(selectedPlan.id, {
+        semester: selectedSemester,
+        ...(debouncedCourseQ ? { q: debouncedCourseQ } : {}),
+      });
+
+      const coursesArr = Array.isArray(res?.courses)
+        ? res.courses
+        : Array.isArray(res)
+          ? res
+          : [];
+
+      setCourses(coursesArr);
+    } catch (e) {
+      toast.error(e?.message || "Error al cargar cursos del semestre");
+      setCourses([]);
+    }
+  }, [selectedPlan?.id, selectedSemester, debouncedCourseQ]);
+
+  // Al seleccionar un plan: carga índice, resetea UI
   useEffect(() => {
-    if (selectedPlan?.id) loadCourses(selectedPlan.id);
-  }, [selectedPlan?.id, loadCourses]);
+    if (!selectedPlan?.id) return;
+
+    setPrereqFor(null);
+    setPrereqs([]);
+    setCourseQ("");
+
+    loadSemesterIndex(selectedPlan.id);
+  }, [selectedPlan?.id, loadSemesterIndex]);
+
+  // Cada vez que cambia semestre o búsqueda (debounced) => cargar cursos
+  useEffect(() => {
+    fetchCourses();
+  }, [fetchCourses]);
 
   const createPlan = async (e) => {
     e.preventDefault();
     try {
       const res = await Plans.create(pform);
       toast.success("Plan creado");
-      setPform({ name: "", career_id: "", start_year: new Date().getFullYear(), semesters: 10, description: "" });
+      setPform({
+        name: "",
+        career_id: "",
+        start_year: new Date().getFullYear(),
+        semesters: 10,
+        description: "",
+      });
       const created = res?.plan || res;
       setList((prev) => [created, ...prev]);
     } catch (e2) {
-      toast.error(e2.message || "Error al crear plan");
+      toast.error(e2?.message || "Error al crear plan");
     }
   };
 
   const createCourse = async (e) => {
     e.preventDefault();
     if (!selectedPlan) return toast.error("Seleccione un plan");
+
     try {
       await Plans.addCourse(selectedPlan.id, cform);
       toast.success("Curso añadido");
-      setCform({ code: "", name: "", credits: 3, weekly_hours: 3, semester: 1, type: "MANDATORY" });
-      loadCourses(selectedPlan.id);
+
+      setCform({
+        code: "",
+        name: "",
+        credits: 3,
+        weekly_hours: 3,
+        semester: selectedSemester,
+        type: "MANDATORY",
+      });
+
+      // recarga índice y cursos una sola vez
+      await loadSemesterIndex(selectedPlan.id);
+      await fetchCourses();
     } catch (e2) {
-      toast.error(e2.message || "Error al crear curso");
+      toast.error(e2?.message || "Error al crear curso");
     }
   };
 
   const savePrereqs = async () => {
     if (!selectedPlan?.id || !prereqFor?.id) return;
+
     try {
       await Plans.setPrereqs(selectedPlan.id, prereqFor.id, prereqs);
       toast.success("Prerrequisitos guardados");
       setPrereqFor(null);
       setPrereqs([]);
-      loadCourses(selectedPlan.id);
+
+      await loadSemesterIndex(selectedPlan.id);
+      await fetchCourses();
     } catch (e2) {
-      toast.error(e2.message || "Error al guardar prerrequisitos");
+      toast.error(e2?.message || "Error al guardar prerrequisitos");
     }
   };
+
+  const semestersButtons = useMemo(() => {
+    if (semesterIndex.length > 0) return semesterIndex;
+
+    const total = Number(selectedPlan?.semesters || 0) || 0;
+    if (total <= 0) return [];
+    return Array.from({ length: total }, (_, i) => ({ semester: i + 1 }));
+  }, [semesterIndex, selectedPlan?.semesters]);
 
   return (
     <IfPerm any={REQS.plans}>
@@ -439,6 +531,7 @@ function PlansAndCurricula() {
         </Card>
 
         <div className="grid lg:grid-cols-2 gap-6">
+          {/* LISTA DE PLANES */}
           <Card className="border">
             <CardHeader>{sectionHeader({ title: "Planes" })}</CardHeader>
             <CardContent className="space-y-2">
@@ -466,16 +559,55 @@ function PlansAndCurricula() {
             </CardContent>
           </Card>
 
+          {/* CURSOS DEL PLAN */}
           <Card className="border">
             <CardHeader>
               {sectionHeader({
                 title: `Cursos del Plan ${selectedPlan ? `– ${selectedPlan.name}` : ""}`,
-                description: "Alta rápida + prerrequisitos",
+                description: "Paginación por semestre + alta rápida + prerrequisitos",
                 Icon: ClipboardList,
               })}
             </CardHeader>
 
             <CardContent className="space-y-4 overflow-x-hidden">
+              {/* Semestres */}
+              {selectedPlan ? (
+                <div className="flex flex-wrap gap-2">
+                  {semestersButtons.map((s) => (
+                    <Button
+                      key={s.semester}
+                      type="button"
+                      variant={selectedSemester === Number(s.semester) ? "default" : "outline"}
+                      className="rounded-full"
+                      onClick={() => {
+                        const sem = Number(s.semester);
+                        setSelectedSemester(sem);
+                        setCform((prev) => ({ ...prev, semester: sem }));
+                      }}
+                    >
+                      Sem {s.semester}
+                      {typeof s.total === "number" ? ` (${s.total})` : ""}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
+
+              {/* Buscar */}
+              {selectedPlan ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={courseQ}
+                    onChange={(e) => setCourseQ(e.target.value)}
+                    placeholder="Buscar curso por código o nombre…"
+                    className="rounded-xl"
+                  />
+                  <Badge variant="outline" className="rounded-full">
+                    Sem {selectedSemester}
+                  </Badge>
+                </div>
+              ) : null}
+
+              {/* Alta rápida */}
               <form onSubmit={createCourse} className="w-full grid grid-cols-1 gap-3">
                 <div className="min-w-0">
                   <Label className="block text-left">Nombre *</Label>
@@ -484,6 +616,7 @@ function PlansAndCurricula() {
                     value={cform.name}
                     onChange={(e) => setCform({ ...cform, name: e.target.value })}
                     required
+                    disabled={!selectedPlan}
                   />
                 </div>
 
@@ -494,6 +627,7 @@ function PlansAndCurricula() {
                     value={cform.code}
                     onChange={(e) => setCform({ ...cform, code: e.target.value })}
                     required
+                    disabled={!selectedPlan}
                   />
                 </div>
 
@@ -506,6 +640,7 @@ function PlansAndCurricula() {
                     inputMode="numeric"
                     value={cform.credits}
                     onChange={(e) => setCform({ ...cform, credits: +e.target.value || 0 })}
+                    disabled={!selectedPlan}
                   />
                 </div>
 
@@ -518,11 +653,12 @@ function PlansAndCurricula() {
                     inputMode="numeric"
                     value={cform.weekly_hours}
                     onChange={(e) => setCform({ ...cform, weekly_hours: +e.target.value || 0 })}
+                    disabled={!selectedPlan}
                   />
                 </div>
 
                 <div className="min-w-0">
-                  <Label className="block text-left">Semestre</Label>
+                  <Label className="block text-left">Semestre (actual)</Label>
                   <Input
                     className="w-full max-w-[120px] h-9 text-sm"
                     type="number"
@@ -530,12 +666,17 @@ function PlansAndCurricula() {
                     inputMode="numeric"
                     value={cform.semester}
                     onChange={(e) => setCform({ ...cform, semester: +e.target.value || 1 })}
+                    disabled={!selectedPlan}
                   />
                 </div>
 
                 <div className="min-w-0">
                   <Label className="block text-left">Tipo</Label>
-                  <Select value={cform.type} onValueChange={(v) => setCform({ ...cform, type: v })}>
+                  <Select
+                    value={cform.type}
+                    onValueChange={(v) => setCform({ ...cform, type: v })}
+                    disabled={!selectedPlan}
+                  >
                     <SelectTrigger className="w-full max-w-[240px] h-9 text-sm">
                       <SelectValue />
                     </SelectTrigger>
@@ -554,7 +695,7 @@ function PlansAndCurricula() {
                 </div>
               </form>
 
-              {/* ===================== DESKTOP: TABLA ===================== */}
+              {/* TABLA */}
               <div className="hidden sm:block border rounded-xl overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-200">
@@ -576,9 +717,7 @@ function PlansAndCurricula() {
                         <td className="p-2 text-center text-black">{c.credits}</td>
                         <td className="p-2 text-center text-black">{c.semester}</td>
                         <td className="p-2 text-center text-black">
-                          <Badge variant="outline">
-                            {c.type === "ELECTIVE" ? "Electivo" : "Obligatorio"}
-                          </Badge>
+                          <Badge variant="outline">{c.type === "ELECTIVE" ? "Electivo" : "Obligatorio"}</Badge>
                         </td>
                         <td className="p-2 text-right">
                           <Button
@@ -598,7 +737,15 @@ function PlansAndCurricula() {
                     {selectedPlan && (Array.isArray(courses) ? courses : []).length === 0 && (
                       <tr>
                         <td colSpan={6} className="p-3 text-center text-gray-500">
-                          Sin cursos
+                          Sin cursos en Sem {selectedSemester}
+                        </td>
+                      </tr>
+                    )}
+
+                    {!selectedPlan && (
+                      <tr>
+                        <td colSpan={6} className="p-3 text-center text-gray-500">
+                          Selecciona un plan primero
                         </td>
                       </tr>
                     )}
@@ -606,7 +753,7 @@ function PlansAndCurricula() {
                 </table>
               </div>
 
-              {/* ===================== MOBILE: LISTADO ===================== */}
+              {/* MOBILE */}
               <div className="block sm:hidden space-y-2">
                 {(Array.isArray(courses) ? courses : []).map((c) => (
                   <div key={c.id} className="border rounded-lg p-3 bg-white flex justify-between items-start gap-3">
@@ -636,7 +783,15 @@ function PlansAndCurricula() {
                 ))}
 
                 {selectedPlan && (Array.isArray(courses) ? courses : []).length === 0 && (
-                  <div className="text-center text-sm text-gray-500 py-4">Sin cursos</div>
+                  <div className="text-center text-sm text-gray-500 py-4">
+                    Sin cursos en Sem {selectedSemester}
+                  </div>
+                )}
+
+                {!selectedPlan && (
+                  <div className="text-center text-sm text-gray-500 py-4">
+                    Selecciona un plan primero
+                  </div>
                 )}
               </div>
 
@@ -763,6 +918,7 @@ function LoadAndSchedules() {
     load();
   }, [load]);
 
+  // ✅ Ajuste: con backend por semestres, pedimos semestre 1 por defecto
   useEffect(() => {
     const run = async () => {
       if (!selectedPlanId) {
@@ -772,11 +928,12 @@ function LoadAndSchedules() {
         return;
       }
       try {
-        const res = await Plans.listCourses(selectedPlanId);
+        const res = await Plans.listCourses(selectedPlanId, { semester: 1 });
         const coursesArr = Array.isArray(res?.courses) ? res.courses : Array.isArray(res) ? res : [];
         setPlanCourses(coursesArr);
       } catch (e) {
         toast.error(e.message || "Error al cargar cursos del plan");
+        setPlanCourses([]);
       }
     };
     run();
@@ -859,7 +1016,10 @@ function LoadAndSchedules() {
           <div className="grid md:grid-cols-3 gap-3">
             <div>
               <Label>Plan/Malla *</Label>
-              <Select value={selectedPlanId ? String(selectedPlanId) : "ALL"} onValueChange={(v) => setSelectedPlanId(v === "ALL" ? "" : v)}>
+              <Select
+                value={selectedPlanId ? String(selectedPlanId) : "ALL"}
+                onValueChange={(v) => setSelectedPlanId(v === "ALL" ? "" : v)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar plan" />
                 </SelectTrigger>
@@ -949,7 +1109,12 @@ function LoadAndSchedules() {
 
             <div>
               <Label>Capacidad (sección)</Label>
-              <Input type="number" min="1" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: +e.target.value || 1 })} />
+              <Input
+                type="number"
+                min="1"
+                value={form.capacity}
+                onChange={(e) => setForm({ ...form, capacity: +e.target.value || 1 })}
+              />
             </div>
           </div>
 
@@ -963,9 +1128,7 @@ function LoadAndSchedules() {
                   </SelectTrigger>
                   <SelectContent>
                     {["MON", "TUE", "WED", "THU", "FRI", "SAT"].map((d) => (
-                      <SelectItem key={d} value={d}>
-                        {d}
-                      </SelectItem>
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1022,9 +1185,7 @@ function LoadAndSchedules() {
             <div className="mt-2 p-3 border rounded-2xl bg-destructive/5">
               <div className="font-medium text-destructive mb-1">Conflictos:</div>
               {conflicts.map((c, i) => (
-                <div key={i} className="text-sm text-destructive">
-                  • {c.message}
-                </div>
+                <div key={i} className="text-sm text-destructive">• {c.message}</div>
               ))}
             </div>
           ) : null}

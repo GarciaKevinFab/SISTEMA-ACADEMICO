@@ -4,8 +4,13 @@ from io import BytesIO
 import random
 import csv
 import base64
+import os
+
+from django.conf import settings
+from openpyxl import load_workbook
 
 from django.db import transaction
+from django.db.models import Q, Count  # ✅ IMPORTANTE (para semester index + búsqueda)
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import FieldError
@@ -18,7 +23,13 @@ from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-# ✅ NUEVO: ACL real (Role + UserRole)
+from students.models import Student as StudentProfile
+from academic.models import AcademicGradeRecord
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from pypdf import PdfReader, PdfWriter
+
+# ✅ ACL real (Role + UserRole)
 from acl.models import Role, UserRole
 
 from .models import (
@@ -28,7 +39,6 @@ from .models import (
     AttendanceSession, AttendanceRow,
     Syllabus, EvaluationConfig,
     AcademicProcess, ProcessFile,
-    # ✅ IMPORTANTE: debe existir en models.py
     SectionGrades,
 )
 
@@ -76,12 +86,8 @@ def _get_full_name(u):
     return (getattr(u, "username", "") or getattr(u, "email", "") or f"User {getattr(u,'id','')}").strip()
 
 
-# ───────────────────────── ACL-aware role helpers (✅ IMPLEMENTADO) ─────────────────────────
+# ───────────────────────── ACL-aware role helpers ─────────────────────────
 def list_users_by_role_names(role_names):
-    """
-    Retorna queryset de usuarios (activos) que tengan cualquiera de los roles por name,
-    usando el ACL real: Role + UserRole.
-    """
     User = get_user_model()
 
     role_ids = list(Role.objects.filter(name__in=role_names).values_list("id", flat=True))
@@ -108,9 +114,6 @@ def list_student_users_qs():
 
 
 def user_has_any_role(user, names):
-    """
-    True si el usuario tiene cualquiera de esos roles (por name) o es superuser.
-    """
     if not user:
         return False
     if getattr(user, "is_superuser", False):
@@ -122,22 +125,17 @@ def user_has_any_role(user, names):
 
 
 def resolve_teacher(teacher_id):
-    """
-    Acepta:
-    - teacher_id como User.id (lo que manda el frontend)
-    - o como Teacher.id (por compatibilidad)
-    """
     if not teacher_id:
         return None
 
     tid = int(teacher_id)
 
-    # ✅ 1) PRIORIDAD: buscar por user_id (frontend manda User.id)
+    # ✅ 1) por user_id (frontend manda User.id)
     t = Teacher.objects.select_related("user").filter(user_id=tid).first()
     if t:
         return t
 
-    # ✅ 2) Luego buscar por Teacher.id (compat)
+    # ✅ 2) por Teacher.id (compat)
     t = Teacher.objects.select_related("user").filter(id=tid).first()
     if t:
         return t
@@ -178,9 +176,6 @@ def resolve_classroom(room_id, code=None, capacity=None):
 
 
 def count_teachers():
-    """
-    Cuenta docentes por ACL (roles) y si no hay ninguno, cae al modelo Teacher.
-    """
     qs = list_teacher_users_qs()
     if qs.exists():
         return qs.count()
@@ -203,10 +198,6 @@ def _overlaps(a_start, a_end, b_start, b_end):
 
 
 def _detect_schedule_conflicts(sections):
-    """
-    sections: list[Section] con schedule_slots prefetched.
-    retorna lista de conflicts con message (frontend la muestra).
-    """
     events = []
     for sec in sections:
         for sl in sec.schedule_slots.all():
@@ -238,9 +229,90 @@ def _detect_schedule_conflicts(sections):
 def _dummy_pdf_response(filename="documento.pdf"):
     buf = BytesIO(b"%PDF-1.4\n% Dummy PDF\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n")
     return FileResponse(buf, as_attachment=True, filename=filename)
+# =========================
+# PDF Template (Kardex)
+# =========================
+
+def _norm_key(s: str) -> str:
+    return (s or "").strip().lower()
+
+def _pick_kardex_template(career_name: str) -> str:
+    """
+    Mapea carrera -> template PDF en templates/kardex/
+    """
+    c = _norm_key(career_name)
+
+    if "inicial" in c:
+        return "inicial.pdf"
+    if "primaria" in c:
+        return "primaria.pdf"
+    if "comunic" in c:
+        return "comunicacion.pdf"
+    if "fisic" in c:
+        return "educacion_fisica.pdf"
+
+    return "inicial.pdf"
 
 
-# ─────────────────────── Available courses (mejorado para tu UI) ───────────────────────
+# ⚠️ AJUSTA 1 VEZ: coordenadas en puntos, origen abajo-izq (A4)
+KARDEX_POS = {
+    # donde cae el nombre en "A DON (ÑA) ____"
+    "name": (165, 695),
+
+    # donde cae "COD. DE MATRICULA" (pon DNI/código)
+    "code": (420, 678),
+
+    # Columna NOTA
+    "nota_x": 300,
+    "row_y_start": 604,
+    "row_step": 18.,
+
+    # cuántas filas caben por página (según el formato)
+    "rows_per_page": 30,
+}
+
+def _draw_text(c, x, y, text, size=10, bold=False):
+    c.setFont("Helvetica-Bold" if bold else "Helvetica", size)
+    c.drawString(x, y, "" if text is None else str(text))
+
+def _make_overlay_pdf(num_pages: int, draw_fn):
+    """
+    Crea overlay PDF con reportlab (transparente), 1 página por página del template.
+    """
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+
+    for page_i in range(num_pages):
+        draw_fn(c, page_i)
+        c.showPage()
+
+    c.save()
+    buf.seek(0)
+    return PdfReader(buf)
+
+def _merge_overlay(template_pdf_path: str, overlay_reader: PdfReader) -> bytes:
+    """
+    Merge overlay encima del template. Devuelve bytes.
+    """
+    tpl = PdfReader(template_pdf_path)
+    out = PdfWriter()
+
+    n = min(len(tpl.pages), len(overlay_reader.pages))
+    for i in range(n):
+        base = tpl.pages[i]
+        base.merge_page(overlay_reader.pages[i])
+        out.add_page(base)
+
+    for i in range(n, len(tpl.pages)):
+        out.add_page(tpl.pages[i])
+
+    bio = BytesIO()
+    out.write(bio)
+    bio.seek(0)
+    return bio.getvalue()
+
+
+# ─────────────────────── Available courses ───────────────────────
 class AvailableCoursesView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
@@ -266,11 +338,9 @@ class AvailableCoursesView(APIView):
                 return ok(courses=[])
 
         if q:
-            from django.db.models import Q
             qs = qs.filter(Q(course__code__icontains=q) | Q(course__name__icontains=q))
 
         qs = qs.order_by("course__code")
-
         plan_course_ids = list(qs.values_list("id", flat=True))
 
         sections = (
@@ -313,7 +383,7 @@ class AvailableCoursesView(APIView):
         return ok(courses=courses)
 
 
-# ─────────────────────── Enrollment endpoints que tu frontend exige ───────────────────────
+# ─────────────────────── Enrollment endpoints ───────────────────────
 class EnrollmentValidateView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
@@ -417,7 +487,6 @@ class EnrollmentSuggestionsView(APIView):
         for pc_id in conflict_course_ids:
             current = chosen.get(pc_id)
             candidates = [s for s in by_course.get(pc_id, []) if (not current or s.id != current.id)]
-
             others = [s for s in chosen_sections if s.plan_course_id != pc_id]
 
             for cand in candidates:
@@ -473,18 +542,12 @@ class EnrollmentCertificateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, enrollment_id: int):
-        return ok(
-            success=True,
-            downloadUrl=f"/api/enrollments/{enrollment_id}/certificate/pdf",
-            download_url=f"/api/enrollments/{enrollment_id}/certificate/pdf",
-        )
+        return ok(success=True, downloadUrl=f"/api/enrollments/{enrollment_id}/certificate/pdf",
+                  download_url=f"/api/enrollments/{enrollment_id}/certificate/pdf")
 
     def get(self, request, enrollment_id: int):
-        return ok(
-            success=True,
-            downloadUrl=f"/api/enrollments/{enrollment_id}/certificate/pdf",
-            download_url=f"/api/enrollments/{enrollment_id}/certificate/pdf",
-        )
+        return ok(success=True, downloadUrl=f"/api/enrollments/{enrollment_id}/certificate/pdf",
+                  download_url=f"/api/enrollments/{enrollment_id}/certificate/pdf")
 
 
 class EnrollmentCertificatePDFView(APIView):
@@ -502,11 +565,9 @@ class ScheduleExportView(APIView):
     def post(self, request):
         body = request.data or {}
         period = (body.get("academic_period") or "2025-I").strip()
-        return ok(
-            success=True,
-            downloadUrl=f"/api/schedules/export/pdf?academic_period={period}",
-            download_url=f"/api/schedules/export/pdf?academic_period={period}",
-        )
+        return ok(success=True,
+                  downloadUrl=f"/api/schedules/export/pdf?academic_period={period}",
+                  download_url=f"/api/schedules/export/pdf?academic_period={period}")
 
 
 class ScheduleExportPDFView(APIView):
@@ -593,14 +654,59 @@ class PlansViewSet(viewsets.ModelViewSet):
         plan.delete()
         return ok(success=True)
 
+    # ✅✅✅ IMPLEMENTADO: índice por semestres + cursos por semestre + búsqueda
     @action(detail=True, methods=["get", "post"], url_path="courses")
     def courses(self, request, pk=None):
         plan = self.get_object()
 
+        # ---------------- GET ----------------
         if request.method.lower() == "get":
-            qs = PlanCourse.objects.filter(plan=plan).select_related("course")
-            return ok(courses=PlanCourseOutSerializer(qs, many=True).data)
+            semester = request.query_params.get("semester")
+            q = (request.query_params.get("q") or "").strip()
 
+            base = PlanCourse.objects.filter(plan=plan).select_related("course")
+
+            if q:
+                base = base.filter(Q(course__code__icontains=q) | Q(course__name__icontains=q))
+
+            # ✅ Si NO mandan semester => devolvemos índice semestres
+            if not semester:
+                sems = (
+                    base.values("semester")
+                    .order_by("semester")
+                    .annotate(total=Count("id"))
+                )
+
+                semesters = []
+                for row in sems:
+                    try:
+                        sem = int(row.get("semester") or 0)
+                    except Exception:
+                        sem = 0
+                    if sem <= 0:
+                        continue
+                    semesters.append({
+                        "semester": sem,
+                        "total": int(row.get("total") or 0),
+                    })
+
+                return ok(semesters=semesters)
+
+            # ✅ Si mandan semester => cursos del semestre
+            try:
+                sem = int(semester)
+            except Exception:
+                return Response({"detail": "semester inválido"}, status=400)
+
+            qs = base.filter(semester=sem).order_by("course__code", "id")
+
+            return ok(
+                semester=sem,
+                total=qs.count(),
+                courses=PlanCourseOutSerializer(qs, many=True).data
+            )
+
+        # ---------------- POST ----------------
         payload_ser = PlanCourseCreateSerializer(data=request.data)
         payload_ser.is_valid(raise_exception=True)
         data = payload_ser.validated_data
@@ -864,7 +970,6 @@ class AttendanceSessionsView(APIView):
         qs = AttendanceSession.objects.filter(section_id=section_id).prefetch_related("rows").order_by("-id")
         return ok(sessions=AttendanceSessionSerializer(qs, many=True).data)
 
-    # ✅ CORREGIDO: acepta date
     def post(self, request, section_id):
         body = request.data or {}
         date_str = body.get("date")
@@ -897,7 +1002,6 @@ class AttendanceSessionSetView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
-    # ✅ CORREGIDO: normaliza int + upper
     def put(self, request, section_id, session_id):
         sess = get_object_or_404(AttendanceSession, id=session_id, section_id=section_id)
         rows = (request.data or {}).get("rows", [])
@@ -962,18 +1066,205 @@ class EvaluationConfigView(APIView):
         return ok(config=obj.config)
 
 
-# ─────────────────────────── Kardex (dummy) ───────────────────────────
+# ─────────────────────────── Kardex ───────────────────────────
 class KardexView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
+    def _final_grade(self, row: dict):
+        if not isinstance(row, dict):
+            return None
+
+        for k in ("FINAL", "final", "PROMEDIO", "promedio", "AVERAGE", "average"):
+            v = row.get(k)
+            try:
+                if v is not None and str(v).strip() != "":
+                    return float(v)
+            except Exception:
+                pass
+
+        vals = []
+        for k in ("PARCIAL_1", "PARCIAL_2", "PARCIAL_3", "P1", "P2", "P3"):
+            v = row.get(k)
+            try:
+                if v is not None and str(v).strip() != "":
+                    vals.append(float(v))
+            except Exception:
+                pass
+
+        if vals:
+            return sum(vals) / len(vals)
+
+        return None
+
+    def _status_from_grade(self, g):
+        if g is None:
+            return "SIN NOTA"
+        return "APROBADO" if g >= 11 else "DESAPROBADO"
+
     def get(self, request, student_id):
+        st = None
+        doc = str(student_id).strip()
+
+        if doc.isdigit():
+            st = StudentProfile.objects.filter(num_documento=doc).first()
+            if not st:
+                st = StudentProfile.objects.filter(id=int(doc)).first()
+        else:
+            st = StudentProfile.objects.filter(num_documento=doc).first()
+
+        if not st:
+            return ok(student_id=student_id, student_name="No encontrado", career_name="", credits_earned=0, gpa=None, items=[])
+
+        student_name = f"{st.apellido_paterno} {st.apellido_materno} {st.nombres}".strip()
+        career_name = st.programa_carrera or ""
+
+        best_by_key = {}
+
+        recs = (
+            AcademicGradeRecord.objects
+            .select_related("course")
+            .filter(student=st)
+            .order_by("-id")
+        )
+
+        for rec in recs:
+            crs = rec.course
+            period = (rec.term or "").strip()
+            course_code = (crs.code or "").strip() or f"CRS-{crs.id}"
+
+            semester = 0
+            weekly_hours = 0
+            if st.plan_id:
+                pc = PlanCourse.objects.filter(plan_id=st.plan_id, course=crs).first()
+                if pc:
+                    semester = int(pc.semester or 0)
+                    weekly_hours = int(pc.weekly_hours or 0)
+
+            grade = float(rec.final_grade) if rec.final_grade is not None else None
+            status_txt = self._status_from_grade(grade)
+            credits = int(getattr(crs, "credits", 0) or 0)
+
+            item = {
+                "period": period,
+                "semester": semester,
+                "weekly_hours": weekly_hours,
+                "course_code": course_code,
+                "course_name": crs.name,
+                "credits": credits,
+                "grade": grade,
+                "status": status_txt,
+            }
+
+            key = (period, course_code)
+
+            def score(x):
+                g = x.get("grade")
+                return -1 if g is None else float(g)
+
+            prev = best_by_key.get(key)
+            if (prev is None) or (score(item) > score(prev)):
+                best_by_key[key] = item
+
+        items = list(best_by_key.values())
+        items.sort(key=lambda x: (str(x.get("period") or ""), int(x.get("semester") or 0), str(x.get("course_code") or "")))
+
+        credits_earned = 0
+        sum_w = 0.0
+        sum_c = 0
+
+        for it in items:
+            cr = int(it.get("credits") or 0)
+            g = it.get("grade")
+            if it.get("status") == "APROBADO":
+                credits_earned += cr
+            if g is not None and cr > 0:
+                sum_w += float(g) * cr
+                sum_c += cr
+
+        gpa = round(sum_w / sum_c, 2) if sum_c > 0 else None
+
         return ok(
-            student_id=student_id,
-            student_name="Estudiante Demo",
-            career_name="Ingeniería",
-            credits_earned=96,
-            gpa=14.2,
+            student_id=st.num_documento,
+            student_name=student_name,
+            career_name=career_name,
+            credits_earned=credits_earned,
+            gpa=gpa,
+            items=items,
+        )
+
+
+class KardexExportXlsxView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, student_id):
+        period_q = (request.query_params.get("period") or "").strip()
+
+        kv = KardexView()
+        kv.request = request
+        resp = kv.get(request, student_id)
+        data = getattr(resp, "data", None) or {}
+
+        items = data.get("items") or []
+        if period_q:
+            items = [x for x in items if str(x.get("period") or "").strip() == period_q]
+
+        template_path = os.path.join(settings.BASE_DIR, "academic", "templates", "kardex_template.xlsx")
+        wb = load_workbook(template_path)
+        ws = wb[wb.sheetnames[0]]
+
+        start_row = 14
+
+        for r in range(start_row, start_row + 200):
+            for c in range(1, 10):
+                ws.cell(r, c).value = None
+
+        today = timezone.now().date().isoformat()
+
+        def s_int(v):
+            try:
+                return int(v)
+            except Exception:
+                return 0
+
+        def s_float(v):
+            try:
+                return float(v)
+            except Exception:
+                return None
+
+        items_sorted = sorted(items, key=lambda x: (s_int(x.get("semester") or 0), str(x.get("course_code") or "")))
+
+        for idx, it in enumerate(items_sorted, start=1):
+            r = start_row + (idx - 1)
+
+            semester = s_int(it.get("semester") or 0) or ""
+            hours = s_int(it.get("weekly_hours") or 0) or ""
+            credits = s_int(it.get("credits") or 0) or ""
+            grade = s_float(it.get("grade"))
+            status_txt = it.get("status") or ""
+
+            ws.cell(r, 1).value = semester
+            ws.cell(r, 2).value = idx
+            ws.cell(r, 3).value = it.get("course_name")
+            ws.cell(r, 4).value = hours
+            ws.cell(r, 5).value = credits
+            ws.cell(r, 6).value = "" if grade is None else grade
+            ws.cell(r, 7).value = today
+            ws.cell(r, 8).value = status_txt
+            ws.cell(r, 9).value = "" if grade is None else grade
+
+        filename = f"kardex-{student_id}{('-' + period_q) if period_q else ''}.xlsx"
+        bio = BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+
+        return FileResponse(
+            bio,
+            as_attachment=True,
+            filename=filename,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
 
@@ -982,10 +1273,66 @@ class KardexBoletaPDFView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, student_id):
-        return _dummy_pdf_response(f"boleta-{student_id}.pdf")
+        period_q = (request.query_params.get("period") or "").strip()
+
+        # 1) Datos del kardex
+        kv = KardexView()
+        kv.request = request
+        resp = kv.get(request, student_id)
+        data = getattr(resp, "data", None) or {}
+
+        items = data.get("items") or []
+        if period_q:
+            items = [x for x in items if str(x.get("period") or "").strip() == period_q]
+
+        student_name = data.get("student_name", "") or ""
+        student_code = data.get("student_id", "") or ""
+        career_name = data.get("career_name", "") or ""
+
+        # 2) Template por carrera: templates/kardex/*.pdf
+        template_name = _pick_kardex_template(career_name)
+        template_path = os.path.join(settings.BASE_DIR, "templates", "kardex", template_name)
+
+        if not os.path.exists(template_path):
+            template_path = os.path.join(settings.BASE_DIR, "templates", "kardex", "inicial.pdf")
+
+        tpl_pages = len(PdfReader(template_path).pages)
+
+        # 3) Partir por páginas
+        per_page = int(KARDEX_POS["rows_per_page"])
+        chunks = [items[i:i+per_page] for i in range(0, len(items), per_page)]
+        chunks = chunks[:tpl_pages]  # no exceder páginas del template
+
+        # 4) Overlay
+        def draw_fn(c, page_i):
+            # header en 1ra página
+            if page_i == 0:
+                _draw_text(c, *KARDEX_POS["name"], student_name, size=10, bold=True)
+                _draw_text(c, *KARDEX_POS["code"], student_code, size=9, bold=False)
+
+            rows = chunks[page_i] if page_i < len(chunks) else []
+            y = KARDEX_POS["row_y_start"]
+
+            for r in rows:
+                g = r.get("grade")
+                gtxt = "" if g is None else str(g)
+                _draw_text(c, KARDEX_POS["nota_x"], y, gtxt, size=10, bold=True)
+                y -= KARDEX_POS["row_step"]
+
+        overlay_reader = _make_overlay_pdf(tpl_pages, draw_fn)
+        pdf_bytes = _merge_overlay(template_path, overlay_reader)
+
+        filename = f"boleta-{student_id}{('-' + period_q) if period_q else ''}.pdf"
+        return HttpResponse(
+            pdf_bytes,
+            content_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     def post(self, request, student_id):
-        return _dummy_pdf_response(f"boleta-{student_id}.pdf")
+        # compat: POST igual que GET
+        return self.get(request, student_id)
+
 
 
 class KardexConstanciaPDFView(APIView):
@@ -993,10 +1340,40 @@ class KardexConstanciaPDFView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, student_id):
-        return _dummy_pdf_response(f"constancia-{student_id}.pdf")
+        kv = KardexView()
+        kv.request = request
+        resp = kv.get(request, student_id)
+        data = getattr(resp, "data", None) or {}
+
+        student_name = data.get("student_name", "") or ""
+        student_code = data.get("student_id", "") or ""
+        career_name = data.get("career_name", "") or ""
+
+        template_name = _pick_kardex_template(career_name)
+        template_path = os.path.join(settings.BASE_DIR, "templates", "kardex", template_name)
+
+        if not os.path.exists(template_path):
+            template_path = os.path.join(settings.BASE_DIR, "templates", "kardex", "inicial.pdf")
+
+        tpl_pages = len(PdfReader(template_path).pages)
+
+        def draw_fn(c, page_i):
+            if page_i == 0:
+                _draw_text(c, *KARDEX_POS["name"], student_name, size=10, bold=True)
+                _draw_text(c, *KARDEX_POS["code"], student_code, size=9, bold=False)
+
+        overlay_reader = _make_overlay_pdf(tpl_pages, draw_fn)
+        pdf_bytes = _merge_overlay(template_path, overlay_reader)
+
+        filename = f"constancia-{student_id}.pdf"
+        return HttpResponse(
+            pdf_bytes,
+            content_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     def post(self, request, student_id):
-        return _dummy_pdf_response(f"constancia-{student_id}.pdf")
+        return self.get(request, student_id)
 
 
 # ───────────────────── Procesos académicos ─────────────────────
@@ -1102,13 +1479,12 @@ class ProcessFileDeleteView(APIView):
         return ok(success=True)
 
 
-# ───────────────────── Reportes académicos (✅ YA NO DUMMY) ─────────────────────
+# ───────────────────── Reportes académicos ─────────────────────
 class AcademicReportsSummaryView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # ✅ IMPLEMENTADO: cuenta usuarios activos con rol STUDENT
         students_count = list_student_users_qs().count()
 
         return ok(summary={
@@ -1143,10 +1519,7 @@ class AcademicReportOccupancyXlsxView(APIView):
         return _xlsx_response("occupancy.xlsx")
 
 
-# ─────────────────────────────────────────────────────────────
-# ✅ LO QUE TE FALTABA: DOCENTE / ESTUDIANTES / NOTAS / ACTA / IMPORT
-# ─────────────────────────────────────────────────────────────
-
+# ───────────────────── Docente / Estudiantes / Notas / Acta / Import ─────────────────────
 class TeacherSectionsView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
@@ -1185,7 +1558,6 @@ class SectionStudentsView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
-    # NOTA: sin matrícula real, devolvemos usuarios con rol estudiante
     def get(self, request, section_id: int):
         qs = list_student_users_qs().order_by("id")[:200]
 
@@ -1287,7 +1659,6 @@ class GradesReopenView(APIView):
         return ok(success=True, submitted=False)
 
 
-# ─────────────────────── Acta (dummy para polling) ───────────────────────
 class SectionActaView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
@@ -1325,7 +1696,6 @@ class SectionActaQRPngView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, section_id: int):
-        # PNG 1x1 (dummy)
         png_1x1 = base64.b64decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6X1fQAAAABJRU5ErkJggg=="
         )

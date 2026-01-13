@@ -68,11 +68,18 @@ export const Imports = {
     },
 
     start: async (type, file, mapping) => {
-        const fd = new FormData();
-        fd.append("file", file);
-        if (mapping) fd.append("mapping", JSON.stringify(mapping));
-        return getData(api.post(`/catalogs/imports/${type}`, fd));
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            if (mapping) fd.append("mapping", JSON.stringify(mapping));
+            const res = await api.post(`/catalogs/imports/${type}`, fd);
+            return res.data;
+        } catch (e) {
+            console.log("IMPORT ERROR:", e?.response?.data || e);
+            throw e;
+        }
     },
+
 
     status: (jobId) => getData(api.get(`/catalogs/imports/status/${jobId}`)),
 };

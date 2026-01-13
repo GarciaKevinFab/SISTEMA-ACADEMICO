@@ -18,10 +18,6 @@ User = get_user_model()
 
 # ---------- permisos ----------
 class IsAdminOrReadOnly(permissions.BasePermission):
-    """
-    GET/HEAD/OPTIONS: cualquier usuario autenticado
-    Mutaciones: solo staff
-    """
     def has_permission(self, request, view):
         if request.method in ("GET", "HEAD", "OPTIONS"):
             return request.user and request.user.is_authenticated
@@ -46,7 +42,6 @@ def _split_full_name(full_name: str, fallback: str = ""):
     if len(parts) == 1:
         return parts[0], ""
     if len(parts) >= 3:
-        # últimos 2 = apellidos (común)
         nombres = " ".join(parts[:-2])
         apellidos = " ".join(parts[-2:])
         return nombres, apellidos
@@ -54,35 +49,70 @@ def _split_full_name(full_name: str, fallback: str = ""):
 
 
 def _ensure_student_for_user(user: User):
-    """
-    Si el usuario tiene rol STUDENT, asegurar Student enlazado.
-    Crea Student con DNI/COD temporales para cumplir unique.
-    """
-    # ya tiene
     if hasattr(user, "student_profile"):
         return None
 
-    full_name = getattr(user, "full_name", "") or ""
     username = getattr(user, "username", "") or ""
     email = getattr(user, "email", "") or ""
+    full_name = getattr(user, "full_name", "") or username
 
     nombres, apellidos = _split_full_name(full_name, fallback=username)
+    temp_doc = username[:12] if username else "TMP-" + get_random_string(9).upper()
 
-    # DNI/Código temporales (luego se corrigen en el módulo Estudiante)
-    temp_dni = "99" + get_random_string(6, allowed_chars="0123456789")   # 8 dígitos
-    temp_cod = "TMP-" + get_random_string(8).upper()
+    ap_parts = apellidos.split() if apellidos else []
+    ap_pat = ap_parts[0] if len(ap_parts) >= 1 else ""
+    ap_mat = " ".join(ap_parts[1:]) if len(ap_parts) >= 2 else ""
 
     st = Student.objects.create(
         user=user,
-        codigo_estudiante=temp_cod,
-        dni=temp_dni,
+        num_documento=temp_doc,
         nombres=nombres or username,
-        apellidos=apellidos,
+        apellido_paterno=ap_pat,
+        apellido_materno=ap_mat,
         email=email,
-        estado="activo",
     )
     return st
+# ===================== PAGINACIÓN SIMPLE =====================
+def _int_param(request, key, default):
+    raw = request.query_params.get(key, None)
+    if raw is None or raw == "":
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
 
+
+def _paginate_queryset(request, qs, default_page_size=10, max_page_size=100):
+    page = _int_param(request, "page", 1)
+    page_size = _int_param(request, "page_size", default_page_size)
+
+    # saneo
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = default_page_size
+    if page_size > max_page_size:
+        page_size = max_page_size
+
+    total = qs.count()
+    start = (page - 1) * page_size
+    end = start + page_size
+
+    items = qs[start:end]
+
+    # next/previous como números (simple para front)
+    next_page = page + 1 if end < total else None
+    prev_page = page - 1 if page > 1 else None
+
+    return {
+        "count": total,
+        "page": page,
+        "page_size": page_size,
+        "next": next_page,
+        "previous": prev_page,
+        "items": items,
+    }
 
 # ---------- AUTH ----------
 @api_view(["GET"])
@@ -90,20 +120,27 @@ def _ensure_student_for_user(user: User):
 def auth_me(request):
     u = request.user
 
-    roles = []
-    if hasattr(u, "roles"):
+    # roles seguros
+    try:
         roles = list(u.roles.values_list("name", flat=True))
+    except Exception:
+        roles = []
 
+    # permissions seguros (NO rompe auth/me)
     perm_codes = []
-    if hasattr(u, "roles"):
+    try:
         perm_codes = list(
             u.roles.values_list("permissions__code", flat=True).distinct()
         )
+    except Exception:
+        perm_codes = []
 
-    # ✅ NUEVO: student_id si está enlazado
+    # student_profile seguro
     student_id = None
-    if hasattr(u, "student_profile"):
+    try:
         student_id = u.student_profile.id
+    except Exception:
+        student_id = None
 
     return Response({
         "id": u.id,
@@ -118,18 +155,18 @@ def auth_me(request):
         "student_id": student_id,
     })
 
-
 # ✅ ---------- USERS (COLLECTION) ----------
 @api_view(["GET", "POST"])
 @permission_classes([permissions.IsAuthenticated])
 def users_collection(request):
     """
-    GET  /api/users?q=...
+    GET  /api/users?q=...&page=1&page_size=10
     POST /api/users      (solo staff)
     """
-    # ----- GET -----
+    # ----- GET (PAGINADO) -----
     if request.method == "GET":
         q = (request.query_params.get("q") or "").strip()
+
         qs = User.objects.all().order_by("id")
         if q:
             qs = qs.filter(
@@ -137,8 +174,19 @@ def users_collection(request):
                 Q(email__icontains=q) |
                 Q(full_name__icontains=q)
             )
-        ser = UserSerializer(qs, many=True)
-        return Response({"users": ser.data})
+
+        pag = _paginate_queryset(request, qs, default_page_size=10, max_page_size=100)
+        ser = UserSerializer(pag["items"], many=True)
+
+        # ✅ respuesta tipo DRF para que tu front lo soporte con results/count
+        return Response({
+            "count": pag["count"],
+            "page": pag["page"],
+            "page_size": pag["page_size"],
+            "next": pag["next"],
+            "previous": pag["previous"],
+            "results": ser.data,
+        })
 
     # ----- POST -----
     not_ok = _require_staff(request)
@@ -158,13 +206,41 @@ def users_collection(request):
             role_objs.append(r)
         user.roles.set(role_objs)
 
-        # ✅ si lo creas como STUDENT desde aquí, también crea su Student
         role_names = [r.name.upper() for r in role_objs]
         if "STUDENT" in role_names:
             _ensure_student_for_user(user)
 
     return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def users_search(request):
+    """
+    GET /api/users/search?q=...&page=1&page_size=10
+    (alias paginado)
+    """
+    q = (request.query_params.get("q") or "").strip()
+
+    qs = User.objects.all().order_by("id")
+    if q:
+        qs = qs.filter(
+            Q(username__icontains=q) |
+            Q(email__icontains=q) |
+            Q(full_name__icontains=q)
+        )
+
+    pag = _paginate_queryset(request, qs, default_page_size=10, max_page_size=100)
+    ser = UserSerializer(pag["items"], many=True)
+
+    return Response({
+        "count": pag["count"],
+        "page": pag["page"],
+        "page_size": pag["page_size"],
+        "next": pag["next"],
+        "previous": pag["previous"],
+        "results": ser.data,
+    })
 
 # ✅ ---------- USERS (DETAIL) ----------
 @api_view(["PUT", "PATCH", "DELETE"])

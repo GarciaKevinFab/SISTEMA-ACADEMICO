@@ -191,14 +191,15 @@ const PeriodsSection = () => {
     };
 
     const remove = async (id) => {
-        if (!window.confirm("¿Eliminar periodo?")) return;
         try {
             await Periods.remove(id);
+            toast.success("Periodo eliminado");
             load();
         } catch (e) {
             toast.error(formatApiError(e));
         }
     };
+
 
     const toggleActive = async (r) => {
         try {
@@ -703,6 +704,7 @@ const TeachersSection = () => {
     const remove = async (id) => {
         try {
             await Teachers.remove(id);
+            toast.success("Docente eliminado");
             load();
         } catch (e) {
             toast.error(formatApiError(e));
@@ -785,8 +787,8 @@ const TeachersSection = () => {
                                 <td className="px-6 py-3">
                                     <AlertDialog>
                                         <AlertDialogTrigger asChild>
-                                            <Button size="sm" variant="outline" className="rounded-xl">
-                                                Eliminar
+                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600">
+                                                <XCircle className="h-4 w-4" />
                                             </Button>
                                         </AlertDialogTrigger>
 
@@ -813,6 +815,9 @@ const TeachersSection = () => {
                                             </AlertDialogFooter>
                                         </AlertDialogContent>
                                     </AlertDialog>
+
+
+
                                 </td>
                             </tr>
                         ))}
@@ -1155,9 +1160,16 @@ const ImportersTab = () => {
     const [poll, setPoll] = useState(null);
 
     const required = useMemo(() => {
-        if (type === "students") return ["document", "first_name", "last_name", "email", "phone"];
-        if (type === "courses") return ["code", "name", "credits", "hours"];
-        return ["student_document", "course_code", "term", "final_grade"];
+        if (type === "plans") return ["(auto)"];
+        if (type === "students") return [
+            "num_documento", "nombres", "apellido_paterno", "apellido_materno",
+            "sexo", "fecha_nac", "region", "provincia", "distrito",
+            "codigo_modular", "nombre_institucion", "gestion", "tipo",
+            "programa_carrera", "ciclo", "turno", "seccion", "periodo",
+            "lengua", "discapacidad", "tipo_discapacidad",
+        ];
+        if (type === "grades") return ["(auto)"]; // tu excel real de notas no usa student_document/course_code
+        return [];
     }, [type]);
 
     useEffect(() => () => { if (poll) clearInterval(poll); }, [poll]);
@@ -1216,17 +1228,18 @@ const ImportersTab = () => {
                         Importadores Excel/CSV
                     </>
                 }
-                desc="Carga masiva de alumnos, cursos y notas históricas."
+                desc="Carga masiva de planes de Estudios, alumnos y notas históricas."
             >
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Field label="Tipo de importación">
                         <Select value={type} onValueChange={setType}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
+                                <SelectItem value="plans">Plan de estudios</SelectItem>
                                 <SelectItem value="students">Alumnos</SelectItem>
-                                <SelectItem value="courses">Cursos</SelectItem>
                                 <SelectItem value="grades">Notas históricas</SelectItem>
                             </SelectContent>
+
                         </Select>
                     </Field>
 
@@ -1272,7 +1285,7 @@ const ImportersTab = () => {
                     </div>
 
                     <p className="text-xs text-gray-500 mt-2">
-                        Si no defines mapeo, el backend asumirá encabezados iguales a los campos.
+                        Si no defines mapeo, el backend detecta automáticamente el Excel oficial (con encabezados REGIÓN, CÓDIGO_MODULAR, etc).
                     </p>
                 </div>
 

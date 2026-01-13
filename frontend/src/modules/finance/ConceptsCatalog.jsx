@@ -9,6 +9,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { toast } from "../../utils/safeToast";
 import { Plus, Save, Edit3, Trash2 } from "lucide-react";
 import { fmtCurrency, formatApiError } from "../../utils/format";
+import {
+    AlertDialog,
+    AlertDialogTrigger,
+    AlertDialogContent,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogCancel,
+    AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 const TYPES = ["ADMISION", "MATRICULA", "PENSION", "CERTIFICADO", "OTRO"];
 
@@ -78,7 +89,6 @@ export default function ConceptsCatalog() {
     };
 
     const remove = async (r) => {
-        if (!window.confirm(`¿Eliminar concepto "${r.name}"?`)) return;
         try {
             await Concepts.remove(r.id);
             toast.success("Concepto eliminado");
@@ -87,6 +97,7 @@ export default function ConceptsCatalog() {
             showApiError(e, "No se pudo eliminar");
         }
     };
+
 
     return (
         <div className="space-y-6 pb-24 sm:pb-6">
@@ -117,7 +128,7 @@ export default function ConceptsCatalog() {
                            SOLUCIÓN DEFINITIVA CON ESTILOS EN LÍNEA (INLINE STYLES)
                            Esto ignora Tailwind y fuerza al navegador a hacer scroll.
                            ========================================================== */
-                        <div style={{ 
+                        <div style={{
                             height: "300px",        /* Altura FIJA */
                             overflowY: "auto",      /* Scroll vertical automático */
                             overflowX: "auto",    /* Evita scroll horizontal innecesario */

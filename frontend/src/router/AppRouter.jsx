@@ -97,12 +97,20 @@ export default function AppRouter() {
                         <RequireAuth>
                             <RequirePerm
                                 any={[
-                                    PERMS["student.profile.view"],
+                                    // ✅ SELF (estudiante)
+                                    PERMS["student.self.dashboard.view"],
+                                    PERMS["student.self.profile.view"],
+                                    PERMS["student.self.profile.edit"],
+                                    PERMS["student.self.kardex.view"],
+                                    PERMS["student.self.enrollment.view"],
+
+                                    // ✅ MANAGE (admin académico / system)
+                                    PERMS["student.manage.list"],
+                                    PERMS["student.manage.view"],
+                                    PERMS["student.manage.edit"],
+
+                                    // ✅ super admin (si en tu sistema entra por admin perms)
                                     PERMS["admin.access.manage"],
-                                    PERMS["admin.catalogs.view"],
-                                    PERMS["admin.catalogs.manage"],
-                                    PERMS["admin.audit.view"],
-                                    PERMS["academic.view"],
                                 ].filter(Boolean)}
                                 fallback={<Navigate to="/403" replace />}
                             >
@@ -111,6 +119,7 @@ export default function AppRouter() {
                         </RequireAuth>
                     }
                 />
+
 
                 {/* Académico */}
                 <Route

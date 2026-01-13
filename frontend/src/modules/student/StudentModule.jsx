@@ -1,17 +1,43 @@
 // src/modules/student/StudentModule.jsx
-import "../academic/styles.css"; // si quieres el mismo look que tus módulos
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import "../academic/styles.css";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Search, RefreshCw, GraduationCap, ShieldAlert } from "lucide-react";
+import {
+    Search,
+    RefreshCw,
+    GraduationCap,
+    ShieldAlert,
+    FileText,
+    User,
+    Users,
+    Info,
+} from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+} from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 
+// ✅ Tabs (shadcn)
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from "../../components/ui/tabs";
+
 import { StudentsService } from "../../services/students.service";
 import StudentProfileForm from "./StudentProfileForm";
+
+// ✅ IMPORTA TU CARD
+import StudentKardexCard from "./StudentKardexCard";
 
 import { useAuth } from "../../context/AuthContext";
 import { PERMS } from "../../auth/permissions";
@@ -41,21 +67,45 @@ const normalizeStudentsPayload = (data) => {
     return [];
 };
 
+const getStudentLabel = (s) => {
+    if (!s) return "";
+    const ap = `${s.apellidoPaterno || ""} ${s.apellidoMaterno || ""}`.trim();
+    const nm = `${s.nombres || ""}`.trim();
+    const full = `${ap} ${nm}`.trim();
+    return full || s.full_name || s.display_name || "Estudiante";
+};
+
 export default function StudentModule() {
-    const { hasPerm, user } = useAuth();
+    const { hasPerm, roles = [] } = useAuth();
 
-    // ✅ Ajusta estas reglas a tu auth real
-    const roles = Array.isArray(user?.roles) ? user.roles : [];
-    const isAdminSystem = roles.some((r) => String(r).toUpperCase().includes("ADMIN_SYSTEM"));
+    const isAdminSystem = roles.some((r) =>
+        String(r).toUpperCase().includes("ADMIN_SYSTEM")
+    );
 
-    // Si tienes permiso específico, mejor:
-    const adminManagePerm = PERMS["admin.access.manage"] ?? "admin.access.manage";
-    const canAdmin = isAdminSystem || hasPerm(adminManagePerm);
+    const isStudentRole = roles.some((r) =>
+        String(r).toUpperCase().includes("STUDENT")
+    );
 
-    const isStudent = roles.some((r) => String(r).toUpperCase().includes("STUDENT"));
+    const canManageStudents =
+        isAdminSystem ||
+        hasPerm(PERMS["student.manage.list"]) ||
+        hasPerm(PERMS["student.manage.view"]) ||
+        hasPerm(PERMS["student.manage.edit"]);
 
-    // Modo final (admin o student)
-    const mode = canAdmin ? "admin" : "student";
+    const canSelf =
+        isStudentRole ||
+        hasPerm(PERMS["student.self.dashboard.view"]) ||
+        hasPerm(PERMS["student.self.profile.view"]) ||
+        hasPerm(PERMS["student.self.profile.edit"]) ||
+        hasPerm(PERMS["student.self.kardex.view"]) ||
+        hasPerm(PERMS["student.self.enrollment.view"]);
+
+    const mode = canManageStudents ? "admin" : "student";
+
+    const canViewKardex =
+        canManageStudents ||
+        hasPerm(PERMS["student.self.kardex.view"]) ||
+        isStudentRole;
 
     /* ===================== STATE ===================== */
     const [loading, setLoading] = useState(true);
@@ -69,6 +119,9 @@ export default function StudentModule() {
     // current student record
     const [student, setStudent] = useState(null);
     const [studentLoading, setStudentLoading] = useState(false);
+
+    // Tabs
+    const [tab, setTab] = useState("profile");
 
     /* ===================== LOADERS ===================== */
     const loadMyProfile = useCallback(async () => {
@@ -100,6 +153,7 @@ export default function StudentModule() {
     const loadSelectedStudent = useCallback(async (id) => {
         if (!id) return;
         try {
+            setStudent(null);
             setStudentLoading(true);
             const data = await StudentsService.get(id);
             setStudent(data);
@@ -113,29 +167,36 @@ export default function StudentModule() {
 
     /* ===================== EFFECTS ===================== */
     useEffect(() => {
-        if (mode === "student") {
-            loadMyProfile();
-        } else {
-            loadCandidates();
-        }
+        if (mode === "student") loadMyProfile();
+        else loadCandidates();
     }, [mode, loadMyProfile, loadCandidates]);
-
-    useEffect(() => {
-        if (mode === "admin") loadCandidates();
-    }, [mode, loadCandidates]);
 
     useEffect(() => {
         if (mode === "admin" && selectedId) loadSelectedStudent(selectedId);
     }, [mode, selectedId, loadSelectedStudent]);
 
+    useEffect(() => {
+        if (mode === "admin" && !selectedId) {
+            setStudent(null);
+            setStudentLoading(false);
+        }
+    }, [mode, selectedId]);
+
+    // ✅ UX: en admin, cuando selecciona otro, vuelve a Perfil
+    useEffect(() => {
+        if (mode === "admin" && selectedId) setTab("profile");
+    }, [mode, selectedId]);
+
+    // ✅ UX: si se está en kardex pero admin deselecciona, vuelve a perfil
+    useEffect(() => {
+        if (mode === "admin" && !selectedId && tab === "kardex") setTab("profile");
+    }, [mode, selectedId, tab]);
+
     /* ===================== ACTIONS ===================== */
     const onSave = async (payload) => {
         try {
             if (mode === "admin") {
-                if (!selectedId) {
-                    toast.error("Selecciona un estudiante primero.");
-                    return;
-                }
+                if (!selectedId) return toast.error("Selecciona un estudiante primero.");
                 const res = await StudentsService.update(selectedId, payload);
                 toast.success("Estudiante actualizado");
                 setStudent(res);
@@ -152,14 +213,11 @@ export default function StudentModule() {
     const onUploadPhoto = async (file) => {
         try {
             if (!file) return;
+
             if (mode === "admin") {
-                if (!selectedId) {
-                    toast.error("Selecciona un estudiante primero.");
-                    return;
-                }
+                if (!selectedId) return toast.error("Selecciona un estudiante primero.");
                 const res = await StudentsService.uploadPhoto(selectedId, file);
                 toast.success("Foto actualizada");
-                // backend puede devolver photoUrl; si no, recarga:
                 setStudent((s) => ({ ...(s || {}), ...(res || {}) }));
                 if (!res?.photoUrl) loadSelectedStudent(selectedId);
             } else {
@@ -173,11 +231,37 @@ export default function StudentModule() {
         }
     };
 
-    /* ===================== RENDER ===================== */
-    const title = mode === "admin" ? "Estudiante (Admin)" : "Mi Perfil";
+    /* ===================== KÁRDEX KEY ===================== */
+    const kardexKey = useMemo(() => {
+        if (!canViewKardex) return "";
 
-    // Si no es admin ni student, no debería entrar acá
-    if (!canAdmin && !isStudent) {
+        if (mode === "admin") {
+            // Si tu backend acepta ID: ok.
+            // Si solo acepta DNI, cambia a: student?.numDocumento || selectedId
+            return selectedId || "";
+        }
+
+        return (
+            student?.id ||
+            student?._id ||
+            student?.student_id ||
+            student?.numDocumento ||
+            student?.dni ||
+            ""
+        );
+    }, [mode, selectedId, student, canViewKardex]);
+
+    /* ===================== RENDER ===================== */
+    const title = mode === "admin" ? "Estudiantes (Gestión)" : "Mi Perfil";
+
+    const selectedLabel = useMemo(() => {
+        if (mode !== "admin") return "";
+        if (!student) return "";
+        const doc = student?.numDocumento ? ` · DOC ${student.numDocumento}` : "";
+        return `${getStudentLabel(student)}${doc}`;
+    }, [mode, student]);
+
+    if (!canManageStudents && !canSelf) {
         return (
             <div className="h-full p-4 md:p-6">
                 <Card className="rounded-2xl border-t-4 border-t-rose-600 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-md">
@@ -204,7 +288,7 @@ export default function StudentModule() {
                                 </CardTitle>
                                 <CardDescription>
                                     {mode === "admin"
-                                        ? "Selecciona un estudiante y completa su ficha (datos + foto)."
+                                        ? "Busca, selecciona y gestiona la ficha. El kárdex va en su pestaña."
                                         : "Revisa tus datos y actualiza lo permitido (contacto/dirección/foto)."}
                                 </CardDescription>
                             </div>
@@ -214,71 +298,185 @@ export default function StudentModule() {
                                     variant="outline"
                                     className="rounded-xl gap-2"
                                     onClick={() => (mode === "admin" ? loadCandidates() : loadMyProfile())}
+                                    disabled={loading || studentLoading}
                                 >
-                                    <RefreshCw className="h-4 w-4" /> Recargar
+                                    <RefreshCw className={`h-4 w-4 ${(loading || studentLoading) ? "animate-spin" : ""}`} />
+                                    Recargar
                                 </Button>
                             </div>
                         </div>
                     </CardHeader>
 
                     <CardContent className="space-y-5">
-                        {/* ADMIN: picker */}
+                        {/* ADMIN: picker mejorado */}
                         {mode === "admin" && (
-                            <div className="rounded-2xl border border-white/50 dark:border-white/10 p-3 bg-white/60 dark:bg-neutral-900/40">
-                                <div className="flex flex-col gap-3 md:flex-row md:items-end">
-                                    <div className="flex-1">
+                            <div className="rounded-2xl border border-white/50 dark:border-white/10 p-4 bg-white/60 dark:bg-neutral-900/40">
+                                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                                    <div className="md:col-span-7">
                                         <Label>Buscar estudiante</Label>
                                         <div className="relative mt-1">
                                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-60" />
                                             <Input
                                                 className="pl-9 rounded-xl"
-                                                placeholder="DNI, código, nombres..."
+                                                placeholder="Documento, apellidos, nombres..."
                                                 value={q}
                                                 onChange={(e) => setQ(e.target.value)}
                                             />
                                         </div>
+
+                                        <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                                            <Info className="h-4 w-4" />
+                                            Tip: escribe DNI o apellidos. El backend debe soportar filtro <code>q</code>.
+                                        </div>
                                     </div>
 
-                                    <div className="w-full md:w-[320px]">
+                                    <div className="md:col-span-5">
                                         <Label>Seleccionar</Label>
-                                        <select
-                                            className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent"
-                                            value={selectedId}
-                                            onChange={(e) => setSelectedId(e.target.value)}
-                                        >
-                                            <option value="">— Selecciona —</option>
-                                            {candidates.map((s) => {
-                                                const id = s.id || s._id;
-                                                const name = `${s.apellidos || ""} ${s.nombres || ""}`.trim() || "—";
-                                                const dni = s.dni ? `DNI ${s.dni}` : "";
-                                                const cod = s.codigoEstudiante ? `COD ${s.codigoEstudiante}` : "";
-                                                return (
-                                                    <option key={id} value={id}>
-                                                        {name} {dni ? `- ${dni}` : ""} {cod ? `- ${cod}` : ""}
-                                                    </option>
-                                                );
-                                            })}
-                                        </select>
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                            Tip: si hay miles, el backend debe soportar filtro `q`.
-                                        </p>
+                                        <div className="mt-1 relative">
+                                            <Users className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-60 pointer-events-none" />
+                                            <select
+                                                className="w-full rounded-xl border pl-9 pr-3 py-2 bg-transparent"
+                                                value={selectedId}
+                                                onChange={(e) => setSelectedId(e.target.value)}
+                                            >
+                                                <option value="">— Selecciona —</option>
+                                                {candidates.map((s) => {
+                                                    const id = s.id || s._id;
+                                                    const ap = `${s.apellidoPaterno || ""} ${s.apellidoMaterno || ""}`.trim();
+                                                    const name = `${ap} ${s.nombres || ""}`.trim() || "—";
+                                                    const doc = s.numDocumento ? `DOC ${s.numDocumento}` : "";
+                                                    return (
+                                                        <option key={id} value={id}>
+                                                            {name} {doc ? `- ${doc}` : ""}
+                                                        </option>
+                                                    );
+                                                })}
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {studentLoading && (
-                                    <p className="mt-3 text-sm text-muted-foreground">Cargando estudiante…</p>
-                                )}
+                                {studentLoading ? (
+                                    <div className="mt-3 text-sm text-muted-foreground">
+                                        Cargando estudiante…
+                                    </div>
+                                ) : selectedId && student ? (
+                                    <div className="mt-3 rounded-xl border bg-white/60 dark:bg-neutral-900/30 px-3 py-2 text-sm flex items-center justify-between gap-2">
+                                        <div className="truncate">
+                                            <span className="font-medium">Seleccionado:</span>{" "}
+                                            <span className="text-muted-foreground">{selectedLabel}</span>
+                                        </div>
+
+                                        {canViewKardex ? (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="rounded-xl"
+                                                onClick={() => setTab("kardex")}
+                                            >
+                                                <FileText className="h-4 w-4 mr-2" />
+                                                Ver kárdex
+                                            </Button>
+                                        ) : null}
+                                    </div>
+                                ) : null}
                             </div>
                         )}
 
-                        {/* FORM */}
-                        <StudentProfileForm
-                            mode={mode}
-                            student={student}
-                            loading={loading}
-                            onSave={onSave}
-                            onUploadPhoto={onUploadPhoto}
-                        />
+                        {/* ✅ Tabs con estilo tipo "píldora" (mejor UX visual) */}
+                        <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+                            <TabsList
+                                className="
+                  w-full
+                  flex
+                  flex-wrap
+                  gap-2
+                  p-2
+                  rounded-2xl
+                  bg-white/70 dark:bg-neutral-900/40
+                  border border-white/40 dark:border-white/10
+                  shadow-sm
+                "
+                            >
+                                <TabsTrigger
+                                    value="profile"
+                                    className="
+                    rounded-xl
+                    px-4 py-2
+                    flex items-center gap-2
+                    data-[state=active]:bg-slate-900 data-[state=active]:text-white
+                    dark:data-[state=active]:bg-white dark:data-[state=active]:text-black
+                  "
+                                >
+                                    <User className="h-4 w-4" />
+                                    Perfil
+                                </TabsTrigger>
+
+                                {canViewKardex ? (
+                                    <TabsTrigger
+                                        value="kardex"
+                                        disabled={mode === "admin" && !selectedId}
+                                        className="
+                      rounded-xl
+                      px-4 py-2
+                      flex items-center gap-2
+                      data-[state=active]:bg-slate-900 data-[state=active]:text-white
+                      dark:data-[state=active]:bg-white dark:data-[state=active]:text-black
+                      data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed
+                    "
+                                    >
+                                        <FileText className="h-4 w-4" />
+                                        Kárdex / Notas
+                                    </TabsTrigger>
+                                ) : null}
+                            </TabsList>
+
+                            {/* PERFIL */}
+                            <TabsContent value="profile" className="mt-0">
+                                {mode === "student" ? (
+                                    <StudentProfileForm
+                                        mode={mode}
+                                        student={student}
+                                        loading={loading}
+                                        onSave={onSave}
+                                        onUploadPhoto={onUploadPhoto}
+                                    />
+                                ) : selectedId ? (
+                                    <StudentProfileForm
+                                        mode={mode}
+                                        student={student}
+                                        loading={loading || studentLoading}
+                                        onSave={onSave}
+                                        onUploadPhoto={onUploadPhoto}
+                                    />
+                                ) : (
+                                    <div className="rounded-2xl border border-white/50 dark:border-white/10 p-4 bg-white/60 dark:bg-neutral-900/40">
+                                        <p className="text-sm text-muted-foreground">
+                                            Selecciona un estudiante para ver y editar su ficha.
+                                        </p>
+                                    </div>
+                                )}
+                            </TabsContent>
+
+                            {/* KÁRDEX */}
+                            {canViewKardex ? (
+                                <TabsContent value="kardex" className="mt-0">
+                                    {mode === "admin" && !selectedId ? (
+                                        <div className="rounded-2xl border border-white/50 dark:border-white/10 p-4 bg-white/60 dark:bg-neutral-900/40">
+                                            <p className="text-sm text-muted-foreground">
+                                                Selecciona un estudiante para ver su kárdex.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <StudentKardexCard
+                                            mode={mode}
+                                            studentKey={kardexKey}
+                                            titlePrefix="Kárdex / Notas"
+                                        />
+                                    )}
+                                </TabsContent>
+                            ) : null}
+                        </Tabs>
                     </CardContent>
                 </Card>
             </motion.div>

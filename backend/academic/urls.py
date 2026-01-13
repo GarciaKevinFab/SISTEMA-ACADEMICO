@@ -6,7 +6,7 @@ from .views import (
     PlansViewSet, SectionsViewSet, TeachersViewSet, ClassroomsViewSet,
 
     KardexView, KardexBoletaPDFView, KardexConstanciaPDFView,
-    SectionsScheduleConflictsView,
+    SectionsScheduleConflictsView,KardexExportXlsxView,
 
     ProcessesCreateView, ProcessesListView, ProcessesMineView, ProcessDetailView,
     ProcessStatusView, ProcessNotifyView, ProcessFilesView, ProcessFileDeleteView,
@@ -81,12 +81,14 @@ urlpatterns = [
     # Evaluation config
     path('sections/<int:section_id>/evaluation', EvaluationConfigView.as_view()),
 
-    # Kardex + PDFs
-    path('kardex/<str:student_id>', KardexView.as_view()),
-    path('kardex/<str:student_id>/boleta', KardexBoletaPDFView.as_view()),
-    path('kardex/<str:student_id>/boleta/pdf', KardexBoletaPDFView.as_view()),
-    path('kardex/<str:student_id>/constancia', KardexConstanciaPDFView.as_view()),
-    path('kardex/<str:student_id>/constancia/pdf', KardexConstanciaPDFView.as_view()),
+# Kardex + PDFs
+path('academic/kardex/<str:student_id>', KardexView.as_view()),
+path('academic/kardex/<str:student_id>/export/xlsx', KardexExportXlsxView.as_view()),
+path('academic/kardex/<str:student_id>/boleta', KardexBoletaPDFView.as_view()),
+path('academic/kardex/<str:student_id>/boleta/pdf', KardexBoletaPDFView.as_view()),
+path('academic/kardex/<str:student_id>/constancia', KardexConstanciaPDFView.as_view()),
+path('academic/kardex/<str:student_id>/constancia/pdf', KardexConstanciaPDFView.as_view()),
+
 
     # Procesos
     path('processes/withdraw', ProcessesCreateView.as_view(), {'ptype': 'RETIRO'}),

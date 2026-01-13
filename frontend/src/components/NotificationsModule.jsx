@@ -22,6 +22,17 @@ import {
     Templates, Sender, Logs, Events, CHANNELS, EVENT_DEFS, PRESETS, naiveCompile,
 } from "../../services/notifications.service";
 import { useAuth } from "../../context/AuthContext";
+import {
+    AlertDialog,
+    AlertDialogTrigger,
+    AlertDialogContent,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogCancel,
+    AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 // ---------- helpers ----------
 function formatApiError(err, fallback = "Ocurrió un error") {
@@ -67,10 +78,15 @@ const TemplatesTab = () => {
     });
 
     const remove = async (tmpl) => {
-        if (!window.confirm("¿Eliminar plantilla?")) return;
-        try { await Templates.remove(tmpl.id); toast.success("Eliminada"); load(); }
-        catch (e) { toast.error(formatApiError(e)); }
+        try {
+            await Templates.remove(tmpl.id);
+            toast.success("Eliminada");
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        }
     };
+
 
     const toggleActive = async (tmpl) => {
         try { await Templates.setActive(tmpl.id, !tmpl.is_active); load(); }
@@ -145,7 +161,36 @@ const TemplatesTab = () => {
                                                 <div className="flex gap-2">
                                                     <Button size="sm" variant="outline" onClick={() => { setEditing(t); setOpenEditor(true); }}><Edit3 className="h-4 w-4" /></Button>
                                                     <Button size="sm" variant="outline" onClick={() => toggleActive(t)}>{t.is_active ? "Desactivar" : "Activar"}</Button>
-                                                    <Button size="sm" variant="outline" onClick={() => remove(t)}><Trash2 className="h-4 w-4" /></Button>
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button size="sm" variant="outline">
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+
+                                                        <AlertDialogContent className="max-w-[92vw] sm:max-w-md">
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>¿Eliminar plantilla?</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    Esta acción no se puede deshacer. Se eliminará la plantilla{" "}
+                                                                    <span className="font-semibold">{t.name}</span>.
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+
+                                                            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                                                <AlertDialogCancel className="w-full sm:w-auto">
+                                                                    Cancelar
+                                                                </AlertDialogCancel>
+
+                                                                <AlertDialogAction
+                                                                    className="w-full sm:w-auto bg-red-600 hover:bg-red-700"
+                                                                    onClick={() => remove(t)}
+                                                                >
+                                                                    Sí, eliminar
+                                                                </AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
                                                 </div>
                                             </td>
                                         </tr>

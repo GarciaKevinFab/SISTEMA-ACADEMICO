@@ -1,7 +1,7 @@
 // src/modules/admin/AccessControlModule.jsx
 import "../academic/styles.css";
 import { t } from "./aclTranslations";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import {
   Card,
@@ -13,7 +13,6 @@ import {
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
-import { Badge } from "../../components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -35,6 +34,8 @@ import {
   Check,
   AlertTriangle,
   Database,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -177,10 +178,7 @@ const AccessControlModule = () => {
 
   const defaultTab = canManage ? "users" : canCatalogs ? "catalogs" : canAudit ? "audit" : "users";
 
- return (
-    // CAMBIO 1: 'h-full overflow-y-auto' para scroll general.
-    // 'pb-40' deja espacio al final para el botón flotante.
-    // 'p-4' reduce márgenes en móvil.
+  return (
     <div className="h-full overflow-y-auto p-4 md:p-6 pb-40 space-y-6">
       <motion.div
         {...fade}
@@ -201,51 +199,48 @@ const AccessControlModule = () => {
       </motion.div>
 
       <Tabs defaultValue={defaultTab} className="space-y-6">
-        
-        {/* CAMBIO 2: CONTENEDOR DESLIZABLE PARA LAS PESTAÑAS */}
-        {/* Esto permite hacer scroll horizontal en el menú si no cabe en la pantalla */}
         <div className="w-full overflow-x-auto pb-2">
-            <TabsList className="inline-flex w-max h-auto p-1 mx-auto rounded-2xl bg-white/70 dark:bg-neutral-900/60 backdrop-blur border border-white/50 dark:border-white/10 shadow-sm">
+          <TabsList className="inline-flex w-max h-auto p-1 mx-auto rounded-2xl bg-white/70 dark:bg-neutral-900/60 backdrop-blur border border-white/50 dark:border-white/10 shadow-sm">
             {canManage && (
-                <TabsTrigger
+              <TabsTrigger
                 value="users"
                 className="gap-2 px-4 py-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition"
-                >
+              >
                 <Users className="h-4 w-4" /> Usuarios
-                </TabsTrigger>
+              </TabsTrigger>
             )}
             {canManage && (
-                <TabsTrigger
+              <TabsTrigger
                 value="roles"
                 className="gap-2 px-4 py-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-600 data-[state=active]:to-fuchsia-600 data-[state=active]:text-white"
-                >
+              >
                 <Shield className="h-4 w-4" /> Roles
-                </TabsTrigger>
+              </TabsTrigger>
             )}
             {canManage && (
-                <TabsTrigger
+              <TabsTrigger
                 value="permissions"
                 className="gap-2 px-4 py-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-teal-600 data-[state=active]:text-white"
-                >
+              >
                 <KeyRound className="h-4 w-4" /> Permisos
-                </TabsTrigger>
+              </TabsTrigger>
             )}
 
             {canCatalogs && (
-                <TabsTrigger
+              <TabsTrigger
                 value="catalogs"
                 className="gap-2 px-4 py-2 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-800 data-[state=active]:to-slate-600 data-[state=active]:text-white"
-                >
+              >
                 <Database className="h-4 w-4" /> Catálogos
-                </TabsTrigger>
+              </TabsTrigger>
             )}
 
             {canAudit && (
-                <TabsTrigger value="audit" className="px-4 py-2 rounded-xl">
+              <TabsTrigger value="audit" className="px-4 py-2 rounded-xl">
                 Auditoría
-                </TabsTrigger>
+              </TabsTrigger>
             )}
-            </TabsList>
+          </TabsList>
         </div>
 
         {canManage && (
@@ -290,11 +285,17 @@ const AccessControlModule = () => {
   );
 };
 
-/* ------------------------ Usuarios ------------------------ */
+/* ------------------------ Usuarios (con paginación 10 en 10) ------------------------ */
 const UsersTab = () => {
+  const PAGE_SIZE = 10;
+
   const [list, setList] = useState([]);
   const [q, setQ] = useState("");
   const debouncedQ = useDebounce(q, 450);
+
+  // ✅ PAGINACIÓN
+  const [page, setPage] = useState(1);
+  const [count, setCount] = useState(0); // total global del backend
 
   const [loading, setLoading] = useState(true);
   const [openCreate, setOpenCreate] = useState(false);
@@ -328,39 +329,51 @@ const UsersTab = () => {
 
   const pwdFeedback = validatePassword(form.password || "");
 
-  const normalizeUsersPayload = (data) => {
+  const normalizeUsersResponse = (data) => {
     // soporta:
     // - array
     // - { users: [] }
-    // - { results: [] } (paginación DRF)
+    // - { results: [], count, next, previous } (DRF)
     // - { data: [] }
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data?.users)) return data.users;
-    if (Array.isArray(data?.results)) return data.results;
-    if (Array.isArray(data?.data)) return data.data;
-    return [];
+    if (Array.isArray(data)) return { items: data, count: data.length };
+    if (Array.isArray(data?.users)) return { items: data.users, count: data.count ?? data.users.length };
+    if (Array.isArray(data?.results)) return { items: data.results, count: data.count ?? data.results.length };
+    if (Array.isArray(data?.data)) return { items: data.data, count: data.count ?? data.data.length };
+    return { items: [], count: 0 };
   };
+
+  // ✅ cuando cambia búsqueda, volvemos a página 1
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQ]);
 
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await UsersService.list(debouncedQ ? { q: debouncedQ } : undefined);
-      setList(normalizeUsersPayload(data));
+
+      const params = {
+        page,
+        page_size: PAGE_SIZE,
+        ...(debouncedQ ? { q: debouncedQ } : {}),
+      };
+
+      const data = await UsersService.list(params);
+      const norm = normalizeUsersResponse(data);
+
+      setList(norm.items);
+      setCount(norm.count);
     } catch {
       toast.error("Error al cargar usuarios");
       setList([]);
+      setCount(0);
     } finally {
       setLoading(false);
     }
-  }, [debouncedQ]);
+  }, [debouncedQ, page]);
 
   const fetchRoles = useCallback(async () => {
     try {
       const data = await ACLService.listRoles();
-      // soporta:
-      // - { roles: [{name:...}] }
-      // - [{name:...}]
-      // - ["ADMIN", "STUDENT"]
       const raw = data?.roles ?? data ?? [];
       const names = raw
         .map((r) => (typeof r === "string" ? r : r?.name))
@@ -406,7 +419,10 @@ const UsersTab = () => {
       toast.success("Usuario creado");
       setOpenCreate(false);
       resetCreate();
-      fetchUsers();
+
+      // ✅ tras crear, vuelve a página 1 y recarga
+      setPage(1);
+      // fetchUsers se ejecutará por el useEffect (page cambió)
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Error al crear usuario");
     }
@@ -446,9 +462,13 @@ const UsersTab = () => {
 
   const handleDelete = async (id) => {
     try {
-      await UsersService.delete(id); // ✅ 
+      await UsersService.delete(id);
       toast.success("Usuario eliminado");
-      fetchUsers();
+
+      // ✅ si borras el último de la página, baja página si hace falta
+      const wouldBeEmpty = list.length === 1 && page > 1;
+      if (wouldBeEmpty) setPage((p) => p - 1);
+      else fetchUsers();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "No se pudo eliminar");
     }
@@ -490,11 +510,20 @@ const UsersTab = () => {
     setConfirm((s) => ({ ...s, open: false }));
   };
 
-  const total = list.length;
-  const activos = list.filter((u) => u.is_active).length;
-  const inactivos = total - activos;
+  // ✅ contadores SOLO de la página actual (honestos)
+  const totalPage = list.length;
+  const activosPage = list.filter((u) => u.is_active).length;
+  const inactivosPage = totalPage - activosPage;
 
   const hasData = !loading && list.length > 0;
+
+  // ✅ UI paginación
+  const totalPages = useMemo(() => Math.max(1, Math.ceil((count || 0) / PAGE_SIZE)), [count]);
+  const canPrev = page > 1;
+  const canNext = page < totalPages;
+
+  const from = count === 0 ? 0 : PAGE_SIZE * (page - 1) + 1;
+  const to = Math.min(PAGE_SIZE * page, count);
 
   return (
     <Card className="rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] border-t-4 border-t-blue-600 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-md">
@@ -509,13 +538,13 @@ const UsersTab = () => {
 
           <div className="flex flex-wrap gap-2 text-xs md:text-sm">
             <div className="px-3 py-2 rounded-xl bg-blue-50 text-blue-700 border border-blue-100">
-              <span className="font-semibold">{total}</span> usuarios
+              <span className="font-semibold">{count}</span> total (backend)
             </div>
             <div className="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100">
-              <span className="font-semibold">{activos}</span> activos
+              <span className="font-semibold">{activosPage}</span> activos (pág.)
             </div>
             <div className="px-3 py-2 rounded-xl bg-slate-50 text-slate-700 border border-slate-100">
-              <span className="font-semibold">{inactivos}</span> inactivos
+              <span className="font-semibold">{inactivosPage}</span> inactivos (pág.)
             </div>
           </div>
         </div>
@@ -530,7 +559,14 @@ const UsersTab = () => {
           />
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={fetchUsers} className="gap-2 rounded-xl">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPage(1);
+                fetchUsers();
+              }}
+              className="gap-2 rounded-xl"
+            >
               <RefreshCw className="h-4 w-4" /> Buscar
             </Button>
 
@@ -542,140 +578,137 @@ const UsersTab = () => {
               </DialogTrigger>
 
               <DialogContent
-  className="
-    w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-xl
-    h-[90vh] overflow-hidden p-0
-    backdrop-blur-md bg-white/85 dark:bg-neutral-900/85
-    border border-white/50 dark:border-white/10 rounded-2xl
-    flex flex-col
-  "
->
-  {/* HEADER fijo */}
-  <div className="px-6 pt-5 pb-3 border-b flex-none">
-    <DialogHeader>
-      <DialogTitle>Crear Usuario</DialogTitle>
-      <DialogDescription>Complete los datos básicos</DialogDescription>
-    </DialogHeader>
-  </div>
+                className="
+                  w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-xl
+                  h-[90vh] overflow-hidden p-0
+                  backdrop-blur-md bg-white/85 dark:bg-neutral-900/85
+                  border border-white/50 dark:border-white/10 rounded-2xl
+                  flex flex-col
+                "
+              >
+                {/* HEADER fijo */}
+                <div className="px-6 pt-5 pb-3 border-b flex-none">
+                  <DialogHeader>
+                    <DialogTitle>Crear Usuario</DialogTitle>
+                    <DialogDescription>Complete los datos básicos</DialogDescription>
+                  </DialogHeader>
+                </div>
 
-  {/* BODY con scroll */}
-  <div
-    className="px-6 py-4 flex-1 overflow-y-auto"
-    style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}
-  >
-    <motion.form {...scaleIn} onSubmit={handleCreate} className="space-y-4">
-      <div className="grid gap-3">
-        <div>
-          <Label htmlFor="full_name">Nombre completo</Label>
-          <Input
-            id="full_name"
-            className="rounded-xl"
-            value={form.full_name}
-            onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-            required
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="username">Usuario</Label>
-            <Input
-              id="username"
-              className="rounded-xl"
-              value={form.username}
-              onChange={(e) => setForm({ ...form, username: e.target.value })}
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              className="rounded-xl"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              required
-            />
-          </div>
-        </div>
-
-        <div>
-          <Label htmlFor="password">Contraseña</Label>
-          <Input
-            id="password"
-            type="password"
-            className="rounded-xl"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            required
-          />
-          <PasswordHints feedback={pwdFeedback} />
-        </div>
-
-        {/* Roles */}
-        <div>
-          <Label>Roles</Label>
-          <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
-            {rolesOptions.map((r) => {
-              const checked = form.roles.includes(r);
-              return (
-                <label
-                  key={r}
-                  className={`flex items-center gap-2 p-2 rounded-xl border cursor-pointer ${
-                    checked ? "bg-blue-50 border-blue-200" : "hover:bg-muted/40"
-                  }`}
+                {/* BODY con scroll */}
+                <div
+                  className="px-6 py-4 flex-1 overflow-y-auto"
+                  style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}
                 >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() =>
-                      toggleRole(r, form.roles, (newRoles) =>
-                        setForm({ ...form, roles: newRoles })
-                      )
-                    }
-                  />
-                  <span className="text-sm">{r}</span>
-                </label>
-              );
-            })}
+                  <motion.form {...scaleIn} onSubmit={handleCreate} className="space-y-4">
+                    <div className="grid gap-3">
+                      <div>
+                        <Label htmlFor="full_name">Nombre completo</Label>
+                        <Input
+                          id="full_name"
+                          className="rounded-xl"
+                          value={form.full_name}
+                          onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+                          required
+                        />
+                      </div>
 
-            {rolesOptions.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                No hay roles (o no tienes permisos para listarlos).
-              </p>
-            )}
-          </div>
-        </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="username">Usuario</Label>
+                          <Input
+                            id="username"
+                            className="rounded-xl"
+                            value={form.username}
+                            onChange={(e) => setForm({ ...form, username: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="email">Email</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            className="rounded-xl"
+                            value={form.email}
+                            onChange={(e) => setForm({ ...form, email: e.target.value })}
+                            required
+                          />
+                        </div>
+                      </div>
 
-        {/* espacio final para que no choque con el footer */}
-        <div className="h-8" />
-      </div>
+                      <div>
+                        <Label htmlFor="password">Contraseña</Label>
+                        <Input
+                          id="password"
+                          type="password"
+                          className="rounded-xl"
+                          value={form.password}
+                          onChange={(e) => setForm({ ...form, password: e.target.value })}
+                          required
+                        />
+                        <PasswordHints feedback={pwdFeedback} />
+                      </div>
 
-      {/* FOOTER fijo */}
-      <div className="sticky bottom-0 bg-white/85 dark:bg-neutral-900/85 pt-3 pb-2 border-t">
-        <div className="flex flex-col sm:flex-row justify-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setOpenCreate(false)}
-            className="rounded-xl w-full sm:w-auto"
-          >
-            Cancelar
-          </Button>
+                      {/* Roles */}
+                      <div>
+                        <Label>Roles</Label>
+                        <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
+                          {rolesOptions.map((r) => {
+                            const checked = form.roles.includes(r);
+                            return (
+                              <label
+                                key={r}
+                                className={`flex items-center gap-2 p-2 rounded-xl border cursor-pointer ${checked ? "bg-blue-50 border-blue-200" : "hover:bg-muted/40"
+                                  }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() =>
+                                    toggleRole(r, form.roles, (newRoles) =>
+                                      setForm({ ...form, roles: newRoles })
+                                    )
+                                  }
+                                />
+                                <span className="text-sm">{r}</span>
+                              </label>
+                            );
+                          })}
 
-          <Button
-            type="submit"
-            className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 gap-2 w-full sm:w-auto"
-          >
-            <Check className="h-4 w-4" /> Crear
-          </Button>
-        </div>
-      </div>
-    </motion.form>
-  </div>
-</DialogContent>
+                          {rolesOptions.length === 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              No hay roles (o no tienes permisos para listarlos).
+                            </p>
+                          )}
+                        </div>
+                      </div>
 
+                      <div className="h-8" />
+                    </div>
+
+                    {/* FOOTER fijo */}
+                    <div className="sticky bottom-0 bg-white/85 dark:bg-neutral-900/85 pt-3 pb-2 border-t">
+                      <div className="flex flex-col sm:flex-row justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setOpenCreate(false)}
+                          className="rounded-xl w-full sm:w-auto"
+                        >
+                          Cancelar
+                        </Button>
+
+                        <Button
+                          type="submit"
+                          className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 gap-2 w-full sm:w-auto"
+                        >
+                          <Check className="h-4 w-4" /> Crear
+                        </Button>
+                      </div>
+                    </div>
+                  </motion.form>
+                </div>
+              </DialogContent>
             </Dialog>
           </div>
         </div>
@@ -851,6 +884,37 @@ const UsersTab = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* ✅ PAGINACIÓN */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-1">
+          <div className="text-xs text-muted-foreground">
+            Mostrando <b>{from}</b> - <b>{to}</b> de <b>{count}</b>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="rounded-xl gap-1"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={!canPrev || loading}
+            >
+              <ChevronLeft className="h-4 w-4" /> Anterior
+            </Button>
+
+            <span className="text-xs px-2">
+              Página <b>{page}</b> / {totalPages}
+            </span>
+
+            <Button
+              variant="outline"
+              className="rounded-xl gap-1"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={!canNext || loading}
+            >
+              Siguiente <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Editar */}
@@ -1158,8 +1222,8 @@ const PermissionsTab = () => {
                 key={r.id || r.name}
                 variant={isActive ? "default" : "outline"}
                 className={`rounded-full ${isActive
-                  ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
-                  : ""
+                    ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
+                    : ""
                   }`}
                 onClick={() => {
                   setSelectedRole(r);
@@ -1192,8 +1256,8 @@ const PermissionsTab = () => {
                   <label
                     key={code}
                     className={`flex items-center gap-2 p-2 rounded-xl border transition cursor-pointer ${checked
-                      ? "bg-emerald-50/80 dark:bg-emerald-900/20 border-emerald-200/70"
-                      : "hover:bg-muted/40"
+                        ? "bg-emerald-50/80 dark:bg-emerald-900/20 border-emerald-200/70"
+                        : "hover:bg-muted/40"
                       }`}
                   >
                     <input

@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from academic.models import Plan
 
 User = settings.AUTH_USER_MODEL
 
@@ -13,34 +14,45 @@ class Student(models.Model):
         related_name="student_profile"
     )
 
-    codigo_estudiante = models.CharField(max_length=30, unique=True)
-    dni = models.CharField(max_length=12, unique=True)
-
+    # Identidad real del excel
+    num_documento = models.CharField(max_length=12, unique=True)
     nombres = models.CharField(max_length=120)
-    apellidos = models.CharField(max_length=120)
+    apellido_paterno = models.CharField(max_length=120, blank=True, default="")
+    apellido_materno = models.CharField(max_length=120, blank=True, default="")
+    sexo = models.CharField(max_length=5, blank=True, default="")  # M / F
+    fecha_nac = models.DateField(null=True, blank=True)
 
-    sexo = models.CharField(max_length=20, blank=True, default="")
-    fecha_nacimiento = models.DateField(null=True, blank=True)
-
-    email = models.EmailField(blank=True, default="")
-    celular = models.CharField(max_length=30, blank=True, default="")
-
-    direccion = models.CharField(max_length=255, blank=True, default="")
-    departamento = models.CharField(max_length=80, blank=True, default="")
+    # Ubicación / institución
+    region = models.CharField(max_length=80, blank=True, default="")
     provincia = models.CharField(max_length=80, blank=True, default="")
     distrito = models.CharField(max_length=80, blank=True, default="")
+    codigo_modular = models.CharField(max_length=20, blank=True, default="")
+    nombre_institucion = models.CharField(max_length=255, blank=True, default="")
+    gestion = models.CharField(max_length=50, blank=True, default="")
+    tipo = models.CharField(max_length=50, blank=True, default="")
 
-    programa_id = models.CharField(max_length=64, blank=True, default="")
-    ciclo_actual = models.IntegerField(null=True, blank=True)
+    # Académico
+    programa_carrera = models.CharField(max_length=255, blank=True, default="")
+    ciclo = models.IntegerField(null=True, blank=True)
     turno = models.CharField(max_length=30, blank=True, default="")
     seccion = models.CharField(max_length=30, blank=True, default="")
-    periodo_ingreso = models.CharField(max_length=20, blank=True, default="")
-    estado = models.CharField(max_length=30, blank=True, default="activo")
+    periodo = models.CharField(max_length=20, blank=True, default="")
+    lengua = models.CharField(max_length=80, blank=True, default="")
+    discapacidad = models.CharField(max_length=20, blank=True, default="")
+    tipo_discapacidad = models.CharField(max_length=255, blank=True, default="")
 
-    apoderado_nombre = models.CharField(max_length=160, blank=True, default="")
-    apoderado_dni = models.CharField(max_length=12, blank=True, default="")
-    apoderado_telefono = models.CharField(max_length=30, blank=True, default="")
+    # ✅ FK real al Plan académico
+    plan = models.ForeignKey(
+        Plan,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="students"
+    )
 
+    # Opcional
+    email = models.EmailField(blank=True, default="")
+    celular = models.CharField(max_length=30, blank=True, default="")
     photo = models.ImageField(upload_to="students/photos/", null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -50,4 +62,4 @@ class Student(models.Model):
         ordering = ["id"]
 
     def __str__(self):
-        return f"{self.apellidos} {self.nombres} ({self.dni})"
+        return f"{self.apellido_paterno} {self.apellido_materno} {self.nombres} ({self.num_documento})"

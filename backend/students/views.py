@@ -12,6 +12,7 @@ from acl.models import Role
 from .models import Student
 from .serializers import StudentSerializer, StudentUpdateSerializer, StudentMeUpdateSerializer
 from .upload import validate_photo_upload
+from students.models import Student
 
 User = get_user_model()
 
@@ -55,17 +56,17 @@ def students_collection(request):
     if request.method == "GET":
         q = (request.query_params.get("q") or "").strip()
         qs = Student.objects.all().order_by("id")
-
-        # ✅ MEJORA: búsqueda por tokens (nombre completo funciona)
         if q:
             terms = [t for t in q.split() if t]
             for term in terms:
                 qs = qs.filter(
-                    Q(dni__icontains=term)
-                    | Q(codigo_estudiante__icontains=term)
-                    | Q(nombres__icontains=term)
-                    | Q(apellidos__icontains=term)
-                )
+                Q(num_documento__icontains=term) |
+                Q(nombres__icontains=term) |
+                Q(apellido_paterno__icontains=term) |
+                Q(apellido_materno__icontains=term) |
+                Q(email__icontains=term)
+            )
+
 
         data = StudentSerializer(qs, many=True, context={"request": request}).data
         return Response({"students": data})
@@ -157,8 +158,27 @@ def students_link_user(request, pk: int):
 @permission_classes([permissions.IsAuthenticated])
 def students_me(request):
     st = _get_my_student(request)
+
     if not st:
-        return Response({"detail": "Tu usuario no tiene estudiante vinculado."}, status=404)
+        full = getattr(request.user, "full_name", "") or getattr(request.user, "username", "")
+        nombres, apellidos = _split_full_name(full, fallback=getattr(request.user, "username", ""))
+
+        ap_parts = apellidos.split() if apellidos else []
+        ap_pat = ap_parts[0] if len(ap_parts) >= 1 else ""
+        ap_mat = " ".join(ap_parts[1:]) if len(ap_parts) >= 2 else ""
+
+        # lo mejor: si username es su documento, úsalo
+        username = getattr(request.user, "username", "")
+        temp_doc = username[:12] if username else "TMP-" + get_random_string(9).upper()
+
+        st = Student.objects.create(
+            user=request.user,
+            num_documento=temp_doc,
+            nombres=nombres or username,
+            apellido_paterno=ap_pat,
+            apellido_materno=ap_mat,
+            email=getattr(request.user, "email", "") or "",
+        )
 
     if request.method == "GET":
         return Response(StudentSerializer(st, context={"request": request}).data)

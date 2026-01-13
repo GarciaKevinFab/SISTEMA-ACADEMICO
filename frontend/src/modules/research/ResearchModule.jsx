@@ -62,6 +62,17 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
 } from "../../components/ui/dropdown-menu";
+import {
+    AlertDialog,
+    AlertDialogTrigger,
+    AlertDialogContent,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogCancel,
+    AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 /* ---------------- helpers ---------------- */
 function formatApiError(err, fallback = "Ocurrió un error") {
@@ -230,7 +241,6 @@ const ProjectsManagement = () => {
     };
 
     const remove = async (p) => {
-        if (!window.confirm(`¿Eliminar proyecto "${p.title}"?`)) return;
         try {
             await Projects.remove(p.id);
             toast.success("Proyecto eliminado");
@@ -239,6 +249,7 @@ const ProjectsManagement = () => {
             toast.error(formatApiError(e2, "No se pudo eliminar"));
         }
     };
+
 
     const changeStatus = async (p, newStatus) => {
         try {
@@ -336,9 +347,34 @@ const ProjectsManagement = () => {
                                                 <Button size="sm" variant="outline" onClick={() => openEdit(p)} title="Editar">
                                                     <Edit3 className="h-4 w-4" />
                                                 </Button>
-                                                <Button size="sm" variant="outline" onClick={() => remove(p)} title="Eliminar">
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button size="sm" variant="outline" title="Eliminar">
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+
+                                                    <AlertDialogContent className="max-w-[92vw] sm:max-w-md">
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>¿Eliminar proyecto?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                Esta acción no se puede deshacer. Se eliminará el proyecto{" "}
+                                                                <span className="font-semibold">{p.title}</span>.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+
+                                                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                                            <AlertDialogCancel className="w-full sm:w-auto">Cancelar</AlertDialogCancel>
+                                                            <AlertDialogAction
+                                                                className="w-full sm:w-auto bg-red-600 hover:bg-red-700"
+                                                                onClick={() => remove(p)}
+                                                            >
+                                                                Sí, eliminar
+                                                            </AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+
                                                 {p.status !== "APPROVED" && (
                                                     <Button size="sm" variant="outline" onClick={() => changeStatus(p, "APPROVED")} title="Aprobar">
                                                         <CheckCircle className="h-4 w-4" />
@@ -1191,7 +1227,6 @@ const CatalogsTab = () => {
     };
 
     const removeLine = async (l) => {
-        if (!window.confirm(`¿Eliminar la línea "${l.name}"?`)) return;
         try {
             await Catalog.removeLine(l.id);
             toast.success("Línea eliminada");
@@ -1200,6 +1235,7 @@ const CatalogsTab = () => {
             toast.error(formatApiError(e, "No se pudo eliminar"));
         }
     };
+
 
     const openCreateAdvisor = () => { setAdvisorEditing(null); setAdvisorForm({ full_name: "", email: "", orcid: "" }); setOpenAdvisorForm(true); };
     const openEditAdvisor = (a) => { setAdvisorEditing(a); setAdvisorForm({ full_name: a.full_name || "", email: a.email || "", orcid: a.orcid || "" }); setOpenAdvisorForm(true); };
@@ -1222,7 +1258,6 @@ const CatalogsTab = () => {
     };
 
     const removeAdvisor = async (a) => {
-        if (!window.confirm(`¿Eliminar al asesor "${a.full_name}"?`)) return;
         try {
             await Catalog.removeAdvisor(a.id);
             toast.success("Asesor eliminado");
@@ -1270,9 +1305,34 @@ const CatalogsTab = () => {
                                                     <Button size="sm" variant="outline" className="h-9 w-9 p-0" onClick={() => openEditLine(l)}>
                                                         <Edit3 className="h-4 w-4" />
                                                     </Button>
-                                                    <Button size="sm" variant="outline" className="h-9 w-9 p-0" onClick={() => removeLine(l)}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button size="sm" variant="outline" className="h-9 w-9 p-0">
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+
+                                                        <AlertDialogContent className="max-w-[92vw] sm:max-w-md">
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>¿Eliminar línea?</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    Esta acción no se puede deshacer. Se eliminará la línea{" "}
+                                                                    <span className="font-semibold">{l.name}</span>.
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+
+                                                            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                                                <AlertDialogCancel className="w-full sm:w-auto">Cancelar</AlertDialogCancel>
+                                                                <AlertDialogAction
+                                                                    className="w-full sm:w-auto bg-red-600 hover:bg-red-700"
+                                                                    onClick={() => removeLine(l)}
+                                                                >
+                                                                    Sí, eliminar
+                                                                </AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+
                                                 </div>
                                             </td>
                                         </tr>
@@ -1350,9 +1410,34 @@ const CatalogsTab = () => {
                                                     <Button size="sm" variant="outline" onClick={() => openEditAdvisor(a)}>
                                                         <Edit3 className="h-4 w-4" />
                                                     </Button>
-                                                    <Button size="sm" variant="outline" onClick={() => removeAdvisor(a)}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button size="sm" variant="outline">
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+
+                                                        <AlertDialogContent className="max-w-[92vw] sm:max-w-md">
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>¿Eliminar asesor?</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    Esta acción no se puede deshacer. Se eliminará al asesor{" "}
+                                                                    <span className="font-semibold">{a.full_name}</span>.
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+
+                                                            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                                                <AlertDialogCancel className="w-full sm:w-auto">Cancelar</AlertDialogCancel>
+                                                                <AlertDialogAction
+                                                                    className="w-full sm:w-auto bg-red-600 hover:bg-red-700"
+                                                                    onClick={() => removeAdvisor(a)}
+                                                                >
+                                                                    Sí, eliminar
+                                                                </AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+
                                                 </div>
                                             </td>
                                         </tr>

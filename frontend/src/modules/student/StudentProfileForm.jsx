@@ -8,39 +8,39 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 
-// ✅ Catálogos
-import { Careers, Plans, Periods } from "../../services/academic.service";
-
 const empty = {
-    codigoEstudiante: "",
-    dni: "",
-    nombres: "",
-    apellidos: "",
-    sexo: "",
-    fechaNacimiento: "",
-
-    email: "",
-    celular: "",
-
-    direccion: "",
-    departamento: "",
+    // ✅ Excel (21 campos)
+    region: "",
     provincia: "",
     distrito: "",
 
-    // UI helper (NO se manda al backend)
-    careerId: "",
+    codigoModular: "",
+    nombreInstitucion: "",
+    gestion: "",
+    tipo: "",
 
-    // Backend field (programaId = planId)
-    programaId: "",
-    cicloActual: "",
+    programaCarrera: "",
+
+    ciclo: "",
     turno: "",
     seccion: "",
-    periodoIngreso: "",
-    estado: "activo",
 
-    apoderadoNombre: "",
-    apoderadoDni: "",
-    apoderadoTelefono: "",
+    apellidoPaterno: "",
+    apellidoMaterno: "",
+    nombres: "",
+
+    fechaNac: "",
+    sexo: "",
+
+    numDocumento: "",
+    lengua: "",
+    periodo: "",
+    discapacidad: "",
+    tipoDiscapacidad: "",
+
+    // ✅ Opcionales tuyos que siguen existiendo en el modelo
+    email: "",
+    celular: "",
 
     photoUrl: "",
 };
@@ -53,23 +53,16 @@ const TURNOS = [
     { value: "Noche", label: "Noche" },
 ];
 
-const ESTADOS = [
-    { value: "activo", label: "Activo" },
-    { value: "retirado", label: "Retirado" },
-    { value: "egresado", label: "Egresado" },
-    { value: "suspendido", label: "Suspendido" },
-];
-
 const SEXOS = [
     { value: "M", label: "Masculino (M)" },
     { value: "F", label: "Femenino (F)" },
     { value: "Otro", label: "Otro" },
 ];
 
-const DEFAULT_CICLOS = Array.from({ length: 10 }).map((_, i) => ({
-    value: String(i + 1),
-    label: `Ciclo ${i + 1}`,
-}));
+const DISCAPACIDAD_OPTS = [
+    { value: "SI", label: "SI" },
+    { value: "NO", label: "NO" },
+];
 
 export default function StudentProfileForm({ mode, student, loading, onSave, onUploadPhoto }) {
     const [form, setForm] = useState(empty);
@@ -80,82 +73,24 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
 
     const isAdmin = mode === "admin";
 
-    // Catálogos
-    const [careers, setCareers] = useState([]);
-    const [plans, setPlans] = useState([]);
-    const [periods, setPeriods] = useState([]);
-    const [catsLoading, setCatsLoading] = useState(false);
-
-    // Campos editables por el estudiante
+    // ✅ Qué campos puede editar el estudiante (tú decides)
     const studentEditable = useMemo(
         () =>
             new Set([
                 "email",
                 "celular",
-                "direccion",
-                "departamento",
-                "provincia",
-                "distrito",
-                "apoderadoNombre",
-                "apoderadoDni",
-                "apoderadoTelefono",
+                // si quieres permitirle actualizar lengua o dirección, acá
+                // "lengua",
             ]),
         []
     );
 
     const canEditField = (key) => (isAdmin ? true : studentEditable.has(key));
-    const adminOnly = (key) => !isAdmin; // helper visual
 
-    // Helpers para mapear planes -> carrera y semestres
-    const planCareerId = (p) =>
-        String(p?.career_id ?? p?.careerId ?? p?.career?.id ?? p?.career?.career_id ?? "");
-
-    const planSemesters = (p) =>
-        Number(p?.semesters ?? p?.num_semesters ?? p?.semester_count ?? p?.numSemesters ?? 10) || 10;
-
-    // Cargar catálogos (una vez)
-    useEffect(() => {
-        let alive = true;
-
-        const loadCats = async () => {
-            try {
-                setCatsLoading(true);
-
-                const [cRes, plRes, pRes] = await Promise.allSettled([
-                    Careers.list(),
-                    Plans.list(),
-                    Periods.list(),
-                ]);
-
-                if (!alive) return;
-
-                setCareers(cRes.status === "fulfilled" ? cRes.value?.careers ?? [] : []);
-                setPlans(plRes.status === "fulfilled" ? plRes.value?.plans ?? [] : []);
-
-                if (pRes.status === "fulfilled") {
-                    const raw = pRes.value;
-                    const arr =
-                        (Array.isArray(raw) ? raw : raw?.periods ?? raw?.items ?? raw?.results ?? raw?.data ?? []) || [];
-                    setPeriods(arr);
-                } else {
-                    setPeriods([]);
-                }
-            } finally {
-                if (alive) setCatsLoading(false);
-            }
-        };
-
-        loadCats();
-        return () => {
-            alive = false;
-        };
-    }, []);
-
-    // Si el student ya tiene programaId (planId), inferimos careerId desde plans
-    const inferCareerFromPlan = (programaId, plansList) => {
-        if (!programaId) return "";
-        const p = (plansList || []).find((x) => String(x?.id) === String(programaId));
-        return p ? planCareerId(p) : "";
+    const pickPhoto = (file) => {
+        setPhotoFile(file);
+        if (!file) return;
+        setPhotoPreview(URL.createObjectURL(file));
     };
 
     // Cargar student al form
@@ -166,29 +101,18 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
             return;
         }
 
-        const programaId = student?.programaId?._id ?? student?.programaId ?? "";
-        const inferredCareerId = inferCareerFromPlan(programaId, plans);
-
-        setForm((prev) => ({
+        setForm({
             ...empty,
             ...student,
-            careerId: inferredCareerId || prev.careerId || "",
-            programaId,
-            cicloActual: student?.cicloActual ?? "",
-            fechaNacimiento: safeDate(student?.fechaNacimiento),
+            // normalizaciones
+            fechaNac: safeDate(student?.fechaNac),
+            ciclo: student?.ciclo ?? "",
             photoUrl: student?.photoUrl || "",
-        }));
+        });
 
         setPhotoPreview(student?.photoUrl || "");
         setPhotoFile(null);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [student, plans]);
-
-    const pickPhoto = (file) => {
-        setPhotoFile(file);
-        if (!file) return;
-        setPhotoPreview(URL.createObjectURL(file));
-    };
+    }, [student]);
 
     const submit = async (e) => {
         e.preventDefault();
@@ -201,10 +125,9 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
         try {
             setSaving(true);
 
-            // payload para backend
+            // ✅ payload para backend (campos Excel + extras)
             const payload = { ...form };
-            delete payload.careerId; // 🔥 NO existe en backend
-            payload.cicloActual = payload.cicloActual === "" ? null : Number(payload.cicloActual);
+            payload.ciclo = payload.ciclo === "" ? null : Number(payload.ciclo);
 
             if (!isAdmin) {
                 const filtered = {};
@@ -272,85 +195,6 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
         </div>
     );
 
-    // Options: carreras
-    const careerOptions = useMemo(() => {
-        return (careers || [])
-            .map((c) => {
-                const id = String(c.id ?? c.career_id ?? "");
-                const name = c.name ?? c.title ?? `Carrera ${id}`;
-                if (!id) return null;
-                return { value: id, label: name };
-            })
-            .filter(Boolean);
-    }, [careers]);
-
-    // Options: planes filtrados por carrera
-    const planOptions = useMemo(() => {
-        const cid = String(form.careerId || "");
-        const filtered = cid ? (plans || []).filter((p) => planCareerId(p) === cid) : (plans || []);
-
-        return filtered
-            .map((p) => {
-                const id = String(p.id ?? "");
-                if (!id) return null;
-
-                const name = p.name ?? p.title ?? `Plan ${id}`;
-                const year = p.start_year ?? p.year ?? p.academic_year ?? p.startYear ?? "";
-                const sem = planSemesters(p);
-
-                // si trae nombre de carrera en el plan, lo anexamos como label informativo
-                const cName =
-                    p.career_name ??
-                    p.career?.name ??
-                    p.careerName ??
-                    "";
-
-                const label = `${name}${cName ? ` - ${cName}` : ""}${year ? ` (${year})` : ""} - ${sem} sem.`;
-                return { value: id, label };
-            })
-            .filter(Boolean);
-    }, [plans, form.careerId]);
-
-    // Ciclos dinámicos según plan (si el plan dice 6, sale 1..6)
-    const cycleOptions = useMemo(() => {
-        const pid = String(form.programaId || "");
-        if (!pid) return DEFAULT_CICLOS;
-
-        const p = (plans || []).find((x) => String(x?.id) === pid);
-        const sem = planSemesters(p);
-        return Array.from({ length: sem }).map((_, i) => ({
-            value: String(i + 1),
-            label: `Ciclo ${i + 1}`,
-        }));
-    }, [plans, form.programaId]);
-
-    // Periodos
-    const periodOptions = useMemo(() => {
-        if (Array.isArray(periods) && periods.every((x) => typeof x === "string")) {
-            return periods.map((p) => ({ value: p, label: p }));
-        }
-        return (periods || [])
-            .map((p) => {
-                const val = p.code ?? p.name ?? p.label ?? p.period ?? p.id;
-                if (!val) return null;
-                return { value: String(val), label: String(val) };
-            })
-            .filter(Boolean);
-    }, [periods]);
-
-    // fallback periodos si backend aún no los devuelve
-    const fallbackPeriodOptions = useMemo(() => {
-        const y = new Date().getFullYear();
-        return [
-            { value: `${y}-I`, label: `${y}-I` },
-            { value: `${y}-II`, label: `${y}-II` },
-            { value: `${y + 1}-I`, label: `${y + 1}-I` },
-            { value: `${y + 1}-II`, label: `${y + 1}-II` },
-        ];
-    }, []);
-
-    const effectivePeriodOptions = periodOptions.length ? periodOptions : fallbackPeriodOptions;
-
     return (
         <Card className="rounded-2xl border border-white/50 dark:border-white/10 bg-white/60 dark:bg-neutral-900/40 p-4">
             <form onSubmit={submit} className="space-y-6">
@@ -398,16 +242,16 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
                     </div>
                 </div>
 
-                {/* IDENTIDAD */}
+                {/* IDENTIDAD (Excel) */}
                 <div className="space-y-2">
                     <h3 className="font-semibold">Identidad</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {field("dni", "DNI")}
-                        {field("codigoEstudiante", "Código de estudiante")}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {field("numDocumento", "Num Documento")}
                         {field("nombres", "Nombres")}
-                        {field("apellidos", "Apellidos")}
+                        {field("apellidoPaterno", "Apellido Paterno")}
+                        {field("apellidoMaterno", "Apellido Materno")}
                         {selectField("sexo", "Sexo", SEXOS)}
-                        {field("fechaNacimiento", "Fecha nacimiento", { type: "date" })}
+                        {field("fechaNac", "Fecha Nac", { type: "date" })}
                     </div>
                 </div>
 
@@ -420,91 +264,45 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
                     </div>
                 </div>
 
-                {/* DIRECCIÓN (PERÚ) */}
+                {/* UBICACIÓN */}
                 <div className="space-y-2">
-                    <h3 className="font-semibold">Dirección (Perú)</h3>
+                    <h3 className="font-semibold">Ubicación</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {field("departamento", "Departamento")}
+                        {field("region", "Región")}
                         {field("provincia", "Provincia")}
                         {field("distrito", "Distrito")}
-                        <div className="md:col-span-3">{field("direccion", "Dirección")}</div>
                     </div>
                 </div>
 
-                {/* ACADÉMICO */}
+                {/* INSTITUCIÓN */}
+                <div className="space-y-2">
+                    <h3 className="font-semibold">Institución</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {field("codigoModular", "Código Modular")}
+                        {field("nombreInstitucion", "Nombre de la institución")}
+                        {field("gestion", "Gestión")}
+                        {field("tipo", "Tipo")}
+                    </div>
+                </div>
+
+                {/* ACADÉMICO (Excel) */}
                 <div className="space-y-2">
                     <h3 className="font-semibold">Académico</h3>
-
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                        {/* Carrera (solo admin) */}
-                        <div>
-                            <Label className="flex items-center gap-2">
-                                Carrera
-                                {adminOnly("careerId") && (
-                                    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border">
-                                        <Lock className="h-3 w-3" /> Bloqueado
-                                    </span>
-                                )}
-                            </Label>
-                            <select
-                                className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent"
-                                value={form.careerId ?? ""}
-                                onChange={(e) => {
-                                    const careerId = e.target.value;
-                                    setForm((s) => ({
-                                        ...s,
-                                        careerId,
-                                        programaId: "",  // reset plan
-                                        cicloActual: "", // reset ciclo
-                                    }));
-                                }}
-                                disabled={isAdmin ? (loading || saving || catsLoading) : true}
-                            >
-                                <option value="">— Selecciona —</option>
-                                {careerOptions.map((o) => (
-                                    <option key={o.value} value={o.value}>
-                                        {o.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Plan/Malla (programaId = planId) */}
-                        {selectField(
-                            "programaId",
-                            "Plan / Malla",
-                            planOptions,
-                            { disabled: (isAdmin ? (loading || saving || catsLoading) : true) }
-                        )}
-
-                        {selectField("cicloActual", "Ciclo", cycleOptions)}
+                        <div className="md:col-span-2">{field("programaCarrera", "Programa / Carrera")}</div>
+                        {field("ciclo", "Ciclo", { type: "number", min: 0 })}
                         {selectField("turno", "Turno", TURNOS)}
                         {field("seccion", "Sección")}
-                        {selectField("periodoIngreso", "Periodo ingreso", effectivePeriodOptions)}
-                        {selectField("estado", "Estado", ESTADOS)}
+                        {field("periodo", "Periodo")}
+                        {field("lengua", "Lengua")}
+                        {selectField("discapacidad", "Discapacidad", DISCAPACIDAD_OPTS)}
+                        <div className="md:col-span-2">{field("tipoDiscapacidad", "Tipo de discapacidad")}</div>
                     </div>
-
-                    {catsLoading && (
-                        <p className="text-xs text-muted-foreground">
-                            Cargando catálogos…
-                        </p>
-                    )}
-
                     {!isAdmin && (
                         <p className="text-xs text-muted-foreground">
-                            * Carrera y Plan/Malla están bloqueados para el estudiante: lo maneja administración.
+                            * La mayoría de datos del Excel están bloqueados para el estudiante. Administración lo gestiona.
                         </p>
                     )}
-                </div>
-
-                {/* APODERADO */}
-                <div className="space-y-2">
-                    <h3 className="font-semibold">Apoderado</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {field("apoderadoNombre", "Nombre")}
-                        {field("apoderadoDni", "DNI")}
-                        {field("apoderadoTelefono", "Teléfono")}
-                    </div>
                 </div>
 
                 {/* GUARDAR */}

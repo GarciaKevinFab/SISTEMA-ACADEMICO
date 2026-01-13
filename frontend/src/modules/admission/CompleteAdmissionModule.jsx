@@ -15,6 +15,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "../../components/ui/textarea";
 import { toast } from "sonner";
 import { Plus, Eye, Edit, Download } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+
 
 /* Submódulos reales */
 import AdmissionDashboard from "./AdmissionDashboard";
@@ -165,12 +177,11 @@ const CareersManagement = () => {
     }
   };
 
-  const removeCareer = async (row) => {
-    if (!window.confirm(`Eliminar "${row.name}"? Esta acción no se puede deshacer.`)) return;
+  const removeCareer = async (id) => {
     try {
-      await api.delete(`/careers/${row.id}`);
+      await api.delete(`/careers/${id}`);
       toast.success("Carrera eliminada");
-      setCareers((prev) => prev.filter((c) => c.id !== row.id));
+      setCareers((prev) => prev.filter((x) => x.id !== id));
     } catch (e) {
       toast.error(formatApiError(e, "No se pudo eliminar"));
     }
@@ -182,135 +193,135 @@ const CareersManagement = () => {
     </div>
   );
 
- return (
- <div className="space-y-6 pb-24 sm:pb-6">
+  return (
+    <div className="space-y-6 pb-24 sm:pb-6">
 
-    {/* Header responsive */}
-    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
-        Gestión de Carreras Profesionales
-      </h2>
+      {/* Header responsive */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
+          Gestión de Carreras Profesionales
+        </h2>
 
-      <Button
-        onClick={() => setOpenCreate(true)}
-        className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
-      >
-        <Plus className="h-4 w-4 mr-2" /> Nueva Carrera
-      </Button>
-    </div>
+        <Button
+          onClick={() => setOpenCreate(true)}
+          className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
+        >
+          <Plus className="h-4 w-4 mr-2" /> Nueva Carrera
+        </Button>
+      </div>
 
-    {/* Crear */}
-    {openCreate && (
-      <Card className="p-4">
-        <form onSubmit={submitCreate} className="space-y-4">
-          {/* 2 campos: móvil 1 col, sm 2 col */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label>Nombre *</Label>
-              <Input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                required
-              />
+      {/* Crear */}
+      {openCreate && (
+        <Card className="p-4">
+          <form onSubmit={submitCreate} className="space-y-4">
+            {/* 2 campos: móvil 1 col, sm 2 col */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label>Nombre *</Label>
+                <Input
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div>
+                <Label>Código *</Label>
+                <Input
+                  value={form.code}
+                  onChange={(e) => setForm({ ...form, code: e.target.value })}
+                  required
+                />
+              </div>
             </div>
 
             <div>
-              <Label>Código *</Label>
-              <Input
-                value={form.code}
-                onChange={(e) => setForm({ ...form, code: e.target.value })}
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <Label>Descripción</Label>
-            <Textarea
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-            />
-          </div>
-
-          {/* 4 campos: móvil 1 col, sm 2 col, lg 4 col */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <Label>Duración (sem.) *</Label>
-              <Input
-                type="number"
-                min="1"
-                max="20"
-                value={form.duration_semesters}
-                onChange={(e) => setForm({ ...form, duration_semesters: e.target.value })}
+              <Label>Descripción</Label>
+              <Textarea
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
             </div>
 
-            <div>
-              <Label>Vacantes *</Label>
-              <Input
-                type="number"
-                min="0"
-                value={form.vacancies}
-                onChange={(e) => setForm({ ...form, vacancies: e.target.value })}
-              />
+            {/* 4 campos: móvil 1 col, sm 2 col, lg 4 col */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <Label>Duración (sem.) *</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={form.duration_semesters}
+                  onChange={(e) => setForm({ ...form, duration_semesters: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <Label>Vacantes *</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={form.vacancies}
+                  onChange={(e) => setForm({ ...form, vacancies: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <Label>Tipo de Grado *</Label>
+                <Select
+                  value={form.degree_type}
+                  onValueChange={(v) => setForm({ ...form, degree_type: v })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BACHELOR">Bachiller</SelectItem>
+                    <SelectItem value="TECHNICAL">Técnico</SelectItem>
+                    <SelectItem value="PROFESSIONAL">Profesional</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Modalidad *</Label>
+                <Select
+                  value={form.modality}
+                  onValueChange={(v) => setForm({ ...form, modality: v })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PRESENCIAL">Presencial</SelectItem>
+                    <SelectItem value="VIRTUAL">Virtual</SelectItem>
+                    <SelectItem value="SEMIPRESENCIAL">Semipresencial</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div>
-              <Label>Tipo de Grado *</Label>
-              <Select
-                value={form.degree_type}
-                onValueChange={(v) => setForm({ ...form, degree_type: v })}
+            {/* Botones: móvil columna, desktop fila */}
+            <div className="flex flex-col sm:flex-row sm:justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => setOpenCreate(false)}
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="BACHELOR">Bachiller</SelectItem>
-                  <SelectItem value="TECHNICAL">Técnico</SelectItem>
-                  <SelectItem value="PROFESSIONAL">Profesional</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                Cancelar
+              </Button>
 
-            <div>
-              <Label>Modalidad *</Label>
-              <Select
-                value={form.modality}
-                onValueChange={(v) => setForm({ ...form, modality: v })}
+              <Button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PRESENCIAL">Presencial</SelectItem>
-                  <SelectItem value="VIRTUAL">Virtual</SelectItem>
-                  <SelectItem value="SEMIPRESENCIAL">Semipresencial</SelectItem>
-                </SelectContent>
-              </Select>
+                Crear
+              </Button>
             </div>
-          </div>
-
-          {/* Botones: móvil columna, desktop fila */}
-          <div className="flex flex-col sm:flex-row sm:justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => setOpenCreate(false)}
-            >
-              Cancelar
-            </Button>
-
-            <Button
-              type="submit"
-              className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
-            >
-              Crear
-            </Button>
-          </div>
-        </form>
-      </Card>
-    )}
+          </form>
+        </Card>
+      )}
 
 
       {/* Tabla */}
@@ -557,7 +568,7 @@ const ApplicantsManagement = () => {
   );
 
   return (
-   <div className="space-y-6 pb-24 sm:pb-6">
+    <div className="space-y-6 pb-24 sm:pb-6">
 
       {/* Header + acciones */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -746,84 +757,84 @@ export default function CompleteAdmissionModule() {
 
   if (!user) return <div>Acceso no autorizado</div>;
 
-return (
-  <div className="p-6 box-border flex justify-center">
-    {/* 1. CONTENEDOR: Usamos 'max-h' en vez de 'h' para que no ocupe espacio vacío */}
-    <div className="w-full rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10 flex flex-col md:max-h-[calc(100vh-3rem)]">
+  return (
+    <div className="p-6 box-border flex justify-center">
+      {/* 1. CONTENEDOR: Usamos 'max-h' en vez de 'h' para que no ocupe espacio vacío */}
+      <div className="w-full rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10 flex flex-col md:max-h-[calc(100vh-3rem)]">
 
-      
-      {/* 2. TARJETA: Restauramos color 70 y ajustamos el flex */}
-      <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)] flex flex-col md:overflow-hidden">
 
-        
-        {/* HEADER (Se queda quieto) */}
-        <div className="px-6 pt-5 flex-none">
-          <h1 className="text-xl font-bold text-slate-900">
-            Módulo Admisión
-          </h1>
-          <p className="text-sm text-slate-700">
-            Gestión de convocatorias, postulantes, documentos, evaluación y resultados.
-          </p>
-          <div className="mt-3 h-px w-full bg-white/60" />
+        {/* 2. TARJETA: Restauramos color 70 y ajustamos el flex */}
+        <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)] flex flex-col md:overflow-hidden">
+
+
+          {/* HEADER (Se queda quieto) */}
+          <div className="px-6 pt-5 flex-none">
+            <h1 className="text-xl font-bold text-slate-900">
+              Módulo Admisión
+            </h1>
+            <p className="text-sm text-slate-700">
+              Gestión de convocatorias, postulantes, documentos, evaluación y resultados.
+            </p>
+            <div className="mt-3 h-px w-full bg-white/60" />
+          </div>
+
+          {/* TABS */}
+          <Tabs value={active} onValueChange={onTabChange} className="px-6 pt-4 flex flex-col overflow-hidden h-full">
+
+            {/* BARRA DE MENU: h-auto para permitir que crezca si baja de línea */}
+            <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2 flex-none mb-4 h-auto">
+              <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2 h-auto">
+                {[
+                  { val: "dashboard", label: "Dashboard" },
+                  { val: "careers", label: "Carreras" },
+                  { val: "calls", label: "Convocatorias" },
+                  { val: "applicants", label: "Postulantes" },
+                  { val: "apply", label: "Postulación" },
+                  { val: "docs", label: "Documentos" },
+                  { val: "doc-review", label: "Revisión Docs" },
+                  { val: "eval", label: "Evaluación" },
+                  { val: "results", label: "Resultados" },
+                  { val: "schedule", label: "Cronograma" },
+                  { val: "certificates", label: "Constancias" },
+                  { val: "reports", label: "Reportes" },
+                  { val: "payments", label: "Pagos" },
+                  { val: "params", label: "Parámetros" }
+                ].map((item) => (
+                  <TabsTrigger
+                    key={item.val}
+                    value={item.val}
+                    // CLAVE: flex-1 para que se adapte al ancho, whitespace-nowrap para que no parta el texto
+                    className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm flex-1 whitespace-nowrap text-center min-w-[100px]"
+                  >
+                    {item.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+
+            {/* 3. ZONA DE CONTENIDO */}
+            <div className="pb-6 pr-1 custom-scrollbar flex-1 md:overflow-y-auto">
+
+              <TabsContent value="dashboard" className="mt-0"><AdmissionDashboard /></TabsContent>
+              <TabsContent value="careers" className="mt-0"><CareersManagement /></TabsContent>
+              <TabsContent value="calls" className="mt-0"><AdmissionCallsManagement /></TabsContent>
+              <TabsContent value="applicants" className="mt-0"><ApplicantsManagement /></TabsContent>
+              <TabsContent value="doc-review" className="mt-0"><DocumentReview /></TabsContent>
+              <TabsContent value="apply" className="mt-0"><ApplicationWizard /></TabsContent>
+              <TabsContent value="docs" className="mt-0"><ApplicantDocuments /></TabsContent>
+              <TabsContent value="eval" className="mt-0"><EvaluationBoard /></TabsContent>
+              <TabsContent value="results" className="mt-0"><ResultsPublication /></TabsContent>
+              <TabsContent value="schedule" className="mt-0"><AdmissionScheduleModule /></TabsContent>
+              <TabsContent value="payments" className="mt-0"><PaymentsManagement /></TabsContent>
+              <TabsContent value="certificates" className="mt-0"><AdmissionCertificates /></TabsContent>
+              <TabsContent value="reports" className="mt-0"><AdmissionReportsModule /></TabsContent>
+              <TabsContent value="params" className="mt-0"><AdmissionParamsModule /></TabsContent>
+            </div>
+          </Tabs>
         </div>
-
-        {/* TABS */}
-        <Tabs value={active} onValueChange={onTabChange} className="px-6 pt-4 flex flex-col overflow-hidden h-full">
-          
-          {/* BARRA DE MENU: h-auto para permitir que crezca si baja de línea */}
-          <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2 flex-none mb-4 h-auto">
-            <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2 h-auto">
-              {[
-                { val: "dashboard", label: "Dashboard" },
-                { val: "careers", label: "Carreras" },
-                { val: "calls", label: "Convocatorias" },
-                { val: "applicants", label: "Postulantes" },
-                { val: "apply", label: "Postulación" },
-                { val: "docs", label: "Documentos" },
-                { val: "doc-review", label: "Revisión Docs" },
-                { val: "eval", label: "Evaluación" },
-                { val: "results", label: "Resultados" },
-                { val: "schedule", label: "Cronograma" },
-                { val: "certificates", label: "Constancias" },
-                { val: "reports", label: "Reportes" },
-                { val: "payments", label: "Pagos" },
-                { val: "params", label: "Parámetros" }
-              ].map((item) => (
-                <TabsTrigger 
-                  key={item.val}
-                  value={item.val} 
-                  // CLAVE: flex-1 para que se adapte al ancho, whitespace-nowrap para que no parta el texto
-                  className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm flex-1 whitespace-nowrap text-center min-w-[100px]"
-                >
-                  {item.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </div>
-
-          {/* 3. ZONA DE CONTENIDO */}
-          <div className="pb-6 pr-1 custom-scrollbar flex-1 md:overflow-y-auto">
-
-            <TabsContent value="dashboard" className="mt-0"><AdmissionDashboard /></TabsContent>
-            <TabsContent value="careers" className="mt-0"><CareersManagement /></TabsContent>
-            <TabsContent value="calls" className="mt-0"><AdmissionCallsManagement /></TabsContent>
-            <TabsContent value="applicants" className="mt-0"><ApplicantsManagement /></TabsContent>
-            <TabsContent value="doc-review" className="mt-0"><DocumentReview /></TabsContent>
-            <TabsContent value="apply" className="mt-0"><ApplicationWizard /></TabsContent>
-            <TabsContent value="docs" className="mt-0"><ApplicantDocuments /></TabsContent>
-            <TabsContent value="eval" className="mt-0"><EvaluationBoard /></TabsContent>
-            <TabsContent value="results" className="mt-0"><ResultsPublication /></TabsContent>
-            <TabsContent value="schedule" className="mt-0"><AdmissionScheduleModule /></TabsContent>
-            <TabsContent value="payments" className="mt-0"><PaymentsManagement /></TabsContent>
-            <TabsContent value="certificates" className="mt-0"><AdmissionCertificates /></TabsContent>
-            <TabsContent value="reports" className="mt-0"><AdmissionReportsModule /></TabsContent>
-            <TabsContent value="params" className="mt-0"><AdmissionParamsModule /></TabsContent>
-          </div>
-        </Tabs>
       </div>
     </div>
-  </div>
-);
+  );
 
 
 }
