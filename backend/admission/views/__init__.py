@@ -28,6 +28,7 @@ from .applications import (
 from .documents import (
     application_docs_collection,
     application_doc_review,
+    application_doc_download,
 )
 
 # Pagos
@@ -104,6 +105,7 @@ __all__ = [
     # Documents
     'application_docs_collection',
     'application_doc_review',
+    'application_doc_download',
     # Payments
     'payments_list',
     'application_payment_start',

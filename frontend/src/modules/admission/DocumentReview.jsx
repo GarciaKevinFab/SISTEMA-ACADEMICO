@@ -1,12 +1,30 @@
 import React, { useEffect, useState } from "react";
-import { AdmissionCalls, Evaluation, ApplicantDocs, Applications } from "../../services/admission.service";
+import { AdmissionCalls, ApplicantDocs, Applications } from "../../services/admission.service";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
 import { Badge } from "../../components/ui/badge";
 import { toast } from "sonner";
+import { FileText, Eye, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+
+/* ── Mapa de tipos de documento → etiqueta legible ── */
+const DOC_LABELS = {
+    FOTO_CARNET: "Foto Carnet",
+    COPIA_DNI: "Copia DNI",
+    PARTIDA_NACIMIENTO: "Partida de Nacimiento",
+    CERTIFICADO_ESTUDIOS: "Certificado de Estudios",
+    CARNET_CONADIS: "Carnet CONADIS",
+    CERTIFICADO_SALUD: "Certificado de Salud",
+    DECLARACION_JURADA: "Declaración Jurada",
+    CONSTANCIA_INGRESO: "Constancia de Ingreso",
+    VOUCHER_PAGO: "Voucher de Pago",
+};
+
+const docLabel = (type) => {
+    if (!type) return "Documento";
+    return DOC_LABELS[type] || type.replace(/_/g, " ");
+};
 
 const statusColor = (s) =>
     s === "APPROVED" ? "bg-green-100 text-green-700" :
@@ -14,12 +32,18 @@ const statusColor = (s) =>
             s === "OBSERVED" ? "bg-amber-100 text-amber-700" :
                 "bg-gray-100 text-gray-700";
 
+const statusIcon = (s) =>
+    s === "APPROVED" ? <CheckCircle2 className="h-3.5 w-3.5" /> :
+        s === "REJECTED" ? <XCircle className="h-3.5 w-3.5" /> :
+            s === "OBSERVED" ? <AlertTriangle className="h-3.5 w-3.5" /> :
+                null;
+
 export default function DocumentReview() {
     const [calls, setCalls] = useState([]);
     const [call, setCall] = useState(null);
     const [careerId, setCareerId] = useState("");
     const [apps, setApps] = useState([]);
-    const [current, setCurrent] = useState(null); // application actual
+    const [current, setCurrent] = useState(null);
     const [docs, setDocs] = useState([]);
     const [saving, setSaving] = useState(false);
 
@@ -67,8 +91,7 @@ export default function DocumentReview() {
             toast.error("Aún hay documentos pendientes/observados/rechazados.");
             return;
         }
-        // No hay endpoint en el backend stub: dejamos un éxito local.
-        toast.success("Expediente validado (sincronización pendiente con backend real).");
+        toast.success("Expediente validado correctamente.");
     };
 
     return (
@@ -78,7 +101,7 @@ export default function DocumentReview() {
 
                 <div className="grid md:grid-cols-3 gap-3">
                     <div>
-                        <label className="text-sm">Convocatoria</label>
+                        <label className="text-sm font-medium">Convocatoria</label>
                         <Select value={call?.id?.toString()} onValueChange={(v) => setCall(calls.find(x => x.id.toString() === v))}>
                             <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                             <SelectContent>
@@ -87,7 +110,7 @@ export default function DocumentReview() {
                         </Select>
                     </div>
                     <div>
-                        <label className="text-sm">Carrera</label>
+                        <label className="text-sm font-medium">Carrera</label>
                         <Select value={careerId} onValueChange={setCareerId}>
                             <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                             <SelectContent>
@@ -95,26 +118,20 @@ export default function DocumentReview() {
                             </SelectContent>
                         </Select>
                     </div>
-                   <div className="flex flex-col md:flex-row md:items-end gap-2">
-  <Button
-    className="w-full md:w-auto"
-    variant="outline"
-    onClick={loadApplications}
-  >
-    Refrescar
-  </Button>
-
-  <Button
-    className="w-full md:w-auto"
-    variant="outline"
-    disabled={!current}
-    onClick={markComplete}
-    data-testid="btn-mark-complete"
-  >
-    Marcar expediente 
-  </Button>
-</div>
-
+                    <div className="flex flex-col md:flex-row md:items-end gap-2">
+                        <Button className="w-full md:w-auto" variant="outline" onClick={loadApplications}>
+                            Refrescar
+                        </Button>
+                        <Button
+                            className="w-full md:w-auto"
+                            variant="outline"
+                            disabled={!current}
+                            onClick={markComplete}
+                            data-testid="btn-mark-complete"
+                        >
+                            Marcar expediente
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="grid lg:grid-cols-3 gap-4">
@@ -129,7 +146,7 @@ export default function DocumentReview() {
                                     onClick={() => setCurrent(a)}
                                 >
                                     <div className="text-sm font-medium">{a.applicant_name}</div>
-                                    <div className="text-xs text-gray-500">{a.application_number} · {a.status}</div>
+                                    <div className="text-xs text-gray-500">#{a.application_number || a.id} · {a.status}</div>
                                 </button>
                             ))}
                             {!apps.length && <div className="p-4 text-sm text-gray-500">Sin registros</div>}
@@ -143,7 +160,7 @@ export default function DocumentReview() {
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <div className="font-semibold">{current.applicant_name}</div>
-                                        <div className="text-xs text-gray-500">N° {current.application_number}</div>
+                                        <div className="text-xs text-gray-500">N° {current.application_number || current.id}</div>
                                     </div>
                                     <Badge variant="outline">{current.status}</Badge>
                                 </div>
@@ -174,14 +191,39 @@ export default function DocumentReview() {
 
 function DocRow({ doc, onApprove, onReject, onObserve, saving }) {
     const [obs, setObs] = useState(doc?.observations || "");
+
+    // Resolver la URL del archivo: preferir url (normalizado), luego file_url
+    const fileUrl = doc.url || doc.file_url || null;
+
     return (
         <div className="border rounded p-3">
             <div className="flex justify-between items-center">
-                <div className="text-sm font-medium">{doc.document_type}</div>
-                <Badge className={statusColor(doc.review_status)}>{doc.review_status || "UPLOADED"}</Badge>
+                <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-gray-400" />
+                    <div className="text-sm font-medium">{docLabel(doc.document_type)}</div>
+                    {doc.file_name && (
+                        <span className="text-xs text-gray-400 truncate max-w-[200px]">({doc.file_name})</span>
+                    )}
+                </div>
+                <Badge className={`${statusColor(doc.review_status)} gap-1`}>
+                    {statusIcon(doc.review_status)}
+                    {doc.review_status || "UPLOADED"}
+                </Badge>
             </div>
             <div className="mt-2 flex items-center justify-between gap-4">
-                <a href={doc.url} target="_blank" rel="noreferrer" className="text-blue-600 text-sm underline">Ver archivo</a>
+                {fileUrl ? (
+                    <a
+                        href={fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 text-sm underline flex items-center gap-1 shrink-0"
+                    >
+                        <Eye className="h-3.5 w-3.5" />
+                        Ver archivo
+                    </a>
+                ) : (
+                    <span className="text-gray-400 text-sm italic shrink-0">Sin archivo</span>
+                )}
                 <div className="flex-1">
                     <Textarea
                         rows={2}

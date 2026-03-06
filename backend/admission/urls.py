@@ -61,6 +61,10 @@ urlpatterns = [
         "applications/<int:application_id>/documents/<int:document_id>/review",
         v.application_doc_review,
     ),
+    path(
+        "applications/<int:application_id>/documents/<int:document_id>/download",
+        v.application_doc_download,
+    ),
 
     # ══════════════════════════════════════════════════════════
     # Pago
