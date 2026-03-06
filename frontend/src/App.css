@@ -354,14 +354,238 @@ textarea:focus {
   outline-offset: 2px;
 }
 
-/* Print styles */
+/* ═══════════════════════════════════════════════════════
+   PRINT STYLES — Layout A4 para constancia de postulación
+   ═══════════════════════════════════════════════════════ */
 @media print {
+  /* ── Ocultar elementos no imprimibles ── */
   .no-print {
     display: none !important;
   }
 
   .print-break {
     page-break-before: always;
+  }
+
+  /* ── Mostrar elementos solo-print ── */
+  .print-only {
+    display: block !important;
+  }
+
+  /* ── Configuración de página A4 ── */
+  @page {
+    size: A4 portrait;
+    margin: 18mm 15mm 15mm 15mm;
+  }
+
+  /* ── Reset global para impresión ── */
+  html, body {
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: white !important;
+    color: #1e293b !important;
+    font-size: 12pt !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* ── Ocultar sidebar, header, footer, navegación ── */
+  .sidenav-root,
+  .layout-root > aside,
+  .layout-root > header,
+  .layout-root > .flex-1 > header,
+  .layout-root > .flex-1 > footer,
+  .layout-root > div:first-child:not(.flex-1),
+  header,
+  footer,
+  nav,
+  [data-sonner-toaster],
+  [role="tablist"],
+  [data-radix-scroll-area-viewport] > div > [role="tablist"] {
+    display: none !important;
+  }
+
+  /* ── Ocultar sidebar SideNav (contenedor directo) ── */
+  .layout-root > *:not(.flex-1):not(style):not(script) {
+    display: none !important;
+  }
+
+  /* ── Asegurar que el contenedor principal ocupa todo ── */
+  .layout-root {
+    display: block !important;
+    min-height: auto !important;
+    background: white !important;
+  }
+
+  .layout-root > .flex-1 {
+    display: block !important;
+    width: 100% !important;
+    min-height: auto !important;
+  }
+
+  .layout-root > .flex-1 > main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* ── Ocultar la barra de tabs del módulo de admisión ── */
+  [role="tablist"] {
+    display: none !important;
+  }
+
+  /* ── Ocultar elementos sticky de layout (header, tabs) pero no contenido ── */
+  .layout-root .sticky {
+    display: none !important;
+  }
+
+  /* ── Ocultar mobile overlay y backdrops ── */
+  .fixed[class*="backdrop"],
+  .fixed[class*="inset-0"],
+  [class*="bg-blue-950"] {
+    display: none !important;
+  }
+
+  /* ── Ocultar encabezado del módulo ("Módulo de Admisión") y tabs wrapper ── */
+  [role="tablist"],
+  .rounded-2xl > .px-6.pt-5,
+  .rounded-xl[class*="bg-slate-100"] {
+    display: none !important;
+  }
+
+  /* ── El contenedor de tabs: quitar overflow y max-height para print ── */
+  [class*="md:max-h-"],
+  [class*="md:overflow-hidden"],
+  [class*="md:overflow-y-auto"] {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* ── Quitar contenedores decorativos del módulo ── */
+  .rounded-2xl.p-\\[1px\\],
+  .rounded-2xl[class*="bg-slate-200"],
+  .rounded-2xl[class*="bg-gradient"] {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  /* ── Ocultar botones de acción en la confirmación ── */
+  #print-confirmation .no-print,
+  #print-confirmation button {
+    display: none !important;
+  }
+
+  /* ── Ocultar el ícono de check grande (verde) en impresión ── */
+  .print-hide-icon {
+    display: none !important;
+  }
+
+  /* ── Contenedor de confirmación: ancho completo para A4 ── */
+  #print-confirmation {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    text-align: left !important;
+  }
+
+  #print-confirmation h3 {
+    font-size: 18pt !important;
+    text-align: center !important;
+    margin-bottom: 8px !important;
+  }
+
+  #print-confirmation > .py-8 {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+
+  #print-confirmation > .py-8 > p {
+    text-align: center !important;
+  }
+
+  /* ── Caja de datos: ancho completo con borde limpio ── */
+  .print-data-box,
+  #print-confirmation .print-data-box {
+    max-width: 100% !important;
+    width: 100% !important;
+    background: #fafbfc !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 8px !important;
+    padding: 16px 20px !important;
+    margin: 12px auto !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* ── Filas de resumen: texto legible ── */
+  #print-confirmation .print-data-box .flex {
+    display: flex !important;
+    justify-content: space-between !important;
+    padding: 6px 8px !important;
+    font-size: 11pt !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+  }
+
+  #print-confirmation .print-data-box .flex:last-child {
+    border-bottom: none !important;
+  }
+
+  /* ── Badge: estilo plano para impresión ── */
+  #print-confirmation [class*="badge"],
+  #print-confirmation [class*="Badge"] {
+    display: inline-block !important;
+    background: #dcfce7 !important;
+    color: #166534 !important;
+    border: 1px solid #bbf7d0 !important;
+    padding: 2px 10px !important;
+    border-radius: 4px !important;
+    font-size: 10pt !important;
+    font-weight: 600 !important;
+  }
+
+  /* ── Asegurar que todo el contenido no se divida ── */
+  #print-confirmation > * {
+    page-break-inside: avoid !important;
+  }
+
+  /* ── Ocultar animaciones en impresión ── */
+  #print-confirmation * {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* ── Card wrapper: sin sombra, sin borde excesivo ── */
+  #print-confirmation .rounded-2xl {
+    border-radius: 8px !important;
+  }
+
+  /* ── El Card padre que envuelve todo el wizard ── */
+  .max-w-4xl {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .max-w-4xl > .border {
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* ── Ocultar el header del wizard "Postulación al Proceso..." ── */
+  .max-w-4xl > .pb-4 {
+    display: none !important;
   }
 }
 

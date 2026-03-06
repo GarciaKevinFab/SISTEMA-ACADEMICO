@@ -858,9 +858,27 @@ export default function ApplicationWizard() {
           {/* STEP 6: CONFIRMACIÓN (post-submit)      */}
           {/* ════════════════════════════════════════ */}
           {step === 6 && result && (
-            <div className="space-y-8 animate-in fade-in duration-300 text-center">
+            <div id="print-confirmation" className="space-y-8 animate-in fade-in duration-300 text-center">
+
+              {/* ── Encabezado solo visible al imprimir ── */}
+              <div className="print-only" style={{ display: "none" }}>
+                <div style={{ textAlign: "center", paddingBottom: "12px", borderBottom: "2px solid #1e3a5f", marginBottom: "18px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "16px" }}>
+                    <img src="/loguito.png" alt="Logo" style={{ width: "60px", height: "60px", objectFit: "contain" }} />
+                    <div>
+                      <div style={{ fontSize: "15px", fontWeight: 800, color: "#1e3a5f", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                        IESPP Gustavo Allende Llavería
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+                        Proceso de Admisión — Constancia de Inscripción
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="py-8 space-y-4">
-                <div className="bg-green-100 text-green-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto">
+                <div className="bg-green-100 text-green-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto print-hide-icon">
                   <CheckCircle2 size={40} />
                 </div>
                 <h3 className="text-2xl font-bold text-gray-900">¡Postulación Registrada!</h3>
@@ -869,7 +887,7 @@ export default function ApplicationWizard() {
                 </p>
               </div>
 
-              <div className="bg-gray-50 p-6 rounded-2xl border max-w-md mx-auto space-y-3 text-left">
+              <div className="bg-gray-50 p-6 rounded-2xl border max-w-md mx-auto space-y-3 text-left print-data-box">
                 <SummaryRow
                   label="N° Postulación"
                   value={<span className="text-blue-600 font-bold text-lg">#{result.application_number || result.application_id}</span>}
@@ -878,10 +896,24 @@ export default function ApplicationWizard() {
                 <SummaryRow label="Postulante" value={fullName} />
                 <SummaryRow label="DNI" value={form.dni} />
                 <SummaryRow label="Convocatoria" value={selectedCall?.name} />
+                {preferences.length > 0 && (
+                  <SummaryRow
+                    label={preferences.length === 1 ? "Programa de Estudios" : "Programas (orden preferencia)"}
+                    value={
+                      preferences.length === 1
+                        ? preferences[0].name
+                        : preferences.map((p, i) => `${i + 1}. ${p.name}`).join(", ")
+                    }
+                  />
+                )}
+                <SummaryRow
+                  label="Fecha de registro"
+                  value={new Date().toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                />
               </div>
 
               {(selectedCall?.application_fee ?? 0) > 0 && (
-                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 max-w-md mx-auto text-left space-y-2">
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 max-w-md mx-auto text-left space-y-2 print-data-box">
                   <div className="flex items-center gap-2 text-blue-800 font-bold">
                     <CreditCard className="h-5 w-5" />
                     Pago pendiente: S/. {selectedCall.application_fee}
@@ -893,7 +925,20 @@ export default function ApplicationWizard() {
                 </div>
               )}
 
-              <div className="pt-4 flex flex-col sm:flex-row justify-center gap-3">
+              {/* ── Pie de página solo visible al imprimir ── */}
+              <div className="print-only" style={{ display: "none" }}>
+                <div style={{ marginTop: "32px", paddingTop: "12px", borderTop: "1px solid #cbd5e1", textAlign: "center" }}>
+                  <p style={{ fontSize: "10px", color: "#94a3b8" }}>
+                    Documento generado el {new Date().toLocaleDateString("es-PE", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    {" — "}Sistema Académico IESPP Gustavo Allende Llavería
+                  </p>
+                  <p style={{ fontSize: "9px", color: "#cbd5e1", marginTop: "4px" }}>
+                    Este documento es una constancia de registro. No constituye comprobante de pago.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-4 flex flex-col sm:flex-row justify-center gap-3 no-print">
                 <Button variant="outline" onClick={() => window.print()} className="h-12 rounded-xl px-8">
                   <Printer className="mr-2 h-4 w-4" /> Imprimir
                 </Button>
