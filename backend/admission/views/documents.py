@@ -11,7 +11,7 @@ Incluye:
 import mimetypes
 from django.http import FileResponse, Http404
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from admission.models import Application, ApplicationDocument
@@ -130,11 +130,12 @@ def application_doc_review(request, application_id: int, document_id: int):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def application_doc_download(request, application_id: int, document_id: int):
     """
     Sirve el archivo del documento directamente a través de Django.
     Esto funciona en producción sin necesidad de configurar nginx para /media/.
+    AllowAny: el enlace se abre en nueva pestaña sin token JWT.
     """
     try:
         doc = ApplicationDocument.objects.get(
