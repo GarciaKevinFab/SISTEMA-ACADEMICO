@@ -18,6 +18,7 @@ export const PERMS = {
 
     /* === ACADÉMICO (granular) === */
     "academic.plans.view": "academic.plans.view",
+    "academic.plans.delete": "academic.plans.delete",
     "academic.plans.edit": "academic.plans.edit",
     "academic.sections.view": "academic.sections.view",
     "academic.sections.create": "academic.sections.create",
@@ -161,6 +162,7 @@ export const ROLE_POLICIES = {
     ADMIN_ACADEMIC: [
         "academic.plans.view",
         "academic.plans.edit",
+        "academic.plans.delete",
         "academic.sections.view",
         "academic.sections.create",
         "academic.sections.conflicts",

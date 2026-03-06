@@ -1768,3 +1768,48 @@ def finance_dashboard_stats(request):
         "cash_balance": float(cash_balance or 0),
         "trend": trend,
     })
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def student_balance(request):
+    """GET /api/finance/student/balance — Saldo del estudiante autenticado"""
+    from academic.models import Student
+    try:
+        student = Student.objects.get(user=request.user)
+    except Student.DoesNotExist:
+        return Response({"detail": "No se encontró perfil de estudiante."}, status=404)
+
+    pending_charges = StudentAccountCharge.objects.filter(
+        subject_id=student.id, subject_type="STUDENT", paid=False
+    ).order_by("due_date", "created_at")
+
+    total_pending = sum(float(c.amount) for c in pending_charges)
+    next_charge = pending_charges.first()
+
+    payments = []
+    for c in pending_charges[:5]:
+        payments.append({
+            "concept": c.concept_name or (c.concept.name if c.concept else "Cargo"),
+            "amount": float(c.amount),
+            "status": "pendiente",
+            "due_date": str(c.due_date) if c.due_date else "",
+        })
+
+    paid_entries = StudentAccountPayment.objects.filter(
+        subject_id=student.id, subject_type="STUDENT"
+    ).order_by("-date", "-created_at")[:3]
+
+    for p in paid_entries:
+        payments.append({
+            "concept": f"Pago {p.method} {p.ref or ''}".strip(),
+            "amount": float(p.amount),
+            "status": "pagado",
+            "due_date": str(p.date) if p.date else "",
+        })
+
+    return Response({
+        "pending": total_pending,
+        "next_due": str(next_charge.due_date) if next_charge and next_charge.due_date else None,
+        "next_amount": float(next_charge.amount) if next_charge else 0,
+        "payments": payments,
+    })

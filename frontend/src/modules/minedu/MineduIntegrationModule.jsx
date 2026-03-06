@@ -1,1670 +1,1272 @@
 // src/components/MineduIntegrationModule.jsx
+//
+// Módulo de Integración MINEDU / SIA — v5
+// Design: "Institutional Clean" — matching Admisión Module style
+// - Light, airy backgrounds with white cards
+// - Pill-style tab navigation
+// - Stat cards with right-aligned soft icons
+// - Subtle borders, minimal shadows
+// - Clean typography hierarchy
+// - Soft accent colors through icon circles
+
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useAuth } from "../../context/AuthContext";
-
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../../components/ui/card";
-import { Button } from "../../components/ui/button";
-import { Label } from "../../components/ui/label";
-import { Badge } from "../../components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
-
-import {
-  Database,
-  Upload,
-  RefreshCw,
-  CheckCircle,
-  XCircle,
-  Clock,
-  AlertTriangle,
-  Eye,
-  Shield,
-  Users,
-  BookOpen,
-  Award,
-  TrendingUp,
-  Settings2,
-  ListChecks,
-  Play,
-  Pause,
-  Terminal,
-  RotateCcw,
-  Search,
-  Copy,
-} from "lucide-react";
-
-import { toast } from "../../utils/safeToast";
-
-/* shadcn select */
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "../../components/ui/select";
-
-/* shadcn dialog */
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "../../components/ui/dialog";
-
-/* shadcn separator (opcional pero bonito) */
-import { Separator } from "../../components/ui/separator";
-
-/* servicios MINEDU */
-import {
-  Catalog,
-  Mapping,
-  Jobs,
-  Logs,
-  Exports,
-  Validation,
-  Stats,
+  Stats, Exports, Validation, Codes, Catalog, Mapping, Jobs,
 } from "../../services/minedu.service";
 
-/* =========================
-   helpers
-========================= */
-function formatApiError(err, fallback = "Ocurrió un error") {
-  const data = err?.response?.data;
-  if (data?.detail) {
-    const d = data.detail;
-    if (typeof d === "string") return d;
-    if (Array.isArray(d)) {
-      const msgs = d
-        .map((e) => {
-          const field = Array.isArray(e?.loc) ? e.loc.join(".") : e?.loc;
-          return e?.msg ? (field ? `${field}: ${e.msg}` : e.msg) : null;
-        })
-        .filter(Boolean);
-      if (msgs.length) return msgs.join(" | ");
-    }
-  }
-  if (typeof data?.error?.message === "string") return data.error.message;
-  if (typeof data?.message === "string") return data.message;
-  if (typeof data?.error === "string") return data.error;
-  if (typeof err?.message === "string") return err.message;
-  return fallback;
-}
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
 
-function safeDate(value, withTime = false) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return withTime ? d.toLocaleString() : d.toLocaleDateString();
-}
+import {
+  BarChart3, FileSpreadsheet, History, Link2, ShieldCheck,
+  Cog, Download, RefreshCw, Play, Pause, Plus, Search, X,
+  Loader2, CheckCircle2, AlertTriangle, XCircle, Clock,
+  ChevronDown, FileText, Users, GraduationCap,
+  Building2, BookOpen, ClipboardList, Award, FileCheck, Zap,
+  Save, Upload, LayoutGrid, Table2, ArrowUpRight, Database,
+  TrendingUp, Activity,
+} from "lucide-react";
+import { toast } from "sonner";
 
-function safeJson(obj) {
-  try {
-    return JSON.stringify(obj ?? {}, null, 2);
-  } catch {
-    return "{}";
-  }
-}
+/* ================================================================
+   DESIGN TOKENS
+   ================================================================ */
 
-async function copyToClipboard(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast.success("Copiado ✅");
-  } catch {
-    toast.error("No se pudo copiar");
-  }
-}
+const TABS = [
+  { key: "dashboard", label: "Dashboard", icon: BarChart3 },
+  { key: "export", label: "Exportar", icon: Upload },
+  { key: "history", label: "Historial", icon: History },
+  { key: "mappings", label: "Mapeos", icon: Link2 },
+  { key: "validation", label: "Validación", icon: ShieldCheck },
+  { key: "jobs", label: "Jobs", icon: Cog },
+];
 
-/* =========================================================
-   DASHBOARD
-========================================================= */
-const MineduDashboard = () => {
-  const [stats, setStats] = useState({});
-  const [loading, setLoading] = useState(true);
+const DATA_TYPES = [
+  { value: "ENROLLMENT", label: "Nómina de Matrícula", desc: "Padrón general de matriculados", icon: ClipboardList, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200" },
+  { value: "FICHA", label: "Ficha de Matrícula", desc: "Ficha individual por estudiante", icon: FileText, color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-200" },
+  { value: "BOLETA", label: "Boleta de Notas", desc: "Notas con promedio ponderado", icon: FileCheck, color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200" },
+  { value: "ACTA", label: "Acta Consolidada", desc: "Tabla alumnos × asignaturas", icon: Table2, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200" },
+  { value: "REPORTE", label: "Reporte Kardex", desc: "Historial académico completo", icon: BookOpen, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
+  { value: "REGISTRO_AUX", label: "Registro Auxiliar", desc: "Plantilla de notas parciales", icon: LayoutGrid, color: "text-rose-600", bg: "bg-rose-50", border: "border-rose-200" },
+  { value: "CERTIFICADO", label: "Certificado Estudios", desc: "Certificado oficial por período", icon: Award, color: "text-teal-600", bg: "bg-teal-50", border: "border-teal-200" },
+];
 
-  const fetchDashboardStats = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await Stats.dashboard();
-      setStats(data ?? {});
-    } catch (error) {
-      console.error("Error fetching MINEDU stats:", error);
-      toast.error(formatApiError(error, "Error al cargar estadísticas MINEDU"));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+const EXPORT_FORMATS = [
+  { value: "XLSX", label: "Excel (.xlsx)", icon: FileSpreadsheet },
+  { value: "CSV", label: "CSV (.csv)", icon: FileText },
+];
 
+const CATALOG_TYPES = [
+  { value: "INSTITUTION", label: "Institución", icon: Building2 },
+  { value: "CAREER", label: "Programa de Estudios", icon: GraduationCap },
+  { value: "STUDY_PLAN", label: "Plan de Estudios", icon: BookOpen },
+  { value: "STUDENT", label: "Estudiante", icon: Users },
+];
+
+const STATUS_MAP = {
+  COMPLETED: { label: "Completado", bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", ring: "ring-emerald-200" },
+  FAILED: { label: "Fallido", bg: "bg-red-50", text: "text-red-700", dot: "bg-red-500", ring: "ring-red-200" },
+  PROCESSING: { label: "Procesando", bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-500", ring: "ring-blue-200" },
+  PENDING: { label: "Pendiente", bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500", ring: "ring-amber-200" },
+  RETRYING: { label: "Reintentando", bg: "bg-orange-50", text: "text-orange-700", dot: "bg-orange-500", ring: "ring-orange-200" },
+};
+
+/* ================================================================
+   HOOKS
+   ================================================================ */
+
+function useDebounce(value, delay = 300) {
+  const [d, setD] = useState(value);
   useEffect(() => {
-    fetchDashboardStats();
-  }, [fetchDashboardStats]);
+    const t = setTimeout(() => setD(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return d;
+}
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
-      </div>
-    );
-  }
+/* ================================================================
+   SHARED PRIMITIVES
+   ================================================================ */
 
-  const s = stats?.stats ?? {};
-  const breakdown = stats?.data_breakdown ?? {};
-
+function StatusBadge({ status }) {
+  const s = STATUS_MAP[status] || STATUS_MAP.PENDING;
   return (
-    <div className="space-y-6 pb-24 sm:pb-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-  <div className="min-w-0">
-    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
-      Integración MINEDU
-    </h2>
-    <p className="text-sm sm:text-base text-slate-600">
-      SIA/SIAGIE – exportación, validación y monitoreo
-    </p>
-  </div>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${s.bg} ${s.text} ring-1 ${s.ring}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${s.dot} ${status === "PROCESSING" ? "animate-pulse" : ""}`} />
+      {s.label}
+    </span>
+  );
+}
 
-  <Button
-    variant="outline"
-    onClick={fetchDashboardStats}
-    className="w-full sm:w-auto shrink-0"
-  >
-    <RefreshCw className="h-4 w-4 mr-2" />
-    Actualizar
-  </Button>
-</div>
+function TipBtn({ icon: Icon, label, onClick, cls = "", disabled = false }) {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={onClick}
+            disabled={disabled}
+            className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors hover:bg-slate-100 disabled:opacity-40 ${cls}`}
+          >
+            <Icon className="h-4 w-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs font-medium">{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Exportaciones Pendientes
-            </CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{s.pending_exports || 0}</div>
-            <p className="text-xs text-muted-foreground">Por procesar</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completadas</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {s.completed_exports || 0}
-            </div>
-            <p className="text-xs text-muted-foreground">Enviadas exitosamente</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Fallidas</CardTitle>
-            <XCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {s.failed_exports || 0}
-            </div>
-            <p className="text-xs text-muted-foreground">Con errores</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tasa de Éxito</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {typeof s.success_rate === "number"
-                ? `${Math.round(s.success_rate)}%`
-                : "0%"}
-            </div>
-            <p className="text-xs text-muted-foreground">Sobre el total enviado</p>
-          </CardContent>
-        </Card>
+function Empty({ icon: Icon = FileText, title, sub, action }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20">
+      <div className="h-14 w-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+        <Icon className="h-6 w-6 text-slate-400" />
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Desglose por Tipo</CardTitle>
-          <CardDescription>Exportaciones por categoría</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <Users className="h-8 w-8 text-blue-600" />
-                <div>
-                  <div className="font-semibold">Matrículas</div>
-                  <div className="text-sm text-gray-500">estudiantes</div>
-                </div>
-              </div>
-              <div className="text-2xl font-bold text-blue-600">
-                {breakdown.enrollment_exports || 0}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <Award className="h-8 w-8 text-green-600" />
-                <div>
-                  <div className="font-semibold">Calificaciones</div>
-                  <div className="text-sm text-gray-500">notas</div>
-                </div>
-              </div>
-              <div className="text-2xl font-bold text-green-600">
-                {breakdown.grades_exports || 0}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <BookOpen className="h-8 w-8 text-purple-600" />
-                <div>
-                  <div className="font-semibold">Estudiantes</div>
-                  <div className="text-sm text-gray-500">datos</div>
-                </div>
-              </div>
-              <div className="text-2xl font-bold text-purple-600">
-                {breakdown.students_exports || 0}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <p className="text-sm font-semibold text-slate-600">{title}</p>
+      {sub && <p className="text-xs text-slate-400 mt-1 max-w-xs text-center">{sub}</p>}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
-};
+}
 
-/* =========================================================
-   EXPORT DATA
-========================================================= */
-const ExportDataModule = () => {
-  const [exportType, setExportType] = useState("");
-  const [academicYear, setAcademicYear] = useState("2024");
-  const [academicPeriod, setAcademicPeriod] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleExport = async (e) => {
-    e.preventDefault();
-    if (!exportType || !academicPeriod || !academicYear) {
-      toast.error("Complete todos los campos requeridos");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const payload = {
-        academic_year: parseInt(academicYear, 10),
-        academic_period: academicPeriod,
-      };
-      if (exportType === "enrollments") await Exports.enqueueEnrollments(payload);
-      else await Exports.enqueueGrades(payload);
-
-      toast.success("Exportación encolada");
-      setExportType("");
-      setAcademicPeriod("");
-    } catch (error) {
-      toast.error(formatApiError(error, "Error al iniciar exportación"));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
+function Collapsible({ open, toggle, icon: Icon, iconCls, title, titleCls, borderCls, children }) {
   return (
-  <div className="space-y-6 pb-32 sm:pb-8">
-    <h2 className="text-2xl font-bold text-gray-900">Exportación de Datos</h2>
-
-    <Card>
-      <CardHeader>
-        <CardTitle>Exportar a MINEDU</CardTitle>
-        <CardDescription>Seleccione tipo y período</CardDescription>
-      </CardHeader>
-
-      <CardContent>
-        <form onSubmit={handleExport} className="space-y-6">
-          {/* ✅ responsive grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="min-w-0">
-              <Label>Tipo *</Label>
-              <Select value={exportType} onValueChange={setExportType}>
-                <SelectTrigger className="mt-2 w-full">
-                  <SelectValue placeholder="Datos a exportar" />
-                </SelectTrigger>
-                <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
-                  <SelectItem value="enrollments">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4" />
-                      Matrículas
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="grades">
-                    <div className="flex items-center gap-2">
-                      <Award className="h-4 w-4" />
-                      Calificaciones
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="min-w-0">
-              <Label>Año *</Label>
-              <Select value={academicYear} onValueChange={setAcademicYear}>
-                <SelectTrigger className="mt-2 w-full">
-                  <SelectValue placeholder="Año" />
-                </SelectTrigger>
-                <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
-                  <SelectItem value="2025">2025</SelectItem>
-                  <SelectItem value="2024">2024</SelectItem>
-                  <SelectItem value="2023">2023</SelectItem>
-                  <SelectItem value="2022">2022</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="min-w-0">
-              <Label>Período *</Label>
-              <Select value={academicPeriod} onValueChange={setAcademicPeriod}>
-                <SelectTrigger className="mt-2 w-full">
-                  <SelectValue placeholder="Período" />
-                </SelectTrigger>
-                <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
-                  <SelectItem value="I">I Semestre</SelectItem>
-                  <SelectItem value="II">II Semestre</SelectItem>
-                  <SelectItem value="III">III Semestre</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start gap-3 text-sm text-blue-700">
-              <AlertTriangle className="h-5 w-5 mt-0.5" />
-              <span>
-                <b>Importante:</b> valide catálogos y mapeos antes de exportar.
-              </span>
-            </div>
-          </div>
-
-          {/* ✅ botones responsive + no tapa el “Star” */}
-          <div className="flex flex-col sm:flex-row sm:justify-end gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => {
-                setExportType("");
-                setAcademicPeriod("");
-                setAcademicYear("2024");
-              }}
-            >
-              Limpiar
-            </Button>
-
-            <Button
-              type="submit"
-              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
-              disabled={submitting}
-            >
-              {submitting ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Encolando...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Iniciar Exportación
-                </>
-              )}
-            </Button>
-          </div>
-
-          {/* ✅ spacer extra para que el footer “Star” no tape nada */}
-          <div className="h-10 sm:h-0" />
-        </form>
-      </CardContent>
-    </Card>
-  </div>
-);
-
-};
-
-/* =========================================================
-   HISTORY
-========================================================= */
-const ExportHistoryModule = () => {
-  const [exportsData, setExportsData] = useState([]);
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [typeFilter, setTypeFilter] = useState("ALL");
-  const [loading, setLoading] = useState(true);
-
-  // detalle (Dialog)
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [selectedExport, setSelectedExport] = useState(null);
-
-  const fetchExports = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await Exports.list();
-      setExportsData(data?.exports ?? data ?? []);
-    } catch (e) {
-      toast.error(formatApiError(e, "Error al cargar historial"));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchExports();
-  }, [fetchExports]);
-
-  const retry = async (id) => {
-    try {
-      await Exports.retry(id);
-      toast.success("Reintento encolado");
-      fetchExports();
-    } catch (e) {
-      toast.error(formatApiError(e));
-    }
-  };
-
-  const statusCfg = (status) => {
-    switch (status) {
-      case "COMPLETED":
-        return {
-          label: "Completado",
-          className: "bg-green-100 text-green-700 border border-green-200",
-          Icon: CheckCircle,
-        };
-      case "FAILED":
-        return {
-          label: "Fallido",
-          className: "bg-red-100 text-red-700 border border-red-200",
-          Icon: XCircle,
-        };
-      case "PROCESSING":
-        return {
-          label: "Procesando",
-          className: "bg-yellow-100 text-yellow-700 border border-yellow-200",
-          Icon: RefreshCw,
-        };
-      case "RETRYING":
-        return {
-          label: "Reintentando",
-          className: "bg-yellow-100 text-yellow-700 border border-yellow-200",
-          Icon: RefreshCw,
-        };
-      case "PENDING":
-      default:
-        return {
-          label: "Pendiente",
-          className: "bg-gray-100 text-gray-700 border border-gray-200",
-          Icon: Clock,
-        };
-    }
-  };
-
-  const filtered = useMemo(() => {
-    return (exportsData ?? []).filter((exp) => {
-      const okS = statusFilter === "ALL" || exp.status === statusFilter;
-      const okT = typeFilter === "ALL" || exp.data_type === typeFilter;
-      return okS && okT;
-    });
-  }, [exportsData, statusFilter, typeFilter]);
-
-  const openDetail = (exp) => {
-    setSelectedExport(exp);
-    setDetailOpen(true);
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+    <div className={`rounded-xl border ${borderCls} overflow-hidden`}>
+      <button onClick={toggle} className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50/50 transition-colors">
+        <div className="flex items-center gap-2.5">
+          <Icon className={`h-4 w-4 ${iconCls}`} />
+          <span className={`text-sm font-semibold ${titleCls}`}>{title}</span>
+        </div>
+        <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      <div className={`grid transition-all duration-200 ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+        <div className="overflow-hidden">
+          <div className="px-5 pb-4 pt-1 border-t border-slate-100">{children}</div>
+        </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
+
+/* Skeletons */
+function DashSkeleton() {
+  return (
+    <div className="space-y-6 animate-pulse">
+      <div className="h-20 rounded-xl bg-slate-100" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => <div key={i} className="h-28 rounded-xl bg-slate-100" />)}
+      </div>
+      <div className="grid grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => <div key={i} className="h-24 rounded-xl bg-slate-100" />)}
+      </div>
+    </div>
+  );
+}
+
+function TblSkeleton({ rows = 5 }) {
+  return (
+    <div className="animate-pulse space-y-px">
+      {[...Array(rows)].map((_, i) => (
+        <div key={i} className="h-12 bg-slate-50 first:rounded-t-lg last:rounded-b-lg" />
+      ))}
+    </div>
+  );
+}
+
+
+/* ================================================================
+   MAIN COMPONENT
+   ================================================================ */
+
+export default function MineduIntegrationModule() {
+  const [tab, setTab] = useState("dashboard");
 
   return (
-    <div className="space-y-6 pb-24 sm:pb-6">
+    <div className="min-h-screen bg-[#eef2f6]">
+      {/* ─── MODULE HEADER ─── */}
+      <div className="px-6 pt-6 pb-4">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="h-9 w-9 rounded-lg bg-slate-700 flex items-center justify-center">
+            <Building2 className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-slate-800">Integración MINEDU / SIA</h1>
+            <p className="text-sm text-slate-400">Documentos oficiales para archivo institucional</p>
+          </div>
+        </div>
+      </div>
 
-      {/* Dialog Detalle */}
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Detalle de exportación</DialogTitle>
-            <DialogDescription>
-              Si esto falla en prod, mínimo ya tienes el cadáver bien etiquetado.
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedExport ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div className="p-3 rounded border bg-white">
-                  <div className="text-xs text-gray-500">ID</div>
-                  <div className="font-semibold">{selectedExport.id}</div>
-                </div>
-
-                <div className="p-3 rounded border bg-white">
-                  <div className="text-xs text-gray-500">Tipo</div>
-                  <div className="font-semibold">{selectedExport.data_type}</div>
-                </div>
-
-                <div className="p-3 rounded border bg-white">
-                  <div className="text-xs text-gray-500">Estado</div>
-                  <div className="font-semibold">{selectedExport.status}</div>
-                </div>
-
-                <div className="p-3 rounded border bg-white">
-                  <div className="text-xs text-gray-500">Registros</div>
-                  <div className="font-semibold">
-                    {selectedExport.total_records ?? "N/A"}
-                  </div>
-                </div>
-
-                <div className="p-3 rounded border bg-white md:col-span-2">
-                  <div className="text-xs text-gray-500">Período</div>
-                  <div className="font-semibold">
-                    {selectedExport.record_data?.academic_year ?? "—"}-
-                    {selectedExport.record_data?.academic_period ?? "—"}
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold">record_data</div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => copyToClipboard(safeJson(selectedExport.record_data))}
-                >
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copiar JSON
-                </Button>
-              </div>
-
-              <pre className="p-3 rounded border bg-gray-50 text-xs overflow-auto max-h-[320px]">
-                {safeJson(selectedExport.record_data)}
-              </pre>
-            </div>
-          ) : (
-            <div className="text-sm text-gray-500">Sin datos.</div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-     {/* HEADER */}
-<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-  <h2 className="text-2xl font-bold text-gray-900">Historial de Exportaciones</h2>
-
-  <Button onClick={fetchExports} variant="outline" className="w-full sm:w-auto">
-    <RefreshCw className="h-4 w-4 mr-2" />
-    Actualizar
-  </Button>
-</div>
-
-{/* FILTROS */}
-<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4">
-  <div className="w-full sm:w-48 min-w-0">
-    <Label className="sr-only">Estado</Label>
-    <Select value={statusFilter} onValueChange={setStatusFilter}>
-      <SelectTrigger className="w-full">
-        <SelectValue placeholder="Estado" />
-      </SelectTrigger>
-      <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
-        <SelectItem value="ALL">Todos</SelectItem>
-        <SelectItem value="PENDING">Pendiente</SelectItem>
-        <SelectItem value="PROCESSING">Procesando</SelectItem>
-        <SelectItem value="COMPLETED">Completado</SelectItem>
-        <SelectItem value="FAILED">Fallido</SelectItem>
-        <SelectItem value="RETRYING">Reintentando</SelectItem>
-      </SelectContent>
-    </Select>
-  </div>
-
-  <div className="w-full sm:w-48 min-w-0">
-    <Label className="sr-only">Tipo</Label>
-    <Select value={typeFilter} onValueChange={setTypeFilter}>
-      <SelectTrigger className="w-full">
-        <SelectValue placeholder="Tipo" />
-      </SelectTrigger>
-      <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
-        <SelectItem value="ALL">Todos</SelectItem>
-        <SelectItem value="ENROLLMENT">Matrículas</SelectItem>
-        <SelectItem value="GRADES">Calificaciones</SelectItem>
-        <SelectItem value="STUDENTS">Estudiantes</SelectItem>
-      </SelectContent>
-    </Select>
-  </div>
-
-  {/* Contador: abajo en móvil, a la derecha en desktop */}
-  <div className="text-sm text-gray-600 sm:ml-auto">
-    Mostrando: <b>{filtered.length}</b>
-  </div>
-
-  {/* Mostrando: en móvil se queda abajo, en desktop se va a la derecha */}
-  <div className="text-sm text-gray-600 sm:ml-auto">
-    Mostrando: <b>{filtered.length}</b>
-  </div>
-</div>
-
-{/* TABLA */}
-<Card>
-  <CardContent className="p-0">
-    <div className="w-full overflow-x-auto">
-      <table className="w-full min-w-[820px]">
-        <thead className="bg-gray-200 border-b">
-          <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider whitespace-nowrap">
-              Tipo
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider whitespace-nowrap">
-              Período
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider whitespace-nowrap">
-              Estado
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider whitespace-nowrap">
-              Registros
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider whitespace-nowrap">
-              Fecha
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider whitespace-nowrap">
-              Acciones
-            </th>
-          </tr>
-        </thead>
-
-        <tbody className="bg-white divide-y divide-gray-200">
-          {filtered.map((exp) => {
-            const cfg = statusCfg(exp.status);
-            const Icon = cfg.Icon;
-
+      {/* ─── TAB NAVIGATION ─── */}
+      <div className="px-6 pb-4">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {TABS.map(t => {
+            const active = tab === t.key;
             return (
-              <tr key={exp.id} className="hover:bg-gray-50">
-                <td className="px-4 py-4 whitespace-nowrap text-black">
-                  <div className="flex items-center gap-2">
-                    {exp.data_type === "ENROLLMENT" ? (
-                      <Users className="h-4 w-4 text-blue-600" />
-                    ) : exp.data_type === "GRADES" ? (
-                      <Award className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <BookOpen className="h-4 w-4 text-purple-600" />
-                    )}
-                    <span className="font-medium">{exp.data_type}</span>
-                  </div>
-                </td>
-
-                <td className="px-4 py-4 whitespace-nowrap text-sm text-black">
-                  {exp.record_data?.academic_year ?? "—"}-{exp.record_data?.academic_period ?? "—"}
-                </td>
-
-                <td className="px-4 py-4 whitespace-nowrap text-black">
-                  <Badge variant="secondary" className={cfg.className}>
-                    <span className="flex items-center gap-1">
-                      <Icon className="h-3 w-3" />
-                      {cfg.label}
-                    </span>
-                  </Badge>
-                </td>
-
-                <td className="px-4 py-4 whitespace-nowrap text-sm text-black">
-                  {exp.total_records ?? "N/A"}
-                </td>
-
-                <td className="px-4 py-4 whitespace-nowrap text-sm text-black">
-                  {safeDate(exp.created_at)}
-                </td>
-
-                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-black">
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" title="Ver detalle" onClick={() => openDetail(exp)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-
-                    {exp.status === "FAILED" && (
-                      <Button variant="ghost" size="sm" onClick={() => retry(exp.id)} title="Reintentar">
-                        <RefreshCw className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                </td>
-              </tr>
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`
+                  flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all
+                  ${active
+                    ? "bg-slate-800 text-white shadow-sm"
+                    : "bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 border border-slate-200"
+                  }
+                `}
+              >
+                <t.icon className="h-3.5 w-3.5" />
+                {t.label}
+              </button>
             );
           })}
-        </tbody>
-      </table>
+        </div>
+      </div>
+
+      {/* ─── CONTENT AREA ─── */}
+      <div className="px-6 pb-6">
+        {tab === "dashboard" && <DashboardTab onNav={setTab} />}
+        {tab === "export" && <ExportTab />}
+        {tab === "history" && <HistoryTab />}
+        {tab === "mappings" && <MappingsTab />}
+        {tab === "validation" && <ValidationTab />}
+        {tab === "jobs" && <JobsTab />}
+      </div>
     </div>
-  </CardContent>
-</Card>
+  );
+}
 
 
-      {filtered.length === 0 && (
-        <div className="text-center py-12">
-          <Database className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            No hay exportaciones
-          </h3>
-          <p className="text-gray-500">
-            Prueba con otros filtros o realiza una exportación.
-          </p>
+/* ================================================================
+   DASHBOARD
+   ================================================================ */
+
+function DashboardTab({ onNav }) {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Stats.dashboard()
+      .then(setStats)
+      .catch(() => setStats(null))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <DashSkeleton />;
+  if (!stats) return <Empty icon={BarChart3} title="No se pudo cargar el dashboard" sub="Verifica tu conexión" />;
+
+  const { stats: s, data_breakdown: db } = stats;
+  const rate = Number(s.success_rate) || 0;
+
+  return (
+    <div className="space-y-6">
+      {/* ── Title card ── */}
+      <div className="bg-white rounded-xl border border-slate-200 px-6 py-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-sky-100 flex items-center justify-center">
+            <Building2 className="h-5 w-5 text-sky-600" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-slate-800">Integración MINEDU / SIA</h2>
+            <p className="text-sm text-slate-400">Resumen general de exportaciones</p>
+          </div>
+        </div>
+        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold px-3 py-1.5 rounded-full">
+          <span className="h-2 w-2 rounded-full bg-emerald-500 mr-2 animate-pulse" />
+          Servicio activo
+        </Badge>
+      </div>
+
+      {/* ── Stat cards ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          label="PENDIENTES"
+          value={s.pending_exports}
+          sub="En cola"
+          icon={Clock}
+          iconBg="bg-amber-50"
+          iconColor="text-amber-500"
+        />
+        <StatCard
+          label="COMPLETADAS"
+          value={s.completed_exports}
+          sub="Exitosas"
+          icon={CheckCircle2}
+          iconBg="bg-emerald-50"
+          iconColor="text-emerald-500"
+        />
+        <StatCard
+          label="FALLIDAS"
+          value={s.failed_exports}
+          sub="Con error"
+          icon={XCircle}
+          iconBg="bg-red-50"
+          iconColor="text-red-500"
+        />
+        <StatCard
+          label="TASA DE ÉXITO"
+          value={`${rate}%`}
+          sub="De exportaciones"
+          icon={TrendingUp}
+          iconBg="bg-blue-50"
+          iconColor="text-blue-500"
+        />
+      </div>
+
+      {/* ── Breakdown section ── */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Desglose por tipo</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <BreakCard icon={ClipboardList} label="Matrícula" value={db.enrollment_exports} iconBg="bg-blue-50" iconColor="text-blue-500" />
+          <BreakCard icon={FileCheck} label="Calificaciones" value={db.grades_exports} iconBg="bg-emerald-50" iconColor="text-emerald-500" />
+          <BreakCard icon={Users} label="Estudiantes" value={db.students_exports} iconBg="bg-indigo-50" iconColor="text-indigo-500" />
+        </div>
+      </div>
+
+      {/* ── Quick actions ── */}
+      <div>
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">
+          Accesos directos
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { icon: Upload, label: "Nueva exportación", sub: "Generar documentos", tab: "export", iconBg: "bg-blue-50", iconColor: "text-blue-500" },
+            { icon: ShieldCheck, label: "Validar datos", sub: "Verificar integridad", tab: "validation", iconBg: "bg-emerald-50", iconColor: "text-emerald-500" },
+            { icon: Link2, label: "Revisar mapeos", sub: "Códigos MINEDU", tab: "mappings", iconBg: "bg-violet-50", iconColor: "text-violet-500" },
+            { icon: History, label: "Ver historial", sub: "Exportaciones previas", tab: "history", iconBg: "bg-amber-50", iconColor: "text-amber-500" },
+          ].map(q => (
+            <button
+              key={q.tab}
+              onClick={() => onNav?.(q.tab)}
+              className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col items-center text-center hover:shadow-md hover:border-slate-300 transition-all group"
+            >
+              <div className={`h-12 w-12 rounded-xl ${q.iconBg} flex items-center justify-center mb-3 group-hover:scale-105 transition-transform`}>
+                <q.icon className={`h-6 w-6 ${q.iconColor}`} />
+              </div>
+              <p className="text-sm font-semibold text-slate-700">{q.label}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{q.sub}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, sub, icon: Icon, iconBg, iconColor }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5 flex items-start justify-between">
+      <div>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+        <p className="text-3xl font-bold text-slate-800 mt-1">{value}</p>
+        <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+          <TrendingUp className="h-3 w-3" /> {sub}
+        </p>
+      </div>
+      <div className={`h-11 w-11 rounded-xl ${iconBg} flex items-center justify-center shrink-0`}>
+        <Icon className={`h-5.5 w-5.5 ${iconColor}`} />
+      </div>
+    </div>
+  );
+}
+
+function BreakCard({ icon: Icon, label, value, iconBg, iconColor }) {
+  return (
+    <div className="flex items-center gap-3.5 rounded-xl bg-slate-50 border border-slate-100 p-4 hover:bg-slate-100/70 transition-colors">
+      <div className={`h-10 w-10 rounded-xl ${iconBg} flex items-center justify-center shrink-0`}>
+        <Icon className={`h-5 w-5 ${iconColor}`} />
+      </div>
+      <div>
+        <p className="text-xs text-slate-500">{label}</p>
+        <p className="text-2xl font-bold text-slate-800">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+
+/* ================================================================
+   EXPORTAR
+   ================================================================ */
+
+function ExportTab() {
+  const yr = new Date().getFullYear();
+  const [form, setForm] = useState({
+    data_type: "ENROLLMENT",
+    export_format: "XLSX",
+    academic_year: yr,
+    academic_period: "I",
+  });
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+
+  const run = async () => {
+    setBusy(true); setResult(null); setError(null);
+    try {
+      const r = await Exports.generate(form);
+      setResult(r);
+      toast.success("Exportación generada");
+    } catch (e) {
+      const m = e?.response?.data?.detail || e.message || "Error";
+      setError(m);
+      toast.error(m);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sel = DATA_TYPES.find(t => t.value === form.data_type);
+
+  return (
+    <div className="space-y-6">
+      {/* Step 1 */}
+      <div>
+        <StepLabel n={1} text="Selecciona el tipo de documento" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 mt-3">
+          {DATA_TYPES.map(dt => {
+            const Icon = dt.icon;
+            const on = form.data_type === dt.value;
+            return (
+              <button
+                key={dt.value}
+                onClick={() => setForm({ ...form, data_type: dt.value })}
+                className={`
+                  group text-left rounded-xl border-2 p-3.5 transition-all
+                  ${on
+                    ? `${dt.border} ${dt.bg} shadow-sm`
+                    : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                  }
+                `}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 transition-all ${on ? `${dt.bg}` : "bg-slate-100 group-hover:bg-slate-50"}`}>
+                    <Icon className={`h-4 w-4 ${on ? dt.color : "text-slate-400"}`} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <p className={`text-sm font-semibold truncate ${on ? "text-slate-800" : "text-slate-600"}`}>{dt.label}</p>
+                      {on && <CheckCircle2 className={`h-4 w-4 ${dt.color} shrink-0`} />}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{dt.desc}</p>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Step 2 */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <StepLabel n={2} text="Configura los parámetros" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+          <Field label="Formato">
+            <Select value={form.export_format} onValueChange={v => setForm({ ...form, export_format: v })}>
+              <SelectTrigger className="bg-slate-50 border-slate-200 hover:bg-white transition-colors"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {EXPORT_FORMATS.map(f => (
+                  <SelectItem key={f.value} value={f.value}>
+                    <span className="flex items-center gap-2"><f.icon className="h-3.5 w-3.5 text-slate-400" />{f.label}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Año académico">
+            <Input
+              type="number"
+              value={form.academic_year}
+              onChange={e => setForm({ ...form, academic_year: parseInt(e.target.value) || yr })}
+              className="bg-slate-50 border-slate-200"
+              min={2020} max={2030}
+            />
+          </Field>
+          <Field label="Período">
+            <Select value={form.academic_period} onValueChange={v => setForm({ ...form, academic_period: v })}>
+              <SelectTrigger className="bg-slate-50 border-slate-200 hover:bg-white transition-colors"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="I">I — Primer semestre</SelectItem>
+                <SelectItem value="II">II — Segundo semestre</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+      </div>
+
+      {/* Action bar */}
+      <div className="bg-white rounded-xl border border-slate-200 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3 text-sm text-slate-500">
+          {sel && (
+            <>
+              <div className={`h-7 w-7 rounded-lg ${sel.bg} flex items-center justify-center`}>
+                <sel.icon className={`h-3.5 w-3.5 ${sel.color}`} />
+              </div>
+              <span className="font-semibold text-slate-700">{sel.label}</span>
+              <span className="text-slate-300">·</span>
+              <span className="font-mono text-xs">{form.export_format} · {form.academic_year}-{form.academic_period}</span>
+            </>
+          )}
+        </div>
+        <Button
+          onClick={run}
+          disabled={busy}
+          className="bg-slate-800 hover:bg-slate-700 shadow-sm min-w-[170px] h-10 text-sm font-semibold"
+        >
+          {busy
+            ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Generando…</>
+            : <><Upload className="h-4 w-4 mr-2" />Generar documento</>
+          }
+        </Button>
+      </div>
+
+      {/* Feedback */}
+      {result && (
+        <FeedbackBanner
+          ok
+          icon={CheckCircle2}
+          title="Exportación generada exitosamente"
+          detail={`${result.total_records} registros · ${result.data_type} · ${result.export_format}`}
+          action={result.file_url && (
+            <a href={result.file_url} download className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 hover:text-emerald-900">
+              <Download className="h-4 w-4" />Descargar
+            </a>
+          )}
+        />
+      )}
+      {error && <FeedbackBanner icon={XCircle} title="Error al generar" detail={error} />}
+    </div>
+  );
+}
+
+function StepLabel({ n, text }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-800 text-[11px] font-bold text-white">{n}</span>
+      <span className="text-sm font-semibold text-slate-700">{text}</span>
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div>
+      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function FeedbackBanner({ ok = false, icon: Icon, title, detail, action }) {
+  return (
+    <div className={`rounded-xl border p-5 flex items-start gap-4 ${ok ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
+      <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${ok ? "bg-emerald-100" : "bg-red-100"}`}>
+        <Icon className={`h-5 w-5 ${ok ? "text-emerald-600" : "text-red-600"}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-semibold ${ok ? "text-emerald-800" : "text-red-800"}`}>{title}</p>
+        {detail && <p className={`text-xs mt-0.5 ${ok ? "text-emerald-600" : "text-red-600"}`}>{detail}</p>}
+        {action && <div className="mt-2.5">{action}</div>}
+      </div>
+    </div>
+  );
+}
+
+
+/* ================================================================
+   HISTORIAL
+   ================================================================ */
+
+function HistoryTab() {
+  const [exps, setExps] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+  const dq = useDebounce(q, 250);
+  const [ft, setFt] = useState("ALL");
+
+  const load = useCallback(() => {
+    setLoading(true);
+    Exports.list()
+      .then(r => setExps(r?.exports || []))
+      .catch(() => setExps([]))
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const retry = async id => {
+    try { await Exports.retry(id); toast.success("Reintentando…"); load(); }
+    catch { toast.error("Error"); }
+  };
+
+  const tLabel = dt => DATA_TYPES.find(t => t.value === dt)?.label || dt;
+  const tIcon = dt => DATA_TYPES.find(t => t.value === dt)?.icon || FileText;
+
+  const filtered = useMemo(() => {
+    let r = exps;
+    if (ft !== "ALL") r = r.filter(e => e.data_type === ft);
+    if (dq) {
+      const s = dq.toLowerCase();
+      r = r.filter(e => tLabel(e.data_type).toLowerCase().includes(s) || (e.export_format || "").toLowerCase().includes(s));
+    }
+    return r;
+  }, [exps, ft, dq]);
+
+  const counts = useMemo(() => {
+    const m = {};
+    exps.forEach(e => { m[e.status] = (m[e.status] || 0) + 1; });
+    return m;
+  }, [exps]);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-base font-bold text-slate-800">Historial de Exportaciones</h3>
+          <p className="text-xs text-slate-400 mt-0.5">{exps.length} registros</p>
+        </div>
+        <Button size="sm" variant="outline" onClick={load} className="border-slate-200 hover:bg-slate-50">
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />Actualizar
+        </Button>
+      </div>
+
+      {Object.keys(counts).length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(counts).map(([st, c]) => (
+            <span key={st} className="inline-flex items-center gap-1.5">
+              <StatusBadge status={st} />
+              <span className="text-xs text-slate-400 font-mono">{c}</span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input placeholder="Buscar…" className="pl-9 bg-white border-slate-200" value={q} onChange={e => setQ(e.target.value)} />
+          {q && <button onClick={() => setQ("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X className="h-3.5 w-3.5" /></button>}
+        </div>
+        <Select value={ft} onValueChange={setFt}>
+          <SelectTrigger className="w-[200px] bg-white border-slate-200"><SelectValue placeholder="Tipo" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Todos los tipos</SelectItem>
+            {DATA_TYPES.map(dt => <SelectItem key={dt.value} value={dt.value}>{dt.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {loading ? <TblSkeleton /> : filtered.length === 0 ? (
+        <Empty
+          icon={History}
+          title={q || ft !== "ALL" ? "Sin resultados" : "Sin exportaciones"}
+          sub={q ? "Intenta con otros términos" : "Genera tu primera exportación"}
+        />
+      ) : (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="text-left px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tipo</th>
+                  <th className="text-left px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Formato</th>
+                  <th className="text-left px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Período</th>
+                  <th className="text-right px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider hidden md:table-cell">Registros</th>
+                  <th className="text-left px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estado</th>
+                  <th className="text-left px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider hidden lg:table-cell">Fecha</th>
+                  <th className="w-20" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map(exp => {
+                  const TI = tIcon(exp.data_type);
+                  return (
+                    <tr key={exp.id} className="group hover:bg-slate-50 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <TI className="h-4 w-4 text-slate-400" />
+                          <span className="font-medium text-slate-700">{tLabel(exp.data_type)}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 hidden sm:table-cell">
+                        <code className="text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-semibold">{exp.export_format}</code>
+                      </td>
+                      <td className="px-5 py-3.5 font-mono text-xs text-slate-600">{exp.academic_year}-{exp.academic_period}</td>
+                      <td className="px-5 py-3.5 text-right font-mono text-xs text-slate-500 hidden md:table-cell">{exp.total_records}</td>
+                      <td className="px-5 py-3.5"><StatusBadge status={exp.status} /></td>
+                      <td className="px-5 py-3.5 text-xs text-slate-400 hidden lg:table-cell">{new Date(exp.created_at).toLocaleString("es-PE")}</td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {exp.status === "COMPLETED" && exp.file_url && (
+                            <a href={exp.file_url} download>
+                              <TipBtn icon={Download} label="Descargar" cls="text-blue-600 hover:bg-blue-50" onClick={() => { }} />
+                            </a>
+                          )}
+                          {exp.status === "FAILED" && (
+                            <TipBtn icon={RefreshCw} label="Reintentar" cls="text-orange-600 hover:bg-orange-50" onClick={() => retry(exp.id)} />
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-400 font-medium">
+            Mostrando {filtered.length} de {exps.length} exportaciones
+          </div>
         </div>
       )}
     </div>
   );
-};
+}
 
-/* =========================================================
-   VALIDATION
-========================================================= */
-const DataValidationModule = () => {
-  const [validation, setValidation] = useState(null);
-  const [loading, setLoading] = useState(false);
 
-  const runValidation = async () => {
-    setLoading(true);
-    try {
-      const data = await Validation.integrity();
-      setValidation(data);
-      if (data?.valid) toast.success("Validación: OK");
-      else toast.warning("Validación: hay inconsistencias");
-    } catch (e) {
-      toast.error(formatApiError(e, "Error al validar"));
-    } finally {
-      setLoading(false);
-    }
-  };
+/* ================================================================
+   MAPEOS
+   ================================================================ */
 
-  return (
-    <div className="space-y-6 pb-24 sm:pb-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Validación de Integridad</h2>
-
-        <Button
-          onClick={runValidation}
-          disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
-          {loading ? (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              Validando...
-            </>
-          ) : (
-            <>
-              <Shield className="h-4 w-4 mr-2" />
-              Ejecutar
-            </>
-          )}
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Resultados</CardTitle>
-          <CardDescription>Revisión previa al envío</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {validation ? (
-           <div className="space-y-6 pb-24 sm:pb-6">
-
-              <div
-                className={`p-4 rounded-lg border ${validation.valid
-                    ? "bg-green-50 border-green-200"
-                    : "bg-red-50 border-red-200"
-                  }`}
-              >
-                <div className="flex items-center gap-3">
-                  {validation.valid ? (
-                    <CheckCircle className="h-6 w-6 text-green-600" />
-                  ) : (
-                    <XCircle className="h-6 w-6 text-red-600" />
-                  )}
-                  <div>
-                    <h3
-                      className={`font-semibold ${validation.valid ? "text-green-800" : "text-red-800"
-                        }`}
-                    >
-                      {validation.valid ? "Datos Válidos" : "Se Encontraron Problemas"}
-                    </h3>
-                    <p
-                      className={`text-sm ${validation.valid ? "text-green-700" : "text-red-700"
-                        }`}
-                    >
-                      {validation.valid ? "Listo para exportación" : "Corrija los puntos listados abajo"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {Object.entries(validation.stats || {}).map(([key, value]) => (
-                  <div key={key} className="p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold text-gray-900">{value}</div>
-                    <div className="text-sm text-gray-600 capitalize">
-                      {key.replace(/_/g, " ")}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {Array.isArray(validation.errors) && validation.errors.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-red-800">Errores:</h4>
-                  {validation.errors.map((e, i) => (
-                    <div
-                      key={`${i}-${e}`}
-                      className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded"
-                    >
-                      <XCircle className="h-5 w-5 text-red-600 mt-0.5" />
-                      <span className="text-sm text-red-700">{e}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {Array.isArray(validation.warnings) && validation.warnings.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-yellow-800">Advertencias:</h4>
-                  {validation.warnings.map((w, i) => (
-                    <div
-                      key={`${i}-${w}`}
-                      className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded"
-                    >
-                      <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
-                      <span className="text-sm text-yellow-700">{w}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="text-center py-12 text-gray-500">
-              Ejecute la validación para ver resultados.
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-/* =========================================================
-   MAPPINGS
-========================================================= */
-const MappingsModule = () => {
-  const TYPES = [
-    { value: "INSTITUTION", label: "Institución (código IE)", icon: Settings2 },
-    { value: "CAREER", label: "Carreras", icon: BookOpen },
-    { value: "STUDY_PLAN", label: "Planes de Estudio", icon: Upload }, // icon simpática
-    { value: "STUDENT", label: "Estudiantes", icon: Users },
-  ];
-
-  const [type, setType] = useState("CAREER");
+function MappingsTab() {
+  const [catType, setCatType] = useState("CAREER");
   const [localItems, setLocalItems] = useState([]);
-  const [remoteOptions, setRemoteOptions] = useState([]);
-  const [currentMap, setCurrentMap] = useState({});
-  const [original, setOriginal] = useState({});
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [remoteCodes, setRemoteCodes] = useState([]);
+  const [mappings, setMappings] = useState({});
+  const [mineduCodes, setMineduCodes] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState(null);
+  const [search, setSearch] = useState("");
+  const ds = useDebounce(search, 200);
+  const [nc, setNc] = useState({ code: "", label: "" });
+  const [adding, setAdding] = useState(false);
 
-  const loadAll = useCallback(async () => {
+  const loadData = useCallback(async () => {
+    setLoading(true); setSaveMsg(null);
     try {
-      setLoading(true);
-      const [local, remote, mappings] = await Promise.all([
-        Catalog.local(type),
-        Catalog.remote(type),
-        Mapping.list(type),
+      const [lr, rr, mr, cr] = await Promise.all([
+        Catalog.local(catType), Catalog.remote(catType),
+        Mapping.list(catType), Codes.list(catType),
       ]);
-      setLocalItems(local?.items ?? local ?? []);
-      setRemoteOptions(remote?.items ?? remote ?? []);
-      const map = {};
-      (mappings?.mappings ?? mappings ?? []).forEach((m) => {
-        map[m.local_id] = m.minedu_code;
-      });
-      setCurrentMap(map);
-      setOriginal(map);
-    } catch (e) {
-      toast.error(formatApiError(e, "Error cargando catálogos"));
+      setLocalItems(lr?.items || []);
+      setRemoteCodes(rr?.items || []);
+      setMineduCodes(cr?.items || []);
+      const m = {};
+      (mr?.mappings || []).forEach(x => { m[x.local_id] = x.minedu_code || ""; });
+      setMappings(m);
+    } catch {
+      setLocalItems([]); setRemoteCodes([]);
     } finally {
       setLoading(false);
     }
-  }, [type]);
-
-  useEffect(() => {
-    loadAll();
-  }, [loadAll]);
-
-  const filteredLocal = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return (localItems ?? []).filter((it) => {
-      if (!q) return true;
-      return (
-        (it.name || it.label || "").toLowerCase().includes(q) ||
-        (it.code || it.ident || "").toLowerCase().includes(q)
-      );
-    });
-  }, [localItems, search]);
-
-  const changed = useMemo(() => {
-    return Object.keys(currentMap).filter((id) => currentMap[id] !== original[id]);
-  }, [currentMap, original]);
+  }, [catType]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const save = async () => {
-    if (changed.length === 0) {
-      toast.info("No hay cambios");
-      return;
-    }
-    setSaving(true);
+    setSaving(true); setSaveMsg(null);
     try {
-      const payload = changed.map((id) => ({
-        local_id: Number(id),
-        minedu_code: currentMap[id] || null,
-      }));
-      await Mapping.saveBulk(type, payload);
-      toast.success("Mapeos guardados");
-      await loadAll();
-    } catch (e) {
-      toast.error(formatApiError(e, "Error al guardar mapeos"));
+      const a = Object.entries(mappings).map(([l, c]) => ({ local_id: parseInt(l), minedu_code: c }));
+      const r = await Mapping.saveBulk(catType, a);
+      setSaveMsg({ ok: true, t: `${r.saved} guardados` });
+      toast.success(`${r.saved} mapeo(s) guardados`);
+    } catch {
+      setSaveMsg({ ok: false, t: "Error" });
+      toast.error("Error");
     } finally {
       setSaving(false);
     }
   };
 
-  return (
-    <div className="space-y-6 pb-24 sm:pb-6">
+  const addCode = async () => {
+    if (!nc.code.trim()) return;
+    setAdding(true);
+    try {
+      await Codes.create({ ...nc, type: catType });
+      setNc({ code: "", label: "" });
+      toast.success("Agregado");
+      loadData();
+    } catch { toast.error("Error"); }
+    finally { setAdding(false); }
+  };
 
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="text-2xl font-bold text-black">Mapeo de Catálogos MINEDU</h2>
-        <div className="flex gap-2 items-center">
-          <ListChecks className="h-5 w-5 text-gray-500" />
-          <span className="text-sm text-gray-600">
-            Cambios pendientes: <b>{changed.length}</b>
-          </span>
-          <Button
-            onClick={save}
-            disabled={saving || changed.length === 0}
-            className="ml-2 bg-blue-600 hover:bg-blue-700"
-          >
-            {saving ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Guardando...
-              </>
-            ) : (
-              "Guardar cambios"
-            )}
-          </Button>
-        </div>
+  const delCode = async id => {
+    try { await Codes.delete(id); toast.success("Eliminado"); loadData(); }
+    catch { toast.error("Error"); }
+  };
+
+  const ms = useMemo(() => {
+    const t = localItems.length;
+    const m = localItems.filter(i => mappings[i.id]?.trim()).length;
+    return { t, m, p: t > 0 ? Math.round((m / t) * 100) : 0 };
+  }, [localItems, mappings]);
+
+  const fItems = useMemo(() => {
+    if (!ds) return localItems;
+    const s = ds.toLowerCase();
+    return localItems.filter(i => (i.name || "").toLowerCase().includes(s) || (i.code || "").toLowerCase().includes(s));
+  }, [localItems, ds]);
+
+  const cc = CATALOG_TYPES.find(c => c.value === catType);
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h3 className="text-base font-bold text-slate-800">Mapeos locales → MINEDU</h3>
+        <p className="text-xs text-slate-400 mt-0.5">Vincula registros internos con códigos oficiales</p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {TYPES.map((t) => {
-          const Icon = t.icon;
-          const active = type === t.value;
+      {/* Catalog type pills */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {CATALOG_TYPES.map(ct => {
+          const I = ct.icon;
+          const active = catType === ct.value;
           return (
-            <Button
-              key={t.value}
-              variant={active ? "default" : "outline"}
-              onClick={() => setType(t.value)}
+            <button
+              key={ct.value}
+              onClick={() => { setCatType(ct.value); setSearch(""); }}
+              className={`
+                flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-full transition-all
+                ${active
+                  ? "bg-slate-800 text-white shadow-sm"
+                  : "bg-white text-slate-500 hover:text-slate-700 border border-slate-200"
+                }
+              `}
             >
-              <Icon className="h-4 w-4 mr-2" />
-              {t.label}
-            </Button>
+              <I className="h-3.5 w-3.5" />{ct.label}
+            </button>
           );
         })}
       </div>
 
-    <Card>
-  <CardHeader>
-    <CardTitle>Vincular códigos MINEDU</CardTitle>
-    <CardDescription>
-      Seleccione el código MINEDU correspondiente para cada registro local
-    </CardDescription>
-  </CardHeader>
+      {loading ? (
+        <div className="space-y-4 animate-pulse">
+          <div className="h-28 bg-slate-100 rounded-xl" />
+          <TblSkeleton rows={4} />
+        </div>
+      ) : (
+        <>
+          {/* Codes */}
+          <div className="bg-white rounded-xl border border-slate-200 p-6">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h4 className="text-sm font-bold text-slate-700">Códigos MINEDU — {cc?.label}</h4>
+                <p className="text-xs text-slate-400 mt-0.5">{mineduCodes.length} código(s)</p>
+              </div>
+            </div>
+            {mineduCodes.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {mineduCodes.map(c => (
+                  <span key={c.id} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-full text-xs group hover:border-slate-300 transition-colors">
+                    <code className="font-mono font-bold text-slate-700">{c.code}</code>
+                    {c.label && <span className="text-slate-400">· {c.label}</span>}
+                    <button onClick={() => delCode(c.id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2 items-end">
+              <div className="flex-1 max-w-[140px]">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Código</label>
+                <Input placeholder="001" value={nc.code} onChange={e => setNc({ ...nc, code: e.target.value })} className="h-9 bg-slate-50 border-slate-200 text-xs font-mono" />
+              </div>
+              <div className="flex-1 max-w-[220px]">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Etiqueta</label>
+                <Input placeholder="Descripción" value={nc.label} onChange={e => setNc({ ...nc, label: e.target.value })} className="h-9 bg-slate-50 border-slate-200 text-xs" />
+              </div>
+              <Button size="sm" className="h-9 bg-slate-800 hover:bg-slate-700 shadow-sm" onClick={addCode} disabled={adding || !nc.code.trim()}>
+                {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Plus className="h-3.5 w-3.5 mr-1" />}Agregar
+              </Button>
+            </div>
+          </div>
 
-  <CardContent>
-    <div className="flex items-center gap-3 mb-4 flex-wrap">
-      <div className="relative w-full md:w-80">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <input
-          className="w-full border rounded pl-9 h-9 text-sm"
-          placeholder="Buscar..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+          {/* Completeness */}
+          {localItems.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-5">
+              <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
+                <Database className="h-5 w-5 text-indigo-500" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-semibold text-slate-600">Completitud de mapeos</span>
+                  <span className={`text-xs font-mono font-bold ${ms.p === 100 ? "text-emerald-600" : ms.p > 50 ? "text-amber-600" : "text-red-500"}`}>
+                    {ms.m}/{ms.t} ({ms.p}%)
+                  </span>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-700 ease-out ${ms.p === 100 ? "bg-emerald-500" : ms.p > 50 ? "bg-amber-500" : "bg-red-500"}`}
+                    style={{ width: `${ms.p}%` }}
+                  />
+                </div>
+              </div>
+              {ms.p === 100 && <CheckCircle2 className="h-6 w-6 text-emerald-500 shrink-0" />}
+            </div>
+          )}
 
-      <Button variant="outline" onClick={loadAll}>
-        <RefreshCw className="h-4 w-4 mr-2" />
-        Refrescar
-      </Button>
+          {/* Table */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
+              <div className="relative flex-1 max-w-xs">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <Input placeholder="Buscar…" className="pl-8 h-8 text-xs bg-white border-slate-200" value={search} onChange={e => setSearch(e.target.value)} />
+              </div>
+              <span className="text-[11px] text-slate-400 font-medium">{fItems.length} registros</span>
+            </div>
 
-      <div className="text-sm text-gray-600 ml-auto">
-        Mostrando: <b>{filteredLocal.length}</b>
-      </div>
-    </div>
+            {fItems.length === 0 ? (
+              <div className="p-8">
+                <Empty icon={cc?.icon || FileText} title={search ? "Sin resultados" : "No hay registros"} />
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="px-5 py-2.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider w-14">ID</th>
+                        <th className="px-5 py-2.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nombre</th>
+                        <th className="px-5 py-2.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Cód. local</th>
+                        <th className="px-5 py-2.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Código MINEDU</th>
+                        <th className="px-5 py-2.5 text-center w-12" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {fItems.map(it => {
+                        const has = !!mappings[it.id]?.trim();
+                        return (
+                          <tr key={it.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-5 py-3 text-xs text-slate-400 font-mono">{it.id}</td>
+                            <td className="px-5 py-3 font-medium text-slate-700">{it.name}</td>
+                            <td className="px-5 py-3 text-slate-500 font-mono text-xs hidden sm:table-cell">{it.code || it.ident || "—"}</td>
+                            <td className="px-5 py-3">
+                              <Input
+                                value={mappings[it.id] || ""}
+                                list={`codes-${catType}`}
+                                onChange={e => setMappings(p => ({ ...p, [it.id]: e.target.value }))}
+                                placeholder="Código MINEDU"
+                                className={`h-8 text-xs font-mono border-slate-200 w-44 transition-colors ${has ? "border-emerald-300 bg-emerald-50 focus:border-emerald-400" : "bg-slate-50"}`}
+                              />
+                            </td>
+                            <td className="px-5 py-3 text-center">
+                              {has
+                                ? <CheckCircle2 className="h-4 w-4 text-emerald-500 mx-auto" />
+                                : <div className="h-4 w-4 rounded-full border-2 border-slate-200 mx-auto" />
+                              }
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <datalist id={`codes-${catType}`}>
+                    {remoteCodes.map(c => <option key={c.id} value={c.code}>{c.label}</option>)}
+                  </datalist>
+                </div>
+                <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-400 font-medium">
+                  {ms.m} de {ms.t} mapeados
+                </div>
+              </>
+            )}
+          </div>
 
-    {loading ? (
-      <div className="flex items-center justify-center h-40">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
-      </div>
-    ) : (
-      <div className="overflow-auto">
-        <table className="w-full">
-          <thead className="bg-gray-400 border-b">
-            <tr>
-              <th className="px-4 py-2 text-left text-xs font-semibold text-black uppercase">
-                Local
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-semibold text-black uppercase">
-                Código MINEDU
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-semibold text-black uppercase">
-                Estado
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y bg-white">
-            {filteredLocal.map((it) => {
-              const mappedCode = currentMap[it.id] || "";
-              const changedRow = mappedCode !== (original[it.id] || "");
-
-              return (
-                <tr key={it.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2 text-black">
-                    <div className="font-medium">{it.name || it.label}</div>
-                    <div className="text-xs text-gray-500">
-                      {it.code || it.ident || it.document || ""}
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-2 text-black">
-                    <Select
-                      value={mappedCode}
-                      onValueChange={(v) =>
-                        setCurrentMap((m) => ({
-                          ...m,
-                          [it.id]: v === "UNLINKED" ? "" : v,
-                        }))
-                      }
-                    >
-                      <SelectTrigger className="w-80">
-                        <SelectValue placeholder="Seleccione código" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-72">
-                        <SelectItem value="UNLINKED">— Sin vincular —</SelectItem>
-                        {remoteOptions.map((opt) => (
-                          <SelectItem key={opt.code} value={String(opt.code)}>
-                            {opt.code} — {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </td>
-
-                  <td className="px-4 py-2 text-black">
-                    {changedRow ? (
-                      <Badge className="bg-yellow-100 text-yellow-800 border border-yellow-200">
-                        Pendiente de guardar
-                      </Badge>
-                    ) : mappedCode ? (
-                      <Badge className="bg-green-100 text-green-800 border border-green-200">
-                        Vinculado
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary">Sin vincular</Badge>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    )}
-  </CardContent>
-</Card>
-
-
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={save}
+              disabled={saving || !localItems.length}
+              className="bg-slate-800 hover:bg-slate-700 shadow-sm h-10 px-5 font-semibold"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              {saving ? "Guardando…" : "Guardar mapeos"}
+            </Button>
+            {saveMsg && (
+              <span className={`text-sm flex items-center gap-1.5 font-medium ${saveMsg.ok ? "text-emerald-600" : "text-red-600"}`}>
+                {saveMsg.ok ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}{saveMsg.t}
+              </span>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
-};
+}
 
-/* =========================================================
-   JOBS + LOGS
-========================================================= */
-const JobsLogsModule = () => {
-  const JOB_TYPES = [
-    { value: "EXPORT_ENROLLMENTS", label: "Exportar Matrículas" },
-    { value: "EXPORT_GRADES", label: "Exportar Calificaciones" },
-    { value: "VALIDATE_DATA", label: "Validar Integridad" },
-    { value: "SYNC_CATALOGS", label: "Sincronizar Catálogos" },
-  ];
 
-  const [jobs, setJobs] = useState([]);
-  const [runs, setRuns] = useState([]);
-  const [logs, setLogs] = useState([]);
-  const [selectedJob, setSelectedJob] = useState(null);
-  const [selectedRun, setSelectedRun] = useState(null);
+/* ================================================================
+   VALIDACIÓN
+   ================================================================ */
 
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [form, setForm] = useState({
-    type: "EXPORT_ENROLLMENTS",
-    cron: "0 3 * * *",
-    enabled: true,
-  });
+function ValidationTab() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [eOpen, setEOpen] = useState(true);
+  const [wOpen, setWOpen] = useState(true);
 
-  const loadJobs = useCallback(async () => {
+  const run = async () => {
+    setLoading(true);
     try {
-      const data = await Jobs.list();
-      setJobs(data?.jobs ?? data ?? []);
-    } catch (e) {
-      toast.error(formatApiError(e, "Error al cargar jobs"));
-    }
-  }, []);
-
-  useEffect(() => {
-    loadJobs();
-  }, [loadJobs]);
-
-  const openRuns = useCallback(async (job) => {
-    try {
-      setSelectedJob(job);
-      const data = await Jobs.runs(job.id);
-      setRuns(data?.runs ?? data ?? []);
-      setLogs([]);
-      setSelectedRun(null);
-    } catch (e) {
-      toast.error(formatApiError(e, "Error al cargar ejecuciones"));
-    }
-  }, []);
-
-  const openLogs = async (run) => {
-    try {
-      setSelectedRun(run);
-      const data = await Logs.forRun(run.id);
-      setLogs(data?.logs ?? data ?? []);
-    } catch (e) {
-      toast.error(formatApiError(e, "Error al cargar logs"));
-    }
-  };
-
-  const runNow = async (job) => {
-    try {
-      await Jobs.runNow(job.id);
-      toast.success("Ejecución disparada");
-      await openRuns(job);
-    } catch (e) {
-      toast.error(formatApiError(e));
-    }
-  };
-
-  const pause = async (job) => {
-    try {
-      await Jobs.pause(job.id);
-      toast.success("Job pausado");
-      loadJobs();
-      if (selectedJob?.id === job.id) setSelectedJob((j) => ({ ...j, enabled: false }));
-    } catch (e) {
-      toast.error(formatApiError(e));
-    }
-  };
-
-  const resume = async (job) => {
-    try {
-      await Jobs.resume(job.id);
-      toast.success("Job reanudado");
-      loadJobs();
-      if (selectedJob?.id === job.id) setSelectedJob((j) => ({ ...j, enabled: true }));
-    } catch (e) {
-      toast.error(formatApiError(e));
-    }
-  };
-
-  const retryRun = async (run) => {
-    try {
-      await Jobs.retryRun(run.id);
-      toast.success("Run marcado para reintento");
-      // refresca runs + logs
-      if (selectedJob) await openRuns(selectedJob);
-      setSelectedRun(null);
-      setLogs([]);
-    } catch (e) {
-      toast.error(formatApiError(e, "No se pudo reintentar el run"));
-    }
-  };
-
-  const createJob = async (e) => {
-    e.preventDefault();
-    try {
-      await Jobs.create(form);
-      toast.success("Job creado");
-      setIsCreateOpen(false);
-      loadJobs();
-    } catch (e2) {
-      toast.error(formatApiError(e2, "No se pudo crear el job"));
+      const r = await Validation.integrity();
+      setData(r);
+      r.valid ? toast.success("Datos correctos") : toast.error("Problemas encontrados");
+    } catch {
+      setData(null);
+      toast.error("Error");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-6 pb-24 sm:pb-6">
-
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="text-2xl font-bold">Jobs Programados & Bitácora</h2>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={loadJobs}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Actualizar
-          </Button>
-          <Button onClick={() => setIsCreateOpen(true)}>
-            <Settings2 className="h-4 w-4 mr-2" />
-            Nuevo Job
-          </Button>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-bold text-slate-800">Validación de integridad</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Verifica datos antes de registrar en el SIA</p>
         </div>
-      </div>
-
-      {isCreateOpen && (
-        <Card className="border-2 border-blue-100">
-  <CardHeader>
-    <CardTitle>Crear Job</CardTitle>
-  </CardHeader>
-
-  <CardContent>
-    <form
-      onSubmit={createJob}
-      className="grid grid-cols-1 md:grid-cols-3 gap-4"
-    >
-      <div className="min-w-0">
-        <Label>Tipo</Label>
-        <Select
-          value={form.type}
-          onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}
+        <Button
+          onClick={run}
+          disabled={loading}
+          className="bg-slate-800 hover:bg-slate-700 shadow-sm h-10 font-semibold"
         >
-          <SelectTrigger className="mt-2 w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
-            {JOB_TYPES.map((j) => (
-              <SelectItem key={j.value} value={j.value}>
-                {j.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Play className="h-4 w-4 mr-2" />}
+          {loading ? "Validando…" : "Ejecutar validación"}
+        </Button>
       </div>
 
-      <div className="min-w-0">
-        <Label>CRON</Label>
-        <input
-          className="w-full border rounded h-9 px-3 mt-2 text-sm"
-          value={form.cron}
-          onChange={(e) => setForm((f) => ({ ...f, cron: e.target.value }))}
-          placeholder="0 3 * * *"
-        />
-        <p className="text-xs text-gray-500 mt-1">Ej. 0 3 * * * (3am diario)</p>
-      </div>
-
-      {/* acciones: en móvil se apila, en desktop queda al final */}
-      <div className="min-w-0 md:self-end">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-          <label className="text-sm flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={form.enabled}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, enabled: e.target.checked }))
-              }
-            />
-            Habilitado
-          </label>
-
-          <div className="flex flex-col sm:flex-row gap-2 sm:ml-auto">
-            <Button
-              type="submit"
-              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
-            >
-              Guardar
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => setIsCreateOpen(false)}
-            >
-              Cancelar
-            </Button>
-          </div>
-        </div>
-      </div>
-    </form>
-  </CardContent>
-</Card>
-
+      {!data && !loading && (
+        <Empty icon={ShieldCheck} title="Sin resultados de validación" sub='Presiona "Ejecutar validación" para comenzar' />
       )}
 
-   <Card>
-  <CardHeader>
-    <CardTitle>Jobs</CardTitle>
-    <CardDescription>Programación y acciones</CardDescription>
-  </CardHeader>
-  <CardContent>
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead className="bg-gray-200 border-b">
-          <tr>
-            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Tipo</th> {/* Cambié a text-gray-900 */}
-            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">CRON</th> {/* Cambié a text-gray-900 */}
-            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Estado</th> {/* Cambié a text-gray-900 */}
-            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Última Ejecución</th> {/* Cambié a text-gray-900 */}
-            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Acciones</th> {/* Cambié a text-gray-900 */}
-          </tr>
-        </thead>
-        <tbody className="divide-y bg-white">
-          {jobs.map((job) => (
-            <tr key={job.id} className="hover:bg-gray-50">
-              <td className="px-4 py-2 text-gray-900">{job.type}</td> {/* Cambié a text-gray-900 */}
-              <td className="px-4 py-2 text-gray-900">{job.cron || "-"}</td> {/* Cambié a text-gray-900 */}
-              <td className="px-4 py-2">
-                {job.enabled ? (
-                  <Badge className="bg-green-100 text-green-800 border border-green-200">
-                    Habilitado
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary">Pausado</Badge>
-                )}
-              </td>
-              <td className="px-4 py-2 text-sm text-gray-900">
-                {safeDate(job.last_run_at, true)} {/* Cambié a text-gray-900 */}
-              </td>
-              <td className="px-4 py-2">
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openRuns(job)}
-                    title="Ver ejecuciones"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
+      {data && (
+        <div className="space-y-4">
+          {/* Result banner */}
+          <div className={`rounded-xl border p-6 flex items-center gap-5 ${data.valid ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
+            <div className={`h-14 w-14 rounded-2xl flex items-center justify-center shrink-0 ${data.valid ? "bg-emerald-100" : "bg-red-100"}`}>
+              {data.valid ? <CheckCircle2 className="h-7 w-7 text-emerald-600" /> : <XCircle className="h-7 w-7 text-red-600" />}
+            </div>
+            <div>
+              <p className={`text-base font-bold ${data.valid ? "text-emerald-800" : "text-red-800"}`}>
+                {data.valid ? "Todos los datos correctos" : "Se encontraron problemas"}
+              </p>
+              <p className={`text-sm mt-0.5 ${data.valid ? "text-emerald-600" : "text-red-600"}`}>
+                {data.valid ? "Listo para el SIA" : "Corregir antes de la carga"}
+              </p>
+            </div>
+          </div>
 
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => runNow(job)}
-                    title="Ejecutar ahora"
-                  >
-                    <Play className="h-4 w-4" />
-                  </Button>
-
-                  {job.enabled ? (
-                    <Button size="sm" variant="outline" onClick={() => pause(job)} title="Pausar">
-                      <Pause className="h-4 w-4" />
-                    </Button>
-                  ) : (
-                    <Button size="sm" variant="outline" onClick={() => resume(job)} title="Reanudar">
-                      <Play className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))}
-
-          {jobs.length === 0 && (
-            <tr>
-              <td colSpan="5" className="text-center py-8 text-gray-500">
-                No hay jobs configurados.
-              </td>
-            </tr>
+          {/* Stats */}
+          {data.stats && Object.keys(data.stats).length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 p-6">
+              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-4">Estadísticas</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {Object.entries(data.stats).map(([k, v]) => (
+                  <div key={k} className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{k.replace(/_/g, " ")}</p>
+                    <p className="text-xl font-bold text-slate-800 mt-1">{v}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
-        </tbody>
-      </table>
-    </div>
-  </CardContent>
-</Card>
 
-
-
-      {selectedJob && (
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card>
-  <CardHeader>
-    <CardTitle>Ejecuciones: {selectedJob.type}</CardTitle>
-    <CardDescription>Click en terminal para ver logs</CardDescription>
-  </CardHeader>
-  <CardContent>
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead className="bg-gray-200 border-b">
-          <tr>
-            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Inicio</th> {/* Letras negras */}
-            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Fin</th> {/* Letras negras */}
-            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Estado</th> {/* Letras negras */}
-            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900">Acciones</th> {/* Letras negras */}
-          </tr>
-        </thead>
-        <tbody className="divide-y bg-white">
-          {runs.map((r) => (
-            <tr key={r.id} className="hover:bg-gray-50">
-              <td className="px-4 py-2 text-sm text-gray-900">{safeDate(r.started_at, true)}</td> {/* Letras negras */}
-              <td className="px-4 py-2 text-sm text-gray-900">{safeDate(r.finished_at, true)}</td> {/* Letras negras */}
-              <td className="px-4 py-2">
-                {r.status === "COMPLETED" ? (
-                  <Badge className="bg-green-100 text-green-800 border border-green-200">OK</Badge>
-                ) : r.status === "FAILED" ? (
-                  <Badge className="bg-red-100 text-red-800 border border-red-200">Fallo</Badge>
-                ) : (
-                  <Badge className="bg-yellow-100 text-yellow-800 border border-yellow-200">
-                    {r.status || "En curso"}
-                  </Badge>
-                )}
-              </td>
-              <td className="px-4 py-2">
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openLogs(r)}
-                    title="Ver logs"
-                  >
-                    <Terminal className="h-4 w-4" />
-                  </Button>
-
-                  {r.status === "FAILED" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => retryRun(r)}
-                      title="Reintentar ejecución"
-                    >
-                      <RotateCcw className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))}
-
-          {runs.length === 0 && (
-            <tr>
-              <td colSpan="4" className="text-center py-8 text-gray-500">
-                Sin ejecuciones.
-              </td>
-            </tr>
+          {data.errors?.length > 0 && (
+            <Collapsible
+              open={eOpen} toggle={() => setEOpen(!eOpen)}
+              icon={XCircle} iconCls="text-red-500"
+              title={`Errores (${data.errors.length})`} titleCls="text-red-800"
+              borderCls="border-red-200 bg-white"
+            >
+              <ul className="space-y-2 mt-2">
+                {data.errors.map((e, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm text-red-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-400 mt-1.5 shrink-0" />
+                    <span>{e}</span>
+                  </li>
+                ))}
+              </ul>
+            </Collapsible>
           )}
-        </tbody>
-      </table>
-    </div>
-  </CardContent>
-</Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Logs {selectedRun ? `run #${selectedRun.id}` : ""}</CardTitle>
-              <CardDescription>
-                {selectedRun ? `Estado: ${selectedRun.status}` : "Selecciona una ejecución"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {logs.length === 0 ? (
-                <div className="text-gray-500 text-sm">
-                  Selecciona una ejecución para ver la bitácora.
-                </div>
-              ) : (
-                <div className="max-h-[420px] overflow-auto space-y-2 font-mono text-xs">
-                  {logs.map((l) => (
-                    <div
-                      key={l.id || `${l.timestamp}-${l.message}`}
-                      className={`rounded border p-2 ${l.level === "ERROR"
-                          ? "bg-red-50 border-red-200"
-                          : l.level === "WARN"
-                            ? "bg-yellow-50 border-yellow-200"
-                            : "bg-gray-50 border-gray-200"
-                        }`}
-                    >
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">{safeDate(l.timestamp, true)}</span>
-                        <Badge variant="secondary">{l.level}</Badge>
-                      </div>
-
-                      <div className="mt-1 whitespace-pre-wrap">{l.message}</div>
-
-                      {l.meta && (
-                        <pre className="mt-1 opacity-80">{safeJson(l.meta)}</pre>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {data.warnings?.length > 0 && (
+            <Collapsible
+              open={wOpen} toggle={() => setWOpen(!wOpen)}
+              icon={AlertTriangle} iconCls="text-amber-500"
+              title={`Advertencias (${data.warnings.length})`} titleCls="text-amber-800"
+              borderCls="border-amber-200 bg-white"
+            >
+              <ul className="space-y-2 mt-2">
+                {data.warnings.map((w, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm text-amber-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                    <span>{w}</span>
+                  </li>
+                ))}
+              </ul>
+            </Collapsible>
+          )}
         </div>
       )}
     </div>
   );
-};
+}
 
-/* =========================================================
-   MAIN
-========================================================= */
-const MineduIntegrationModule = () => {
-  const { user, hasPerm } = useAuth();
 
-  // ✅ Hooks SIEMPRE arriba (antes de if/returns)
-  const [activeTab, setActiveTab] = useState("dashboard");
+/* ================================================================
+   JOBS
+   ================================================================ */
 
-  const roles = Array.isArray(user?.roles) ? user.roles : [];
+function JobsTab() {
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [exp, setExp] = useState(null);
+  const [runs, setRuns] = useState([]);
+  const [rl, setRl] = useState(false);
 
-  const canByRole =
-    roles.includes("ADMIN_SYSTEM") ||
-    roles.includes("ADMIN") ||
-    roles.includes("REGISTRAR");
+  const load = useCallback(() => {
+    setLoading(true);
+    Jobs.list()
+      .then(r => setJobs(r?.jobs || []))
+      .catch(() => setJobs([]))
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => { load(); }, [load]);
 
-  const canByPerm =
-    (hasPerm && hasPerm("admin.access.manage")) ||
-    (hasPerm && hasPerm("minedu.access"));
+  const loadRuns = async id => {
+    if (exp === id) { setExp(null); return; }
+    setExp(id); setRl(true);
+    try { const r = await Jobs.runs(id); setRuns(r?.runs || []); }
+    catch { setRuns([]); }
+    finally { setRl(false); }
+  };
 
-  const canAccess = !!user && (canByRole || canByPerm);
+  const runNow = async id => {
+    try {
+      await Jobs.runNow(id);
+      toast.success("Iniciado");
+      load();
+      if (exp === id) loadRuns(id);
+    } catch { toast.error("Error"); }
+  };
 
-  if (!canAccess) {
-    return (
-      <div className="p-6 text-center">
-        <Shield className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Acceso Restringido
-        </h2>
-        <p className="text-gray-600">
-          Solo ADMIN/REGISTRAR pueden acceder al módulo MINEDU.
-        </p>
-      </div>
-    );
-  }
+  const toggle = async j => {
+    try {
+      j.enabled ? await Jobs.pause(j.id) : await Jobs.resume(j.id);
+      toast.success(j.enabled ? "Pausado" : "Reanudado");
+      load();
+    } catch { toast.error("Error"); }
+  };
 
   return (
-    <div className="p-6">
-      <div
-        className="
-          bg-white/70
-          backdrop-blur-md
-          border border-white/40
-          rounded-xl
-          p-6
-          shadow-md
-        "
-      >
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          {/* ===================== MOBILE (dropdown) ===================== */}
-          <div className="block sm:hidden">
-            <Select value={activeTab} onValueChange={setActiveTab}>
-              <SelectTrigger className="w-full bg-white/60">
-                <SelectValue placeholder="Seleccionar módulo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="dashboard">Dashboard</SelectItem>
-                <SelectItem value="mappings">Mapeos</SelectItem>
-                <SelectItem value="export">Exportar</SelectItem>
-                <SelectItem value="history">Historial</SelectItem>
-                <SelectItem value="jobs">Jobs & Logs</SelectItem>
-                <SelectItem value="validation">Validación</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* ===================== DESKTOP (tabs normal) ===================== */}
-          <TabsList className="hidden sm:grid w-full grid-cols-6 bg-white/60">
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="mappings">Mapeos</TabsTrigger>
-            <TabsTrigger value="export">Exportar</TabsTrigger>
-            <TabsTrigger value="history">Historial</TabsTrigger>
-            <TabsTrigger value="jobs">Jobs & Logs</TabsTrigger>
-            <TabsTrigger value="validation">Validación</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="dashboard">
-            <MineduDashboard />
-          </TabsContent>
-
-          <TabsContent value="mappings">
-            <MappingsModule />
-          </TabsContent>
-
-          <TabsContent value="export">
-            <ExportDataModule />
-          </TabsContent>
-
-          <TabsContent value="history">
-            <ExportHistoryModule />
-          </TabsContent>
-
-          <TabsContent value="jobs">
-            <JobsLogsModule />
-          </TabsContent>
-
-          <TabsContent value="validation">
-            <DataValidationModule />
-          </TabsContent>
-        </Tabs>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-bold text-slate-800">Jobs Programados</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Tareas automáticas de sincronización</p>
+        </div>
+        <Button size="sm" variant="outline" onClick={load} className="border-slate-200 hover:bg-slate-50">
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />Actualizar
+        </Button>
       </div>
+
+      {loading ? (
+        <div className="space-y-3 animate-pulse">
+          {[...Array(3)].map((_, i) => <div key={i} className="h-20 rounded-xl bg-slate-100" />)}
+        </div>
+      ) : jobs.length === 0 ? (
+        <Empty icon={Cog} title="Sin jobs configurados" sub="Se configuran desde el panel de administración" />
+      ) : (
+        <div className="space-y-3">
+          {jobs.map(j => {
+            const open = exp === j.id;
+            return (
+              <div
+                key={j.id}
+                className={`bg-white rounded-xl border overflow-hidden transition-all ${open ? "border-indigo-300 shadow-md" : "border-slate-200"}`}
+              >
+                <div className="px-6 py-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${j.enabled ? "bg-emerald-50" : "bg-slate-100"}`}>
+                      <Cog className={`h-5 w-5 ${j.enabled ? "text-emerald-500" : "text-slate-400"}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-800 truncate">{j.type}</p>
+                      <div className="flex items-center gap-2.5 mt-0.5">
+                        <code className="text-[10px] font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded font-semibold">{j.cron}</code>
+                        <span className={`flex items-center gap-1.5 text-[11px] font-semibold ${j.enabled ? "text-emerald-600" : "text-slate-400"}`}>
+                          <span className={`h-2 w-2 rounded-full ${j.enabled ? "bg-emerald-400 animate-pulse" : "bg-slate-300"}`} />
+                          {j.enabled ? "Activo" : "Pausado"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button size="sm" variant="outline" className="h-8 border-slate-200 text-xs font-semibold" onClick={() => toggle(j)}>
+                      {j.enabled ? <><Pause className="h-3.5 w-3.5 mr-1" />Pausar</> : <><Play className="h-3.5 w-3.5 mr-1" />Reanudar</>}
+                    </Button>
+                    <Button size="sm" className="h-8 bg-slate-800 hover:bg-slate-700 text-xs font-semibold shadow-sm" onClick={() => runNow(j.id)}>
+                      <Zap className="h-3.5 w-3.5 mr-1" />Ejecutar
+                    </Button>
+                    <Button size="sm" variant="ghost" className={`h-8 text-xs font-semibold ${open ? "text-indigo-600 bg-indigo-50" : ""}`} onClick={() => loadRuns(j.id)}>
+                      <History className="h-3.5 w-3.5 mr-1" />{open ? "Ocultar" : "Historial"}
+                    </Button>
+                  </div>
+                </div>
+
+                {open && (
+                  <div className="border-t border-slate-100 bg-slate-50 px-6 py-5">
+                    {rl ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                      </div>
+                    ) : runs.length === 0 ? (
+                      <p className="text-center text-sm text-slate-400 py-6">Sin ejecuciones registradas</p>
+                    ) : (
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-4">Últimas ejecuciones</p>
+                        <div className="space-y-0">
+                          {runs.slice(0, 5).map((r, i) => (
+                            <div key={r.id} className="flex items-center gap-3.5 relative">
+                              {i < Math.min(runs.length, 5) - 1 && (
+                                <div className="absolute left-[13px] top-8 h-full w-px bg-slate-200" />
+                              )}
+                              <div className={`h-[26px] w-[26px] rounded-full border-2 flex items-center justify-center shrink-0 z-10 bg-white ${r.status === "COMPLETED" ? "border-emerald-400"
+                                  : r.status === "FAILED" ? "border-red-400"
+                                    : r.status === "PROCESSING" ? "border-blue-400"
+                                      : "border-slate-300"
+                                }`}>
+                                <div className={`h-2.5 w-2.5 rounded-full ${STATUS_MAP[r.status]?.dot || "bg-slate-300"}`} />
+                              </div>
+                              <div className="flex-1 flex items-center justify-between py-3">
+                                <div>
+                                  <StatusBadge status={r.status} />
+                                  <p className="text-[11px] text-slate-400 mt-1 font-medium">
+                                    {new Date(r.started_at).toLocaleString("es-PE")}
+                                  </p>
+                                </div>
+                                {r.finished_at && (
+                                  <span className="text-[10px] text-slate-400 font-mono">
+                                    → {new Date(r.finished_at).toLocaleString("es-PE")}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
-};
-
-export default MineduIntegrationModule;
+}

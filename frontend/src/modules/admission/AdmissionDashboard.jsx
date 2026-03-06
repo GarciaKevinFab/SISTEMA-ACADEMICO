@@ -1,35 +1,177 @@
-// src/modules/admission/AdmissionDashboard.jsx
+// src/modules/admission/AdmissionDashboard.jsx — UI/UX mejorado
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { motion } from "framer-motion";
 
-import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { Card, CardContent } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
-import { Button } from "../../components/ui/button";
 import {
-  Users,
-  FileText,
-  Award,
-  CheckCircle,
-  BarChart3,
-  GraduationCap,
+  Users, FileText, Award, CheckCircle, BarChart3,
+  GraduationCap, TrendingUp, ArrowRight, Loader2,
 } from "lucide-react";
 import { getAdmissionDashboardStats } from "../../services/admission.service";
 
-/* --- Animaciones --- */
-const fade = {
-  initial: { opacity: 0, y: 10 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.3 },
-};
+/* ─────────────────────────── ESTILOS ─────────────────────────── */
+const admissionStyles = `
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+  .adm-module * { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
 
-const scaleIn = {
-  initial: { opacity: 0, scale: 0.95 },
-  animate: { opacity: 1, scale: 1 },
-  transition: { duration: 0.2 },
-};
+  /* Header gradient border */
+  .adm-header {
+    background: linear-gradient(white, white) padding-box,
+                linear-gradient(135deg, #3B82F6 0%, #6366F1 50%, #06B6D4 100%) border-box;
+    border: 1.5px solid transparent;
+    border-radius: 18px;
+  }
 
+  /* Stat card */
+  .adm-stat { position: relative; overflow: hidden; transition: box-shadow 0.18s, transform 0.18s; }
+  .adm-stat:hover { transform: translateY(-2px); box-shadow: 0 10px 30px -8px rgba(0,0,0,0.12); }
+  .adm-stat::after {
+    content: '';
+    position: absolute;
+    bottom: -30px; right: -30px;
+    width: 100px; height: 100px;
+    border-radius: 50%;
+    opacity: 0.06;
+  }
+  .adm-stat-blue::after   { background: #2563EB; }
+  .adm-stat-indigo::after { background: #4F46E5; }
+  .adm-stat-violet::after { background: #7C3AED; }
+  .adm-stat-green::after  { background: #059669; }
+
+  /* Action button */
+  .adm-action {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; padding: 24px 16px;
+    background: white;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.18s cubic-bezier(.4,0,.2,1);
+    text-align: center; width: 100%;
+  }
+  .adm-action:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 28px -6px rgba(0,0,0,0.10);
+  }
+  .adm-action .adm-action-icon {
+    width: 48px; height: 48px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.2s;
+  }
+  .adm-action:hover .adm-action-icon { transform: scale(1.1) rotate(-3deg); }
+
+  /* Progress bar (conversion rate) */
+  @keyframes bar-in { from { width: 0 } }
+  .adm-bar { animation: bar-in 0.7s ease both; }
+
+  /* Fade in */
+  @keyframes fade-in { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+  .fade-in { animation: fade-in 0.28s ease both; }
+
+  /* Skeleton */
+  @keyframes skel { 0%,100%{opacity:.35} 50%{opacity:.75} }
+  .skel { animation: skel 1.4s ease-in-out infinite; background: #E2E8F0; border-radius: 8px; }
+`;
+
+function InjectAdmissionStyles() {
+  useEffect(() => {
+    const id = "admission-styles";
+    if (document.getElementById(id)) return;
+    const s = document.createElement("style");
+    s.id = id; s.textContent = admissionStyles;
+    document.head.appendChild(s);
+    return () => document.getElementById(id)?.remove();
+  }, []);
+  return null;
+}
+
+/* ─────────────────────────── STAT CARD ─────────────────────────── */
+function StatCard({ label, value, subtitle, Icon, accent, delay = 0, loading }) {
+  const themes = {
+    blue: { border: "border-t-blue-500", iconBg: "bg-blue-50", iconColor: "text-blue-600", valueBg: "text-blue-700", cls: "adm-stat-blue" },
+    indigo: { border: "border-t-indigo-500", iconBg: "bg-indigo-50", iconColor: "text-indigo-600", valueBg: "text-indigo-700", cls: "adm-stat-indigo" },
+    violet: { border: "border-t-violet-500", iconBg: "bg-violet-50", iconColor: "text-violet-600", valueBg: "text-violet-700", cls: "adm-stat-violet" },
+    green: { border: "border-t-emerald-500", iconBg: "bg-emerald-50", iconColor: "text-emerald-600", valueBg: "text-emerald-700", cls: "adm-stat-green" },
+  };
+  const th = themes[accent] || themes.blue;
+
+  return (
+    <Card
+      className={`adm-stat ${th.cls} border-t-4 ${th.border} border-slate-100 shadow-sm rounded-2xl bg-white fade-in`}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-700 uppercase tracking-wider text-slate-500 truncate">{label}</p>
+            <div className="mt-2">
+              {loading ? (
+                <div className="skel h-9 w-20 rounded-xl" />
+              ) : (
+                <p className="text-3xl font-800 text-slate-800 tabular-nums leading-none">
+                  {value.toLocaleString()}
+                </p>
+              )}
+            </div>
+            <p className={`text-[11px] font-600 mt-1.5 flex items-center gap-1 ${th.valueBg}`}>
+              <TrendingUp size={10} /> {subtitle}
+            </p>
+          </div>
+          <div className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${th.iconBg}`}>
+            <Icon size={18} className={th.iconColor} />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─────────────────────────── ACTION BUTTON ─────────────────────────── */
+function ActionCard({ label, sublabel, Icon, color, bg, onClick, delay = 0 }) {
+  return (
+    <button
+      className="adm-action fade-in"
+      style={{ animationDelay: `${delay}ms` }}
+      onClick={onClick}
+    >
+      <div className="adm-action-icon" style={{ background: bg, color }}>
+        <Icon size={22} />
+      </div>
+      <div>
+        <p className="text-sm font-700 text-slate-700 leading-tight">{label}</p>
+        <p className="text-[11px] text-slate-400 mt-0.5">{sublabel}</p>
+      </div>
+      <ArrowRight size={13} className="text-slate-300 mt-1" />
+    </button>
+  );
+}
+
+/* ─────────────────────────── CONVERSION RATE ─────────────────────────── */
+function ConversionBar({ label, value, max, color, bg }) {
+  const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-600 text-slate-600">{label}</p>
+        <div className="flex items-baseline gap-1">
+          <span className="text-sm font-800 text-slate-800">{value}</span>
+          <span className="text-[10px] text-slate-400">/ {max}</span>
+          <span className="text-[10px] font-700 ml-1" style={{ color }}>{pct}%</span>
+        </div>
+      </div>
+      <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+        <div
+          className="adm-bar h-full rounded-full"
+          style={{ width: `${pct}%`, background: color, animationDelay: "200ms" }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────── DASHBOARD PRINCIPAL ─────────────────────────── */
 export default function AdmissionDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -39,23 +181,14 @@ export default function AdmissionDashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const data = await getAdmissionDashboardStats();
-        setStats(data || {});
-      } catch (error) {
-        console.error(error);
+        setStats((await getAdmissionDashboardStats()) || {});
+      } catch (e) {
+        console.error(e);
       } finally {
         setLoading(false);
       }
     })();
   }, []);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600" />
-      </div>
-    );
-  }
 
   const totalApplicants = stats.total_applicants || 0;
   const totalApplications = stats.total_applications || 0;
@@ -63,221 +196,128 @@ export default function AdmissionDashboard() {
   const totalAdmitted = stats.total_admitted || 0;
 
   return (
-    /* ✅ Responsive sólido:
-       - min-h-[100dvh]: mejor en móvil iOS
-       - overflow-x-hidden: evita desbordes laterales
-       - max-w-7xl mx-auto: buen ancho en laptop
-    */
-    <div className="min-h-[100dvh] w-full overflow-x-hidden p-4 sm:p-6 lg:p-8 pb-40 space-y-6 sm:space-y-8 max-w-7xl mx-auto">
-      {/* 1. CABECERA */}
-      <motion.div
-        {...fade}
-        className="rounded-2xl p-[1px] bg-gradient-to-r from-blue-500/30 via-indigo-500/30 to-cyan-500/30"
-      >
-        <div className="w-full min-w-0 rounded-2xl bg-white/70 dark:bg-neutral-900/60 backdrop-blur-md px-4 py-5 sm:px-6 border border-white/50 dark:border-white/10 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-800 dark:text-gray-100 flex items-center gap-2">
-              <GraduationCap className="h-6 w-6 text-indigo-600" />
-              Módulo de Admisión
-            </h1>
-            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Resumen general del proceso de admisión.
-            </p>
+    <>
+      <InjectAdmissionStyles />
+      <div className="adm-module w-full min-w-0 overflow-x-hidden p-4 sm:p-6 pb-16 space-y-5 max-w-6xl mx-auto">
+
+        {/* ── HEADER ── */}
+        <div className="adm-header bg-white shadow-sm px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm shadow-blue-200">
+              <GraduationCap size={20} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-800 text-slate-800 leading-tight">Módulo de Admisión</h1>
+              <p className="text-xs text-slate-400 mt-0.5">Resumen general del proceso de admisión</p>
+            </div>
           </div>
 
-          <Badge
-            variant="outline"
-            className="self-start md:self-auto px-3 py-1 bg-indigo-50 text-indigo-700 border-indigo-200 text-sm rounded-lg whitespace-nowrap"
-          >
-            Proceso Activo
-          </Badge>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {loading ? (
+              <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-lg">
+                <Loader2 size={11} className="animate-spin" /> Cargando...
+              </div>
+            ) : (
+              <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-700 px-3 py-1.5 rounded-lg">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 inline-block" />
+                Proceso activo
+              </Badge>
+            )}
+          </div>
         </div>
-      </motion.div>
 
-      {/* 2. TARJETAS DE MÉTRICAS */}
-      {/* 1 col móvil, 2 tablet, 4 laptop */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-        {/* Postulantes */}
-        <motion.div {...scaleIn} transition={{ delay: 0.05 }}>
-          <Card className="min-w-0 h-full border-t-4 border-t-blue-500 shadow-sm bg-white/60 dark:bg-neutral-900/60 backdrop-blur-sm border-white/50">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Total Postulantes
-              </CardTitle>
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <Users className="h-4 w-4 text-blue-600" />
+        {/* ── MÉTRICAS ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <StatCard
+            label="Postulantes" value={totalApplicants}
+            subtitle="Registrados" Icon={Users}
+            accent="blue" delay={0} loading={loading}
+          />
+          <StatCard
+            label="Postulaciones" value={totalApplications}
+            subtitle="Expedientes enviados" Icon={FileText}
+            accent="indigo" delay={60} loading={loading}
+          />
+          <StatCard
+            label="Evaluados" value={totalEvaluated}
+            subtitle="Con puntaje" Icon={Award}
+            accent="violet" delay={120} loading={loading}
+          />
+          <StatCard
+            label="Admitidos" value={totalAdmitted}
+            subtitle="Ingresantes oficiales" Icon={CheckCircle}
+            accent="green" delay={180} loading={loading}
+          />
+        </div>
+
+        {/* ── TASA DE CONVERSIÓN ── */}
+        {!loading && totalApplicants > 0 && (
+          <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white fade-in" style={{ animationDelay: "240ms" }}>
+            <CardContent className="p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center">
+                  <BarChart3 size={14} className="text-slate-500" />
+                </div>
+                <div>
+                  <p className="text-xs font-700 text-slate-700">Embudo de conversión</p>
+                  <p className="text-[10px] text-slate-400">De postulante a admitido</p>
+                </div>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-gray-100">
-                {totalApplicants}
+              <div className="space-y-3">
+                <ConversionBar
+                  label="Postulaciones / Postulantes"
+                  value={totalApplications} max={totalApplicants}
+                  color="#4F46E5" bg="#EEF2FF"
+                />
+                <ConversionBar
+                  label="Evaluados / Postulaciones"
+                  value={totalEvaluated} max={totalApplications}
+                  color="#7C3AED" bg="#F5F3FF"
+                />
+                <ConversionBar
+                  label="Admitidos / Evaluados"
+                  value={totalAdmitted} max={totalEvaluated}
+                  color="#059669" bg="#ECFDF5"
+                />
               </div>
-              <p className="text-xs text-blue-600/80 font-medium mt-1">
-                Registrados en sistema
-              </p>
             </CardContent>
           </Card>
-        </motion.div>
+        )}
 
-        {/* Postulaciones */}
-        <motion.div {...scaleIn} transition={{ delay: 0.1 }}>
-          <Card className="min-w-0 h-full border-t-4 border-t-indigo-500 shadow-sm bg-white/60 dark:bg-neutral-900/60 backdrop-blur-sm border-white/50">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Postulaciones
-              </CardTitle>
-              <div className="p-2 bg-indigo-50 rounded-lg">
-                <FileText className="h-4 w-4 text-indigo-600" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-gray-100">
-                {totalApplications}
-              </div>
-              <p className="text-xs text-indigo-600/80 font-medium mt-1">
-                Expedientes enviados
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Evaluados */}
-        <motion.div {...scaleIn} transition={{ delay: 0.15 }}>
-          <Card className="min-w-0 h-full border-t-4 border-t-purple-500 shadow-sm bg-white/60 dark:bg-neutral-900/60 backdrop-blur-sm border-white/50">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Evaluados
-              </CardTitle>
-              <div className="p-2 bg-purple-50 rounded-lg">
-                <Award className="h-4 w-4 text-purple-600" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-gray-100">
-                {totalEvaluated}
-              </div>
-              <p className="text-xs text-purple-600/80 font-medium mt-1">
-                Con puntaje asignado
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Admitidos */}
-        <motion.div {...scaleIn} transition={{ delay: 0.2 }}>
-          <Card className="min-w-0 h-full border-t-4 border-t-emerald-500 shadow-sm bg-white/60 dark:bg-neutral-900/60 backdrop-blur-sm border-white/50">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Admitidos
-              </CardTitle>
-              <div className="p-2 bg-emerald-50 rounded-lg">
-                <CheckCircle className="h-4 w-4 text-emerald-600" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-gray-100">
-                {totalAdmitted}
-              </div>
-              <p className="text-xs text-emerald-600/80 font-medium mt-1">
-                Ingresantes oficiales
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
+        {/* ── ACCESOS DIRECTOS ── */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <p className="text-[10px] font-700 uppercase tracking-wider text-slate-400">Accesos directos</p>
+            <div className="flex-1 h-px bg-slate-100" />
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <ActionCard
+              label="Postulantes" sublabel="Base de datos"
+              Icon={Users} color="#2563EB" bg="#DBEAFE"
+              onClick={() => navigate("/dashboard/admission/applicants")}
+              delay={0}
+            />
+            <ActionCard
+              label="Convocatorias" sublabel="Apertura y cierre"
+              Icon={FileText} color="#4F46E5" bg="#E0E7FF"
+              onClick={() => navigate("/dashboard/admission/calls")}
+              delay={60}
+            />
+            <ActionCard
+              label="Evaluaciones" sublabel="Calificar postulantes"
+              Icon={Award} color="#7C3AED" bg="#EDE9FE"
+              onClick={() => navigate("/dashboard/admission/eval")}
+              delay={120}
+            />
+            <ActionCard
+              label="Reportes" sublabel="Estadísticas"
+              Icon={BarChart3} color="#059669" bg="#D1FAE5"
+              onClick={() => navigate("/dashboard/admission/reports")}
+              delay={180}
+            />
+          </div>
+        </div>
       </div>
-
-      {/* 3. ACCIONES RÁPIDAS */}
-      <motion.div
-        {...fade}
-        transition={{ delay: 0.3 }}
-        className="rounded-2xl border border-white/60 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-md p-4 sm:p-6 shadow-sm"
-      >
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-            Accesos Directos
-          </h3>
-          <p className="text-sm text-gray-500">Gestión rápida</p>
-        </div>
-
-        {/* ✅ Grid mejor:
-            - móvil: 1 col
-            - sm: 2 col
-            - lg: 4 col
-        */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Button
-            variant="outline"
-            className="h-auto py-5 sm:py-6 lg:py-5 flex flex-col gap-3 rounded-xl border-dashed border-2 hover:border-solid hover:border-blue-300 hover:bg-blue-50/50 transition-all group"
-            onClick={() => navigate("/dashboard/admission/applicants")}
-          >
-            <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Users className="h-5 w-5" />
-            </div>
-            <div className="text-center">
-              <span className="block font-semibold text-sm sm:text-base text-gray-700 group-hover:text-blue-700">
-                Postulantes
-              </span>
-              <span className="text-[10px] sm:text-xs text-gray-400">
-                Base de datos
-              </span>
-            </div>
-          </Button>
-
-          <Button
-            variant="outline"
-            className="h-auto py-5 sm:py-6 lg:py-5 flex flex-col gap-3 rounded-xl border-dashed border-2 hover:border-solid hover:border-indigo-300 hover:bg-indigo-50/50 transition-all group"
-            onClick={() => navigate("/dashboard/admission/calls")}
-          >
-            <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <FileText className="h-5 w-5" />
-            </div>
-            <div className="text-center">
-              <span className="block font-semibold text-sm sm:text-base text-gray-700 group-hover:text-indigo-700">
-                Convocatorias
-              </span>
-              <span className="text-[10px] sm:text-xs text-gray-400">
-                Apertura y cierre
-              </span>
-            </div>
-          </Button>
-
-          <Button
-            variant="outline"
-            className="h-auto py-5 sm:py-6 lg:py-5 flex flex-col gap-3 rounded-xl border-dashed border-2 hover:border-solid hover:border-purple-300 hover:bg-purple-50/50 transition-all group"
-            onClick={() => navigate("/dashboard/admission/eval")}
-          >
-            <div className="h-10 w-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Award className="h-5 w-5" />
-            </div>
-            <div className="text-center">
-              <span className="block font-semibold text-sm sm:text-base text-gray-700 group-hover:text-purple-700">
-                Evaluaciones
-              </span>
-              <span className="text-[10px] sm:text-xs text-gray-400">
-                Calificar
-              </span>
-            </div>
-          </Button>
-
-          <Button
-            variant="outline"
-            className="h-auto py-5 sm:py-6 lg:py-5 flex flex-col gap-3 rounded-xl border-dashed border-2 hover:border-solid hover:border-emerald-300 hover:bg-emerald-50/50 transition-all group"
-            onClick={() => navigate("/dashboard/admission/reports")}
-          >
-            <div className="h-10 w-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <BarChart3 className="h-5 w-5" />
-            </div>
-            <div className="text-center">
-              <span className="block font-semibold text-sm sm:text-base text-gray-700 group-hover:text-emerald-700">
-                Reportes
-              </span>
-              <span className="text-[10px] sm:text-xs text-gray-400">
-                Estadísticas
-              </span>
-            </div>
-          </Button>
-        </div>
-      </motion.div>
-    </div>
+    </>
   );
 }

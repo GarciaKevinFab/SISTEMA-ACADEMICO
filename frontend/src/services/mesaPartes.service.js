@@ -4,7 +4,7 @@ import api from "../lib/api";
 import { API_BASE } from "../utils/config";
 
 /* -------------------------------------------------------
-   Helpers (estilo academic.service.js)
+   Helpers
 ------------------------------------------------------- */
 const pickFirstArray = (data, keys = []) => {
     if (Array.isArray(data)) return data;
@@ -16,19 +16,12 @@ const pickFirstArray = (data, keys = []) => {
 
 const trimSlash = (s = "") => String(s).replace(/\/+$/, "");
 
-// Cliente público (sin auth / sin refresh)
-const publicApi = axios.create({
-    baseURL: API_BASE,
-});
+// Cliente público (sin auth)
+const publicApi = axios.create({ baseURL: API_BASE });
 
 const asJson = async (client, method, url, payload, config = {}) => {
     try {
-        const res = await client.request({
-            method,
-            url,
-            data: payload,
-            ...config,
-        });
+        const res = await client.request({ method, url, data: payload, ...config });
         return res.data;
     } catch (e) {
         const data = e?.response?.data;
@@ -37,10 +30,7 @@ const asJson = async (client, method, url, payload, config = {}) => {
             data?.message ||
             (data && typeof data === "object"
                 ? Object.entries(data)
-                    .map(
-                        ([k, v]) =>
-                            `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`
-                    )
+                    .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
                     .join(" | ")
                 : null) ||
             (typeof data === "string" ? data : null) ||
@@ -50,169 +40,176 @@ const asJson = async (client, method, url, payload, config = {}) => {
     }
 };
 
-// Cuando un endpoint devuelve a veces JSON y a veces blob (xlsx/pdf)
 const asBlobOrJson = async (client, method, url, payload = null, config = {}) => {
     try {
         const res = await client.request({
-            method,
-            url,
-            data: payload,
-            responseType: "blob",
-            ...config,
+            method, url, data: payload, responseType: "blob", ...config,
         });
-
         const ct = (res.headers?.["content-type"] || "").toLowerCase();
-
         if (ct.includes("application/json")) {
             const text = await res.data.text();
             return JSON.parse(text);
         }
-
-        return res; // axios response con blob
+        return res;
     } catch (e) {
         const data = e?.response?.data;
-
-        // Si el error vino como blob, intentamos leerlo
         if (data instanceof Blob) {
             try {
                 const text = await data.text();
                 const parsed = JSON.parse(text);
-                throw new Error(parsed?.detail || parsed?.message || text || "Error en la solicitud");
+                throw new Error(parsed?.detail || parsed?.message || text || "Error");
             } catch (_) { }
         }
-
         const msg =
-            e?.response?.data?.detail ||
-            e?.response?.data?.message ||
-            (e?.response?.data && typeof e.response.data === "object"
-                ? Object.entries(e.response.data)
-                    .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
-                    .join(" | ")
-                : null) ||
-            (typeof e?.response?.data === "string" ? e.response.data : null) ||
-            e?.message ||
-            "Error en la solicitud";
-
+            e?.response?.data?.detail || e?.response?.data?.message || e?.message || "Error en la solicitud";
         throw new Error(msg);
     }
+};
+
+/**
+ * Descarga un PDF desde un endpoint que devuelve binario application/pdf.
+ * @param {object} client  - axios instance (api o publicApi)
+ * @param {string} url     - endpoint path
+ * @param {string} method  - "GET" o "POST"
+ * @param {string} filename - nombre del archivo a guardar
+ */
+const downloadPdfBlob = async (client, url, method = "GET", filename = "documento.pdf") => {
+    const res = await client.request({
+        method,
+        url,
+        responseType: "blob",
+    });
+    const ct = (res.headers?.["content-type"] || "").toLowerCase();
+
+    // Si el backend respondió con JSON (error), lo leemos
+    if (ct.includes("application/json")) {
+        const text = await res.data.text();
+        let msg = "No se pudo generar el PDF";
+        try { msg = JSON.parse(text)?.detail || msg; } catch (_) { }
+        throw new Error(msg);
+    }
+
+    const blob = new Blob([res.data], { type: "application/pdf" });
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objUrl), 2000);
 };
 
 /* -------------------------------------------------------
    Dashboard
 ------------------------------------------------------- */
 export const MesaPartesDashboard = {
-    // lo dejo como lo tenías; backend ahora acepta con o sin slash
     stats: async () => asJson(api, "GET", "/dashboard/stats/"),
 };
 
 /* -------------------------------------------------------
-   Catálogos
+   Catálogos (PRIVADO)
 ------------------------------------------------------- */
 export const Catalog = {
     offices: async () => {
         const data = await asJson(api, "GET", "/offices");
-        const arr = pickFirstArray(data, ["offices", "items", "results"]);
-        return { offices: arr };
+        return { offices: pickFirstArray(data, ["offices", "items", "results"]) };
     },
-
     users: async (params = {}) => {
         const data = await asJson(api, "GET", "/users", null, { params });
-        const arr = pickFirstArray(data, ["users", "items", "results"]);
-        return { users: arr };
+        return { users: pickFirstArray(data, ["users", "items", "results"]) };
     },
 };
 
 /* -------------------------------------------------------
-   Tipos de trámite
+   Tipos de trámite (PRIVADO)
 ------------------------------------------------------- */
 export const ProcedureTypes = {
     list: async (params = {}) => {
         const data = await asJson(api, "GET", "/procedure-types", null, { params });
         const arr = pickFirstArray(data, ["procedure_types", "types", "items", "results"]);
-        return {
-            procedure_types: arr.length
-                ? arr
-                : pickFirstArray(data, ["procedure_types"]) ||
-                (Array.isArray(data) ? data : []),
-        };
+        return { procedure_types: arr.length ? arr : (Array.isArray(data) ? data : []) };
     },
-
     create: async (payload) => asJson(api, "POST", "/procedure-types", payload),
-
     patch: async (id, payload) => asJson(api, "PATCH", `/procedure-types/${id}`, payload),
-
     update: async (id, payload) => asJson(api, "PUT", `/procedure-types/${id}`, payload),
-
     toggle: async (id, is_active) => asJson(api, "PATCH", `/procedure-types/${id}`, { is_active }),
 };
 
 /* -------------------------------------------------------
-   Trámites
+   Tipos de trámite (PÚBLICO)
 ------------------------------------------------------- */
-export const Procedures = {
-    list: async (params = {}) => asJson(api, "GET", "/procedures", null, { params }),
-
-    create: async (payload) => asJson(api, "POST", "/procedures", payload),
-
-    get: async (id) => asJson(api, "GET", `/procedures/${id}`),
-
-    // ✅ CORRECCIÓN: tu backend usa query param (?code=...), no /code/:code
-    getByCode: async (code) =>
-        asJson(api, "GET", `/procedures/code`, null, { params: { code } }),
-
-    route: async (id, { to_office_id, assignee_id, note, deadline_at }) =>
-        asJson(api, "POST", `/procedures/${id}/route`, {
-            to_office_id,
-            assignee_id,
-            note,
-            deadline_at,
-        }),
-
-    setStatus: async (id, { status, note }) =>
-        asJson(api, "POST", `/procedures/${id}/status`, { status, note }),
-
-    timeline: async (id) => asJson(api, "GET", `/procedures/${id}/timeline`),
-
-    // ✅ ahora backend sí tiene /notes
-    addNote: async (id, { note }) =>
-        asJson(api, "POST", `/procedures/${id}/notes`, { note }),
-
-    // ✅ ahora backend sí tiene /notify
-    notify: async (id, payload) => asJson(api, "POST", `/procedures/${id}/notify`, payload),
-
-    coverPDF: async (id) => asJson(api, "POST", `/procedures/${id}/cover`, {}),
-    cargoPDF: async (id) => asJson(api, "POST", `/procedures/${id}/cargo`, {}),
+export const PublicProcedureTypes = {
+    list: async (params = {}) => {
+        const data = await asJson(publicApi, "GET", `/public/procedure-types`, null, { params });
+        return { procedure_types: pickFirstArray(data, ["procedure_types", "types", "items", "results"]) };
+    },
 };
 
 /* -------------------------------------------------------
-   Público
+   Trámites (PRIVADO)
+------------------------------------------------------- */
+export const Procedures = {
+    list: async (params = {}) => asJson(api, "GET", "/procedures", null, { params }),
+    create: async (payload) => asJson(api, "POST", "/procedures", payload),
+    get: async (id) => asJson(api, "GET", `/procedures/${id}`),
+    getByCode: async (code) => asJson(api, "GET", `/procedures/code`, null, { params: { code } }),
+    route: async (id, payload) => asJson(api, "POST", `/procedures/${id}/route`, payload),
+    setStatus: async (id, payload) => asJson(api, "POST", `/procedures/${id}/status`, payload),
+    timeline: async (id) => asJson(api, "GET", `/procedures/${id}/timeline`),
+    addNote: async (id, payload) => asJson(api, "POST", `/procedures/${id}/notes`, payload),
+    notify: async (id, payload) => asJson(api, "POST", `/procedures/${id}/notify`, payload),
+
+    /**
+     * Descarga la CARÁTULA (uso interno, requiere auth).
+     * El backend devuelve binario PDF directamente.
+     */
+    downloadCover: async (id, trackingCode = id) => {
+        await downloadPdfBlob(api, `/procedures/${id}/cover`, "GET", `caratula-${trackingCode}.pdf`);
+    },
+
+    /**
+     * Descarga el CARGO (uso interno, requiere auth).
+     */
+    downloadCargo: async (id, trackingCode = id) => {
+        await downloadPdfBlob(api, `/procedures/${id}/cargo`, "GET", `cargo-${trackingCode}.pdf`);
+    },
+};
+
+/* -------------------------------------------------------
+   Público (tracking + descarga cargo)
 ------------------------------------------------------- */
 export const PublicProcedures = {
     track: async (code) =>
         asJson(publicApi, "GET", `/public/procedures/track`, null, { params: { code } }),
+
+    /**
+     * Descarga el cargo de recepción desde el portal público.
+     * El endpoint /procedures/{id}/cargo acepta AllowAny.
+     */
+    downloadCargo: async (id, trackingCode = id) => {
+        // El router DRF registra el viewset bajo /procedures/ — sin prefijo /public/
+        await downloadPdfBlob(publicApi, `/procedures/${id}/cargo`, "GET", `cargo-${trackingCode}.pdf`);
+    },
 };
 
 /* -------------------------------------------------------
-   Archivos de trámite
+   Archivos de trámite (PRIVADO)
 ------------------------------------------------------- */
 export const ProcedureFiles = {
     list: async (procedureId) => {
         const data = await asJson(api, "GET", `/procedures/${procedureId}/files`);
-        const arr = pickFirstArray(data, ["files", "items", "results"]);
-        return { files: arr };
+        return { files: pickFirstArray(data, ["files", "items", "results"]) };
     },
-
     upload: async (procedureId, file, meta = {}) => {
         const fd = new FormData();
         fd.append("file", file);
         if (meta.doc_type) fd.append("doc_type", meta.doc_type);
         if (meta.description) fd.append("description", meta.description);
-
         return asJson(api, "POST", `/procedures/${procedureId}/files`, fd, {
             headers: { "Content-Type": "multipart/form-data" },
         });
     },
-
     remove: async (procedureId, fileId) =>
         asJson(api, "DELETE", `/procedures/${procedureId}/files/${fileId}`),
 };
@@ -228,36 +225,41 @@ export const PublicIntake = {
         fd.append("file", file);
         if (meta.doc_type) fd.append("doc_type", meta.doc_type);
         if (meta.description) fd.append("description", meta.description);
-
         return asJson(
-            publicApi,
-            "POST",
+            publicApi, "POST",
             `/public/procedures/${encodeURIComponent(trackingCode)}/files`,
             fd,
-            { headers: { "Content-Type": "multipart/form-data" } }
+            { headers: { "Content-Type": "multipart/form-data" } },
         );
     },
 };
 
 /* -------------------------------------------------------
-   Reportes (SLA/volúmenes)
+   Reportes
 ------------------------------------------------------- */
 export const ProcedureReports = {
-    // ✅ backend ahora acepta con o sin slash
-    summary: async (params = {}) =>
-        asJson(api, "GET", `/procedures/reports/summary`, null, { params }),
-
-    exportSLA: async (params = {}) =>
-        asBlobOrJson(api, "GET", `/procedures/reports/sla.xlsx`, null, { params }),
-
-    exportVolume: async (params = {}) =>
-        asBlobOrJson(api, "GET", `/procedures/reports/volume.xlsx`, null, { params }),
+    summary: async (params = {}) => asJson(api, "GET", `/procedures/reports/summary`, null, { params }),
+    exportSLA: async (params = {}) => asBlobOrJson(api, "GET", `/procedures/reports/sla.xlsx`, null, { params }),
+    exportVolume: async (params = {}) => asBlobOrJson(api, "GET", `/procedures/reports/volume.xlsx`, null, { params }),
 };
 
 /* -------------------------------------------------------
-   URLs públicas (para window.open, links, etc.)
+   URLs públicas
 ------------------------------------------------------- */
 export const MesaPartesPublic = {
     baseURL: trimSlash(API_BASE),
     verifyUrl: (code) => `${trimSlash(API_BASE)}/verify?code=${encodeURIComponent(code)}`,
+};
+
+/* -------------------------------------------------------
+   Oficinas CRUD (Mesa de Partes)
+------------------------------------------------------- */
+export const Offices = {
+    list: async () => {
+        const data = await asJson(api, "GET", "/offices");
+        return pickFirstArray(data, ["offices", "items", "results"]);
+    },
+    create: async (payload) => asJson(api, "POST", "/offices", payload),
+    update: async (id, payload) => asJson(api, "PATCH", `/offices/${id}`, payload),
+    remove: async (id) => asJson(api, "DELETE", `/offices/${id}`),
 };

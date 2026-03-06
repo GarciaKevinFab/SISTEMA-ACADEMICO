@@ -18,11 +18,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Badge } from "../ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { toast } from "sonner";
-import { Plus, Package, TrendingUp, TrendingDown, AlertTriangle, Eye, FileText, Download } from "lucide-react";
+import { Plus, Package, TrendingUp, TrendingDown, AlertTriangle, Eye, FileText, Download, Truck } from "lucide-react";
 
 import { Inventory } from "../../services/finance.service"; 
 
-const InventoryDashboard = () => {
+/* =========================================================
+   RENOMBRADO A LOGISTICS DASHBOARD
+   Para que coincida con el menú "Logística"
+========================================================= */
+const LogisticsDashboard = () => {
   const { user } = useContext(AuthContext);
 
   const [items, setItems] = useState([]);
@@ -100,7 +104,7 @@ const InventoryDashboard = () => {
       setMovements(movRes.movements || movRes.items || movRes || []);
       setAlerts(alertsRes.alerts || alertsRes.items || alertsRes || []);
     } catch (e) {
-      toast.error("Error", { description: getErrMsg(e, "No se pudo cargar inventario") });
+      toast.error("Error", { description: getErrMsg(e, "No se pudo cargar logística") });
     } finally {
       setLoading(false);
     }
@@ -131,7 +135,6 @@ const InventoryDashboard = () => {
       };
 
       await Inventory.createItem(payload);
-
       toast.success("Éxito", { description: "Item creado correctamente" });
 
       setOpenDialogs((prev) => ({ ...prev, newItem: false }));
@@ -162,7 +165,6 @@ const InventoryDashboard = () => {
       };
 
       await Inventory.createMovement(payload);
-
       toast.success("Éxito", { description: "Movimiento registrado correctamente" });
 
       setOpenDialogs((prev) => ({ ...prev, newMovement: false }));
@@ -201,6 +203,15 @@ const InventoryDashboard = () => {
 
   return (
     <div className="space-y-6 pb-24 sm:pb-6">
+      
+      {/* HEADER PRINCIPAL CAMBIADO A LOGÍSTICA */}
+      <div className="flex flex-col gap-2">
+        <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2">
+          <Truck className="h-8 w-8 text-blue-600" />
+          Logística y Almacén
+        </h1>
+        <p className="text-slate-500">Gestión integral de inventarios, entradas y salidas de materiales.</p>
+      </div>
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -247,7 +258,7 @@ const InventoryDashboard = () => {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <AlertTriangle className="h-5 w-5 text-red-500" />
-              <span>Alertas de Inventario</span>
+              <span>Alertas de Abastecimiento</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -280,8 +291,8 @@ const InventoryDashboard = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle>Gestión de Items</CardTitle>
-                <CardDescription>Catálogo de productos e inventario</CardDescription>
+                <CardTitle>Catálogo de Materiales</CardTitle>
+                <CardDescription>Gestión de productos y suministros</CardDescription>
               </div>
 
               <Dialog
@@ -291,152 +302,144 @@ const InventoryDashboard = () => {
                 <DialogTrigger asChild>
                   <Button>
                     <Plus className="h-4 w-4 mr-2" />
-                    Nuevo Item
+                    Nuevo Material
                   </Button>
                 </DialogTrigger>
 
                 <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-md h-[90dvh] overflow-hidden p-0 flex flex-col">
-  {/* HEADER sticky (siempre visible) */}
-  <div className="px-6 pt-5 pb-3 border-b flex-none sticky top-0 bg-background z-10">
-    <DialogHeader>
-      <DialogTitle>Crear Nuevo Item</DialogTitle>
-      <DialogDescription>Complete los datos del nuevo producto</DialogDescription>
-    </DialogHeader>
-  </div>
+                  {/* HEADER sticky */}
+                  <div className="px-6 pt-5 pb-3 border-b flex-none sticky top-0 bg-background z-10">
+                    <DialogHeader>
+                      <DialogTitle>Crear Nuevo Material</DialogTitle>
+                      <DialogDescription>Complete los datos del nuevo producto</DialogDescription>
+                    </DialogHeader>
+                  </div>
 
-  {/* BODY con scroll */}
-  <div
-    className="px-6 py-4 flex-1 overflow-y-auto"
-    style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}
-  >
-    <div className="space-y-4">
-      <div>
-        <Label htmlFor="code">Código *</Label>
-        <Input
-          id="code"
-          value={newItem.code}
-          onChange={(e) => setNewItem({ ...newItem, code: e.target.value })}
-          placeholder="ITM001"
-        />
-      </div>
+                  {/* BODY con scroll */}
+                  <div
+                    className="px-6 py-4 flex-1 overflow-y-auto"
+                    style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}
+                  >
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="code">Código *</Label>
+                        <Input
+                          id="code"
+                          value={newItem.code}
+                          onChange={(e) => setNewItem({ ...newItem, code: e.target.value })}
+                          placeholder="MAT-001"
+                        />
+                      </div>
 
-      <div>
-        <Label htmlFor="name">Nombre *</Label>
-        <Input
-          id="name"
-          value={newItem.name}
-          onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-          placeholder="Papel Bond A4"
-        />
-      </div>
+                      <div>
+                        <Label htmlFor="name">Nombre *</Label>
+                        <Input
+                          id="name"
+                          value={newItem.name}
+                          onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                          placeholder="Silla de escritorio"
+                        />
+                      </div>
 
-      <div>
-        <Label htmlFor="description">Descripción</Label>
-        <Textarea
-          id="description"
-          value={newItem.description}
-          onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-          placeholder="Descripción detallada del producto"
-        />
-      </div>
+                      <div>
+                        <Label htmlFor="description">Descripción</Label>
+                        <Textarea
+                          id="description"
+                          value={newItem.description}
+                          onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                          placeholder="Descripción detallada del material"
+                        />
+                      </div>
 
-      <div>
-        <Label htmlFor="category">Categoría</Label>
-        <Input
-          id="category"
-          value={newItem.category}
-          onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-          placeholder="Materiales de Oficina"
-        />
-      </div>
+                      <div>
+                        <Label htmlFor="category">Categoría</Label>
+                        <Input
+                          id="category"
+                          value={newItem.category}
+                          onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
+                          placeholder="Mobiliario"
+                        />
+                      </div>
 
-      <div>
-        <Label htmlFor="unit_of_measure">Unidad de Medida *</Label>
-        <Select
-          value={newItem.unit_of_measure}
-          onValueChange={(value) => setNewItem({ ...newItem, unit_of_measure: value })}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
-            {Object.entries(unitOfMeasures).map(([key, label]) => (
-              <SelectItem key={key} value={key}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+                      <div>
+                        <Label htmlFor="unit_of_measure">Unidad de Medida *</Label>
+                        <Select
+                          value={newItem.unit_of_measure}
+                          onValueChange={(value) => setNewItem({ ...newItem, unit_of_measure: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+                            {Object.entries(unitOfMeasures).map(([key, label]) => (
+                              <SelectItem key={key} value={key}>
+                                {label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="min_stock">Stock Mínimo</Label>
-          <Input
-            id="min_stock"
-            type="number"
-            value={newItem.min_stock}
-            onChange={(e) => setNewItem({ ...newItem, min_stock: e.target.value })}
-            placeholder="10"
-          />
-        </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="min_stock">Stock Mínimo</Label>
+                          <Input
+                            id="min_stock"
+                            type="number"
+                            value={newItem.min_stock}
+                            onChange={(e) => setNewItem({ ...newItem, min_stock: e.target.value })}
+                            placeholder="10"
+                          />
+                        </div>
 
-        <div>
-          <Label htmlFor="max_stock">Stock Máximo</Label>
-          <Input
-            id="max_stock"
-            type="number"
-            value={newItem.max_stock}
-            onChange={(e) => setNewItem({ ...newItem, max_stock: e.target.value })}
-            placeholder="100"
-          />
-        </div>
-      </div>
+                        <div>
+                          <Label htmlFor="max_stock">Stock Máximo</Label>
+                          <Input
+                            id="max_stock"
+                            type="number"
+                            value={newItem.max_stock}
+                            onChange={(e) => setNewItem({ ...newItem, max_stock: e.target.value })}
+                            placeholder="100"
+                          />
+                        </div>
+                      </div>
 
-      <div>
-        <Label htmlFor="unit_cost">Costo Unitario</Label>
-        <Input
-          id="unit_cost"
-          type="number"
-          step="0.01"
-          value={newItem.unit_cost}
-          onChange={(e) => setNewItem({ ...newItem, unit_cost: e.target.value })}
-          placeholder="0.00"
-        />
-      </div>
+                      <div>
+                        <Label htmlFor="unit_cost">Costo Unitario Ref.</Label>
+                        <Input
+                          id="unit_cost"
+                          type="number"
+                          step="0.01"
+                          value={newItem.unit_cost}
+                          onChange={(e) => setNewItem({ ...newItem, unit_cost: e.target.value })}
+                          placeholder="0.00"
+                        />
+                      </div>
 
-      {/* espacio extra para que no choque con el footer */}
-      <div className="h-10" />
-    </div>
-  </div>
+                      <div className="h-10" />
+                    </div>
+                  </div>
 
-  {/* FOOTER fijo (botón siempre visible) */}
-  <div className="px-6 py-4 border-t bg-background flex-none">
-    <DialogFooter className="w-full">
-      <Button className="w-full" onClick={createItem} disabled={!newItem.code || !newItem.name}>
-        Crear Item
-      </Button>
-    </DialogFooter>
-  </div>
-</DialogContent>
-
+                  {/* FOOTER fijo */}
+                  <div className="px-6 py-4 border-t bg-background flex-none">
+                    <DialogFooter className="w-full">
+                      <Button className="w-full" onClick={createItem} disabled={!newItem.code || !newItem.name}>
+                        Crear Material
+                      </Button>
+                    </DialogFooter>
+                  </div>
+                </DialogContent>
               </Dialog>
             </CardHeader>
 
             <CardContent>
-              {/* ========================================================================
-                  MODIFICACIÓN:
-                  - Se fuerza maxHeight a 190px.
-                  - Esto asegura que si tienes 4 items, el 4to se oculte y aparezca scroll.
-                  - Caben aprox 3 items (dependiendo del zoom/pantalla).
-                  ======================================================================== */}
               <div 
                 className="overflow-y-auto pr-2" 
-                style={{ maxHeight: "190px" }}
+                style={{ maxHeight: "400px" }} // Aumentado un poco para ver mejor
               >
                 <div className="space-y-3">
                   {items.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">No hay items registrados</div>
+                    <div className="text-center py-8 text-gray-500">No hay materiales registrados</div>
                   ) : (
                     items.map((item) => (
                       <div
@@ -485,8 +488,8 @@ const InventoryDashboard = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle>Movimientos de Inventario</CardTitle>
-                <CardDescription>Registro de entradas, salidas y transferencias</CardDescription>
+                <CardTitle>Historial de Operaciones</CardTitle>
+                <CardDescription>Entradas y salidas de almacén</CardDescription>
               </div>
 
               <Dialog
@@ -496,166 +499,157 @@ const InventoryDashboard = () => {
                 <DialogTrigger asChild>
                   <Button>
                     <Plus className="h-4 w-4 mr-2" />
-                    Nuevo Movimiento
+                    Registrar Operación
                   </Button>
                 </DialogTrigger>
 
                 <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-lg h-[90dvh] overflow-hidden p-0 flex flex-col">
-  {/* HEADER fijo */}
-  <div className="px-6 pt-5 pb-3 border-b flex-none sticky top-0 bg-background z-10">
+                  {/* HEADER fijo */}
+                  <div className="px-6 pt-5 pb-3 border-b flex-none sticky top-0 bg-background z-10">
+                    <DialogHeader>
+                      <DialogTitle>Registrar Movimiento</DialogTitle>
+                    </DialogHeader>
+                  </div>
 
-    <DialogHeader>
-      
-      
-      <DialogTitle>Registrar Movimiento</DialogTitle>
-    </DialogHeader>
-  </div>
+                  {/* BODY con scroll */}
+                  <div
+                    className="flex-1 min-h-0 px-6 py-4 overflow-y-auto"
+                    style={{ WebkitOverflowScrolling: "touch" }}
+                  >
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="item_select">Material *</Label>
+                        <Select
+                          value={newMovement.item_id}
+                          onValueChange={(value) => setNewMovement({ ...newMovement, item_id: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar material" />
+                          </SelectTrigger>
+                          <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+                            {items.map((item) => (
+                              <SelectItem key={item.id} value={String(item.id)}>
+                                {item.code} - {item.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-  {/* BODY con scroll */}
-  <div
-    className="flex-1 min-h-0 px-6 py-4 overflow-y-auto"
-    style={{ WebkitOverflowScrolling: "touch" }}
-  >
-    <div className="space-y-4">
-      <div>
-        <Label htmlFor="item_select">Item *</Label>
-        <Select
-          value={newMovement.item_id}
-          onValueChange={(value) => setNewMovement({ ...newMovement, item_id: value })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Seleccionar item" />
-          </SelectTrigger>
-          <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
-            {items.map((item) => (
-              <SelectItem key={item.id} value={String(item.id)}>
-                {item.code} - {item.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+                      <div>
+                        <Label htmlFor="movement_type">Tipo de Operación *</Label>
+                        <Select
+                          value={newMovement.movement_type}
+                          onValueChange={(value) => setNewMovement({ ...newMovement, movement_type: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
+                            {Object.entries(movementTypes).map(([key, label]) => (
+                              <SelectItem key={key} value={key}>
+                                {label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-      <div>
-        <Label htmlFor="movement_type">Tipo de Movimiento *</Label>
-        <Select
-          value={newMovement.movement_type}
-          onValueChange={(value) => setNewMovement({ ...newMovement, movement_type: value })}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
-            {Object.entries(movementTypes).map(([key, label]) => (
-              <SelectItem key={key} value={key}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="quantity">Cantidad *</Label>
+                          <Input
+                            id="quantity"
+                            type="number"
+                            value={newMovement.quantity}
+                            onChange={(e) => setNewMovement({ ...newMovement, quantity: e.target.value })}
+                            placeholder="1"
+                          />
+                        </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="quantity">Cantidad *</Label>
-          <Input
-            id="quantity"
-            type="number"
-            value={newMovement.quantity}
-            onChange={(e) => setNewMovement({ ...newMovement, quantity: e.target.value })}
-            placeholder="1"
-          />
-        </div>
+                        <div>
+                          <Label htmlFor="unit_cost">Costo Unitario</Label>
+                          <Input
+                            id="unit_cost"
+                            type="number"
+                            step="0.01"
+                            value={newMovement.unit_cost}
+                            onChange={(e) => setNewMovement({ ...newMovement, unit_cost: e.target.value })}
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </div>
 
-        <div>
-          <Label htmlFor="unit_cost">Costo Unitario</Label>
-          <Input
-            id="unit_cost"
-            type="number"
-            step="0.01"
-            value={newMovement.unit_cost}
-            onChange={(e) => setNewMovement({ ...newMovement, unit_cost: e.target.value })}
-            placeholder="0.00"
-          />
-        </div>
-      </div>
+                      <div>
+                        <Label htmlFor="reason">Motivo *</Label>
+                        <Input
+                          id="reason"
+                          value={newMovement.reason}
+                          onChange={(e) => setNewMovement({ ...newMovement, reason: e.target.value })}
+                          placeholder="Requerimiento área, compra, merma..."
+                        />
+                      </div>
 
-      <div>
-        <Label htmlFor="reason">Motivo *</Label>
-        <Input
-          id="reason"
-          value={newMovement.reason}
-          onChange={(e) => setNewMovement({ ...newMovement, reason: e.target.value })}
-          placeholder="Compra, venta, ajuste, etc."
-        />
-      </div>
+                      <div>
+                        <Label htmlFor="notes">Observaciones</Label>
+                        <Textarea
+                          id="notes"
+                          value={newMovement.notes}
+                          onChange={(e) => setNewMovement({ ...newMovement, notes: e.target.value })}
+                          placeholder="Detalles adicionales"
+                        />
+                      </div>
 
-      <div>
-        <Label htmlFor="notes">Observaciones</Label>
-        <Textarea
-          id="notes"
-          value={newMovement.notes}
-          onChange={(e) => setNewMovement({ ...newMovement, notes: e.target.value })}
-          placeholder="Observaciones adicionales"
-        />
-      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="batch_number">Lote / Serie</Label>
+                          <Input
+                            id="batch_number"
+                            value={newMovement.batch_number}
+                            onChange={(e) => setNewMovement({ ...newMovement, batch_number: e.target.value })}
+                            placeholder="LT001"
+                          />
+                        </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="batch_number">Número de Lote</Label>
-          <Input
-            id="batch_number"
-            value={newMovement.batch_number}
-            onChange={(e) => setNewMovement({ ...newMovement, batch_number: e.target.value })}
-            placeholder="LT001"
-          />
-        </div>
+                        <div>
+                          <Label htmlFor="expiry_date">Fecha de Vencimiento</Label>
+                          <Input
+                            id="expiry_date"
+                            type="date"
+                            value={newMovement.expiry_date}
+                            onChange={(e) => setNewMovement({ ...newMovement, expiry_date: e.target.value })}
+                          />
+                        </div>
+                      </div>
 
-        <div>
-          <Label htmlFor="expiry_date">Fecha de Vencimiento</Label>
-          <Input
-            id="expiry_date"
-            type="date"
-            value={newMovement.expiry_date}
-            onChange={(e) => setNewMovement({ ...newMovement, expiry_date: e.target.value })}
-          />
-        </div>
-      </div>
+                      <div className="h-6" />
+                    </div>
+                  </div>
 
-      {/* espacio final para que el último input no quede pegado */}
-      <div className="h-6" />
-    </div>
-  </div>
-
-  {/* FOOTER fijo */}
-  <div className="px-6 py-4 border-t bg-background flex-none">
-    <DialogFooter className="w-full">
-      <Button
-        className="w-full sm:w-auto"
-        onClick={createMovement}
-        disabled={!newMovement.item_id || !newMovement.quantity || !newMovement.reason}
-      >
-        Registrar Movimiento
-      </Button>
-    </DialogFooter>
-  </div>
-</DialogContent>
-
+                  {/* FOOTER fijo */}
+                  <div className="px-6 py-4 border-t bg-background flex-none">
+                    <DialogFooter className="w-full">
+                      <Button
+                        className="w-full sm:w-auto"
+                        onClick={createMovement}
+                        disabled={!newMovement.item_id || !newMovement.quantity || !newMovement.reason}
+                      >
+                        Registrar Operación
+                      </Button>
+                    </DialogFooter>
+                  </div>
+                </DialogContent>
               </Dialog>
             </CardHeader>
 
             <CardContent>
-              {/* ========================================================================
-                  MODIFICACIÓN:
-                  - Se fuerza maxHeight a 190px también aquí.
-                  ======================================================================== */}
               <div 
                 className="overflow-y-auto pr-2" 
-                style={{ maxHeight: "190px" }}
+                style={{ maxHeight: "400px" }}
               >
                 <div className="space-y-3">
                   {movements.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">No hay movimientos registrados</div>
+                    <div className="text-center py-8 text-gray-500">No hay operaciones registradas</div>
                   ) : (
                     movements.map((movement) => (
                       <div key={movement.id} className="flex items-center justify-between p-4 border rounded-lg">
@@ -698,8 +692,8 @@ const InventoryDashboard = () => {
         <TabsContent value="reports">
           <Card>
             <CardHeader>
-              <CardTitle>Reportes de Inventario</CardTitle>
-              <CardDescription>Análisis y exportaciones</CardDescription>
+              <CardTitle>Reportes Logísticos</CardTitle>
+              <CardDescription>Análisis y exportación de datos</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -708,7 +702,7 @@ const InventoryDashboard = () => {
                     <CardTitle className="text-lg">Valorización</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-gray-600 mb-4">Reporte de valorización del inventario</p>
+                    <p className="text-sm text-gray-600 mb-4">Reporte de valorización del almacén actual</p>
                     <Button variant="outline" className="w-full">
                       <FileText className="h-4 w-4 mr-2" />
                       Generar PDF
@@ -718,10 +712,10 @@ const InventoryDashboard = () => {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Movimientos</CardTitle>
+                    <CardTitle className="text-lg">Kardex General</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-gray-600 mb-4">Reporte de movimientos por período</p>
+                    <p className="text-sm text-gray-600 mb-4">Reporte consolidado de movimientos</p>
                     <Button variant="outline" className="w-full">
                       <FileText className="h-4 w-4 mr-2" />
                       Generar PDF
@@ -731,10 +725,10 @@ const InventoryDashboard = () => {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Stock Mínimos</CardTitle>
+                    <CardTitle className="text-lg">Abastecimiento</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-gray-600 mb-4">Items con stock bajo o agotado</p>
+                    <p className="text-sm text-gray-600 mb-4">Materiales por reponer</p>
                     <Button variant="outline" className="w-full">
                       <Download className="h-4 w-4 mr-2" />
                       Descargar CSV
@@ -747,7 +741,7 @@ const InventoryDashboard = () => {
         </TabsContent>
       </Tabs>
 
-      {/* KARDEX */}
+      {/* KARDEX DETALLADO */}
       <Dialog
         open={openDialogs.kardex}
         onOpenChange={(open) => setOpenDialogs((prev) => ({ ...prev, kardex: open }))}
@@ -804,4 +798,5 @@ const InventoryDashboard = () => {
   );
 };
 
-export default InventoryDashboard;
+// Exportamos como LogisticsDashboard
+export default LogisticsDashboard;

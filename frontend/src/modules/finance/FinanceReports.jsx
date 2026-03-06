@@ -106,8 +106,12 @@ export default function FinanceReports() {
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
   <div className="min-w-0">
-    <h2 className="text-xl md:text-2xl font-bold">Reportes de ingresos</h2>
-    <p className="text-sm text-gray-600">Por concepto / período / carrera</p>
+    <h2 className="text-xl md:text-2xl font-bold text-white">
+      Reportes de ingresos
+    </h2>
+    <p className="text-sm text-white/80">
+      Por concepto / período / carrera
+    </p>
   </div>
 
   <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">

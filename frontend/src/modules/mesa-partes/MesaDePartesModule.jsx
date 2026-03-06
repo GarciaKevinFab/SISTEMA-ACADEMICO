@@ -1,312 +1,385 @@
 // src/modules/mesa-partes/MesaDePartesModule.jsx
 import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  forwardRef,
-  useImperativeHandle,
+  useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle,
 } from "react";
 import { useAuth } from "../../context/AuthContext";
 import IfPerm from "@/components/auth/IfPerm";
 import { PERMS } from "@/auth/permissions";
-
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
-import { Badge } from "../../components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "../../components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
-
 import {
-  FileText,
-  Clock,
-  CheckCircle,
-  Plus,
-  Search,
-  Eye,
-  Download,
-  QrCode,
-  BarChart3,
-  TrendingUp,
-  Send,
-  Trash2,
-  Paperclip,
-  Pencil,
-  Power,
+  FileText, Clock, CheckCircle2, Plus, Search, Eye, Download,
+  QrCode, BarChart3, TrendingUp, Send, Trash2, Paperclip, Pencil, Power,
+  ExternalLink, ChevronDown, Loader2, ArrowRight, Inbox,
+  ShieldAlert, Settings2, ClipboardList, AlertCircle, AlertTriangle,
+  CalendarClock, Flame, Calendar, Filter, X, RefreshCw,
+  Building2, Edit3,
 } from "lucide-react";
-
-import { toast } from "sonner";
-import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
-
 import {
-  Procedures as ProcSvc,
-  Catalog,
-  ProcedureFiles,
-  ProcedureTypes,
-  MesaPartesDashboard,
-  MesaPartesPublic, // ✅ NUEVO: para verifyUrl()
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
+  AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import {
+  Procedures as ProcSvc, Catalog, ProcedureFiles,
+  ProcedureTypes, MesaPartesDashboard, MesaPartesPublic, Offices,
 } from "../../services/mesaPartes.service";
-
 import MesaPartesReports from "./MesaPartesReports";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 
-import { ChevronDown } from "lucide-react";
-
-/* ---------------- helpers ---------------- */
+/* ─── Helpers ─────────────────────────────────────────────────── */
 function formatApiError(err, fallback = "Ocurrió un error") {
-  // El service lanza Error("msg"), así que primero agarramos message.
   if (typeof err?.message === "string" && err.message.trim()) return err.message;
-
   const data = err?.response?.data;
   if (data?.detail) {
     const d = data.detail;
     if (typeof d === "string") return d;
     if (Array.isArray(d)) {
-      const msgs = d
-        .map((e) => {
-          const field = Array.isArray(e?.loc) ? e.loc.join(".") : e?.loc;
-          return e?.msg ? (field ? `${field}: ${e.msg}` : e.msg) : null;
-        })
-        .filter(Boolean);
+      const msgs = d.map(e => {
+        const field = Array.isArray(e?.loc) ? e.loc.join(".") : e?.loc;
+        return e?.msg ? (field ? `${field}: ${e.msg}` : e.msg) : null;
+      }).filter(Boolean);
       if (msgs.length) return msgs.join(" | ");
     }
   }
   if (typeof data?.error?.message === "string") return data.error.message;
   if (typeof data?.message === "string") return data.message;
   if (typeof data?.error === "string") return data.error;
-
   return fallback;
 }
 
-/* ===================== DASHBOARD ===================== */
-const MesaDePartesDashboardUI = ({ onNew, onSearch, onQR, onReports }) => {
-  const { hasAny } = useAuth();
-  const canSee = hasAny([PERMS["mpv.processes.review"], PERMS["mpv.reports.view"]]);
-  const [stats, setStats] = useState({});
-  const [loading, setLoading] = useState(true);
+const isOverdue = (deadline) => {
+  if (!deadline) return false;
+  return new Date(deadline) < new Date();
+};
 
-  const fetchDashboardStats = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await MesaPartesDashboard.stats();
-      setStats(data?.stats ?? data ?? {});
-    } catch (error) {
-      console.error("Error fetching dashboard stats:", error);
-      toast.error(formatApiError(error, "Error al cargar estadísticas"));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+const fmtDate = (iso, withTime = false) => {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("es-PE", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}),
+  });
+};
 
-  useEffect(() => {
-    if (canSee) fetchDashboardStats();
-  }, [fetchDashboardStats, canSee]);
+const daysLeft = (deadline) => {
+  if (!deadline) return null;
+  const diff = new Date(deadline) - new Date();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+};
 
-  if (!canSee) return null;
+/* ─── Status config ──────────────────────────────────────────── */
+const STATUS_MAP = {
+  RECEIVED: { label: "Recibido", cls: "bg-slate-100 text-slate-600 border-slate-200" },
+  IN_REVIEW: { label: "En Revisión", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  APPROVED: { label: "Aprobado", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  REJECTED: { label: "Rechazado", cls: "bg-red-50 text-red-700 border-red-200" },
+  COMPLETED: { label: "Completado", cls: "bg-violet-50 text-violet-700 border-violet-200" },
+};
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
+/* ─── Urgency config ─────────────────────────────────────────── */
+const URGENCY_MAP = {
+  LOW: { label: "Baja", cls: "bg-slate-100 text-slate-500 border-slate-200", dot: "#94a3b8" },
+  NORMAL: { label: "Normal", cls: "bg-sky-50 text-sky-600 border-sky-200", dot: "#0ea5e9" },
+  HIGH: { label: "Alta", cls: "bg-orange-50 text-orange-600 border-orange-200", dot: "#f97316" },
+  URGENT: { label: "Urgente", cls: "bg-red-50 text-red-600 border-red-200", dot: "#ef4444" },
+};
 
+/* ─── Shared UI ──────────────────────────────────────────────── */
+const FieldLabel = ({ children, required, error }) => (
+  <p className={`text-[10px] font-bold uppercase tracking-wider mb-1.5 ${error ? "text-red-500" : "text-slate-500"}`}>
+    {children}{required && <span className="text-red-500 ml-0.5">*</span>}
+  </p>
+);
+
+const SectionHead = ({ label, color = "slate", icon: Icon }) => {
+  const colorMap = {
+    slate: { box: "bg-slate-100 border-slate-200 text-slate-600", text: "text-slate-700" },
+    blue: { box: "bg-blue-50 border-blue-100 text-blue-600", text: "text-blue-700" },
+    emerald: { box: "bg-emerald-50 border-emerald-100 text-emerald-600", text: "text-emerald-700" },
+    violet: { box: "bg-violet-50 border-violet-100 text-violet-600", text: "text-violet-700" },
+    amber: { box: "bg-amber-50 border-amber-100 text-amber-600", text: "text-amber-700" },
+  };
+  const c = colorMap[color] ?? colorMap.slate;
   return (
-    <div className="space-y-6 px-1 sm:px-0">
-  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-    <div className="min-w-0">
-      <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-black leading-tight">
-        Mesa de Partes Digital
-      </h2>
-      <p className="text-sm sm:text-base text-muted-foreground">
-        Sistema de gestión de trámites documentarios
-      </p>
-    </div>
-  </div>
-
-  {/* Quick Stats */}
-  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-    <Card className="w-full">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Trámites Pendientes</CardTitle>
-        <Clock className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{stats.pending_procedures || 0}</div>
-        <p className="text-xs text-muted-foreground">Requieren atención</p>
-      </CardContent>
-    </Card>
-
-    <Card className="w-full">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Completados Hoy</CardTitle>
-        <CheckCircle className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{stats.completed_today || 0}</div>
-        <p className="text-xs text-muted-foreground">Trámites finalizados</p>
-      </CardContent>
-    </Card>
-
-    <Card className="w-full">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Tiempo Promedio</CardTitle>
-        <TrendingUp className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{stats.avg_processing_time || "0"} días</div>
-        <p className="text-xs text-muted-foreground">Tiempo de procesamiento</p>
-      </CardContent>
-    </Card>
-
-    <Card className="w-full">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Tipos de Trámite</CardTitle>
-        <FileText className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{stats.procedure_types || 0}</div>
-        <p className="text-xs text-muted-foreground">Tipos disponibles</p>
-      </CardContent>
-    </Card>
-  </div>
-
-
-      {/* Acciones rápidas */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Acciones Rápidas</CardTitle>
-          <CardDescription>Acceso directo a las funciones principales de Mesa de Partes</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <IfPerm any={[PERMS["mpv.processes.review"]]}>
-              <Button variant="outline" className="h-20 flex flex-col gap-2" onClick={onNew}>
-                <Plus className="h-6 w-6" />
-                <span className="text-sm">Nuevo Trámite</span>
-              </Button>
-            </IfPerm>
-
-            <IfPerm any={[PERMS["mpv.processes.review"]]}>
-              <Button variant="outline" className="h-20 flex flex-col gap-2" onClick={onSearch}>
-                <Search className="h-6 w-6" />
-                <span className="text-sm">Consultar Estado</span>
-              </Button>
-            </IfPerm>
-
-            <IfPerm any={[PERMS["mpv.processes.review"]]}>
-              <Button variant="outline" className="h-20 flex flex-col gap-2" onClick={onQR}>
-                <QrCode className="h-6 w-6" />
-                <span className="text-sm">Generar QR</span>
-              </Button>
-            </IfPerm>
-
-            <IfPerm any={[PERMS["mpv.reports.view"]]}>
-              <Button variant="outline" className="h-20 flex flex-col gap-2" onClick={onReports}>
-                <BarChart3 className="h-6 w-6" />
-                <span className="text-sm">Reportes</span>
-              </Button>
-            </IfPerm>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="flex items-center gap-2 mb-3">
+      {Icon && (
+        <div className={`h-6 w-6 rounded-lg border grid place-items-center shrink-0 ${c.box}`}>
+          <Icon size={12} />
+        </div>
+      )}
+      <p className={`text-[10px] font-extrabold uppercase tracking-widest ${c.text}`}>{label}</p>
+      <div className="flex-1 h-px bg-slate-100" />
     </div>
   );
 };
 
-/* ===================== TYPES ===================== */
+const StatusBadge = ({ status }) => {
+  const s = STATUS_MAP[status] ?? { label: status, cls: "bg-slate-100 text-slate-600 border-slate-200" };
+  return (
+    <span className={`inline-flex items-center text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${s.cls}`}>
+      {s.label}
+    </span>
+  );
+};
+
+const UrgencyBadge = ({ urgency }) => {
+  if (!urgency || urgency === "NORMAL") return null;
+  const u = URGENCY_MAP[urgency] ?? URGENCY_MAP.NORMAL;
+  return (
+    <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full border ${u.cls}`}>
+      <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: u.dot }} />
+      {u.label}
+    </span>
+  );
+};
+
+const DeadlineBadge = ({ deadline, status }) => {
+  if (!deadline || ["COMPLETED", "REJECTED"].includes(status)) return null;
+  const days = daysLeft(deadline);
+  const over = days < 0;
+  const warn = days >= 0 && days <= 2;
+  if (!over && !warn) return null;
+  return (
+    <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full border ${over ? "bg-red-50 text-red-600 border-red-200" : "bg-amber-50 text-amber-600 border-amber-200"
+      }`}>
+      <AlertTriangle size={9} className="shrink-0" />
+      {over ? `Vencido hace ${Math.abs(days)}d` : `Vence en ${days}d`}
+    </span>
+  );
+};
+
+const LoadingCenter = ({ text = "Cargando…" }) => (
+  <div className="flex items-center justify-center py-14">
+    <div className="flex flex-col items-center gap-2">
+      <div className="h-10 w-10 rounded-2xl bg-slate-50 border border-slate-200 grid place-items-center">
+        <Loader2 size={18} className="animate-spin text-slate-400" />
+      </div>
+      <p className="text-sm text-slate-400 font-medium">{text}</p>
+    </div>
+  </div>
+);
+
+const EmptyState = ({ icon: Icon = Inbox, title, subtitle }) => (
+  <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white py-14 flex flex-col items-center gap-2 text-center px-6">
+    <div className="h-12 w-12 rounded-2xl bg-slate-100 grid place-items-center">
+      <Icon size={22} className="text-slate-300" />
+    </div>
+    <p className="text-sm font-bold text-slate-500">{title}</p>
+    {subtitle && <p className="text-xs text-slate-400 max-w-xs">{subtitle}</p>}
+  </div>
+);
+
+const Th = ({ children, right }) => (
+  <th className={`px-4 py-3.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 bg-slate-50 whitespace-nowrap border-b border-slate-100 ${right ? "text-right" : "text-left"}`}>
+    {children}
+  </th>
+);
+const Td = ({ children, className = "" }) => (
+  <td className={`px-4 py-3 text-sm text-slate-800 border-b border-slate-50 align-middle ${className}`}>{children}</td>
+);
+
+const StatCard = ({ label, value, subtitle, Icon, accent = "blue", loading, delay = 0, alert }) => {
+  const themes = {
+    amber: { bar: "border-t-amber-500", iconBg: "bg-amber-50 border-amber-100", iconCls: "text-amber-600" },
+    green: { bar: "border-t-emerald-500", iconBg: "bg-emerald-50 border-emerald-100", iconCls: "text-emerald-600" },
+    blue: { bar: "border-t-blue-500", iconBg: "bg-blue-50 border-blue-100", iconCls: "text-blue-600" },
+    slate: { bar: "border-t-slate-500", iconBg: "bg-slate-50 border-slate-200", iconCls: "text-slate-600" },
+    red: { bar: "border-t-red-500", iconBg: "bg-red-50 border-red-200", iconCls: "text-red-500" },
+  };
+  const th = themes[accent] ?? themes.blue;
+  return (
+    <div className={`rounded-2xl border border-slate-200/80 border-t-4 ${th.bar} bg-white shadow-sm p-4 hover:-translate-y-0.5 transition-all duration-200 ${alert && Number(value) > 0 ? "ring-1 ring-red-200" : ""}`}
+      style={{ animationDelay: `${delay}ms` }}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{label}</p>
+          <div className="mt-2">
+            {loading
+              ? <div className="h-8 w-16 rounded-xl bg-slate-200 animate-pulse" />
+              : <p className={`text-3xl font-black tabular-nums leading-none ${alert && Number(value) > 0 ? "text-red-600" : "text-slate-800"}`}>{value}</p>
+            }
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1.5">{subtitle}</p>
+        </div>
+        <div className={`h-10 w-10 rounded-xl border grid place-items-center shrink-0 ${th.iconBg}`}>
+          <Icon size={18} className={th.iconCls} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ActionCard = ({ label, sublabel, Icon, color, bg, onClick, delay = 0 }) => (
+  <button onClick={onClick}
+    className="flex flex-col items-center gap-2.5 p-5 bg-white border border-slate-200/80 rounded-2xl shadow-sm cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:border-slate-300 transition-all duration-200 text-center w-full"
+    style={{ animationDelay: `${delay}ms` }}>
+    <div className="h-11 w-11 rounded-2xl grid place-items-center transition-transform duration-200 hover:scale-110"
+      style={{ background: bg, color }}>
+      <Icon size={20} />
+    </div>
+    <div>
+      <p className="text-sm font-bold text-slate-700 leading-tight">{label}</p>
+      {sublabel && <p className="text-[11px] text-slate-400 mt-0.5">{sublabel}</p>}
+    </div>
+    <ArrowRight size={12} className="text-slate-300" />
+  </button>
+);
+
+const FieldError = ({ msg }) => msg ? (
+  <p className="text-[10px] font-bold text-red-500 flex items-center gap-1 mt-0.5">
+    <AlertCircle size={9} /> {msg}
+  </p>
+) : null;
+
+const DetailCard = ({ title, icon: Icon, iconColor = "slate", children }) => {
+  const colorMap = {
+    slate: "bg-slate-100 border-slate-200 text-slate-600",
+    blue: "bg-blue-50 border-blue-100 text-blue-600",
+    violet: "bg-violet-50 border-violet-100 text-violet-600",
+    emerald: "bg-emerald-50 border-emerald-100 text-emerald-600",
+    red: "bg-red-50 border-red-100 text-red-600",
+    amber: "bg-amber-50 border-amber-100 text-amber-600",
+  };
+  return (
+    <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50/60">
+        {Icon && (
+          <div className={`h-6 w-6 rounded-lg border grid place-items-center shrink-0 ${colorMap[iconColor] ?? colorMap.slate}`}>
+            <Icon size={12} />
+          </div>
+        )}
+        <p className="text-xs font-extrabold text-slate-700 uppercase tracking-widest">{title}</p>
+      </div>
+      <div className="p-4">{children}</div>
+    </div>
+  );
+};
+
+/* ════════════════════════════════════════════════════════════
+   DASHBOARD
+════════════════════════════════════════════════════════════ */
+const MesaDePartesDashboardUI = ({ onNew, onSearch, onQR, onReports, onShowOverdue }) => {
+  const { hasAny } = useAuth();
+  const canSee = hasAny([PERMS["mpv.processes.review"], PERMS["mpv.reports.view"]]);
+  const [stats, setStats] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [recent, setRecent] = useState([]);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      setLoading(true);
+      const s = (await MesaPartesDashboard.stats())?.stats ?? {};
+      setStats(s);
+    } catch (e) { toast.error(formatApiError(e, "Error al cargar estadísticas")); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { if (canSee) fetchStats(); }, [fetchStats, canSee]);
+  if (!canSee) return null;
+
+  return (
+    <div className="space-y-5">
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+        <StatCard label="Trámites Pendientes" value={stats.pending_procedures || 0}
+          subtitle="Sin completar" Icon={Clock} accent="amber" loading={loading} delay={0} />
+        <StatCard label="Completados Hoy" value={stats.completed_today || 0}
+          subtitle="Finalizados" Icon={CheckCircle2} accent="green" loading={loading} delay={60} />
+        <StatCard label="Tiempo Promedio" value={`${stats.avg_processing_time || 0}d`}
+          subtitle="Procesamiento" Icon={TrendingUp} accent="blue" loading={loading} delay={120} />
+        <StatCard label="Tipos de Trámite" value={stats.procedure_types || 0}
+          subtitle="Disponibles" Icon={FileText} accent="slate" loading={loading} delay={180} />
+        <StatCard label="Vencidos" value={stats.overdue || 0}
+          subtitle="Plazo excedido" Icon={AlertTriangle} accent="red" loading={loading} delay={240}
+          alert={true} />
+      </div>
+
+      {/* Alert banner if overdue */}
+      {!loading && (stats.overdue || 0) > 0 && (
+        <button onClick={onShowOverdue}
+          className="w-full flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-3.5 text-left hover:bg-red-100 transition-colors">
+          <div className="h-8 w-8 rounded-xl bg-red-100 border border-red-200 grid place-items-center shrink-0">
+            <Flame size={16} className="text-red-500" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-bold text-red-700">
+              {stats.overdue} trámite{stats.overdue !== 1 ? "s" : ""} con plazo vencido
+            </p>
+            <p className="text-xs text-red-500 mt-0.5">Haz clic para ver y gestionar</p>
+          </div>
+          <ArrowRight size={14} className="text-red-400" />
+        </button>
+      )}
+
+      {/* Quick access */}
+      <div>
+        <SectionHead label="Accesos directos" color="slate" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <IfPerm any={[PERMS["mpv.processes.review"]]}>
+            <ActionCard label="Nuevo Trámite" sublabel="Registrar" Icon={Plus} color="#2563EB" bg="#DBEAFE" onClick={onNew} delay={0} />
+          </IfPerm>
+          <IfPerm any={[PERMS["mpv.processes.review"]]}>
+            <ActionCard label="Consultar Estado" sublabel="Buscar trámite" Icon={Search} color="#0891B2" bg="#CFFAFE" onClick={onSearch} delay={60} />
+          </IfPerm>
+          <IfPerm any={[PERMS["mpv.processes.review"]]}>
+            <ActionCard label="Verificar QR" sublabel="Código de seguimiento" Icon={QrCode} color="#7C3AED" bg="#EDE9FE" onClick={onQR} delay={120} />
+          </IfPerm>
+          <IfPerm any={[PERMS["mpv.reports.view"]]}>
+            <ActionCard label="Reportes" sublabel="Estadísticas" Icon={BarChart3} color="#059669" bg="#D1FAE5" onClick={onReports} delay={180} />
+          </IfPerm>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ════════════════════════════════════════════════════════════
+   TIPOS DE TRÁMITE
+════════════════════════════════════════════════════════════ */
 const ProcedureTypesManagement = () => {
   const { hasPerm } = useAuth();
-  const canManageTypes = hasPerm(PERMS["mpv.processes.resolve"]); // o crea "mpv.catalog.manage"
-
+  const canManage = hasPerm(PERMS["mpv.processes.resolve"]);
   const [procedureTypes, setProcedureTypes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-
-  // modal detalle/edición
+  const [filterActive, setFilterActive] = useState("ALL"); // ALL | true | false
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState(null);
-
   const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    required_documents: "",
-    processing_days: 5,
-    cost: 0,
-    is_active: true,
+    name: "", description: "", required_documents: "",
+    processing_days: 5, cost: 0, is_active: true,
   });
 
-  const fetchProcedureTypes = useCallback(async () => {
+  const fetchTypes = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await ProcedureTypes.list();
-      setProcedureTypes(data?.procedure_types ?? []);
-    } catch (error) {
-      console.error("Error fetching procedure types:", error);
-      toast.error(formatApiError(error, "Error al cargar tipos de trámite"));
-    } finally {
-      setLoading(false);
-    }
+      setProcedureTypes((await ProcedureTypes.list())?.procedure_types ?? []);
+    } catch (e) { toast.error(formatApiError(e, "Error al cargar tipos de trámite")); }
+    finally { setLoading(false); }
   }, []);
+  useEffect(() => { fetchTypes(); }, [fetchTypes]);
 
-  useEffect(() => {
-    fetchProcedureTypes();
-  }, [fetchProcedureTypes]);
-
-  const handleSubmitCreate = async (e) => {
+  const handleCreate = async e => {
     e.preventDefault();
     try {
       await ProcedureTypes.create(formData);
-      toast.success("Tipo de trámite creado exitosamente");
-      setIsCreateModalOpen(false);
-      setFormData({
-        name: "",
-        description: "",
-        required_documents: "",
-        processing_days: 5,
-        cost: 0,
-        is_active: true,
-      });
-      fetchProcedureTypes();
-    } catch (error) {
-      toast.error(formatApiError(error, "Error al crear tipo de trámite"));
-    }
-  };
-
-  const openView = (type) => {
-    setSelected(type);
-    setEditing(false);
-    setViewOpen(true);
+      toast.success("Tipo de trámite creado"); setIsCreateOpen(false);
+      setFormData({ name: "", description: "", required_documents: "", processing_days: 5, cost: 0, is_active: true });
+      fetchTypes();
+    } catch (e) { toast.error(formatApiError(e, "Error al crear tipo")); }
   };
 
   const toggleActive = async () => {
@@ -315,297 +388,238 @@ const ProcedureTypesManagement = () => {
       const next = !selected.is_active;
       await ProcedureTypes.toggle(selected.id, next);
       toast.success(`Tipo ${next ? "activado" : "inactivado"}`);
-      setSelected({ ...selected, is_active: next });
-      fetchProcedureTypes();
-    } catch (err) {
-      toast.error(formatApiError(err, "No se pudo cambiar el estado"));
-    }
+      setSelected({ ...selected, is_active: next }); fetchTypes();
+    } catch (e) { toast.error(formatApiError(e, "No se pudo cambiar el estado")); }
   };
 
-  const saveEdit = async (e) => {
+  const saveEdit = async e => {
     e?.preventDefault?.();
     if (!selected) return;
     try {
-      const body = {
-        name: selected.name?.trim() ?? "",
-        description: selected.description ?? "",
+      await ProcedureTypes.patch(selected.id, {
+        name: selected.name?.trim() ?? "", description: selected.description ?? "",
         required_documents: selected.required_documents ?? "",
-        processing_days: Number(selected.processing_days || 0),
-        cost: Number(selected.cost || 0),
-      };
-      await ProcedureTypes.patch(selected.id, body);
-      toast.success("Tipo actualizado");
-      setEditing(false);
-      fetchProcedureTypes();
-    } catch (err) {
-      toast.error(formatApiError(err, "No se pudo actualizar el tipo"));
-    }
+        processing_days: Number(selected.processing_days || 0), cost: Number(selected.cost || 0),
+      });
+      toast.success("Tipo actualizado"); setEditing(false); fetchTypes();
+    } catch (e) { toast.error(formatApiError(e, "No se pudo actualizar")); }
   };
 
-  if (!canManageTypes) return null;
+  if (!canManage) return null;
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
+  const filtered = procedureTypes.filter(t => {
+    if (filterActive === "ALL") return true;
+    return String(t.is_active) === filterActive;
+  });
+
+  const activeCount = procedureTypes.filter(t => t.is_active).length;
+  const inactiveCount = procedureTypes.filter(t => !t.is_active).length;
 
   return (
-    <div className="space-y-6 pb-24 sm:pb-6">
-
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Tipos de Trámite</h2>
-
-        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="h-4 w-4 mr-2" />
-              Nuevo 
-            </Button>
-          </DialogTrigger>
-
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Crear Nuevo Tipo de Trámite</DialogTitle>
-              <DialogDescription>Configure un nuevo tipo de trámite documentario</DialogDescription>
-            </DialogHeader>
-
-            <form onSubmit={handleSubmitCreate} className="space-y-4">
-              <div>
-                <Label htmlFor="name">Nombre del Trámite *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="description">Descripción</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="required_documents">Documentos Requeridos</Label>
-                <Textarea
-                  id="required_documents"
-                  value={formData.required_documents}
-                  onChange={(e) =>
-                    setFormData({ ...formData, required_documents: e.target.value })
-                  }
-                  placeholder="Liste los documentos necesarios para este trámite"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="processing_days">Días de Procesamiento *</Label>
-                  <Input
-                    id="processing_days"
-                    type="number"
-                    min="1"
-                    value={formData.processing_days}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        processing_days: parseInt(e.target.value || "0", 10),
-                      })
-                    }
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="cost">Costo (S/.) *</Label>
-                  <Input
-                    id="cost"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.cost}
-                    onChange={(e) =>
-                      setFormData({ ...formData, cost: parseFloat(e.target.value || "0") })
-                    }
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                  Crear Tipo de Trámite
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+    <div className="space-y-4 pb-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-base font-extrabold text-slate-800 flex items-center gap-2">
+            <div className="h-7 w-7 rounded-xl bg-slate-100 border border-slate-200 grid place-items-center shrink-0">
+              <Settings2 size={13} className="text-slate-600" />
+            </div>
+            Tipos de Trámite
+          </p>
+          <p className="text-xs text-slate-400 mt-0.5 ml-9">
+            {activeCount} activo{activeCount !== 1 ? "s" : ""} · {inactiveCount} inactivo{inactiveCount !== 1 ? "s" : ""}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Active filter tabs */}
+          <div className="flex rounded-xl border border-slate-200 overflow-hidden text-xs font-bold">
+            {[["ALL", "Todos"], ["true", "Activos"], ["false", "Inactivos"]].map(([v, l]) => (
+              <button key={v} onClick={() => setFilterActive(v)}
+                className={`px-3 py-1.5 transition-colors ${filterActive === v
+                  ? "bg-slate-800 text-white"
+                  : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+          <Button size="sm" className="h-9 rounded-xl gap-1.5 font-extrabold bg-slate-800 hover:bg-slate-900"
+            onClick={() => setIsCreateOpen(true)}>
+            <Plus size={13} /> Nuevo tipo
+          </Button>
+        </div>
       </div>
 
-      {/* List */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Tipo de Trámite
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Días
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Costo
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Estado
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Acciones
-                  </th>
+      {loading ? <LoadingCenter /> : filtered.length === 0 ? (
+        <EmptyState icon={FileText} title="Sin tipos de trámite"
+          subtitle={filterActive !== "ALL" ? "Prueba cambiando el filtro" : "Crea el primer tipo para comenzar"} />
+      ) : (
+        <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr><Th>Tipo de Trámite</Th><Th>Días</Th><Th>Costo</Th><Th>Estado</Th><Th right>Acción</Th></tr>
+            </thead>
+            <tbody>
+              {filtered.map(type => (
+                <tr key={type.id} className="group hover:bg-slate-50/40 transition-colors">
+                  <Td>
+                    <p className="font-bold text-slate-800">{type.name}</p>
+                    {type.description && <p className="text-[11px] text-slate-400 mt-0.5 truncate max-w-xs">{type.description}</p>}
+                    {type.required_documents && (
+                      <p className="text-[10px] text-slate-300 mt-0.5 truncate max-w-xs">Docs: {type.required_documents}</p>
+                    )}
+                  </Td>
+                  <Td className="font-mono tabular-nums text-slate-600">{type.processing_days}d</Td>
+                  <Td className="font-bold text-slate-700 tabular-nums">S/. {(Number(type.cost) || 0).toFixed(2)}</Td>
+                  <Td>
+                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${type.is_active
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-slate-100 text-slate-500 border-slate-200"}`}>
+                      {type.is_active ? "Activo" : "Inactivo"}
+                    </span>
+                  </Td>
+                  <Td className="text-right">
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-xl hover:bg-slate-100 text-slate-400"
+                      onClick={() => { setSelected(type); setEditing(false); setViewOpen(true); }}>
+                      <Eye size={13} />
+                    </Button>
+                  </Td>
                 </tr>
-              </thead>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-              <tbody className="bg-white divide-y divide-gray-200">
-                {procedureTypes.map((type) => (
-                  <tr key={type.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{type.name}</div>
-                        <div className="text-sm text-gray-500">{type.description}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {type.processing_days} días
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      S/. {(Number(type.cost) || 0).toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge variant={type.is_active ? "default" : "secondary"}>
-                        {type.is_active ? "Activo" : "Inactivo"}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => openView(type)} title="Ver / Editar">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-
-            </table>
+      {/* Create dialog */}
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent className="max-w-2xl rounded-2xl p-0 border-0 shadow-2xl overflow-hidden">
+          <div className="bg-gradient-to-r from-[#1a2035] via-[#1e293b] to-[#252d3d] px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-white/10 border border-white/20 grid place-items-center shrink-0">
+                <Settings2 size={18} className="text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-300 mb-0.5">Configuración</p>
+                <p className="font-extrabold text-white">Crear Tipo de Trámite</p>
+              </div>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+          <form onSubmit={handleCreate} className="bg-white p-6 space-y-4">
+            <div>
+              <FieldLabel required>Nombre</FieldLabel>
+              <Input className="h-10 rounded-xl" value={formData.name}
+                onChange={e => setFormData({ ...formData, name: e.target.value })} required />
+            </div>
+            <div>
+              <FieldLabel>Descripción</FieldLabel>
+              <Textarea className="rounded-xl resize-none" rows={2} value={formData.description}
+                onChange={e => setFormData({ ...formData, description: e.target.value })} />
+            </div>
+            <div>
+              <FieldLabel>Documentos requeridos</FieldLabel>
+              <Textarea className="rounded-xl resize-none" rows={2} value={formData.required_documents}
+                placeholder="Liste los documentos necesarios"
+                onChange={e => setFormData({ ...formData, required_documents: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <FieldLabel required>Días de procesamiento</FieldLabel>
+                <Input type="number" min="1" className="h-10 rounded-xl font-mono text-center"
+                  value={formData.processing_days}
+                  onChange={e => setFormData({ ...formData, processing_days: parseInt(e.target.value || "0", 10) })} required />
+              </div>
+              <div>
+                <FieldLabel required>Costo (S/.)</FieldLabel>
+                <Input type="number" min="0" step="0.01" className="h-10 rounded-xl font-mono text-center"
+                  value={formData.cost}
+                  onChange={e => setFormData({ ...formData, cost: parseFloat(e.target.value || "0") })} required />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <Button type="button" variant="outline" className="rounded-xl font-semibold"
+                onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
+              <Button type="submit" className="rounded-xl font-extrabold gap-2 bg-slate-800 hover:bg-slate-900">
+                Crear tipo
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {/* Modal Ver/Editar */}
+      {/* View/Edit dialog */}
       <Dialog open={viewOpen} onOpenChange={setViewOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {editing ? "Editar Tipo de Trámite" : `Detalle: ${selected?.name ?? ""}`}
-            </DialogTitle>
-            {!editing && <DialogDescription>Revise la configuración del tipo de trámite</DialogDescription>}
-          </DialogHeader>
-
+        <DialogContent className="max-w-2xl rounded-2xl p-0 border-0 shadow-2xl overflow-hidden">
+          <div className="bg-gradient-to-r from-[#1a2035] via-[#1e293b] to-[#252d3d] px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-white/10 border border-white/20 grid place-items-center shrink-0">
+                {editing ? <Pencil size={18} className="text-white" /> : <Eye size={18} className="text-white" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-300 mb-0.5">
+                  {editing ? "Editar tipo" : "Detalle"}
+                </p>
+                <p className="font-extrabold text-white truncate">{selected?.name}</p>
+              </div>
+            </div>
+          </div>
           {selected && (
-            <form onSubmit={saveEdit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={saveEdit} className="bg-white p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Nombre</Label>
-                  <Input
-                    disabled={!editing}
-                    value={selected.name || ""}
-                    onChange={(e) => setSelected({ ...selected, name: e.target.value })}
-                  />
+                  <FieldLabel>Nombre</FieldLabel>
+                  <Input className="h-10 rounded-xl" disabled={!editing} value={selected.name || ""}
+                    onChange={e => setSelected({ ...selected, name: e.target.value })} />
                 </div>
                 <div>
-                  <Label>Días de Procesamiento</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    disabled={!editing}
+                  <FieldLabel>Días de procesamiento</FieldLabel>
+                  <Input type="number" min="1" className="h-10 rounded-xl font-mono text-center" disabled={!editing}
                     value={selected.processing_days ?? 1}
-                    onChange={(e) =>
-                      setSelected({
-                        ...selected,
-                        processing_days: parseInt(e.target.value || "0", 10),
-                      })
-                    }
-                  />
+                    onChange={e => setSelected({ ...selected, processing_days: parseInt(e.target.value || "0", 10) })} />
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Costo (S/.)</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    disabled={!editing}
+                  <FieldLabel>Costo (S/.)</FieldLabel>
+                  <Input type="number" min="0" step="0.01" className="h-10 rounded-xl font-mono text-center" disabled={!editing}
                     value={selected.cost ?? 0}
-                    onChange={(e) =>
-                      setSelected({ ...selected, cost: parseFloat(e.target.value || "0") })
-                    }
-                  />
+                    onChange={e => setSelected({ ...selected, cost: parseFloat(e.target.value || "0") })} />
                 </div>
-                <div className="flex items-end gap-2">
-                  <Badge variant={selected.is_active ? "default" : "secondary"}>
+                <div className="flex items-end pb-1">
+                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${selected.is_active
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-slate-100 text-slate-500 border-slate-200"}`}>
                     {selected.is_active ? "Activo" : "Inactivo"}
-                  </Badge>
+                  </span>
                 </div>
               </div>
-
               <div>
-                <Label>Descripción</Label>
-                <Textarea
-                  disabled={!editing}
+                <FieldLabel>Descripción</FieldLabel>
+                <Textarea className="rounded-xl resize-none" rows={2} disabled={!editing}
                   value={selected.description ?? ""}
-                  onChange={(e) => setSelected({ ...selected, description: e.target.value })}
-                />
+                  onChange={e => setSelected({ ...selected, description: e.target.value })} />
               </div>
-
               <div>
-                <Label>Documentos Requeridos</Label>
-                <Textarea
-                  disabled={!editing}
+                <FieldLabel>Documentos requeridos</FieldLabel>
+                <Textarea className="rounded-xl resize-none" rows={2} disabled={!editing}
                   value={selected.required_documents ?? ""}
-                  onChange={(e) => setSelected({ ...selected, required_documents: e.target.value })}
-                />
+                  onChange={e => setSelected({ ...selected, required_documents: e.target.value })} />
               </div>
-
-              <div className="flex justify-between pt-2">
-                <Button type="button" variant="outline" onClick={toggleActive}>
-                  <Power className="h-4 w-4 mr-2" />
-                  {selected.is_active ? "Inactivar" : "Activar"}
+              <div className="flex justify-between pt-2 border-t border-slate-100">
+                <Button type="button" variant="outline" className="rounded-xl font-semibold gap-1.5" onClick={toggleActive}>
+                  <Power size={13} /> {selected.is_active ? "Inactivar" : "Activar"}
                 </Button>
-
                 <div className="flex gap-2">
                   {!editing ? (
-                    <Button type="button" onClick={() => setEditing(true)}>
-                      <Pencil className="h-4 w-4 mr-2" />
-                      Editar
+                    <Button type="button" className="rounded-xl font-extrabold gap-2 bg-slate-800 hover:bg-slate-900"
+                      onClick={() => setEditing(true)}>
+                      <Pencil size={13} /> Editar
                     </Button>
                   ) : (
                     <>
-                      <Button type="button" variant="outline" onClick={() => setEditing(false)}>
-                        Cancelar
+                      <Button type="button" variant="outline" className="rounded-xl font-semibold"
+                        onClick={() => setEditing(false)}>Cancelar</Button>
+                      <Button type="submit" className="rounded-xl font-extrabold gap-2 bg-slate-800 hover:bg-slate-900">
+                        Guardar
                       </Button>
-                      <Button type="submit">Guardar</Button>
                     </>
                   )}
                 </div>
@@ -618,7 +632,9 @@ const ProcedureTypesManagement = () => {
   );
 };
 
-/* ===================== DETAIL DIALOG ===================== */
+/* ════════════════════════════════════════════════════════════
+   PROCEDURE DETAIL DIALOG
+════════════════════════════════════════════════════════════ */
 const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) => {
   const { hasPerm } = useAuth();
   const canResolve = hasPerm(PERMS["mpv.processes.resolve"]);
@@ -626,50 +642,33 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
   const canReview = hasPerm(PERMS["mpv.processes.review"]);
 
   const [loading, setLoading] = useState(false);
+  const [genLoading, setGenLoading] = useState({});
   const [proc, setProc] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [offices, setOffices] = useState([]);
   const [users, setUsers] = useState([]);
-
-  // Archivos
   const [files, setFiles] = useState([]);
+
   const fetchFiles = useCallback(async () => {
     if (!proc?.id) return;
-    const d = await ProcedureFiles.list(proc.id);
-    setFiles(d?.files ?? []);
+    setFiles((await ProcedureFiles.list(proc.id))?.files ?? []);
   }, [proc?.id]);
 
-  const uploadFile = async (e) => {
+  const uploadFile = async e => {
     const file = e.target.files?.[0];
     if (!file || !proc?.id) return;
-    try {
-      await ProcedureFiles.upload(proc.id, file, {});
-      toast.success("Archivo subido");
-      await fetchFiles();
-    } catch (err) {
-      toast.error(formatApiError(err, "No se pudo subir el archivo"));
-    } finally {
-      e.target.value = "";
-    }
+    try { await ProcedureFiles.upload(proc.id, file, {}); toast.success("Archivo subido"); await fetchFiles(); }
+    catch (err) { toast.error(formatApiError(err, "No se pudo subir el archivo")); }
+    finally { e.target.value = ""; }
   };
 
-  const deleteFile = async (f) => {
+  const deleteFile = async f => {
     if (!proc?.id) return;
-    try {
-      await ProcedureFiles.remove(proc.id, f.id);
-      toast.success("Archivo eliminado");
-      await fetchFiles();
-    } catch (err) {
-      toast.error(formatApiError(err, "No se pudo eliminar el archivo"));
-    }
+    try { await ProcedureFiles.remove(proc.id, f.id); toast.success("Archivo eliminado"); await fetchFiles(); }
+    catch (err) { toast.error(formatApiError(err, "No se pudo eliminar el archivo")); }
   };
 
-  const [routeForm, setRouteForm] = useState({
-    to_office_id: "",
-    assignee_id: "",
-    deadline_at: "",
-    note: "",
-  });
+  const [routeForm, setRouteForm] = useState({ to_office_id: "", assignee_id: "", deadline_at: "", note: "" });
   const [statusForm, setStatusForm] = useState({ status: "IN_REVIEW", note: "" });
   const [notifyForm, setNotifyForm] = useState({ channels: ["EMAIL"], subject: "", message: "" });
 
@@ -683,31 +682,19 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
         Catalog.offices(),
         Catalog.users({ role: "STAFF" }),
       ]);
-
-      const procData = p?.procedure || p;
-      setProc(procData);
-
-      const tArr = Array.isArray(t?.timeline) ? t.timeline : Array.isArray(t) ? t : [];
-      setTimeline(tArr);
-
-      const officesArr = Array.isArray(o?.offices) ? o.offices : Array.isArray(o) ? o : [];
-      const usersArr = Array.isArray(u?.users) ? u.users : Array.isArray(u) ? u : [];
-      setOffices(officesArr);
-      setUsers(usersArr);
-    } catch (e) {
-      toast.error(formatApiError(e, "No se pudo cargar el detalle"));
-    } finally {
-      setLoading(false);
-    }
+      const proc = p?.procedure || p;
+      setProc(proc);
+      setTimeline(Array.isArray(t?.timeline) ? t.timeline : Array.isArray(t) ? t : []);
+      setOffices(Array.isArray(o?.offices) ? o.offices : Array.isArray(o) ? o : []);
+      setUsers(Array.isArray(u?.users) ? u.users : Array.isArray(u) ? u : []);
+      // Pre-fill status form with current status
+      if (proc?.status) setStatusForm(s => ({ ...s, status: proc.status }));
+    } catch (e) { toast.error(formatApiError(e, "No se pudo cargar el detalle")); }
+    finally { setLoading(false); }
   }, [procedureId, canReview]);
 
-  useEffect(() => {
-    if (open) load();
-  }, [open, load]);
-
-  useEffect(() => {
-    if (open && proc?.id) fetchFiles();
-  }, [open, proc?.id, fetchFiles]);
+  useEffect(() => { if (open) load(); }, [open, load]);
+  useEffect(() => { if (open && proc?.id) fetchFiles(); }, [open, proc?.id, fetchFiles]);
 
   const doRoute = async () => {
     try {
@@ -717,438 +704,352 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
         note: routeForm.note,
         deadline_at: routeForm.deadline_at || null,
       });
-      toast.success("Trámite derivado");
-      await load();
-      onChanged?.();
-    } catch (e) {
-      toast.error(formatApiError(e, "No se pudo derivar"));
-    }
+      toast.success("Trámite derivado"); await load(); onChanged?.();
+    } catch (e) { toast.error(formatApiError(e, "No se pudo derivar")); }
   };
 
   const doStatus = async () => {
-    try {
-      await ProcSvc.setStatus(proc.id, statusForm);
-      toast.success("Estado actualizado");
-      await load();
-      onChanged?.();
-    } catch (e) {
-      toast.error(formatApiError(e, "No se pudo actualizar estado"));
-    }
+    try { await ProcSvc.setStatus(proc.id, statusForm); toast.success("Estado actualizado"); await load(); onChanged?.(); }
+    catch (e) { toast.error(formatApiError(e, "No se pudo actualizar estado")); }
   };
 
   const doNotify = async () => {
-    try {
-      await ProcSvc.notify(proc.id, notifyForm);
-      toast.success("Notificación enviada");
-    } catch (e) {
-      toast.error(formatApiError(e, "No se pudo notificar"));
-    }
+    try { await ProcSvc.notify(proc.id, notifyForm); toast.success("Notificación enviada"); }
+    catch (e) { toast.error(formatApiError(e, "No se pudo notificar")); }
   };
 
-  // PDFs (polling)
-  const genCover = async () => {
+  const genDoc = async (type, label) => {
     const id = proc?.id ?? procedureId;
+    const code = proc?.tracking_code || String(id);
     if (!id) return toast.error("No se pudo obtener el ID del trámite");
+    setGenLoading(prev => ({ ...prev, [type]: true }));
     try {
-      const r = await generatePDFWithPolling(`/procedures/${id}/cover`, {}, { testId: "cover-pdf" });
-      if (r?.success && r.downloadUrl) {
-        await downloadFile(r.downloadUrl, `caratula-${proc?.tracking_code || id}.pdf`);
-        toast.success("Carátula generada");
-      } else {
-        toast.error("No se pudo generar la carátula");
-      }
-    } catch (e) {
-      console.error("cover error:", e);
-      toast.error("Error al generar carátula");
-    }
+      if (type === "cover") await ProcSvc.downloadCover(id, code);
+      else await ProcSvc.downloadCargo(id, code);
+      toast.success(`${label} generado correctamente`);
+    } catch (e) { toast.error(formatApiError(e, `Error al generar ${label}`)); }
+    finally { setGenLoading(prev => ({ ...prev, [type]: false })); }
   };
 
-  const genCargo = async () => {
-    const id = proc?.id ?? procedureId;
-    if (!id) return toast.error("No se pudo obtener el ID del trámite");
-    try {
-      const r = await generatePDFWithPolling(`/procedures/${id}/cargo`, {}, { testId: "cargo-pdf" });
-      if (r?.success && r.downloadUrl) {
-        await downloadFile(r.downloadUrl, `cargo-${proc?.tracking_code || id}.pdf`);
-        toast.success("Cargo generado");
-      } else {
-        toast.error("No se pudo generar el cargo");
-      }
-    } catch (e) {
-      console.error("cargo error:", e);
-      toast.error("Error al generar cargo");
-    }
-  };
+  const overdue = proc && isOverdue(proc.deadline_at) && !["COMPLETED", "REJECTED"].includes(proc.status);
+  const urgencyInfo = proc?.urgency_level ? URGENCY_MAP[proc.urgency_level] : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Trámite {proc?.tracking_code || ""}</DialogTitle>
-          <DialogDescription>Derivación, plazos, estado y trazabilidad</DialogDescription>
-        </DialogHeader>
-
-        {!canReview ? (
-          <div className="p-4 text-sm text-muted-foreground">
-            No tienes permiso para ver el detalle del trámite.
+      <DialogContent className="max-w-5xl max-h-[88vh] overflow-y-auto rounded-2xl p-0 border-0 shadow-2xl">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-[#1a2035] via-[#1e293b] to-[#252d3d] px-6 py-5 sticky top-0 z-10">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="h-10 w-10 rounded-xl bg-white/10 border border-white/20 grid place-items-center shrink-0">
+              <ClipboardList size={18} className="text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-300 mb-0.5">Detalle del Trámite</p>
+              <p className="font-extrabold text-white">
+                {proc?.tracking_code
+                  ? <span>Código <span className="font-mono text-slate-300">#{proc.tracking_code}</span></span>
+                  : "Cargando…"}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {proc && <StatusBadge status={proc.status} />}
+              {urgencyInfo && proc?.urgency_level !== "NORMAL" && (
+                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${urgencyInfo.cls}`}>
+                  {urgencyInfo.label}
+                </span>
+              )}
+            </div>
           </div>
-        ) : loading ? (
-          <div className="flex items-center justify-center h-40">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
-          </div>
-        ) : proc ? (
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* IZQ */}
-            <div className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Resumen</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div>
-                    <b>Solicitante:</b> {proc.applicant_name} ({proc.applicant_document})
-                  </div>
-                  <div>
-                    <b>Tipo:</b> {proc.procedure_type_name}
-                  </div>
-                  <div>
-                    <b>Estado:</b> <Badge>{proc.status}</Badge>
-                  </div>
-                  <div>
-                    <b>Oficina actual:</b> {proc.current_office_name || "-"}
-                  </div>
-                  <div>
-                    <b>Responsable:</b> {proc.assignee_name || "-"}
-                  </div>
-                  <div>
-                    <b>Vence:</b>{" "}
-                    {proc.deadline_at ? new Date(proc.deadline_at).toLocaleString() : "-"}
-                  </div>
-                  <div className="flex gap-2 pt-2">
-                    <Button variant="outline" onClick={genCover}>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Carátula
-                    </Button>
-                    <Button variant="outline" onClick={genCargo}>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Cargo
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+        </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Trazabilidad</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 max-h-[320px] overflow-y-auto">
-                  {(!Array.isArray(timeline) || timeline.length === 0) && (
-                    <div className="text-sm text-gray-500">Sin eventos</div>
-                  )}
+        <div className="bg-white p-6">
+          {!canReview ? (
+            <EmptyState icon={ShieldAlert} title="Sin permiso" subtitle="No tienes permiso para ver el detalle" />
+          ) : loading ? <LoadingCenter /> : proc ? (
+            <>
+              {/* Overdue warning banner */}
+              {overdue && (
+                <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 mb-4">
+                  <AlertTriangle size={16} className="text-red-500 shrink-0" />
+                  <div>
+                    <p className="text-sm font-bold text-red-700">Plazo vencido</p>
+                    <p className="text-xs text-red-500">
+                      Fecha límite: {fmtDate(proc.deadline_at, true)}
+                    </p>
+                  </div>
+                </div>
+              )}
 
-                  {Array.isArray(timeline) &&
-                    timeline.map((ev, i) => (
-                      <div key={i} className="border rounded p-2">
-                        <div className="text-xs text-gray-500">
-                          {ev?.at ? new Date(ev.at).toLocaleString() : "-"}
+              <div className="grid md:grid-cols-2 gap-4">
+                {/* LEFT */}
+                <div className="space-y-4">
+                  <DetailCard title="Resumen del trámite" icon={ClipboardList} iconColor="slate">
+                    <div className="space-y-2">
+                      {[
+                        ["Solicitante", `${proc.applicant_name} · DNI ${proc.applicant_document}`],
+                        ["Correo", proc.applicant_email || "—"],
+                        ["Celular", proc.applicant_phone || "—"],
+                        ["Tipo", proc.procedure_type_name],
+                        ["Oficina actual", proc.current_office_name || "—"],
+                        ["Responsable", proc.assignee_name || "—"],
+                        ["Urgencia", (URGENCY_MAP[proc.urgency_level]?.label || "Normal")],
+                        ["Vence", proc.deadline_at ? fmtDate(proc.deadline_at, true) : "—"],
+                        ["Descripción", proc.description || "—"],
+                      ].map(([k, v]) => (
+                        <div key={k} className="flex gap-3 text-sm">
+                          <span className="text-slate-400 font-semibold w-28 shrink-0 text-xs">{k}</span>
+                          <span className="text-slate-700 font-medium break-words min-w-0">{v}</span>
                         </div>
-                        <div className="text-sm">
-                          <b>{ev.type}</b> — {ev.description}
-                        </div>
-                        {ev.actor_name && (
-                          <div className="text-xs text-gray-500">Por: {ev.actor_name}</div>
-                        )}
+                      ))}
+                      <div className="flex gap-3 items-center text-sm">
+                        <span className="text-slate-400 font-semibold w-28 shrink-0 text-xs">Estado</span>
+                        <StatusBadge status={proc.status} />
                       </div>
-                    ))}
-                </CardContent>
-              </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Documentos adjuntos</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="file"
-                      accept="application/pdf,image/*"
-                      onChange={uploadFile}
-                      disabled={!canUpload}
-                    />
-                    {!canUpload && (
-                      <span className="text-xs text-muted-foreground">
-                        No tienes permiso para subir archivos
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="space-y-2 max-h-[240px] overflow-y-auto">
-                    {files.length === 0 && (
-                      <div className="text-sm text-gray-500">Sin archivos</div>
-                    )}
-                    {files.map((f) => (
-                      <div
-                        key={f.id}
-                        className="flex items-center justify-between border rounded p-2 text-sm"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Paperclip className="h-4 w-4" />
-                          <a
-                            href={f.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-blue-600 underline"
-                          >
-                            {f.filename || f.original_name || "archivo"}
-                          </a>
-                          <span className="text-xs text-gray-500">
-                            {f.doc_type ? `· ${f.doc_type}` : ""}{" "}
-                            {f.size ? `· ${Math.round(f.size / 1024)} KB` : ""}
-                          </span>
-                        </div>
-
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteFile(f)}
-                          disabled={!canUpload}
-                          title={!canUpload ? "Sin permiso para eliminar" : ""}
-                        >
-                          <Trash2 className="h-4 w-4" />
+                      {/* PDF buttons */}
+                      <div className="flex gap-2 pt-2 border-t border-slate-100">
+                        <Button variant="outline" size="sm"
+                          className="h-8 rounded-xl gap-1.5 text-xs font-semibold"
+                          disabled={!!genLoading.cover}
+                          onClick={() => genDoc("cover", "Carátula")}>
+                          {genLoading.cover ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                          Carátula
+                        </Button>
+                        <Button variant="outline" size="sm"
+                          className="h-8 rounded-xl gap-1.5 text-xs font-semibold"
+                          disabled={!!genLoading.cargo}
+                          onClick={() => genDoc("cargo", "Cargo")}>
+                          {genLoading.cargo ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                          Cargo
                         </Button>
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                    </div>
+                  </DetailCard>
 
-            {/* DER */}
-            <div className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Derivar</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <Label>Oficina destino</Label>
-                    <Select
-                      value={routeForm.to_office_id || undefined}
-                      onValueChange={(v) => setRouteForm({ ...routeForm, to_office_id: v })}
-                      disabled={!canResolve}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(Array.isArray(offices) ? offices : []).map((o) => (
-                          <SelectItem key={o.id} value={String(o.id)}>
-                            {o.name}
-                          </SelectItem>
+                  {/* Timeline */}
+                  <DetailCard title="Trazabilidad" icon={TrendingUp} iconColor="blue">
+                    <div className="space-y-2 max-h-56 overflow-y-auto">
+                      {!timeline.length
+                        ? <p className="text-sm text-slate-400">Sin eventos registrados</p>
+                        : timeline.map((ev, i) => (
+                          <div key={i} className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[10px] text-slate-400">{ev?.at ? fmtDate(ev.at, true) : "—"}</p>
+                              {ev.actor_name && <p className="text-[10px] text-slate-400 font-semibold">{ev.actor_name}</p>}
+                            </div>
+                            <p className="text-xs font-bold text-slate-700 mt-0.5">{ev.type}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{ev.description}</p>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  </DetailCard>
+
+                  {/* Files */}
+                  <DetailCard title={`Documentos adjuntos ${files.length > 0 ? `(${files.length})` : ""}`} icon={Paperclip} iconColor="slate">
+                    <div className="space-y-3">
+                      {canUpload && (
+                        <Input type="file" accept="application/pdf,image/*" onChange={uploadFile}
+                          className="h-9 rounded-xl text-sm" />
+                      )}
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {!files.length
+                          ? <p className="text-sm text-slate-400">Sin archivos adjuntos</p>
+                          : files.map(f => (
+                            <div key={f.id} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Paperclip size={12} className="text-slate-400 shrink-0" />
+                                <a href={f.url} target="_blank" rel="noreferrer"
+                                  className="text-xs text-blue-600 hover:underline truncate">
+                                  {f.filename || f.original_name || "archivo"}
+                                </a>
+                                {f.size && <span className="text-[10px] text-slate-400 shrink-0">{Math.round(f.size / 1024)} KB</span>}
+                              </div>
+                              {canUpload && (
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-xl text-red-400 hover:text-red-600 hover:bg-red-50"
+                                  onClick={() => deleteFile(f)}>
+                                  <Trash2 size={12} />
+                                </Button>
+                              )}
+                            </div>
+                          ))
+                        }
+                      </div>
+                    </div>
+                  </DetailCard>
+                </div>
+
+                {/* RIGHT */}
+                <div className="space-y-4">
+                  {/* Route */}
+                  <DetailCard title="Derivar trámite" icon={Send} iconColor="blue">
+                    <div className="space-y-3">
+                      <div>
+                        <FieldLabel>Oficina destino</FieldLabel>
+                        <Select value={routeForm.to_office_id || undefined}
+                          onValueChange={v => setRouteForm({ ...routeForm, to_office_id: v })} disabled={!canResolve}>
+                          <SelectTrigger className="h-9 rounded-xl text-sm"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                          <SelectContent>{offices.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <FieldLabel>Responsable (opcional)</FieldLabel>
+                        <Select value={routeForm.assignee_id || undefined}
+                          onValueChange={v => setRouteForm({ ...routeForm, assignee_id: v })} disabled={!canResolve}>
+                          <SelectTrigger className="h-9 rounded-xl text-sm"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                          <SelectContent>{users.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.full_name || u.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <FieldLabel>Nueva fecha límite</FieldLabel>
+                        <Input type="datetime-local" className="h-9 rounded-xl text-sm"
+                          value={routeForm.deadline_at}
+                          onChange={e => setRouteForm({ ...routeForm, deadline_at: e.target.value })} disabled={!canResolve} />
+                      </div>
+                      <div>
+                        <FieldLabel>Nota</FieldLabel>
+                        <Textarea rows={2} className="rounded-xl resize-none text-sm"
+                          value={routeForm.note}
+                          onChange={e => setRouteForm({ ...routeForm, note: e.target.value })} disabled={!canResolve} />
+                      </div>
+                      <div className="flex justify-end">
+                        <Button size="sm" className="h-9 rounded-xl gap-1.5 font-extrabold bg-slate-800 hover:bg-slate-900"
+                          onClick={doRoute} disabled={!canResolve || !routeForm.to_office_id}>
+                          <Send size={13} /> Derivar
+                        </Button>
+                      </div>
+                    </div>
+                  </DetailCard>
+
+                  {/* Status */}
+                  <DetailCard title="Actualizar estado" icon={CheckCircle2} iconColor="emerald">
+                    <div className="space-y-3">
+                      <div>
+                        <FieldLabel>Nuevo estado</FieldLabel>
+                        <Select value={statusForm.status}
+                          onValueChange={v => setStatusForm({ ...statusForm, status: v })} disabled={!canResolve}>
+                          <SelectTrigger className="h-9 rounded-xl text-sm"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(STATUS_MAP).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <FieldLabel>Nota</FieldLabel>
+                        <Textarea rows={2} className="rounded-xl resize-none text-sm"
+                          value={statusForm.note}
+                          onChange={e => setStatusForm({ ...statusForm, note: e.target.value })} disabled={!canResolve} />
+                      </div>
+                      <div className="flex justify-end">
+                        <Button variant="outline" size="sm" className="h-9 rounded-xl gap-1.5 font-semibold hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700"
+                          onClick={doStatus} disabled={!canResolve}>
+                          <CheckCircle2 size={13} /> Actualizar
+                        </Button>
+                      </div>
+                    </div>
+                  </DetailCard>
+
+                  {/* Notify */}
+                  <DetailCard title="Notificar al solicitante" icon={Send} iconColor="violet">
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        {["EMAIL", "SMS"].map(ch => (
+                          <label key={ch}
+                            className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border cursor-pointer transition-colors ${notifyForm.channels.includes(ch)
+                              ? "bg-slate-800 text-white border-slate-800"
+                              : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+                            <input type="checkbox" className="hidden"
+                              checked={notifyForm.channels.includes(ch)}
+                              onChange={e => setNotifyForm(f => ({
+                                ...f,
+                                channels: e.target.checked ? [...f.channels, ch] : f.channels.filter(x => x !== ch),
+                              }))} disabled={!canResolve} />
+                            {ch}
+                          </label>
                         ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label>Responsable (opcional)</Label>
-                    <Select
-                      value={routeForm.assignee_id || undefined}
-                      onValueChange={(v) => setRouteForm({ ...routeForm, assignee_id: v })}
-                      disabled={!canResolve}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(Array.isArray(users) ? users : []).map((u) => (
-                          <SelectItem key={u.id} value={String(u.id)}>
-                            {u.full_name || u.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label>Vence el</Label>
-                    <Input
-                      type="datetime-local"
-                      value={routeForm.deadline_at}
-                      onChange={(e) => setRouteForm({ ...routeForm, deadline_at: e.target.value })}
-                      disabled={!canResolve}
-                    />
-                  </div>
-
-                  <div>
-                    <Label>Nota</Label>
-                    <Textarea
-                      rows={2}
-                      value={routeForm.note}
-                      onChange={(e) => setRouteForm({ ...routeForm, note: e.target.value })}
-                      disabled={!canResolve}
-                    />
-                  </div>
-
-                  <div className="flex justify-end">
-                    <Button
-                      onClick={doRoute}
-                      disabled={!canResolve}
-                      title={!canResolve ? "No tienes permiso para derivar" : ""}
-                    >
-                      <Send className="h-4 w-4 mr-2" />
-                      Derivar
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Estado</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <Label>Nuevo estado</Label>
-                    <Select
-                      value={statusForm.status}
-                      onValueChange={(v) => setStatusForm({ ...statusForm, status: v })}
-                      disabled={!canResolve}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="RECEIVED">Recibido</SelectItem>
-                        <SelectItem value="IN_REVIEW">En Revisión</SelectItem>
-                        <SelectItem value="APPROVED">Aprobado</SelectItem>
-                        <SelectItem value="REJECTED">Rechazado</SelectItem>
-                        <SelectItem value="COMPLETED">Completado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label>Nota</Label>
-                    <Textarea
-                      rows={2}
-                      value={statusForm.note}
-                      onChange={(e) => setStatusForm({ ...statusForm, note: e.target.value })}
-                      disabled={!canResolve}
-                    />
-                  </div>
-
-                  <div className="flex justify-end">
-                    <Button
-                      variant="outline"
-                      onClick={doStatus}
-                      disabled={!canResolve}
-                      title={!canResolve ? "No tienes permiso para actualizar estado" : ""}
-                    >
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Actualizar
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Notificar</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex gap-3">
-                    {["EMAIL", "SMS"].map((ch) => (
-                      <label key={ch} className="text-sm flex items-center gap-2 border rounded px-2 py-1">
-                        <input
-                          type="checkbox"
-                          checked={notifyForm.channels.includes(ch)}
-                          onChange={(e) =>
-                            setNotifyForm((f) => ({
-                              ...f,
-                              channels: e.target.checked
-                                ? [...f.channels, ch]
-                                : f.channels.filter((x) => x !== ch),
-                            }))
-                          }
-                          disabled={!canResolve}
-                        />
-                        {ch}
-                      </label>
-                    ))}
-                  </div>
-
-                  <div>
-                    <Label>Asunto</Label>
-                    <Input
-                      value={notifyForm.subject}
-                      onChange={(e) => setNotifyForm({ ...notifyForm, subject: e.target.value })}
-                      disabled={!canResolve}
-                    />
-                  </div>
-
-                  <div>
-                    <Label>Mensaje</Label>
-                    <Textarea
-                      rows={3}
-                      value={notifyForm.message}
-                      onChange={(e) => setNotifyForm({ ...notifyForm, message: e.target.value })}
-                      disabled={!canResolve}
-                    />
-                  </div>
-
-                  <div className="flex justify-end">
-                    <Button
-                      onClick={doNotify}
-                      disabled={!canResolve}
-                      title={!canResolve ? "No tienes permiso para notificar" : ""}
-                    >
-                      <Send className="h-4 w-4 mr-2" />
-                      Enviar
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        ) : null}
+                      </div>
+                      <div>
+                        <FieldLabel>Asunto</FieldLabel>
+                        <Input className="h-9 rounded-xl text-sm" value={notifyForm.subject}
+                          onChange={e => setNotifyForm({ ...notifyForm, subject: e.target.value })} disabled={!canResolve} />
+                      </div>
+                      <div>
+                        <FieldLabel>Mensaje</FieldLabel>
+                        <Textarea rows={3} className="rounded-xl resize-none text-sm" value={notifyForm.message}
+                          onChange={e => setNotifyForm({ ...notifyForm, message: e.target.value })} disabled={!canResolve} />
+                      </div>
+                      <div className="flex justify-end">
+                        <Button size="sm" className="h-9 rounded-xl gap-1.5 font-extrabold bg-slate-800 hover:bg-slate-900"
+                          onClick={doNotify} disabled={!canResolve}>
+                          <Send size={13} /> Enviar
+                        </Button>
+                      </div>
+                    </div>
+                  </DetailCard>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
       </DialogContent>
     </Dialog>
   );
 };
 
-/* ===================== PROCEDURES ===================== */
-const ProceduresManagement = forwardRef((props, ref) => {
+/* ════════════════════════════════════════════════════════════
+   GESTIÓN DE TRÁMITES
+════════════════════════════════════════════════════════════ */
+const ProceduresManagement = forwardRef(({ initialFilter }, ref) => {
   const { hasPerm } = useAuth();
   const canReview = hasPerm(PERMS["mpv.processes.review"]);
 
   const [procedures, setProcedures] = useState([]);
   const [procedureTypes, setProcedureTypes] = useState([]);
   const [loading, setLoading] = useState(true);
-
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [urgencyFilter, setUrgencyFilter] = useState("ALL");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailId, setDetailId] = useState(null);
-
   const searchInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
-    procedure_type_id: "",
-    applicant_name: "",
-    applicant_email: "",
-    applicant_phone: "",
-    applicant_document: "",
-    description: "",
-    urgency_level: "NORMAL",
+    procedure_type_id: "", applicant_name: "", applicant_email: "",
+    applicant_phone: "", applicant_document: "", description: "", urgency_level: "NORMAL",
   });
+  const [errors, setErrors] = useState({});
+
+  const onlyDigits = v => String(v).replace(/\D/g, "");
+
+  const validateForm = () => {
+    const e = {};
+    if (!formData.procedure_type_id) e.procedure_type_id = "Seleccione un tipo";
+    if (!formData.applicant_name?.trim()) e.applicant_name = "Nombre obligatorio";
+    else if (formData.applicant_name.length < 3) e.applicant_name = "Mínimo 3 caracteres";
+    if (!formData.applicant_document?.trim()) e.applicant_document = "Documento obligatorio";
+    else if (formData.applicant_document.length !== 8) e.applicant_document = "Debe tener 8 dígitos";
+    if (formData.applicant_email && !formData.applicant_email.includes("@")) e.applicant_email = "Correo inválido";
+    if (formData.applicant_phone && formData.applicant_phone.length !== 9) e.applicant_phone = "Debe tener 9 dígitos";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleField = (field, value) => {
+    setFormData({ ...formData, [field]: value });
+    if (errors[field]) setErrors(p => ({ ...p, [field]: null }));
+  };
 
   useImperativeHandle(ref, () => ({
-    openCreate: () => setIsCreateModalOpen(true),
-    focusSearch: () => {
+    openCreate: () => setIsCreateOpen(true),
+    focusSearch: () => { setStatusFilter("ALL"); setTimeout(() => searchInputRef.current?.focus(), 0); },
+    filterOverdue: () => {
+      // Show only overdue: status filter "pending", date filter shows those with expired deadline
       setStatusFilter("ALL");
+      setShowFilters(true);
       setTimeout(() => searchInputRef.current?.focus(), 0);
     },
   }));
@@ -1157,532 +1058,842 @@ const ProceduresManagement = forwardRef((props, ref) => {
     if (!canReview) return;
     try {
       setLoading(true);
-      const data = await ProcSvc.list();
-      setProcedures(data?.procedures ?? data ?? []);
-    } catch (error) {
-      console.error("Error fetching procedures:", error);
-      toast.error(formatApiError(error, "Error al cargar trámites"));
-    } finally {
-      setLoading(false);
-    }
+      setProcedures((await ProcSvc.list())?.procedures ?? []);
+    } catch (e) { toast.error(formatApiError(e, "Error al cargar trámites")); }
+    finally { setLoading(false); }
   }, [canReview]);
 
-  const fetchProcedureTypes = useCallback(async () => {
-    try {
-      const data = await ProcedureTypes.list();
-      setProcedureTypes(data?.procedure_types ?? []);
-    } catch (error) {
-      console.error("Error fetching procedure types:", error);
-    }
+  const fetchTypes = useCallback(async () => {
+    try { setProcedureTypes((await ProcedureTypes.list())?.procedure_types ?? []); } catch { }
   }, []);
 
+  useEffect(() => { fetchProcedures(); fetchTypes(); }, [fetchProcedures, fetchTypes]);
+
+  // Apply initial filter from dashboard (e.g. "show overdue")
   useEffect(() => {
-    fetchProcedures();
-    fetchProcedureTypes();
-  }, [fetchProcedures, fetchProcedureTypes]);
+    if (initialFilter === "overdue") {
+      setShowFilters(true);
+    }
+  }, [initialFilter]);
 
   if (!canReview) return null;
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmitData = async () => {
     try {
-      const payload = {
-        ...formData,
-        procedure_type: formData.procedure_type_id ? Number(formData.procedure_type_id) : null,
-      };
+      const payload = { ...formData, procedure_type: formData.procedure_type_id ? Number(formData.procedure_type_id) : null };
       delete payload.procedure_type_id;
-
       await ProcSvc.create(payload);
-
-      toast.success("Trámite creado exitosamente");
-      setIsCreateModalOpen(false);
-      setFormData({
-        procedure_type_id: "",
-        applicant_name: "",
-        applicant_email: "",
-        applicant_phone: "",
-        applicant_document: "",
-        description: "",
-        urgency_level: "NORMAL",
-      });
-      fetchProcedures();
-    } catch (error) {
-      console.log("create error:", error);
-      toast.error(formatApiError(error, "Error al crear trámite"));
-    }
+      toast.success("Trámite creado"); setIsCreateOpen(false);
+      setFormData({ procedure_type_id: "", applicant_name: "", applicant_email: "", applicant_phone: "", applicant_document: "", description: "", urgency_level: "NORMAL" });
+      setErrors({}); fetchProcedures();
+    } catch (e) { toast.error(formatApiError(e, "Error al crear trámite")); }
   };
 
-  const filteredProcedures = procedures.filter((procedure) => {
-    const code = procedure?.tracking_code?.toLowerCase?.() || "";
-    const name = procedure?.applicant_name?.toLowerCase?.() || "";
-    const type = procedure?.procedure_type_name?.toLowerCase?.() || "";
+  const onFormSubmit = e => { e.preventDefault(); if (validateForm()) handleSubmitData(); };
+
+  const filtered = procedures.filter(p => {
     const q = searchTerm.toLowerCase();
-    const matchesSearch = code.includes(q) || name.includes(q) || type.includes(q);
-    const matchesStatus = statusFilter === "ALL" || procedure.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const match = (p?.tracking_code?.toLowerCase?.() || "").includes(q)
+      || (p?.applicant_name?.toLowerCase?.() || "").includes(q)
+      || (p?.procedure_type_name?.toLowerCase?.() || "").includes(q)
+      || (p?.applicant_document || "").includes(q);
+    const statusOk = statusFilter === "ALL" || p.status === statusFilter;
+    const urgencyOk = urgencyFilter === "ALL" || p.urgency_level === urgencyFilter;
+    const dateFromOk = !dateFrom || new Date(p.created_at) >= new Date(dateFrom);
+    const dateToOk = !dateTo || new Date(p.created_at) <= new Date(dateTo + "T23:59:59");
+    return match && statusOk && urgencyOk && dateFromOk && dateToOk;
   });
 
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      RECEIVED: { variant: "secondary", label: "Recibido" },
-      IN_REVIEW: { variant: "default", label: "En Revisión" },
-      APPROVED: { variant: "default", label: "Aprobado" },
-      REJECTED: { variant: "destructive", label: "Rechazado" },
-      COMPLETED: { variant: "default", label: "Completado" },
-    };
-    const cfg = statusConfig[status] || { variant: "secondary", label: status };
-    return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
+  const overdueCount = filtered.filter(p => isOverdue(p.deadline_at) && !["COMPLETED", "REJECTED"].includes(p.status)).length;
+  const urgentCount = filtered.filter(p => p.urgency_level === "URGENT").length;
+  const hasFilters = searchTerm || statusFilter !== "ALL" || urgencyFilter !== "ALL" || dateFrom || dateTo;
+
+  const clearFilters = () => {
+    setSearchTerm(""); setStatusFilter("ALL"); setUrgencyFilter("ALL");
+    setDateFrom(""); setDateTo("");
   };
 
-  const handleDownloadPDF = async (proc) => {
-    const id = proc?.id;
-    if (!id) return toast.error("No se pudo obtener el ID del trámite");
+  const handleDownloadPDF = async proc => {
+    if (!proc?.id) return toast.error("No se pudo obtener el ID");
     try {
-      const result = await generatePDFWithPolling(`/procedures/${id}/cover`, {}, { testId: "procedure-cover" });
-      if (result?.success) {
-        await downloadFile(result.downloadUrl, `caratula-${proc.tracking_code || id}.pdf`);
-        toast.success("Documento generado");
-      } else {
-        toast.error("No se pudo generar el PDF");
-      }
-    } catch (error) {
-      console.error("PDF generation error:", error);
-      toast.error(formatApiError(error, "Error al generar PDF"));
-    }
+      await ProcSvc.downloadCover(proc.id, proc.tracking_code || proc.id);
+      toast.success("Carátula descargada");
+    } catch (e) { toast.error(formatApiError(e, "Error al generar carátula")); }
   };
 
-  const handleGenerateQR = async (proc) => {
-    const id = proc?.id;
-    if (!id) return toast.error("No se pudo obtener el ID del trámite");
-    try {
-      const result = await generatePDFWithPolling(`/procedures/${id}/qr`, {}, { testId: "procedure-qr" });
-      if (result?.success) {
-        await downloadFile(result.downloadUrl, `qr-${proc.tracking_code || id}.pdf`);
-        toast.success("QR generado");
-      } else {
-        toast.error("No se pudo generar el QR");
-      }
-    } catch (err) {
-      console.error("QR generation error:", err);
-      toast.error(formatApiError(err, "Error al generar QR"));
-    }
-  };
-
-  const openDetail = async (p) => {
+  const openDetail = async p => {
     let id = p?.id;
-
     if (!id && p?.tracking_code) {
       const d = await ProcSvc.getByCode(p.tracking_code);
-      const procData = d?.procedure || d;
-      id = procData?.id || d?.id;
+      id = (d?.procedure || d)?.id;
     }
-
-    if (!id) {
-      toast.error("No se pudo obtener el ID del trámite");
-      return;
-    }
-
-    setDetailId(id);
-    setDetailOpen(true);
+    if (!id) return toast.error("No se pudo obtener el ID");
+    setDetailId(id); setDetailOpen(true);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+  return (
+    <div className="space-y-4 pb-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-base font-extrabold text-slate-800 flex items-center gap-2">
+            <div className="h-7 w-7 rounded-xl bg-slate-100 border border-slate-200 grid place-items-center shrink-0">
+              <ClipboardList size={13} className="text-slate-600" />
+            </div>
+            Gestión de Trámites
+          </p>
+          <p className="text-xs text-slate-400 mt-0.5 ml-9">
+            Registro, derivación y seguimiento
+            {overdueCount > 0 && (
+              <span className="ml-2 text-red-500 font-bold">{overdueCount} vencido{overdueCount !== 1 ? "s" : ""}</span>
+            )}
+            {urgentCount > 0 && (
+              <span className="ml-2 text-orange-500 font-bold">{urgentCount} urgente{urgentCount !== 1 ? "s" : ""}</span>
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="h-9 rounded-xl gap-1.5 font-semibold border-slate-200"
+            onClick={() => setShowFilters(f => !f)}>
+            <Filter size={13} /> Filtros
+            {hasFilters && <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />}
+          </Button>
+          <Button size="sm" variant="outline" className="h-9 w-9 p-0 rounded-xl border-slate-200"
+            onClick={fetchProcedures} title="Refrescar">
+            <RefreshCw size={13} />
+          </Button>
+          <Button size="sm" className="h-9 rounded-xl gap-1.5 font-extrabold bg-slate-800 hover:bg-slate-900"
+            data-testid="open-create-procedure" onClick={() => setIsCreateOpen(true)}>
+            <Plus size={13} /> Nuevo trámite
+          </Button>
+        </div>
       </div>
+
+      {/* Search row */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Input ref={searchInputRef} className="h-9 pl-8 rounded-xl text-sm border-slate-200"
+            placeholder="Código, solicitante, DNI o tipo…"
+            value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-9 rounded-xl text-sm w-full sm:w-44 border-slate-200">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Todos los estados</SelectItem>
+            {Object.entries(STATUS_MAP).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Advanced filters panel */}
+      {showFilters && (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Filtros avanzados</p>
+            {hasFilters && (
+              <button onClick={clearFilters}
+                className="flex items-center gap-1 text-xs font-semibold text-slate-400 hover:text-red-500 transition-colors">
+                <X size={11} /> Limpiar
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Urgencia</p>
+              <Select value={urgencyFilter} onValueChange={setUrgencyFilter}>
+                <SelectTrigger className="h-8 rounded-xl text-xs border-slate-200 bg-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Todas</SelectItem>
+                  {Object.entries(URGENCY_MAP).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Fecha desde</p>
+              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                className="h-8 rounded-xl text-xs border-slate-200 bg-white" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Fecha hasta</p>
+              <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                className="h-8 rounded-xl text-xs border-slate-200 bg-white" />
+            </div>
+            <div className="flex items-end">
+              <Button size="sm" variant="outline" className="h-8 w-full rounded-xl text-xs font-semibold border-slate-200 bg-white"
+                onClick={() => {
+                  const today = new Date().toISOString().split("T")[0];
+                  setDateTo(today);
+                  setDateFrom(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
+                }}>
+                <Calendar size={11} className="mr-1" /> Últimos 30d
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Table */}
+      {loading ? <LoadingCenter /> : filtered.length === 0 ? (
+        <EmptyState icon={ClipboardList} title="Sin resultados"
+          subtitle={hasFilters ? "Prueba con otros filtros" : "Aún no hay trámites registrados"} />
+      ) : (
+        <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <Th>Código</Th>
+                  <Th>Solicitante</Th>
+                  <Th>Tipo</Th>
+                  <Th>Urgencia</Th>
+                  <Th>Estado</Th>
+                  <Th>Vencimiento</Th>
+                  <Th>Fecha</Th>
+                  <Th>Docs</Th>
+                  <Th right>Acciones</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(p => {
+                  const over = isOverdue(p.deadline_at) && !["COMPLETED", "REJECTED"].includes(p.status);
+                  return (
+                    <tr key={p.id}
+                      className={`group hover:bg-slate-50/40 transition-colors ${over ? "bg-red-50/30" : ""}`}>
+                      <Td>
+                        <span className="text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg font-mono">
+                          {p.tracking_code}
+                        </span>
+                      </Td>
+                      <Td>
+                        <p className="font-bold text-slate-800">{p.applicant_name}</p>
+                        <p className="text-[11px] text-slate-400 font-mono">{p.applicant_document}</p>
+                      </Td>
+                      <Td className="text-slate-600 max-w-[130px] truncate">{p.procedure_type_name}</Td>
+                      <Td>
+                        {p.urgency_level && p.urgency_level !== "NORMAL"
+                          ? <UrgencyBadge urgency={p.urgency_level} />
+                          : <span className="text-[11px] text-slate-300">—</span>
+                        }
+                      </Td>
+                      <Td><StatusBadge status={p.status} /></Td>
+                      <Td>
+                        {p.deadline_at ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[10px] font-mono text-slate-500">{fmtDate(p.deadline_at)}</span>
+                            <DeadlineBadge deadline={p.deadline_at} status={p.status} />
+                          </div>
+                        ) : <span className="text-[11px] text-slate-300">—</span>}
+                      </Td>
+                      <Td className="text-xs text-slate-500 tabular-nums">
+                        {p.created_at ? new Date(p.created_at).toLocaleDateString("es-PE") : "—"}
+                      </Td>
+                      <Td>
+                        {(p.files_count || 0) > 0 ? (
+                          <span className="inline-flex items-center justify-center h-5 w-5 rounded-lg text-white text-[10px] font-bold bg-slate-600">
+                            {p.files_count}
+                          </span>
+                        ) : <span className="text-[11px] text-slate-300">—</span>}
+                      </Td>
+                      <Td className="text-right">
+                        <div className="flex items-center justify-end gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
+                          <Button data-testid="procedure-view" variant="ghost" size="sm"
+                            className="h-7 w-7 p-0 rounded-xl hover:bg-slate-100 text-slate-400"
+                            title="Ver detalle" onClick={() => openDetail(p)}>
+                            <Eye size={13} />
+                          </Button>
+                          <Button data-testid="procedure-download-pdf" variant="ghost" size="sm"
+                            className="h-7 w-7 p-0 rounded-xl hover:bg-blue-50 hover:text-blue-600 text-slate-400"
+                            title="Descargar carátula" onClick={() => handleDownloadPDF(p)}>
+                            <Download size={13} />
+                          </Button>
+                        </div>
+                      </Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/40 flex items-center justify-between">
+            <p className="text-xs text-slate-400 font-semibold">
+              {filtered.length} trámite{filtered.length !== 1 ? "s" : ""}
+              {hasFilters && ` (filtrado de ${procedures.length})`}
+            </p>
+            {overdueCount > 0 && (
+              <p className="text-xs font-bold text-red-500 flex items-center gap-1">
+                <AlertTriangle size={11} /> {overdueCount} vencido{overdueCount !== 1 ? "s" : ""}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Create dialog */}
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent className="max-w-2xl max-h-[82vh] overflow-y-auto rounded-2xl p-0 border-0 shadow-2xl">
+          <div className="bg-gradient-to-r from-[#1a2035] via-[#1e293b] to-[#252d3d] px-6 py-5 sticky top-0 z-10">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-white/10 border border-white/20 grid place-items-center shrink-0">
+                <ClipboardList size={18} className="text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-300 mb-0.5">Nuevo Registro</p>
+                <p className="font-extrabold text-white">Registrar Trámite Documentario</p>
+              </div>
+            </div>
+          </div>
+          <form onSubmit={onFormSubmit} className="bg-white p-6 space-y-4">
+            <div>
+              <FieldLabel required error={!!errors.procedure_type_id}>Tipo de Trámite</FieldLabel>
+              <Select value={formData.procedure_type_id || undefined}
+                onValueChange={v => handleField("procedure_type_id", v)}>
+                <SelectTrigger className={`h-10 rounded-xl ${errors.procedure_type_id ? "border-red-400" : ""}`}>
+                  <SelectValue placeholder="Seleccionar tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {procedureTypes.filter(t => t.is_active).map(t =>
+                    <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              <FieldError msg={errors.procedure_type_id} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <FieldLabel required error={!!errors.applicant_name}>Nombre del solicitante</FieldLabel>
+                <Input className={`h-10 rounded-xl ${errors.applicant_name ? "border-red-400" : ""}`}
+                  placeholder="Nombre completo" value={formData.applicant_name}
+                  onChange={e => handleField("applicant_name", e.target.value)} />
+                <FieldError msg={errors.applicant_name} />
+              </div>
+              <div>
+                <FieldLabel required error={!!errors.applicant_document}>DNI</FieldLabel>
+                <Input className={`h-10 rounded-xl font-mono ${errors.applicant_document ? "border-red-400" : ""}`}
+                  placeholder="8 dígitos" maxLength={8} value={formData.applicant_document}
+                  onChange={e => handleField("applicant_document", onlyDigits(e.target.value).slice(0, 8))} />
+                <FieldError msg={errors.applicant_document} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <FieldLabel error={!!errors.applicant_email}>Correo electrónico</FieldLabel>
+                <Input type="email" className={`h-10 rounded-xl ${errors.applicant_email ? "border-red-400" : ""}`}
+                  placeholder="ejemplo@correo.com" value={formData.applicant_email}
+                  onChange={e => handleField("applicant_email", e.target.value)} />
+                <FieldError msg={errors.applicant_email} />
+              </div>
+              <div>
+                <FieldLabel error={!!errors.applicant_phone}>Celular</FieldLabel>
+                <Input className={`h-10 rounded-xl font-mono ${errors.applicant_phone ? "border-red-400" : ""}`}
+                  placeholder="9 dígitos" maxLength={9} value={formData.applicant_phone}
+                  onChange={e => handleField("applicant_phone", onlyDigits(e.target.value).slice(0, 9))} />
+                <FieldError msg={errors.applicant_phone} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <FieldLabel>Nivel de urgencia</FieldLabel>
+                <Select value={formData.urgency_level} onValueChange={v => handleField("urgency_level", v)}>
+                  <SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(URGENCY_MAP).map(([k, v]) =>
+                      <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <FieldLabel>Fecha límite (opcional)</FieldLabel>
+                <Input type="date" className="h-10 rounded-xl text-sm"
+                  value={formData.deadline_at || ""}
+                  onChange={e => handleField("deadline_at", e.target.value)} />
+              </div>
+            </div>
+
+            <div>
+              <FieldLabel>Descripción / Asunto</FieldLabel>
+              <Textarea className="rounded-xl resize-none" rows={2}
+                placeholder="Detalles específicos del trámite"
+                value={formData.description} onChange={e => handleField("description", e.target.value)} />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <Button type="button" variant="outline" className="rounded-xl font-semibold"
+                onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
+              <Button data-testid="procedure-create" type="submit"
+                className="rounded-xl font-extrabold gap-2 bg-slate-800 hover:bg-slate-900">
+                Crear trámite
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <ProcedureDetailDialog open={detailOpen} onOpenChange={setDetailOpen}
+        procedureId={detailId} onChanged={fetchProcedures} />
+    </div>
+  );
+});
+ProceduresManagement.displayName = "ProceduresManagement";
+
+/* ════════════════════════════════════════════════════════════
+   OFFICES — component
+════════════════════════════════════════════════════════════ */
+
+const OfficesSection = () => {
+  const [rows, setRows] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [open, setOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState(null);
+  const [search, setSearch] = React.useState("");
+  const [form, setForm] = React.useState({ name: "", description: "", is_active: true });
+
+  const resetForm = () => { setForm({ name: "", description: "", is_active: true }); setEditing(null); };
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await Offices.list();
+      setRows(data?.items ?? data ?? []);
+    } catch { toast.error("No se pudo cargar las oficinas"); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    try {
+      if (!form.name?.trim()) return toast.error("El nombre es requerido");
+      if (editing) { await Offices.update(editing.id, form); toast.success("Oficina actualizada"); }
+      else { await Offices.create(form); toast.success("Oficina creada"); }
+      setOpen(false); resetForm(); load();
+    } catch { toast.error("Error al guardar la oficina"); }
+  };
+
+  const remove = async (id) => {
+    try { await Offices.remove(id); toast.success("Oficina eliminada"); load(); }
+    catch { toast.error("No se pudo eliminar la oficina"); }
+  };
+
+  const toggleActive = async (r) => {
+    try { await Offices.update(r.id, { ...r, is_active: !r.is_active }); load(); }
+    catch { toast.error("No se pudo cambiar el estado"); }
+  };
+
+  const filtered = React.useMemo(() => {
+    if (!search.trim()) return rows;
+    const q = search.toLowerCase();
+    return rows.filter(r =>
+      r.name?.toLowerCase().includes(q) || r.description?.toLowerCase().includes(q)
     );
-  }
+  }, [rows, search]);
+
+  const active = rows.filter(r => r.is_active).length;
+  const inactive = rows.length - active;
+
+  const ROW_STYLE = { borderBottom: "1px solid #F1F5F9" };
+  const TH = ({ children, center }) => (
+    <th style={{
+      padding: "10px 16px", fontSize: 10, fontWeight: 800, color: "#64748B",
+      textTransform: "uppercase", letterSpacing: ".1em", background: "#F8FAFC",
+      borderBottom: "1px solid #E2E8F0", textAlign: center ? "center" : "left",
+    }}>{children}</th>
+  );
+  const TD = ({ children, center, style = {} }) => (
+    <td style={{ padding: "11px 16px", fontSize: 13, color: "#334155", textAlign: center ? "center" : "left", ...style }}>
+      {children}
+    </td>
+  );
 
   return (
-    <div className="space-y-6 pb-24 sm:pb-6">
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center">
+            <Building2 className="w-5 h-5 text-violet-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Oficinas / Dependencias</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Destinos de derivación de trámites ·{" "}
+              <span className="text-green-600 font-semibold">{active} activas</span>
+              {inactive > 0 && <span className="text-slate-400"> · {inactive} inactivas</span>}
+            </p>
+          </div>
+        </div>
 
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Gestión de Trámites</h2>
+        <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) resetForm(); }}>
+          <button
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold shadow-sm transition-colors"
+            onClick={() => { resetForm(); setOpen(true); }}
+          >
+            <Plus className="w-4 h-4" /> Nueva oficina
+          </button>
 
-        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="h-4 w-4 mr-2" />
-              Nuevo Trámite
-            </Button>
-          </DialogTrigger>
+          <DialogContent className="max-w-md rounded-2xl p-0 overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-violet-500 to-purple-600" />
+            <div className="p-6">
+              <DialogHeader className="mb-5">
+                <DialogTitle className="text-lg font-bold text-slate-800">
+                  {editing ? "Editar oficina" : "Nueva oficina"}
+                </DialogTitle>
+                <p className="text-sm text-slate-500 mt-1">
+                  Las oficinas activas aparecen en el formulario de derivación.
+                </p>
+              </DialogHeader>
 
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Registrar Nuevo Trámite</DialogTitle>
-              <DialogDescription>Complete los datos del trámite documentario</DialogDescription>
-            </DialogHeader>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="procedure_type_id">Tipo de Trámite *</Label>
-                <Select
-                  value={formData.procedure_type_id || undefined}
-                  onValueChange={(value) => setFormData({ ...formData, procedure_type_id: value })}
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Nombre *</Label>
+                  <Input
+                    className="h-9 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm"
+                    placeholder="Ej: Dirección General, Secretaría Académica…"
+                    value={form.name}
+                    onChange={e => setForm({ ...form, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Descripción / función</Label>
+                  <Input
+                    className="h-9 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm"
+                    placeholder="Opcional — referencia interna"
+                    value={form.description}
+                    onChange={e => setForm({ ...form, description: e.target.value })}
+                  />
+                </div>
+                <div
+                  className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors"
+                  onClick={() => setForm({ ...form, is_active: !form.is_active })}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar tipo de trámite" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {procedureTypes.map((type) => (
-                      <SelectItem key={type.id} value={String(type.id)}>
-                        {type.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="applicant_name">Nombre del Solicitante *</Label>
-                  <Input
-                    id="applicant_name"
-                    value={formData.applicant_name}
-                    onChange={(e) => setFormData({ ...formData, applicant_name: e.target.value })}
-                    required
-                  />
+                  <input type="checkbox" className="w-4 h-4 text-violet-600 rounded border-slate-300"
+                    checked={!!form.is_active}
+                    onChange={e => setForm({ ...form, is_active: e.target.checked })}
+                    onClick={e => e.stopPropagation()} />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700">Oficina activa</p>
+                    <p className="text-xs text-slate-400">Solo las activas aparecen para derivar trámites</p>
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="applicant_document">Documento de Identidad *</Label>
-                  <Input
-                    id="applicant_document"
-                    value={formData.applicant_document}
-                    onChange={(e) => setFormData({ ...formData, applicant_document: e.target.value })}
-                    required
-                  />
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                  <Button variant="outline" className="h-9 rounded-xl text-sm border-slate-200" onClick={() => setOpen(false)}>Cancelar</Button>
+                  <Button className="h-9 px-6 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold shadow-sm" onClick={save}>
+                    {editing ? "Guardar cambios" : "Crear oficina"}
+                  </Button>
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="applicant_email">Correo Electrónico</Label>
-                  <Input
-                    id="applicant_email"
-                    type="email"
-                    value={formData.applicant_email}
-                    onChange={(e) => setFormData({ ...formData, applicant_email: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="applicant_phone">Teléfono</Label>
-                  <Input
-                    id="applicant_phone"
-                    value={formData.applicant_phone}
-                    onChange={(e) => setFormData({ ...formData, applicant_phone: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="description">Descripción del Trámite</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Describa los detalles específicos del trámite"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="urgency_level">Nivel de Urgencia</Label>
-                <Select
-                  value={formData.urgency_level}
-                  onValueChange={(value) => setFormData({ ...formData, urgency_level: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="LOW">Baja</SelectItem>
-                    <SelectItem value="NORMAL">Normal</SelectItem>
-                    <SelectItem value="HIGH">Alta</SelectItem>
-                    <SelectItem value="URGENT">Urgente</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button data-testid="procedure-create" type="submit" className="bg-blue-600 hover:bg-blue-700">
-                  Crear Trámite
-                </Button>
-              </div>
-            </form>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Filters */}
-     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-  {/* Buscador */}
-  <div className="w-full min-w-0 sm:flex-1 sm:max-w-md">
-    <div className="relative">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-      <Input
-        placeholder="Buscar por código, nombre o tipo..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="pl-10 w-full min-w-0"
-        ref={searchInputRef}
-      />
-    </div>
-  </div>
+      {/* Body */}
+      <div className="p-5">
+        {/* Search */}
+        <div className="mb-4 relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <Input className="h-9 pl-9 rounded-xl border-slate-200 bg-white text-sm"
+            placeholder="Buscar oficina…" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
 
-  {/* Estado */}
-  <div className="w-full sm:w-48 shrink-0">
-    <Select value={statusFilter} onValueChange={setStatusFilter}>
-      <SelectTrigger className="w-full">
-        <SelectValue placeholder="Filtrar por estado" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="ALL">Todos los estados</SelectItem>
-        <SelectItem value="RECEIVED">Recibido</SelectItem>
-        <SelectItem value="IN_REVIEW">En Revisión</SelectItem>
-        <SelectItem value="APPROVED">Aprobado</SelectItem>
-        <SelectItem value="REJECTED">Rechazado</SelectItem>
-        <SelectItem value="COMPLETED">Completado</SelectItem>
-      </SelectContent>
-    </Select>
-  </div>
-</div>
-
-
-      {/* List */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b">
+        {/* Table */}
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div style={{ maxHeight: 420, overflowY: "auto", scrollbarWidth: "thin" }}>
+            <table className="w-full border-collapse">
+              <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Solicitante</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                  <TH>Oficina / Dependencia</TH>
+                  <TH>Descripción</TH>
+                  <TH center>Estado</TH>
+                  <TH center>Acciones</TH>
                 </tr>
               </thead>
-
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredProcedures.map((procedure) => (
-                  <tr key={procedure.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{procedure.tracking_code}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{procedure.applicant_name}</div>
-                        <div className="text-sm text-gray-500">{procedure.applicant_document}</div>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={4} className="py-12 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="w-6 h-6 text-violet-500 animate-spin" />
+                      <p className="text-xs text-slate-400">Cargando oficinas…</p>
+                    </div>
+                  </td></tr>
+                ) : filtered.map(r => (
+                  <tr key={r.id} style={ROW_STYLE}
+                    onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
+                    onMouseLeave={e => e.currentTarget.style.background = ""}>
+                    <TD>
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
+                          <Building2 className="w-3.5 h-3.5 text-violet-500" />
+                        </div>
+                        <span className="text-sm font-semibold text-slate-800">{r.name}</span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {procedure.procedure_type_name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(procedure.status)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {procedure.created_at ? new Date(procedure.created_at).toLocaleDateString() : "-"}
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
-                        <Button
-                          data-testid="procedure-view"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openDetail(procedure)}
-                          title="Ver detalle"
+                    </TD>
+                    <TD>
+                      {r.description
+                        ? <span className="text-xs text-slate-500">{r.description}</span>
+                        : <span className="text-xs text-slate-300 italic">—</span>}
+                    </TD>
+                    <TD center>
+                      <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold ${r.is_active ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
+                        {r.is_active ? "Activa" : "Inactiva"}
+                      </span>
+                    </TD>
+                    <TD center>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          className={`h-7 px-3 text-xs font-bold rounded-lg transition-colors ${r.is_active ? "text-orange-600 hover:bg-orange-50" : "text-green-600 hover:bg-green-50"}`}
+                          onClick={() => toggleActive(r)}
                         >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-
-                        <Button
-                          data-testid="procedure-download-pdf"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDownloadPDF(procedure)}
-                          title="Descargar carátula"
+                          {r.is_active ? "Desactivar" : "Activar"}
+                        </button>
+                        <button
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"
+                          onClick={() => { setEditing(r); setForm({ name: r.name || "", description: r.description || "", is_active: !!r.is_active }); setOpen(true); }}
                         >
-                          <Download className="h-4 w-4" />
-                        </Button>
-
-                        <Button
-                          data-testid="procedure-generate-qr"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleGenerateQR(procedure)}
-                          title="Generar QR"
-                        >
-                          <QrCode className="h-4 w-4" />
-                        </Button>
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="max-w-sm rounded-2xl">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+                                <AlertCircle className="h-5 w-5" /> ¿Eliminar oficina?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Se eliminará permanentemente <strong>{r.name}</strong>. Los trámites ya derivados no se verán afectados.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter className="gap-2 mt-2">
+                              <AlertDialogCancel className="rounded-xl border-slate-200">Cancelar</AlertDialogCancel>
+                              <AlertDialogAction className="bg-red-600 hover:bg-red-700 rounded-xl" onClick={() => remove(r.id)}>
+                                Sí, eliminar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
-                    </td>
+                    </TD>
                   </tr>
                 ))}
-
-                {filteredProcedures.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="text-center py-8 text-gray-500">
-                      Sin resultados.
-                    </td>
-                  </tr>
+                {!loading && filtered.length === 0 && (
+                  <tr><td colSpan={4} className="py-12">
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-slate-300" />
+                      </div>
+                      <p className="text-sm font-semibold text-slate-500">
+                        {search ? "Sin resultados" : "No hay oficinas registradas"}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {search ? "Prueba con otro término" : "Crea una nueva con el botón superior"}
+                      </p>
+                    </div>
+                  </td></tr>
                 )}
               </tbody>
-
             </table>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Detalle */}
-      <ProcedureDetailDialog
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
-        procedureId={detailId}
-        onChanged={fetchProcedures}
-      />
+        {!loading && rows.length > 0 && (
+          <p className="text-[11px] text-slate-400 mt-3">
+            {rows.length} oficinas registradas · {active} activas disponibles para derivación
+          </p>
+        )}
+      </div>
     </div>
   );
-});
+};
 
-/* ===================== MAIN ===================== */
+/* ════════════════════════════════════════════════════════════
+   MAIN MODULE
+════════════════════════════════════════════════════════════ */
 const MesaDePartesModule = () => {
   const { user, hasAny } = useAuth();
 
   const tabs = [
-    { key: "dashboard", label: "Dashboard", need: [PERMS["mpv.processes.review"], PERMS["mpv.reports.view"]] },
-    { key: "types", label: "Tipos de Trámite", need: [PERMS["mpv.processes.resolve"]] },
-    { key: "procedures", label: "Trámites", need: [PERMS["mpv.processes.review"]] },
-    { key: "reports", label: "Reportes", need: [PERMS["mpv.reports.view"]] },
-  ].filter((t) => (user ? hasAny(t.need) : false));
+    { key: "dashboard", label: "Dashboard", Icon: BarChart3, need: [PERMS["mpv.processes.review"], PERMS["mpv.reports.view"]] },
+    { key: "types", label: "Tipos de Trámite", Icon: Settings2, need: [PERMS["mpv.processes.resolve"]] },
+    { key: "procedures", label: "Trámites", Icon: ClipboardList, need: [PERMS["mpv.processes.review"]] },
+    { key: "offices", label: "Oficinas", Icon: Building2, need: [PERMS["mpv.processes.resolve"]] },
+    { key: "reports", label: "Reportes", Icon: BarChart3, need: [PERMS["mpv.reports.view"]] },
+  ].filter(t => user ? hasAny(t.need) : false);
 
-  const defaultTab = tabs[0]?.key || "dashboard";
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  const [activeTab, setActiveTab] = useState(tabs[0]?.key || "dashboard");
+  const [procInitFilter, setProcFilter] = useState(null);
   const procRef = useRef(null);
 
-  const goProcedures = () => setActiveTab("procedures");
-  const goReports = () => setActiveTab("reports");
-
-  const handleQuickNew = () => {
-    goProcedures();
-    procRef.current?.openCreate?.();
+  const handleQuickNew = () => { setActiveTab("procedures"); procRef.current?.openCreate?.(); };
+  const handleQuickSearch = () => { setActiveTab("procedures"); procRef.current?.focusSearch?.(); };
+  const handleShowOverdue = () => {
+    setProcFilter("overdue");
+    setActiveTab("procedures");
+    setTimeout(() => procRef.current?.filterOverdue?.(), 100);
   };
 
-  const handleQuickSearch = () => {
-    goProcedures();
-    procRef.current?.focusSearch?.();
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [verifyCode, setVerifyCode] = useState("");
+
+  const confirmVerification = () => {
+    if (!verifyCode.trim()) return;
+    window.open(MesaPartesPublic.verifyUrl(verifyCode.trim()), "_blank", "noopener,noreferrer");
+    setShowVerifyModal(false);
   };
 
-  const handleQuickQR = () => {
-    const code = window.prompt("Ingrese el código de trámite para verificar:");
-    if (!code) return;
-    const url = MesaPartesPublic.verifyUrl(code);
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
+  const currentTabLabel = tabs.find(t => t.key === activeTab)?.label ?? "Dashboard";
 
-  if (!user) return <div>Acceso no autorizado</div>;
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-64 text-sm text-slate-400">
+        Acceso no autorizado
+      </div>
+    );
+  }
+
+  const TabWrap = ({ children }) => (
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">{children}</div>
+  );
 
   return (
-    <div className="p-6">
-      <div className="rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10">
-        <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)]">
-          <div className="px-6 pt-5">
-            <h1 className="text-xl font-bold text-slate-900">Mesa de Partes Digital</h1>
-            <p className="text-sm text-slate-700">Sistema de gestión de trámites documentarios</p>
-            <div className="mt-3 h-px w-full bg-white/60" />
+    <div className="w-full min-w-0 overflow-x-hidden p-4 sm:p-6 pb-16 space-y-5">
+
+      {/* Module header */}
+      <div className="rounded-2xl border border-slate-200/60 bg-white shadow-sm px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-slate-600 to-slate-900 grid place-items-center shadow-sm shrink-0">
+            <FileText size={20} className="text-white" />
           </div>
-
-          <div className="px-6 pb-6 pt-4">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-              {/* ===== NAV TABS RESPONSIVE ===== */}
-<div className="pb-1">
-  {/* MÓVIL: tab actual + dropdown */}
-  <div className="sm:hidden">
-    <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
-      <div className="flex items-center gap-2">
-        <TabsList className="flex-1 bg-transparent p-0 shadow-none">
-          <TabsTrigger
-            value={activeTab}
-            className="w-full justify-center rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-          >
-            {tabs.find((t) => t.key === activeTab)?.label ?? "Dashboard"}
-          </TabsTrigger>
-        </TabsList>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon" className="h-10 w-10 rounded-lg shrink-0">
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-
-          <DropdownMenuContent align="end" className="w-56">
-            {tabs.map((t) => (
-              <DropdownMenuItem key={t.key} onClick={() => setActiveTab(t.key)}>
-                {t.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </div>
-  </div>
-
-  {/* TABLET/LAPTOP: tabs normales */}
-  <div className="hidden sm:block">
-    <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2">
-      <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-2">
-        {tabs.map((t) => (
-          <TabsTrigger
-            key={t.key}
-            value={t.key}
-            className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-          >
-            {t.label}
-          </TabsTrigger>
-        ))}
-      </TabsList>
-    </div>
-  </div>
-</div>
-{/* ===== /NAV TABS RESPONSIVE ===== */}
-
-
-              {tabs.some((t) => t.key === "dashboard") && (
-                <TabsContent value="dashboard">
-                  <MesaDePartesDashboardUI
-                    onNew={handleQuickNew}
-                    onSearch={handleQuickSearch}
-                    onQR={handleQuickQR}
-                    onReports={goReports}
-                  />
-                </TabsContent>
-              )}
-
-              {tabs.some((t) => t.key === "types") && (
-                <TabsContent value="types">
-                  <ProcedureTypesManagement />
-                </TabsContent>
-              )}
-
-              {tabs.some((t) => t.key === "procedures") && (
-                <TabsContent value="procedures">
-                  <ProceduresManagement ref={procRef} />
-                </TabsContent>
-              )}
-
-              {tabs.some((t) => t.key === "reports") && (
-                <TabsContent value="reports">
-                  <MesaPartesReports />
-                </TabsContent>
-              )}
-            </Tabs>
+          <div>
+            <h1 className="text-lg font-extrabold text-slate-800 leading-tight">Mesa de Partes Digital</h1>
+            <p className="text-xs text-slate-400 mt-0.5">Gestión de trámites documentarios</p>
           </div>
         </div>
+        <span className="text-xs font-bold bg-slate-50 border border-slate-200 text-slate-500 px-3 py-1.5 rounded-xl self-start sm:self-auto">
+          Documentario
+        </span>
       </div>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={v => { setActiveTab(v); if (v !== "procedures") setProcFilter(null); }}
+        className="space-y-5">
+
+        {/* Mobile dropdown */}
+        <div className="sm:hidden">
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl p-1.5">
+            <p className="flex-1 text-xs font-bold text-slate-700 px-2 truncate">{currentTabLabel}</p>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl border-slate-200 shrink-0">
+                  <ChevronDown size={14} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52 rounded-xl">
+                {tabs.map(({ key, label, Icon: TIcon }) => (
+                  <DropdownMenuItem key={key} onClick={() => setActiveTab(key)}
+                    className={`flex items-center gap-2 text-xs rounded-lg ${activeTab === key ? "bg-slate-100 font-bold" : ""}`}>
+                    <TIcon size={13} /> {label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* Desktop tab bar */}
+        <div className="hidden sm:block">
+          <TabsList className="inline-flex h-auto p-1.5 gap-1 bg-slate-50 border border-slate-200 rounded-xl shadow-sm">
+            {tabs.map(({ key, label, Icon: TIcon }) => (
+              <TabsTrigger key={key} value={key}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-white/70 transition-all border border-transparent whitespace-nowrap data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:font-bold data-[state=active]:shadow-sm">
+                <TIcon size={13} /> {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+
+        {tabs.some(t => t.key === "dashboard") && (
+          <TabsContent value="dashboard" className="mt-0 focus-visible:outline-none">
+            <TabWrap>
+              <MesaDePartesDashboardUI
+                onNew={handleQuickNew} onSearch={handleQuickSearch}
+                onQR={() => { setVerifyCode(""); setShowVerifyModal(true); }}
+                onReports={() => setActiveTab("reports")}
+                onShowOverdue={handleShowOverdue}
+              />
+            </TabWrap>
+          </TabsContent>
+        )}
+        {tabs.some(t => t.key === "types") && (
+          <TabsContent value="types" className="mt-0 focus-visible:outline-none">
+            <TabWrap><ProcedureTypesManagement /></TabWrap>
+          </TabsContent>
+        )}
+        {tabs.some(t => t.key === "procedures") && (
+          <TabsContent value="procedures" className="mt-0 focus-visible:outline-none">
+            <TabWrap>
+              <ProceduresManagement ref={procRef} initialFilter={procInitFilter} />
+            </TabWrap>
+          </TabsContent>
+        )}
+        {tabs.some(t => t.key === "offices") && (
+          <TabsContent value="offices" className="mt-0 focus-visible:outline-none">
+            <TabWrap><OfficesSection /></TabWrap>
+          </TabsContent>
+        )}
+        {tabs.some(t => t.key === "reports") && (
+          <TabsContent value="reports" className="mt-0 focus-visible:outline-none">
+            <TabWrap><MesaPartesReports /></TabWrap>
+          </TabsContent>
+        )}
+      </Tabs>
+
+      {/* QR Verify modal */}
+      <Dialog open={showVerifyModal} onOpenChange={setShowVerifyModal}>
+        <DialogContent className="sm:max-w-md rounded-2xl p-0 border-0 shadow-2xl overflow-hidden">
+          <div className="bg-gradient-to-r from-[#1a2035] via-[#1e293b] to-[#252d3d] px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-white/10 border border-white/20 grid place-items-center shrink-0">
+                <QrCode size={18} className="text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-300 mb-0.5">Verificación</p>
+                <p className="font-extrabold text-white">Verificar Trámite</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white p-6 space-y-4">
+            <p className="text-sm text-slate-500">Ingrese el código de seguimiento para validar el estado del documento.</p>
+            <div>
+              <FieldLabel>Código de seguimiento</FieldLabel>
+              <Input className="h-10 rounded-xl font-mono border-slate-200"
+                placeholder="Ej: MP-2024-XXXX" value={verifyCode}
+                onChange={e => setVerifyCode(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && confirmVerification()}
+                autoFocus />
+            </div>
+            <div className="flex justify-end gap-2 pt-1 border-t border-slate-100">
+              <Button variant="outline" className="rounded-xl font-semibold"
+                onClick={() => setShowVerifyModal(false)}>Cancelar</Button>
+              <Button className="rounded-xl font-extrabold gap-2 bg-slate-800 hover:bg-slate-900"
+                onClick={confirmVerification}>
+                <ExternalLink size={14} /> Verificar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

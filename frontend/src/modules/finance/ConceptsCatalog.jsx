@@ -102,17 +102,16 @@ export default function ConceptsCatalog() {
     return (
         <div className="space-y-6 pb-24 sm:pb-6">
 
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-bold">Catálogo de conceptos</h2>
-                    <p className="text-sm text-gray-600">Admisión, matrícula, pensiones, certificados, etc.</p>
-                </div>
-                <Button onClick={openCreate}>
-                    <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
-                    Nuevo
-                </Button>
-            </div>
-
+    <div className="flex items-center justify-between">
+        <div>
+            <h2 className="text-2xl font-bold text-white">Catálogo de conceptos</h2>
+            <p className="text-sm text-slate-300">Admisión, matrícula, pensiones, certificados, etc.</p>
+        </div>
+        <Button onClick={openCreate}>
+            <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
+            Nuevo
+        </Button>
+    </div>
             <Card>
                 <CardHeader>
                     <CardTitle>Conceptos</CardTitle>

@@ -13,14 +13,38 @@ from .models import Student
 from .serializers import StudentSerializer, StudentUpdateSerializer, StudentMeUpdateSerializer
 from .upload import validate_photo_upload
 from students.models import Student
-
+from acl.models import UserRole
 User = get_user_model()
 
 
 def _require_staff(request):
-    if not (request.user and request.user.is_authenticated and request.user.is_staff):
+    u = getattr(request, "user", None)
+
+    if not (u and u.is_authenticated):
         return Response({"detail": "No autorizado."}, status=status.HTTP_403_FORBIDDEN)
-    return None
+
+    # ✅ staff pasa
+    if getattr(u, "is_staff", False) or getattr(u, "is_superuser", False):
+        return None
+
+    # ✅ permitir roles
+    allowed = {"ADMIN_ACADEMIC", "ADMIN_ACADEMICO", "ADMIN_SYSTEM", "REGISTRAR"}
+
+    try:
+        # si tu User tiene ManyToMany roles
+        if hasattr(u, "roles") and u.roles.filter(name__in=list(allowed)).exists():
+            return None
+    except Exception:
+        pass
+
+    try:
+        # si manejas roles por tabla acl_userrole
+        if UserRole.objects.filter(user=u, role__name__in=list(allowed)).exists():
+            return None
+    except Exception:
+        pass
+
+    return Response({"detail": "No autorizado."}, status=status.HTTP_403_FORBIDDEN)
 
 
 def _get_my_student(request):

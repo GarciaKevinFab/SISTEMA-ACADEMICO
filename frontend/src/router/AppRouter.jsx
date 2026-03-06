@@ -18,7 +18,7 @@ import DashboardHome from "../pages/DashboardHome";
 
 /* Módulos */
 import PublicAdmissionCalls from "../modules/admission/PublicAdmissionCalls";
-import PublicAdmissionCallDetails from "../modules/admission/PublicAdmissionCallDetails"; // ✅ NUEVO
+import PublicAdmissionCallDetails from "../modules/admission/PublicAdmissionCallDetails";
 import AccessControlModule from "../modules/admin/AccessControlModule";
 
 import CompleteAdmissionModule from "../modules/admission/CompleteAdmissionModule";
@@ -32,11 +32,21 @@ import MesaDePartesModule from "../modules/mesa-partes/MesaDePartesModule";
 import FinanceModule from "../modules/finance/FinanceModule";
 import MineduIntegrationModule from "../modules/minedu/MineduIntegrationModule";
 import SecurityModule from "../modules/security/SecurityModule";
-import PublicProcedureTracking from "../modules/mesa-partes/PublicProcedureTracking";
 import ResearchModule from "../modules/research/ResearchModule";
 
-// ✅ NUEVO: Módulo Estudiante
+/* ✅ Público Mesa de Partes */
+import PublicProcedureTracking from "../modules/mesa-partes/PublicProcedureTracking";
+import PublicProcedureIntake from "../modules/mesa-partes/PublicProcedureIntake";
+import PublicMesaDePartesHome from "../modules/mesa-partes/PublicMesaDePartesHome";
+
+/* ✅ Módulo Estudiante */
 import StudentModule from "../modules/student/StudentModule";
+
+/* ✅ Verificador de Grados y Títulos (público) */
+import PublicGraduateVerifier from "../modules/graduates/PublicGraduateVerifier";
+
+/* ✅ NUEVO: Módulo Admin de Egresados (dashboard) */
+import GraduatesModule from "../modules/graduates/GraduatesModule";
 
 /* Spinner inicial para sesión */
 const ProtectedRoute = ({ children }) => {
@@ -59,10 +69,18 @@ export default function AppRouter() {
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
 
+            {/* Admisión pública */}
             <Route path="/public/admission" element={<PublicAdmissionCalls />} />
-            <Route path="/public/admission/:id" element={<PublicAdmissionCallDetails />} /> {/* ✅ NUEVO */}
+            <Route path="/public/admission/:id" element={<PublicAdmissionCallDetails />} />
 
+            {/* ✅ Mesa de Partes Pública */}
+            <Route path="/public/procedures" element={<PublicMesaDePartesHome />} />
+            <Route path="/public/procedures/new" element={<PublicProcedureIntake />} />
             <Route path="/public/procedures/track" element={<PublicProcedureTracking />} />
+            <Route path="/public/procedures/track/:code" element={<PublicProcedureTracking />} />
+
+            {/* ✅ Verificador de Grados y Títulos */}
+            <Route path="/public/verificador" element={<PublicGraduateVerifier />} />
 
             {/* 403 */}
             <Route path="/403" element={<Forbidden />} />
@@ -90,26 +108,23 @@ export default function AppRouter() {
                     }
                 />
 
-                {/* ✅ NUEVO: Estudiante */}
+                {/* Estudiante */}
                 <Route
                     path="/dashboard/student"
                     element={
                         <RequireAuth>
                             <RequirePerm
                                 any={[
-                                    // ✅ SELF (estudiante)
                                     PERMS["student.self.dashboard.view"],
                                     PERMS["student.self.profile.view"],
                                     PERMS["student.self.profile.edit"],
                                     PERMS["student.self.kardex.view"],
                                     PERMS["student.self.enrollment.view"],
 
-                                    // ✅ MANAGE (admin académico / system)
                                     PERMS["student.manage.list"],
                                     PERMS["student.manage.view"],
                                     PERMS["student.manage.edit"],
 
-                                    // ✅ super admin (si en tu sistema entra por admin perms)
                                     PERMS["admin.access.manage"],
                                 ].filter(Boolean)}
                                 fallback={<Navigate to="/403" replace />}
@@ -119,7 +134,6 @@ export default function AppRouter() {
                         </RequireAuth>
                     }
                 />
-
 
                 {/* Académico */}
                 <Route
@@ -195,7 +209,7 @@ export default function AppRouter() {
                     }
                 />
 
-                {/* Mesa de Partes */}
+                {/* Mesa de Partes (privado) */}
                 <Route
                     path="/dashboard/procedures"
                     element={
@@ -267,6 +281,25 @@ export default function AppRouter() {
                         >
                             <ResearchModule />
                         </RequirePerm>
+                    }
+                />
+
+                {/* ✅ NUEVO: Gestión de Egresados (Admin) */}
+                <Route
+                    path="/dashboard/graduates"
+                    element={
+                        <RequireAuth>
+                            <RequirePerm
+                                any={[
+                                    PERMS["admin.access.manage"],
+                                    PERMS["admin.catalogs.manage"],
+                                    PERMS["admin.catalogs.view"],
+                                ].filter(Boolean)}
+                                fallback={<Navigate to="/403" replace />}
+                            >
+                                <GraduatesModule />
+                            </RequirePerm>
+                        </RequireAuth>
                     }
                 />
             </Route>

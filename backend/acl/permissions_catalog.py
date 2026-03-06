@@ -16,6 +16,7 @@ PERMS = {
     # === ACADÉMICO ===
     "academic.plans.view": "academic.plans.view",
     "academic.plans.edit": "academic.plans.edit",
+    "academic.plans.delete": "academic.plans.delete",
     "academic.sections.view": "academic.sections.view",
     "academic.sections.create": "academic.sections.create",
     "academic.sections.conflicts": "academic.sections.conflicts",
@@ -151,6 +152,7 @@ ROLE_POLICIES = {
 
     # ✅ Admin Académico: académico + gestión de estudiantes
     "ADMIN_ACADEMIC": [
+        "academic.plans.delete",
         "academic.plans.view", "academic.plans.edit",
         "academic.sections.view", "academic.sections.create", "academic.sections.conflicts",
         "academic.enrollment.view", "academic.enrollment.commit",

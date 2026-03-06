@@ -4,7 +4,8 @@ from .views import (
     PagesViewSet, NewsViewSet, DocumentsViewSet,
     public_contact, public_preinscription,
     inbox_list, inbox_get, inbox_set_status,
-    AdmissionCallsViewSet, public_admission_calls
+    AdmissionCallsViewSet, public_admission_calls,
+    active_announcements,
 )
 
 router = DefaultRouter()
@@ -27,4 +28,7 @@ urlpatterns = [
 
     # ✅ ESTE ES EL QUE TE FALTA (sin slash final, tal cual tu request)
     path("portal/public/admission-calls", public_admission_calls),
+
+    # Anuncios activos (dashboard estudiante)
+    path("portal/announcements/active", active_announcements),
 ]

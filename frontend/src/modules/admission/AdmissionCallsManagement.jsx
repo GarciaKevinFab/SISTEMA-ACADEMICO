@@ -1,34 +1,31 @@
 // src/modules/admission/AdmissionCallsManagement.jsx
 import React, { useEffect, useState } from "react";
-import {
-    Card, CardContent, CardHeader, CardTitle, CardDescription,
-} from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
-import { Badge } from "../../components/ui/badge";
 import {
     Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "../../components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
-import { Plus, Eye, Edit, Download, Calendar, FileText } from "lucide-react";
+import {
+    Plus, Eye, Download, Calendar, FileText, BookOpenCheck,
+    Trash2, CheckCircle2, Clock3, AlertCircle, Users, CreditCard,
+    Loader2, GraduationCap, ChevronRight,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
-    listAdmissionCalls,
-    createAdmissionCall,
-    listCareers,
-    Results,
+    listAdmissionCalls, createAdmissionCall, listCareers,
+    Results, deleteAdmissionCall, AdmissionParams,
 } from "../../services/admission.service";
 
-// ---------- helpers de normalización/format ----------
+/* ─── Helpers ────────────────────────────────────────────── */
 const normalizeCall = (c) => {
     const careers = (c.careers || []).map((x) => ({
         id: x.id ?? x.career_id,
         name: x.name ?? x.career_name ?? x.title,
         vacancies: x.vacancies ?? x.quota ?? x.slots ?? 0,
     }));
-
     return {
         id: c.id,
         name: c.name,
@@ -50,168 +47,190 @@ const normalizeCall = (c) => {
     };
 };
 
-const fmtDate = (v) => (v ? new Date(v).toLocaleDateString() : "—");
-const fmtDateTime = (v) => (v ? new Date(v).toLocaleString() : "—");
-const fmtMoney = (n) =>
-    typeof n === "number" ? n.toFixed(2) : Number(n || 0).toFixed(2);
+const fmtDate = (v) => v ? new Date(v).toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+const fmtDateTime = (v) => v ? new Date(v).toLocaleString("es-PE", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+const fmtMoney = (n) => Number(n || 0).toFixed(2);
 
 const REQUIRED_DOCS = [
     { value: "BIRTH_CERTIFICATE", label: "Partida de nacimiento" },
     { value: "STUDY_CERTIFICATE", label: "Cert. estudios" },
     { value: "PHOTO", label: "Foto" },
     { value: "DNI_COPY", label: "Copia DNI" },
+    { value: "CONADIS_COPY", label: "Carné CONADIS" },
 ];
 
+const BASE_FORM = {
+    name: "", description: "",
+    academic_year: new Date().getFullYear(), academic_period: "I",
+    registration_start: "", registration_end: "",
+    exam_date: "", results_date: "",
+    application_fee: 0, max_applications_per_career: 1,
+    available_careers: [], career_vacancies: {},
+    minimum_age: 16, maximum_age: 35,
+    required_documents: ["BIRTH_CERTIFICATE", "STUDY_CERTIFICATE", "PHOTO", "DNI_COPY"],
+};
+
+const buildForm = (defs) => ({
+    ...BASE_FORM,
+    minimum_age: defs?.default_min_age ?? BASE_FORM.minimum_age,
+    maximum_age: defs?.default_max_age ?? BASE_FORM.maximum_age,
+    application_fee: defs?.default_fee ?? BASE_FORM.application_fee,
+    max_applications_per_career: defs?.default_max_applications ?? BASE_FORM.max_applications_per_career,
+    required_documents: Array.isArray(defs?.default_required_documents) ? defs.default_required_documents : BASE_FORM.required_documents,
+});
+
+/* ─── Status config ──────────────────────────────────────── */
+const getCallStatus = (call) => {
+    const now = new Date();
+    const s = call.registration_start && new Date(call.registration_start);
+    const e = call.registration_end && new Date(call.registration_end);
+    if (!s || !e) return "POR_CONFIRMAR";
+    if (now < s) return "PROXIMAMENTE";
+    if (now <= e) return "ABIERTA";
+    return "CERRADA";
+};
+
+const STATUS_CFG = {
+    ABIERTA: { label: "Abierta", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", bar: "bg-gradient-to-r from-emerald-500 to-teal-400", icon: CheckCircle2 },
+    PROXIMAMENTE: { label: "Próximamente", cls: "bg-blue-50 text-blue-700 border-blue-200", bar: "bg-gradient-to-r from-blue-400 to-indigo-400", icon: Clock3 },
+    CERRADA: { label: "Cerrada", cls: "bg-slate-100 text-slate-500 border-slate-200", bar: "bg-slate-300", icon: AlertCircle },
+    POR_CONFIRMAR: { label: "Por confirmar", cls: "bg-slate-100 text-slate-500 border-slate-200", bar: "bg-slate-200", icon: Clock3 },
+};
+
+/* ─── Small reusable components ──────────────────────────── */
+const StatusBadge = ({ status }) => {
+    const cfg = STATUS_CFG[status] ?? STATUS_CFG.CERRADA;
+    const Icon = cfg.icon;
+    return (
+        <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${cfg.cls}`}>
+            <Icon size={10} />{cfg.label}
+        </span>
+    );
+};
+
+const DateRow = ({ label, value, highlight }) => (
+    <div className="flex items-start gap-2.5">
+        <div className={`h-5 w-5 rounded-md grid place-items-center shrink-0 mt-0.5 ${highlight ? "bg-blue-100 border border-blue-200" : "bg-slate-100 border border-slate-200"}`}>
+            <Calendar size={10} className={highlight ? "text-blue-600" : "text-slate-400"} />
+        </div>
+        <div>
+            <p className={`text-[10px] font-bold uppercase tracking-wider ${highlight ? "text-blue-600" : "text-slate-400"}`}>{label}</p>
+            <p className={`text-xs font-semibold mt-0.5 ${highlight ? "text-blue-700" : "text-slate-700"}`}>{value}</p>
+        </div>
+    </div>
+);
+
+const FormSectionHead = ({ n, label }) => (
+    <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+        <div className="h-6 w-6 rounded-lg bg-blue-600 grid place-items-center text-white text-[11px] font-black shrink-0">{n}</div>
+        <p className="text-xs font-extrabold uppercase tracking-widest text-slate-600">{label}</p>
+    </div>
+);
+
+const FieldLabel = ({ children }) => (
+    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">{children}</p>
+);
+
+/* ═══════════════════════════════════════════════════════════
+   MAIN COMPONENT
+══════════════════════════════════════════════════════════ */
 export default function AdmissionCallsManagement() {
     const [admissionCalls, setAdmissionCalls] = useState([]);
     const [careers, setCareers] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [defaults, setDefaults] = useState(null);
 
-    // UI estados
     const [openCreate, setOpenCreate] = useState(false);
     const [openView, setOpenView] = useState(false);
     const [viewCall, setViewCall] = useState(null);
+    const [openDelete, setOpenDelete] = useState(false);
+    const [deleteCall, setDeleteCall] = useState(null);
+    const [deleting, setDeleting] = useState(false);
 
-    const [form, setForm] = useState({
-        name: "",
-        description: "",
-        academic_year: new Date().getFullYear(),
-        academic_period: "I",
-        registration_start: "",
-        registration_end: "",
-        exam_date: "",
-        results_date: "",
-        application_fee: 0,
-        max_applications_per_career: 1,
-        available_careers: [],
-        career_vacancies: {},
-        minimum_age: 16,
-        maximum_age: 35,
-        required_documents: ["BIRTH_CERTIFICATE", "STUDY_CERTIFICATE", "PHOTO", "DNI_COPY"],
-    });
+    const [form, setForm] = useState(BASE_FORM);
 
+    /* ── Load ── */
     const load = async () => {
         try {
-            const [callsRes, careersRes] = await Promise.all([
+            const [callsRes, careersRes, paramsRes] = await Promise.all([
                 listAdmissionCalls(),
                 listCareers(),
+                AdmissionParams.get().catch(() => null),
             ]);
 
-            const callsListRaw = Array.isArray(callsRes)
+            const raw = Array.isArray(callsRes)
                 ? callsRes
-                : callsRes?.items ||
-                callsRes?.results ||
-                callsRes?.admission_calls ||
-                callsRes?.calls ||
-                [];
+                : callsRes?.items || callsRes?.results || callsRes?.admission_calls || callsRes?.calls || [];
 
-            const callsList = callsListRaw.map(normalizeCall);
-
-            const careersList = Array.isArray(careersRes)
-                ? careersRes
-                : careersRes?.items || careersRes?.results || careersRes?.careers || [];
-
-            setAdmissionCalls(callsList);
-            setCareers(careersList);
+            setAdmissionCalls(raw.map(normalizeCall));
+            setCareers(Array.isArray(careersRes) ? careersRes : careersRes?.items || careersRes?.results || careersRes?.careers || []);
+            if (paramsRes) setDefaults(paramsRes);
+            setForm(buildForm(paramsRes));
         } catch (e) {
             console.error(e);
             toast.error("Error al cargar convocatorias");
-        } finally {
-            setLoading(false);
-        }
+        } finally { setLoading(false); }
     };
 
-    useEffect(() => {
-        load();
-    }, []);
+    useEffect(() => { load(); }, []);
 
+    /* ── Career toggle helpers ── */
     const toggleCareer = (careerId, checked) => {
         if (checked) {
-            setForm((f) => ({
+            setForm(f => ({
                 ...f,
                 available_careers: [...f.available_careers, careerId],
-                career_vacancies: {
-                    ...f.career_vacancies,
-                    [careerId]: f.career_vacancies[careerId] ?? 30,
-                },
+                career_vacancies: { ...f.career_vacancies, [careerId]: f.career_vacancies[careerId] ?? 30 },
             }));
         } else {
-            setForm((f) => {
+            setForm(f => {
                 const next = { ...f.career_vacancies };
                 delete next[careerId];
-                return {
-                    ...f,
-                    available_careers: f.available_careers.filter((id) => id !== careerId),
-                    career_vacancies: next,
-                };
+                return { ...f, available_careers: f.available_careers.filter(id => id !== careerId), career_vacancies: next };
             });
         }
     };
 
-    const setVacancy = (careerId, val) => {
-        setForm((f) => ({
-            ...f,
-            career_vacancies: {
-                ...f.career_vacancies,
-                [careerId]: parseInt(val || "0", 10),
-            },
-        }));
-    };
+    const setVacancy = (careerId, val) =>
+        setForm(f => ({ ...f, career_vacancies: { ...f.career_vacancies, [careerId]: parseInt(val || "0", 10) } }));
 
-    const toggleReqDoc = (val) => {
-        setForm((f) => {
-            const selected = new Set(f.required_documents || []);
-            if (selected.has(val)) selected.delete(val);
-            else selected.add(val);
-            return { ...f, required_documents: Array.from(selected) };
-        });
-    };
-
-    const resetForm = () =>
-        setForm({
-            name: "",
-            description: "",
-            academic_year: new Date().getFullYear(),
-            academic_period: "I",
-            registration_start: "",
-            registration_end: "",
-            exam_date: "",
-            results_date: "",
-            application_fee: 0,
-            max_applications_per_career: 1,
-            available_careers: [],
-            career_vacancies: {},
-            minimum_age: 16,
-            maximum_age: 35,
-            required_documents: ["BIRTH_CERTIFICATE", "STUDY_CERTIFICATE", "PHOTO", "DNI_COPY"],
+    const toggleReqDoc = (val) =>
+        setForm(f => {
+            const s = new Set(f.required_documents || []);
+            s.has(val) ? s.delete(val) : s.add(val);
+            return { ...f, required_documents: Array.from(s) };
         });
 
+    const resetForm = () => setForm(buildForm(defaults));
+
+    /* ── Actions ── */
     const submit = async (e) => {
         e.preventDefault();
         try {
             await createAdmissionCall(form);
-            toast.success("Convocatoria creada");
-            setOpenCreate(false);
-            resetForm();
-            load();
+            toast.success("Convocatoria creada"); setOpenCreate(false); resetForm(); load();
         } catch (e) {
-            console.error(e);
-            toast.error(e?.response?.data?.detail || "Error al crear convocatoria");
+            console.error(e); toast.error(e?.response?.data?.detail || "Error al crear convocatoria");
         }
-    };
-
-    const openDetails = (call) => {
-        setViewCall(call);
-        setOpenView(true);
     };
 
     const publishResults = async (call) => {
+        try { await Results.publish({ call_id: call.id }); toast.success("Resultados publicados"); load(); }
+        catch (e) { toast.error(e?.response?.data?.detail || "No se pudo publicar resultados"); }
+    };
+
+    const askDelete = (call) => { setDeleteCall(call); setOpenDelete(true); };
+
+    const confirmDelete = async () => {
+        if (!deleteCall?.id) return;
         try {
-            await Results.publish({ call_id: call.id });
-            toast.success("Resultados publicados");
-        } catch (e) {
-            toast.error(e?.response?.data?.detail || "No se pudo publicar resultados");
-        }
+            setDeleting(true);
+            await deleteAdmissionCall(deleteCall.id);
+            toast.success("Convocatoria eliminada"); setOpenDelete(false); setDeleteCall(null);
+            if (viewCall?.id && String(viewCall.id) === String(deleteCall.id)) { setOpenView(false); setViewCall(null); }
+            load();
+        } catch (e) { toast.error(e?.response?.data?.detail || "No se pudo eliminar"); }
+        finally { setDeleting(false); }
     };
 
     const downloadActa = async (call) => {
@@ -219,262 +238,246 @@ export default function AdmissionCallsManagement() {
             const resp = await Results.actaPdf({ call_id: call.id });
             const blob = new Blob([resp.data], { type: "application/pdf" });
             const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `acta-call-${call.id}.pdf`;
-            a.click();
-            window.URL.revokeObjectURL(url);
-        } catch (e) {
-            toast.error("No se pudo descargar el acta");
-        }
+            const a = document.createElement("a"); a.href = url; a.download = `acta-call-${call.id}.pdf`;
+            a.click(); window.URL.revokeObjectURL(url);
+        } catch { toast.error("No se pudo descargar el acta"); }
     };
 
+    /* ── Loading ── */
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+            <div className="flex items-center justify-center py-20">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="h-12 w-12 rounded-2xl bg-blue-50 border border-blue-100 grid place-items-center">
+                        <Loader2 size={22} className="animate-spin text-blue-500" />
+                    </div>
+                    <p className="text-sm text-slate-400 font-medium">Cargando convocatorias…</p>
+                </div>
             </div>
         );
     }
 
+    /* ── INPUT / SELECT shared classes ── */
+    const inputCls = "h-10 rounded-xl";
+    const selCls = "h-10 rounded-xl";
+
     return (
- <div className="space-y-6 pb-24 sm:pb-6">
+        <div className="max-w-7xl mx-auto space-y-5 pb-12">
 
-    {/* HEADER RESPONSIVE */}
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <h2 className="text-lg sm:text-2xl font-bold text-gray-900">
-        Gestión de Convocatorias
-      </h2>
+            {/* ── Page header ── */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                    <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-xl bg-blue-50 border border-blue-100 grid place-items-center shrink-0">
+                            <Calendar size={16} className="text-blue-600" />
+                        </div>
+                        Gestión de Convocatorias
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5 ml-10 font-medium">
+                        Administra los procesos de admisión, cronogramas y vacantes.
+                    </p>
+                </div>
 
-      <Dialog open={openCreate} onOpenChange={setOpenCreate}>
-        <DialogTrigger asChild>
-          <Button className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
-            <Plus className="h-4 w-4 mr-2" />
-            <span className="sm:hidden">Nueva</span>
-            <span className="hidden sm:inline">Nueva Convocatoria</span>
-          </Button>
-        </DialogTrigger>
+                <Dialog open={openCreate} onOpenChange={setOpenCreate}>
+                    <DialogTrigger asChild>
+                        <Button className="rounded-xl font-extrabold gap-2 bg-blue-600 hover:bg-blue-700 shadow-sm">
+                            <Plus size={16} /> Nueva Convocatoria
+                        </Button>
+                    </DialogTrigger>
 
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Crear Nueva Convocatoria</DialogTitle>
-            <DialogDescription>
-              Configure los parámetros del proceso
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={submit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Nombre *</Label>
-                <Input
-                  value={form.name}
-                  onChange={(e) =>
-                    setForm({ ...form, name: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              <div>
-                <Label>Año Académico *</Label>
-                <Input
-                  type="number"
-                  min="2024"
-                  max="2035"
-                  value={form.academic_year}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      academic_year: parseInt(e.target.value || "0", 10),
-                    })
-                  }
-                  required
-                />
-              </div>
-            </div>
-
-
-                            <div>
-                                <Label>Descripción</Label>
-                                <Textarea
-                                    rows={3}
-                                    value={form.description}
-                                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                                />
+                    {/* ════ CREATE DIALOG ════ */}
+                    <DialogContent className="max-w-4xl max-h-[88vh] overflow-y-auto p-0 gap-0 rounded-2xl border-0 shadow-2xl">
+                        {/* Header */}
+                        <div className="bg-gradient-to-r from-[#0f1a3a] via-[#171a55] to-[#251c6c] px-6 py-5 sticky top-0 z-10">
+                            <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-xl bg-white/10 border border-white/20 grid place-items-center shrink-0">
+                                    <Plus size={18} className="text-white" />
+                                </div>
+                                <div>
+                                    <DialogTitle className="text-base font-extrabold text-white leading-tight">
+                                        Crear Nueva Convocatoria
+                                    </DialogTitle>
+                                    <DialogDescription className="text-blue-300 text-xs mt-0.5">
+                                        Pre-llenado con la configuración por defecto. Ajusta en Configuración de Admisión.
+                                    </DialogDescription>
+                                </div>
                             </div>
+                        </div>
 
-                            <div className="grid grid-cols-3 gap-4">
-                                <div>
-                                    <Label>Período *</Label>
-                                    <Select
-                                        value={form.academic_period}
-                                        onValueChange={(v) => setForm({ ...form, academic_period: v })}
-                                    >
-                                        <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="I">I</SelectItem>
-                                            <SelectItem value="II">II</SelectItem>
-                                            <SelectItem value="III">III</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div>
-                                    <Label>Costo (S/.)</Label>
-                                    <Input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={form.application_fee}
-                                        onChange={(e) =>
-                                            setForm({
-                                                ...form,
-                                                application_fee: parseFloat(e.target.value || "0"),
-                                            })
-                                        }
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Máx. carreras por postulante</Label>
-                                    <Input
-                                        type="number"
-                                        min="1"
-                                        max="3"
-                                        value={form.max_applications_per_career}
-                                        onChange={(e) =>
-                                            setForm({
-                                                ...form,
-                                                max_applications_per_career: parseInt(e.target.value || "1", 10),
-                                            })
-                                        }
-                                    />
+                        <form onSubmit={submit} className="bg-white p-6 space-y-7">
+
+                            {/* ── Sección 1: General ── */}
+                            <div className="space-y-4">
+                                <FormSectionHead n="1" label="Información General" />
+                                <div className="grid sm:grid-cols-12 gap-4">
+                                    <div className="sm:col-span-8">
+                                        <FieldLabel>Nombre de convocatoria *</FieldLabel>
+                                        <Input placeholder="Ej. Admisión Ordinaria 2025-I" value={form.name}
+                                            onChange={e => setForm({ ...form, name: e.target.value })}
+                                            required className={`${inputCls} font-medium`} />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <FieldLabel>Año *</FieldLabel>
+                                        <Input type="number" min="2024" max="2035" value={form.academic_year}
+                                            onChange={e => setForm({ ...form, academic_year: parseInt(e.target.value || "0", 10) })}
+                                            required className={`${inputCls} text-center font-mono`} />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <FieldLabel>Período *</FieldLabel>
+                                        <Select value={form.academic_period} onValueChange={v => setForm({ ...form, academic_period: v })}>
+                                            <SelectTrigger className={selCls}><SelectValue placeholder="—" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="I">I</SelectItem>
+                                                <SelectItem value="II">II</SelectItem>
+                                                <SelectItem value="III">III</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="sm:col-span-12">
+                                        <FieldLabel>Descripción</FieldLabel>
+                                        <Textarea rows={2} placeholder="Detalles adicionales…" value={form.description}
+                                            onChange={e => setForm({ ...form, description: e.target.value })}
+                                            className="rounded-xl resize-none" />
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <Label>Inicio de Inscripciones *</Label>
-                                    <Input
-                                        type="datetime-local"
-                                        value={form.registration_start}
-                                        onChange={(e) => setForm({ ...form, registration_start: e.target.value })}
-                                        required
-                                    />
+                            {/* ── Sección 2: Cronograma ── */}
+                            <div className="space-y-4">
+                                <FormSectionHead n="2" label="Cronograma y Configuración" />
+                                <div className="grid sm:grid-cols-2 gap-4">
+                                    {/* Inscripciones */}
+                                    <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4 space-y-3">
+                                        <p className="text-xs font-extrabold text-blue-800 flex items-center gap-1.5">
+                                            <Calendar size={12} /> Inscripciones
+                                        </p>
+                                        <div>
+                                            <FieldLabel>Inicio *</FieldLabel>
+                                            <Input type="datetime-local" className={`${inputCls} bg-white`}
+                                                value={form.registration_start}
+                                                onChange={e => setForm({ ...form, registration_start: e.target.value })} required />
+                                        </div>
+                                        <div>
+                                            <FieldLabel>Cierre *</FieldLabel>
+                                            <Input type="datetime-local" className={`${inputCls} bg-white`}
+                                                value={form.registration_end}
+                                                onChange={e => setForm({ ...form, registration_end: e.target.value })} required />
+                                        </div>
+                                    </div>
+                                    {/* Evaluación */}
+                                    <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 space-y-3">
+                                        <p className="text-xs font-extrabold text-slate-600 flex items-center gap-1.5">
+                                            <FileText size={12} /> Evaluación
+                                        </p>
+                                        <div>
+                                            <FieldLabel>Fecha de examen</FieldLabel>
+                                            <Input type="datetime-local" className={`${inputCls} bg-white`}
+                                                value={form.exam_date}
+                                                onChange={e => setForm({ ...form, exam_date: e.target.value })} />
+                                        </div>
+                                        <div>
+                                            <FieldLabel>Publicación de resultados</FieldLabel>
+                                            <Input type="datetime-local" className={`${inputCls} bg-white`}
+                                                value={form.results_date}
+                                                onChange={e => setForm({ ...form, results_date: e.target.value })} />
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <Label>Fin de Inscripciones *</Label>
-                                    <Input
-                                        type="datetime-local"
-                                        value={form.registration_end}
-                                        onChange={(e) => setForm({ ...form, registration_end: e.target.value })}
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <Label>Fecha de Examen</Label>
-                                    <Input
-                                        type="datetime-local"
-                                        value={form.exam_date}
-                                        onChange={(e) => setForm({ ...form, exam_date: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Fecha de Resultados</Label>
-                                    <Input
-                                        type="datetime-local"
-                                        value={form.results_date}
-                                        onChange={(e) => setForm({ ...form, results_date: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <Label>Edad Mínima</Label>
-                                    <Input
-                                        type="number"
-                                        min="15"
-                                        max="30"
-                                        value={form.minimum_age}
-                                        onChange={(e) =>
-                                            setForm({ ...form, minimum_age: parseInt(e.target.value || "0", 10) })
-                                        }
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Edad Máxima</Label>
-                                    <Input
-                                        type="number"
-                                        min="20"
-                                        max="50"
-                                        value={form.maximum_age}
-                                        onChange={(e) =>
-                                            setForm({ ...form, maximum_age: parseInt(e.target.value || "0", 10) })
-                                        }
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <Label>Documentos requeridos</Label>
-                                <div className="flex flex-wrap gap-2 mt-2">
-                                    {REQUIRED_DOCS.map((d) => {
-                                        const active = form.required_documents.includes(d.value);
-                                        return (
-                                            <button
-                                                key={d.value}
-                                                type="button"
-                                                onClick={() => toggleReqDoc(d.value)}
-                                                className={`px-2 py-1 rounded border text-xs ${active ? "bg-blue-600 text-white border-blue-600" : "border-gray-300"
-                                                    }`}
-                                            >
-                                                {d.label}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            <div>
-                                <Label>Carreras y Vacantes</Label>
-                                <div className="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-4">
-                                    {careers.map((c) => (
-                                        <div key={c.id} className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <input
-                                                    type="checkbox"
-                                                    id={`career_${c.id}`}
-                                                    checked={form.available_careers.includes(c.id)}
-                                                    onChange={(e) => toggleCareer(c.id, e.target.checked)}
-                                                />
-                                                <Label htmlFor={`career_${c.id}`} className="text-sm">
-                                                    {c.name}
-                                                </Label>
-                                            </div>
-                                            {form.available_careers.includes(c.id) && (
-                                                <Input
-                                                    type="number"
-                                                    min="1"
-                                                    max="200"
-                                                    className="w-24"
-                                                    value={form.career_vacancies[c.id] ?? 30}
-                                                    onChange={(e) => setVacancy(c.id, e.target.value)}
-                                                />
-                                            )}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50/60 p-4 rounded-xl border border-slate-100">
+                                    {[
+                                        { label: "Costo (S/.)", field: "application_fee", type: "number", step: "0.01", min: 0, max: undefined },
+                                        { label: "Máx. Postulac.", field: "max_applications_per_career", type: "number", step: "1", min: 1, max: 3 },
+                                        { label: "Edad Mín.", field: "minimum_age", type: "number", step: "1", min: 15, max: 30 },
+                                        { label: "Edad Máx.", field: "maximum_age", type: "number", step: "1", min: 20, max: 60 },
+                                    ].map(({ label, field, type, step, min, max }) => (
+                                        <div key={field}>
+                                            <FieldLabel>{label}</FieldLabel>
+                                            <Input type={type} step={step} min={min} max={max}
+                                                value={form[field]}
+                                                onChange={e => setForm({ ...form, [field]: field === "application_fee" ? parseFloat(e.target.value || "0") : parseInt(e.target.value || "0", 10) })}
+                                                className="h-9 rounded-xl text-center font-mono" />
                                         </div>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className="flex justify-end gap-2">
-                                <Button type="button" variant="outline" onClick={() => setOpenCreate(false)}>
-                                    Cancelar
-                                </Button>
-                                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                                    Crear Convocatoria
+                            {/* ── Sección 3: Requisitos y vacantes ── */}
+                            <div className="space-y-4">
+                                <FormSectionHead n="3" label="Requisitos y Oferta" />
+
+                                {/* Docs */}
+                                <div>
+                                    <FieldLabel>Documentos solicitados</FieldLabel>
+                                    <div className="flex flex-wrap gap-2 mt-1">
+                                        {REQUIRED_DOCS.map(doc => {
+                                            const active = (form.required_documents || []).includes(doc.value);
+                                            return (
+                                                <button key={doc.value} type="button" onClick={() => toggleReqDoc(doc.value)}
+                                                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all duration-200 border ${active
+                                                            ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                                                            : "bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600"
+                                                        }`}>
+                                                    {active && <Check size={9} className="inline mr-1" />}
+                                                    {doc.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Careers + vacancies */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <FieldLabel>Carreras disponibles y vacantes</FieldLabel>
+                                        <p className="text-[10px] text-slate-400 font-medium">Marca las carreras para incluir en la convocatoria</p>
+                                    </div>
+                                    <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/40 p-2 space-y-1.5">
+                                        {careers.map(c => {
+                                            const isSelected = form.available_careers.includes(c.id);
+                                            return (
+                                                <div key={c.id}
+                                                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all duration-200 ${isSelected
+                                                            ? "bg-white border-blue-200 shadow-sm"
+                                                            : "border-transparent hover:bg-white hover:border-slate-200"
+                                                        }`}>
+                                                    <label htmlFor={`career_${c.id}`}
+                                                        className="flex items-center gap-2.5 cursor-pointer min-w-0">
+                                                        <input type="checkbox" id={`career_${c.id}`}
+                                                            className="w-4 h-4 text-blue-600 rounded border-slate-300 shrink-0"
+                                                            checked={isSelected}
+                                                            onChange={e => toggleCareer(c.id, e.target.checked)} />
+                                                        <span className={`text-sm truncate ${isSelected ? "font-semibold text-slate-900" : "text-slate-500"}`}>
+                                                            {c.name}
+                                                        </span>
+                                                    </label>
+                                                    {isSelected && (
+                                                        <div className="flex items-center gap-2 ml-4 shrink-0">
+                                                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Vacantes</span>
+                                                            <Input type="number" min="1" max="200"
+                                                                className="w-20 h-8 rounded-lg text-center font-mono text-sm bg-slate-50"
+                                                                value={form.career_vacancies[c.id] ?? 30}
+                                                                onChange={e => setVacancy(c.id, e.target.value)} />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                        {careers.length === 0 && (
+                                            <div className="py-8 flex flex-col items-center gap-2 text-center">
+                                                <GraduationCap size={18} className="text-slate-300" />
+                                                <p className="text-xs text-slate-400">Sin carreras registradas. Ve a la pestaña Carreras primero.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                                <Button type="button" variant="outline" className="rounded-xl font-semibold"
+                                    onClick={() => setOpenCreate(false)}>Cancelar</Button>
+                                <Button type="submit" className="rounded-xl font-extrabold gap-2 bg-blue-600 hover:bg-blue-700 px-8">
+                                    <Plus size={15} /> Guardar Convocatoria
                                 </Button>
                             </div>
                         </form>
@@ -482,174 +485,267 @@ export default function AdmissionCallsManagement() {
                 </Dialog>
             </div>
 
-            {/* Lista */}
-            <div className="grid gap-6">
-                {admissionCalls.length === 0 ? (
-                    <div className="text-center py-12">
-                        <Calendar className="h-16 w-16 mx-auto text-gray-400 mb-4" />
-                        <h3 className="text-xl font-medium text-gray-900 mb-2">No hay convocatorias</h3>
-                        <p className="text-gray-500 mb-4">Aún no se han creado convocatorias de admisión.</p>
-                        <Button onClick={() => setOpenCreate(true)} className="bg-blue-600 hover:bg-blue-700">
-                            <Plus className="h-4 w-4 mr-2" /> Crear Primera Convocatoria
-                        </Button>
+            {/* ── Call cards ── */}
+            {admissionCalls.length === 0 ? (
+                <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white py-16 flex flex-col items-center gap-3 text-center">
+                    <div className="h-14 w-14 rounded-2xl bg-blue-50 border border-blue-100 grid place-items-center">
+                        <Calendar size={24} className="text-blue-300" />
                     </div>
-                ) : (
-                    admissionCalls.map((call) => (
-                        <Card key={call.id} className="hover:shadow-lg transition-shadow">
-                            <CardHeader>
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <CardTitle className="text-xl">{call.name}</CardTitle>
-                                        <CardDescription>
-                                            Año {call.academic_year ?? "—"} · Período {call.academic_period ?? "—"}
-                                        </CardDescription>
-                                    </div>
-                                    <Badge variant={call.status === "OPEN" ? "default" : "secondary"}>
-                                        {call.status === "OPEN" ? "Abierta" : call.status}
-                                    </Badge>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="grid md:grid-cols-2 gap-6">
-                                    <div>
-                                        <h4 className="font-semibold mb-2">Cronograma</h4>
-                                        <div className="space-y-1 text-sm">
-                                            <div className="flex justify-between">
-                                                <span>Inscripciones:</span>
-                                                <span>
-                                                    {fmtDate(call.registration_start)} – {fmtDate(call.registration_end)}
+                    <div>
+                        <p className="text-sm font-bold text-slate-600">Sin convocatorias registradas</p>
+                        <p className="text-xs text-slate-400 mt-0.5 max-w-xs mx-auto">
+                            Comienza creando un proceso de admisión para habilitar el registro de postulantes.
+                        </p>
+                    </div>
+                    <Button variant="outline" className="rounded-xl font-semibold gap-2 mt-1"
+                        onClick={() => setOpenCreate(true)}>
+                        <Plus size={15} /> Crear primera convocatoria
+                    </Button>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    {admissionCalls.map(call => {
+                        const status = getCallStatus(call);
+                        const cfg = STATUS_CFG[status] ?? STATUS_CFG.CERRADA;
+                        return (
+                            <div key={call.id}
+                                className="rounded-2xl border border-slate-200/80 bg-white shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-300 overflow-hidden">
+                                {/* top bar */}
+                                <div className={`h-1 w-full ${cfg.bar}`} />
+
+                                <div className="p-5">
+                                    {/* ── Card header ── */}
+                                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                                                <span className="font-mono text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                                                    {call.academic_year}-{call.academic_period}
                                                 </span>
+                                                <StatusBadge status={status} />
                                             </div>
-                                            {call.exam_date && (
-                                                <div className="flex justify-between">
-                                                    <span>Examen:</span>
-                                                    <span>{fmtDate(call.exam_date)}</span>
-                                                </div>
+                                            <h3 className="font-extrabold text-slate-900 text-lg leading-tight truncate">{call.name}</h3>
+                                            {call.description && (
+                                                <p className="text-xs text-slate-400 mt-1 line-clamp-1">{call.description}</p>
                                             )}
-                                            {call.results_date && (
-                                                <div className="flex justify-between">
-                                                    <span>Resultados:</span>
-                                                    <span>{fmtDate(call.results_date)}</span>
-                                                </div>
-                                            )}
+                                        </div>
+                                        <div className="sm:text-right shrink-0">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Postulantes</p>
+                                            <p className="text-3xl font-black text-slate-800 tabular-nums">{call.total_applications || 0}</p>
                                         </div>
                                     </div>
 
-                                    <div>
-                                        <h4 className="font-semibold mb-2">Estadísticas</h4>
-                                        <div className="space-y-1 text-sm">
-                                            <div className="flex justify-between">
-                                                <span>Postulaciones:</span>
-                                                <span className="font-medium">{call.total_applications || 0}</span>
+                                    {/* ── Card body ── */}
+                                    <div className="grid sm:grid-cols-3 gap-4">
+                                        {/* Cronograma */}
+                                        <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5 space-y-3">
+                                            <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                                                <Calendar size={11} /> Cronograma
+                                            </p>
+                                            <DateRow label="Inscripción" value={fmtDate(call.registration_start)} />
+                                            <DateRow label="Cierre" value={fmtDate(call.registration_end)} />
+                                            {call.exam_date && <DateRow label="Examen" value={fmtDate(call.exam_date)} highlight />}
+                                        </div>
+
+                                        {/* Oferta académica */}
+                                        <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5">
+                                            <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-1.5 mb-3">
+                                                <BookOpenCheck size={11} /> Oferta Académica
+                                            </p>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {call.careers?.slice(0, 4).map(c => (
+                                                    <span key={c.id}
+                                                        className="inline-flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-600"
+                                                        title={`${c.name} — ${c.vacancies} vacantes`}>
+                                                        <span className="max-w-[90px] truncate font-medium">{c.name}</span>
+                                                        <span className="border-l border-slate-200 pl-1.5 font-black text-slate-400 text-[10px] tabular-nums">{c.vacancies}</span>
+                                                    </span>
+                                                ))}
+                                                {(call.careers?.length || 0) > 4 && (
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-lg bg-blue-50 border border-blue-100 text-blue-600 text-xs font-bold">
+                                                        +{call.careers.length - 4} más
+                                                    </span>
+                                                )}
+                                                {(!call.careers || call.careers.length === 0) && (
+                                                    <p className="text-xs text-slate-400 italic">Sin carreras asignadas</p>
+                                                )}
                                             </div>
-                                            <div className="flex justify-between">
-                                                <span>Carreras:</span>
-                                                <span className="font-medium">{call.careers?.length || 0}</span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span>Costo:</span>
-                                                <span className="font-medium">S/. {fmtMoney(call.application_fee)}</span>
+                                            {/* Fee */}
+                                            {Number(call.application_fee) > 0 && (
+                                                <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-slate-100">
+                                                    <CreditCard size={11} className="text-slate-400" />
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Costo:</span>
+                                                    <span className="text-xs font-black text-slate-700">S/ {fmtMoney(call.application_fee)}</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Actions */}
+                                        <div className="flex flex-col gap-2 justify-end">
+                                            <Button variant="outline"
+                                                className="w-full rounded-xl font-semibold gap-2 h-10 justify-start hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700"
+                                                onClick={() => { setViewCall(call); setOpenView(true); }}>
+                                                <Eye size={15} className="text-slate-400" /> Ver Detalles
+                                                <ChevronRight size={13} className="ml-auto text-slate-300" />
+                                            </Button>
+                                            <div className="flex gap-2">
+                                                <Button variant="outline"
+                                                    className="flex-1 rounded-xl font-semibold gap-2 h-10 text-xs hover:bg-slate-50"
+                                                    onClick={() => publishResults(call)}>
+                                                    <FileText size={14} /> Resultados
+                                                </Button>
+                                                <Button variant="outline" size="icon"
+                                                    className="h-10 w-10 rounded-xl hover:bg-slate-50"
+                                                    onClick={() => downloadActa(call)} title="Descargar Acta">
+                                                    <Download size={15} />
+                                                </Button>
+                                                <Button variant="outline" size="icon"
+                                                    className="h-10 w-10 rounded-xl hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-slate-400"
+                                                    onClick={() => askDelete(call)} title="Eliminar">
+                                                    <Trash2 size={15} />
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
 
-                                <div className="mt-4">
-                                    <h4 className="font-semibold mb-2">
-                                        Carreras ({call.careers?.length || 0})
-                                    </h4>
-                                    <div className="flex flex-wrap gap-2">
-                                        {call.careers?.slice(0, 3).map((c) => (
-                                            <Badge key={c.id} variant="outline">
-                                                {c.name} ({c.vacancies} vacantes)
-                                            </Badge>
-                                        ))}
-                                        {(call.careers?.length || 0) > 3 && (
-                                            <Badge variant="outline">+{call.careers.length - 3} más</Badge>
-                                        )}
-                                    </div>
+            {/* ════ DELETE DIALOG ════ */}
+            <Dialog open={openDelete} onOpenChange={v => { if (deleting) return; setOpenDelete(v); if (!v) setDeleteCall(null); }}>
+                <DialogContent className="max-w-md rounded-2xl p-0 overflow-hidden border-0 shadow-2xl">
+                    <div className="h-1 bg-gradient-to-r from-red-500 to-rose-400" />
+                    <div className="px-5 pt-5 pb-4 border-b border-slate-100">
+                        <DialogHeader>
+                            <DialogTitle className="font-extrabold text-slate-900 flex items-center gap-2">
+                                <div className="h-8 w-8 rounded-xl bg-red-50 border border-red-200 grid place-items-center shrink-0">
+                                    <Trash2 size={14} className="text-red-600" />
                                 </div>
+                                Eliminar convocatoria
+                            </DialogTitle>
+                            <DialogDescription className="text-slate-500 text-sm mt-1">
+                                Esta acción no se puede deshacer.
+                            </DialogDescription>
+                        </DialogHeader>
+                    </div>
+                    <div className="p-5 space-y-4">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                            <p className="font-extrabold text-slate-900 leading-tight">{deleteCall?.name || "—"}</p>
+                            {deleteCall?.academic_year && (
+                                <p className="text-xs text-slate-400 font-mono mt-1">
+                                    {deleteCall.academic_year}-{deleteCall.academic_period}
+                                </p>
+                            )}
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <Button type="button" variant="outline" className="rounded-xl font-semibold"
+                                disabled={deleting}
+                                onClick={() => { setOpenDelete(false); setDeleteCall(null); }}>
+                                Cancelar
+                            </Button>
+                            <Button type="button" onClick={confirmDelete} disabled={deleting}
+                                className="rounded-xl font-extrabold gap-2 bg-red-600 hover:bg-red-700">
+                                {deleting ? <><Loader2 size={14} className="animate-spin" /> Eliminando…</> : "Sí, eliminar"}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
-                                <div className="flex flex-wrap gap-2 mt-4">
-                                    <Button variant="outline" size="sm" onClick={() => openDetails(call)}>
-                                        <Eye className="h-4 w-4 mr-2" />
-                                        Ver Detalles
-                                    </Button>
-                                    <Button variant="outline" size="sm" onClick={() => publishResults(call)}>
-                                        <FileText className="h-4 w-4 mr-2" />
-                                        Publicar Resultados
-                                    </Button>
-                                    <Button variant="outline" size="sm" onClick={() => downloadActa(call)}>
-                                        <Download className="h-4 w-4 mr-2" />
-                                        Acta PDF
-                                    </Button>
-                                    <Button variant="outline" size="sm" disabled title="Próximamente">
-                                        <Edit className="h-4 w-4 mr-2" />
-                                        Editar
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))
-                )}
-            </div>
-
-            {/* Dialog Detalle */}
+            {/* ════ VIEW DIALOG ════ */}
             <Dialog open={openView} onOpenChange={setOpenView}>
-                <DialogContent className="max-w-3xl">
-                    <DialogHeader>
-                        <DialogTitle>Detalles de Convocatoria</DialogTitle>
-                        <DialogDescription>Información completa</DialogDescription>
-                    </DialogHeader>
+                <DialogContent className="max-w-3xl rounded-2xl p-0 overflow-hidden border-0 shadow-2xl">
+                    <div className="bg-gradient-to-r from-[#0f1a3a] via-[#171a55] to-[#251c6c] px-6 py-5 text-white">
+                        <div className="flex items-start gap-3">
+                            <div className="h-11 w-11 rounded-xl bg-white/10 border border-white/20 grid place-items-center shrink-0">
+                                <Calendar size={19} />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-blue-300 mb-0.5">Detalles de Convocatoria</p>
+                                <p className="font-extrabold text-white leading-tight truncate">{viewCall?.name}</p>
+                                {viewCall && (
+                                    <div className="flex items-center gap-2 mt-1.5">
+                                        <span className="font-mono text-[10px] bg-white/10 text-blue-200 px-2 py-0.5 rounded">
+                                            {viewCall.academic_year}-{viewCall.academic_period}
+                                        </span>
+                                        <StatusBadge status={getCallStatus(viewCall)} />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
 
                     {viewCall && (
-                        <div className="space-y-4">
-                            <div>
-                                <div className="text-lg font-semibold">{viewCall.name}</div>
-                                <div className="text-sm text-gray-500">
-                                    Año {viewCall.academic_year ?? "—"} · Período {viewCall.academic_period ?? "—"}
-                                </div>
-                            </div>
-
+                        <div className="bg-white p-6 space-y-6">
+                            {/* Description */}
                             {viewCall.description && (
-                                <p className="text-sm text-gray-700 whitespace-pre-wrap">{viewCall.description}</p>
+                                <div className="rounded-xl border border-blue-100 bg-blue-50/40 px-4 py-3 text-sm text-slate-700 leading-relaxed">
+                                    {viewCall.description}
+                                </div>
                             )}
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="text-sm space-y-1">
-                                    <div className="flex justify-between"><span>Inscripciones inicio:</span><span>{fmtDateTime(viewCall.registration_start)}</span></div>
-                                    <div className="flex justify-between"><span>Inscripciones fin:</span><span>{fmtDateTime(viewCall.registration_end)}</span></div>
-                                    <div className="flex justify-between"><span>Examen:</span><span>{fmtDateTime(viewCall.exam_date)}</span></div>
-                                    <div className="flex justify-between"><span>Resultados:</span><span>{fmtDateTime(viewCall.results_date)}</span></div>
-                                </div>
-                                <div className="text-sm space-y-1">
-                                    <div className="flex justify-between"><span>Costo postulación:</span><span>S/. {fmtMoney(viewCall.application_fee)}</span></div>
-                                    <div className="flex justify-between"><span>Máx. carreras por postulante:</span><span>{viewCall.max_applications_per_career}</span></div>
-                                    <div className="flex justify-between"><span>Edad mínima:</span><span>{viewCall.minimum_age ?? "—"}</span></div>
-                                    <div className="flex justify-between"><span>Edad máxima:</span><span>{viewCall.maximum_age ?? "—"}</span></div>
+                            {/* Metrics grid */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                {[
+                                    { label: "Inicio Inscripción", value: fmtDateTime(viewCall.registration_start) },
+                                    { label: "Fin Inscripción", value: fmtDateTime(viewCall.registration_end) },
+                                    { label: "Examen", value: fmtDateTime(viewCall.exam_date), highlight: true },
+                                    { label: "Resultados", value: fmtDateTime(viewCall.results_date) },
+                                    { label: "Costo", value: `S/ ${fmtMoney(viewCall.application_fee)}` },
+                                    { label: "Máx. Postulaciones", value: viewCall.max_applications_per_career },
+                                    { label: "Edad Mínima", value: `${viewCall.minimum_age ?? "—"} años` },
+                                    { label: "Edad Máxima", value: `${viewCall.maximum_age ?? "—"} años` },
+                                ].map(({ label, value, highlight }) => (
+                                    <div key={label}
+                                        className={`rounded-xl border p-3 ${highlight ? "bg-blue-50/40 border-blue-100" : "bg-slate-50/60 border-slate-100"}`}>
+                                        <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${highlight ? "text-blue-600" : "text-slate-400"}`}>{label}</p>
+                                        <p className={`text-sm font-bold ${highlight ? "text-blue-700" : "text-slate-800"}`}>{value}</p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Required docs */}
+                            <div>
+                                <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-2">Documentos Requeridos</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {(viewCall.required_documents || []).length > 0
+                                        ? viewCall.required_documents.map(d => (
+                                            <span key={d} className="inline-flex items-center gap-1.5 text-xs font-semibold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full border border-slate-200">
+                                                <CheckCircle2 size={10} className="text-slate-400" />{d}
+                                            </span>
+                                        ))
+                                        : <span className="text-xs text-slate-400 italic">Ninguno especificado</span>
+                                    }
                                 </div>
                             </div>
 
-                            {!!(viewCall.required_documents || []).length && (
-                                <div>
-                                    <div className="font-medium mb-1">Documentos requeridos</div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {viewCall.required_documents.map((d) => (
-                                            <Badge key={d} variant="outline">{d}</Badge>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
+                            {/* Careers */}
                             <div>
-                                <div className="font-medium mb-1">Carreras ({viewCall.careers?.length || 0})</div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                    {(viewCall.careers || []).map((c) => (
-                                        <div key={c.id} className="text-sm border rounded p-2 flex items-center justify-between">
-                                            <span>{c.name}</span>
-                                            <Badge variant="secondary">{c.vacancies} vacantes</Badge>
+                                <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-2">
+                                    Carreras y Vacantes ({viewCall.careers?.length || 0})
+                                </p>
+                                <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-52 overflow-y-auto">
+                                    {(viewCall.careers || []).map(c => (
+                                        <div key={c.id}
+                                            className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 hover:border-indigo-200 hover:bg-indigo-50/20 transition-colors">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <div className="h-6 w-6 rounded-lg bg-indigo-50 border border-indigo-100 grid place-items-center shrink-0">
+                                                    <GraduationCap size={11} className="text-indigo-600" />
+                                                </div>
+                                                <p className="text-xs font-semibold text-slate-700 truncate">{c.name}</p>
+                                            </div>
+                                            <span className="text-[10px] font-black tabular-nums text-slate-500 bg-white border border-slate-200 rounded-full px-2 py-0.5 shrink-0">
+                                                {c.vacancies} vac.
+                                            </span>
                                         </div>
                                     ))}
+                                    {(!viewCall.careers || viewCall.careers.length === 0) && (
+                                        <div className="col-span-3 py-6 text-center">
+                                            <p className="text-xs text-slate-400 italic">No hay carreras asignadas</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -657,5 +753,14 @@ export default function AdmissionCallsManagement() {
                 </DialogContent>
             </Dialog>
         </div>
+    );
+}
+
+// tiny inline icon since we're not importing it above to keep changes minimal
+function Check({ size = 16, className = "" }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}>
+            <polyline points="20 6 9 17 4 12" />
+        </svg>
     );
 }

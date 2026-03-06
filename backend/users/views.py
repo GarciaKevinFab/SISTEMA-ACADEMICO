@@ -1,19 +1,50 @@
 # backend/users/views.py
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.utils.crypto import get_random_string
 
-from rest_framework import status, permissions
+from rest_framework import permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
-from acl.models import Role
+from acl.models import UserRole, Role
 from .serializers import UserSerializer, UserCreateSerializer, UserUpdateSerializer
+from django.db import transaction
 
-# ✅ NUEVO: Students
+from django.db.models.deletion import ProtectedError
+from django.db import IntegrityError
+
+from academic.models import (
+    AcademicGradeRecord,
+    AcademicProcess,
+    ProcessFile,
+    AttendanceRow,
+    SectionGrades,
+)
+
 from students.models import Student
 
 User = get_user_model()
+
+
+def _qs_users_by_role_name(role_name: str):
+    role_name = (role_name or "").strip()
+    if not role_name:
+        return User.objects.none()
+
+    role_ids = list(Role.objects.filter(name__iexact=role_name).values_list("id", flat=True))
+    if not role_ids:
+        return User.objects.none()
+
+    user_ids = (
+        UserRole.objects
+        .filter(role_id__in=role_ids)
+        .values_list("user_id", flat=True)
+        .distinct()
+    )
+    return User.objects.filter(id__in=user_ids)
 
 
 # ---------- permisos ----------
@@ -24,10 +55,30 @@ class IsAdminOrReadOnly(permissions.BasePermission):
         return request.user and request.user.is_authenticated and request.user.is_staff
 
 
+def _has_role(user, role_name: str) -> bool:
+    if not user or not user.is_authenticated:
+        return False
+
+    if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
+        return True
+
+    try:
+        if hasattr(user, "roles") and user.roles.filter(name__iexact=role_name).exists():
+            return True
+    except Exception:
+        pass
+
+    try:
+        return UserRole.objects.filter(user=user, role__name__iexact=role_name).exists()
+    except Exception:
+        return False
+
+
 def _require_staff(request):
-    if not request.user.is_staff:
-        return Response({"detail": "No autorizado."}, status=status.HTTP_403_FORBIDDEN)
-    return None
+    # ✅ STAFF o ADMIN_ACADEMIC
+    if _has_role(request.user, "ADMIN_ACADEMIC"):
+        return None
+    return Response({"detail": "No autorizado."}, status=status.HTTP_403_FORBIDDEN)
 
 
 def _split_full_name(full_name: str, fallback: str = ""):
@@ -72,6 +123,8 @@ def _ensure_student_for_user(user: User):
         email=email,
     )
     return st
+
+
 # ===================== PAGINACIÓN SIMPLE =====================
 def _int_param(request, key, default):
     raw = request.query_params.get(key, None)
@@ -114,7 +167,42 @@ def _paginate_queryset(request, qs, default_page_size=10, max_page_size=100):
         "items": items,
     }
 
+
 # ---------- AUTH ----------
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def change_password(request):
+    """
+    Cambia la contraseña del usuario logueado (self-service).
+    POST /api/auth/change-password
+    body: { current_password, new_password }
+    """
+    u = request.user
+    current_password = (request.data.get("current_password") or "").strip()
+    new_password = (request.data.get("new_password") or "").strip()
+
+    if not current_password or not new_password:
+        return Response({"detail": "Faltan campos."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not u.check_password(current_password):
+        return Response({"detail": "Contraseña actual incorrecta."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # política Django (si tienes AUTH_PASSWORD_VALIDATORS)
+    try:
+        validate_password(new_password, user=u)
+    except ValidationError as e:
+        return Response({"detail": " ".join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+    u.set_password(new_password)
+    if hasattr(u, "must_change_password"):
+        u.must_change_password = False
+        u.save(update_fields=["password", "must_change_password"])
+    else:
+        u.save(update_fields=["password"])
+
+    return Response({"status": "password_changed"})
+
+
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def auth_me(request):
@@ -129,9 +217,7 @@ def auth_me(request):
     # permissions seguros (NO rompe auth/me)
     perm_codes = []
     try:
-        perm_codes = list(
-            u.roles.values_list("permissions__code", flat=True).distinct()
-        )
+        perm_codes = list(u.roles.values_list("permissions__code", flat=True).distinct())
     except Exception:
         perm_codes = []
 
@@ -153,7 +239,9 @@ def auth_me(request):
         "roles": roles,
         "permissions": perm_codes,
         "student_id": student_id,
+        "must_change_password": getattr(u, "must_change_password", False),
     })
+
 
 # ✅ ---------- USERS (COLLECTION) ----------
 @api_view(["GET", "POST"])
@@ -178,7 +266,6 @@ def users_collection(request):
         pag = _paginate_queryset(request, qs, default_page_size=10, max_page_size=100)
         ser = UserSerializer(pag["items"], many=True)
 
-        # ✅ respuesta tipo DRF para que tu front lo soporte con results/count
         return Response({
             "count": pag["count"],
             "page": pag["page"],
@@ -213,12 +300,68 @@ def users_collection(request):
     return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
 
+# ✅ ---------- USERS (DETAIL) ----------
+@api_view(["PUT", "PATCH", "DELETE"])
+@permission_classes([permissions.IsAuthenticated])
+def users_detail(request, pk: int):
+    """
+    PUT/PATCH/DELETE /api/users/<id>   (solo staff)
+    DELETE = eliminación REAL del usuario (si DB lo permite). NO purge.
+    """
+    not_ok = _require_staff(request)
+    if not_ok:
+        return not_ok
+
+    try:
+        user = User.objects.get(pk=pk)
+    except User.DoesNotExist:
+        return Response({"detail": "No existe."}, status=status.HTTP_404_NOT_FOUND)
+
+    # ✅ DELETE (eliminación real, con manejo de errores para no dar 500)
+    if request.method == "DELETE":
+        if request.user.id == pk:
+            return Response({"detail": "No puedes eliminarte a ti mismo."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                user.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        except ProtectedError as e:
+            sample = [str(x) for x in list(e.protected_objects)[:10]]
+            return Response({
+                "detail": "No se puede eliminar este usuario porque tiene registros relacionados protegidos.",
+                "hint": "Si es un estudiante y quieres borrar también su data académica, usa /api/users/purge.",
+                "protected_sample": sample,
+            }, status=status.HTTP_409_CONFLICT)
+
+        except IntegrityError:
+            return Response({
+                "detail": "No se puede eliminar este usuario por integridad referencial en la base de datos.",
+                "hint": "Elimina relaciones primero o usa /api/users/purge si corresponde."
+            }, status=status.HTTP_409_CONFLICT)
+
+        except Exception as ex:
+            return Response({
+                "detail": "Error inesperado al eliminar el usuario.",
+                "error": str(ex)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # PUT/PATCH
+    partial = (request.method == "PATCH")
+    ser = UserUpdateSerializer(user, data=request.data, partial=partial)
+    ser.is_valid(raise_exception=True)
+    user = ser.save()
+    return Response(UserSerializer(user).data)
+
+
+# ✅ ---------- BÚSQUEDA (ALIAS PAGINADO) ----------
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def users_search(request):
     """
     GET /api/users/search?q=...&page=1&page_size=10
-    (alias paginado)
+    Alias paginado del listado.
     """
     q = (request.query_params.get("q") or "").strip()
 
@@ -242,54 +385,6 @@ def users_search(request):
         "results": ser.data,
     })
 
-# ✅ ---------- USERS (DETAIL) ----------
-@api_view(["PUT", "PATCH", "DELETE"])
-@permission_classes([permissions.IsAuthenticated])
-def users_detail(request, pk: int):
-    """
-    PUT/PATCH/DELETE /api/users/<id>   (solo staff)
-    """
-    not_ok = _require_staff(request)
-    if not_ok:
-        return not_ok
-
-    try:
-        user = User.objects.get(pk=pk)
-    except User.DoesNotExist:
-        return Response({"detail": "No existe."}, status=404)
-
-    # DELETE
-    if request.method == "DELETE":
-        if request.user.id == pk:
-            return Response({"detail": "No puedes eliminarte a ti mismo."}, status=400)
-        user.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-    # PUT/PATCH
-    partial = (request.method == "PATCH")
-    ser = UserUpdateSerializer(user, data=request.data, partial=partial)
-    ser.is_valid(raise_exception=True)
-    user = ser.save()
-    return Response(UserSerializer(user).data)
-
-
-@api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def users_search(request):
-    """
-    GET /api/users/search?q=...
-    Alias de listado
-    """
-    q = (request.query_params.get("q") or "").strip()
-    qs = User.objects.all().order_by("id")
-    if q:
-        qs = qs.filter(
-            Q(username__icontains=q) |
-            Q(email__icontains=q) |
-            Q(full_name__icontains=q)
-        )
-    return Response({"users": UserSerializer(qs, many=True).data})
-
 
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
@@ -301,7 +396,7 @@ def users_deactivate(request, pk: int):
     try:
         user = User.objects.get(pk=pk)
     except User.DoesNotExist:
-        return Response({"detail": "No existe."}, status=404)
+        return Response({"detail": "No existe."}, status=status.HTTP_404_NOT_FOUND)
 
     user.is_active = False
     user.save(update_fields=["is_active"])
@@ -318,7 +413,7 @@ def users_activate(request, pk: int):
     try:
         user = User.objects.get(pk=pk)
     except User.DoesNotExist:
-        return Response({"detail": "No existe."}, status=404)
+        return Response({"detail": "No existe."}, status=status.HTTP_404_NOT_FOUND)
 
     user.is_active = True
     user.save(update_fields=["is_active"])
@@ -328,6 +423,9 @@ def users_activate(request, pk: int):
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def users_reset_password(request, pk: int):
+    """
+    Admin reset: genera temporal + must_change_password=True
+    """
     not_ok = _require_staff(request)
     if not_ok:
         return not_ok
@@ -335,11 +433,16 @@ def users_reset_password(request, pk: int):
     try:
         user = User.objects.get(pk=pk)
     except User.DoesNotExist:
-        return Response({"detail": "No existe."}, status=404)
+        return Response({"detail": "No existe."}, status=status.HTTP_404_NOT_FOUND)
 
     tmp = get_random_string(10)
     user.set_password(tmp)
-    user.save(update_fields=["password"])
+    if hasattr(user, "must_change_password"):
+        user.must_change_password = True
+        user.save(update_fields=["password", "must_change_password"])
+    else:
+        user.save(update_fields=["password"])
+
     return Response({"status": "password_reset", "temporary_password": tmp})
 
 
@@ -356,15 +459,15 @@ def users_assign_roles(request, pk: int):
 
     roles = request.data.get("roles", [])
     if not isinstance(roles, list):
-        return Response({"detail": "roles must be a list"}, status=400)
+        return Response({"detail": "roles must be a list"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         user = User.objects.get(pk=pk)
     except User.DoesNotExist:
-        return Response({"detail": "No existe."}, status=404)
+        return Response({"detail": "No existe."}, status=status.HTTP_404_NOT_FOUND)
 
     if not hasattr(user, "roles"):
-        return Response({"detail": "Este modelo User no tiene roles."}, status=400)
+        return Response({"detail": "Este modelo User no tiene roles."}, status=status.HTTP_400_BAD_REQUEST)
 
     role_objs = []
     for name in roles:
@@ -373,9 +476,231 @@ def users_assign_roles(request, pk: int):
 
     user.roles.set(role_objs)
 
-    # ✅ MEJORA: si se asigna STUDENT, crear Student automáticamente
+    # ✅ si se asigna STUDENT, crear Student automáticamente
     role_names = [r.name.upper() for r in role_objs]
     if "STUDENT" in role_names:
         _ensure_student_for_user(user)
 
     return Response({"status": "roles_assigned", "roles": [r.name for r in role_objs]})
+
+
+# ✅ ---------- ADMIN SET PASSWORD (OPCIÓN B) ----------
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def users_set_password(request, pk: int):
+    """
+    Admin set password (NO requiere actual).
+    POST /api/users/<id>/set-password
+    body: { new_password, confirm_password }
+    - must_change_password=True
+    """
+    not_ok = _require_staff(request)
+    if not_ok:
+        return not_ok
+
+    try:
+        user = User.objects.get(pk=pk)
+    except User.DoesNotExist:
+        return Response({"detail": "No existe."}, status=status.HTTP_404_NOT_FOUND)
+
+    new_password = (request.data.get("new_password") or "").strip()
+    confirm_password = (request.data.get("confirm_password") or "").strip()
+
+    errors = {}
+    if not new_password:
+        errors["new_password"] = "La nueva contraseña es obligatoria."
+    if not confirm_password:
+        errors["confirm_password"] = "Confirma la nueva contraseña."
+    if errors:
+        return Response({"errors": errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    if new_password != confirm_password:
+        return Response({"errors": {"confirm_password": "La confirmación no coincide."}}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        validate_password(new_password, user=user)
+    except ValidationError as e:
+        return Response({"errors": {"new_password": list(e.messages)}}, status=status.HTTP_400_BAD_REQUEST)
+
+    user.set_password(new_password)
+
+    if hasattr(user, "must_change_password"):
+        user.must_change_password = True
+        user.save(update_fields=["password", "must_change_password"])
+    else:
+        user.save(update_fields=["password"])
+
+    return Response({"status": "password_set", "must_change_password": getattr(user, "must_change_password", False)})
+
+
+def _purge_one_student(user_obj: User):
+    """
+    Borra todo lo de un estudiante:
+    - AcademicGradeRecord por student_profile
+    - AcademicProcess + ProcessFile (por student_id = Student.id)
+    - AttendanceRow (por student_id = user.id)
+    - SectionGrades.grades: elimina llave str(user.id)
+    - Student profile
+    - UserRole
+    - User
+    Retorna conteos.
+    """
+    counts = {
+        "grade_records": 0,
+        "processes": 0,
+        "process_files": 0,
+        "attendance_rows": 0,
+        "section_grades_touched": 0,
+        "student_profiles": 0,
+        "user_roles": 0,
+        "users": 0,
+    }
+
+    uid = int(user_obj.id)
+
+    st = None
+    try:
+        st = user_obj.student_profile
+    except Exception:
+        st = None
+
+    if st:
+        counts["grade_records"] = AcademicGradeRecord.objects.filter(student=st).delete()[0]
+
+    if st:
+        proc_ids = list(AcademicProcess.objects.filter(student_id=st.id).values_list("id", flat=True))
+        if proc_ids:
+            counts["process_files"] = ProcessFile.objects.filter(process_id__in=proc_ids).delete()[0]
+        counts["processes"] = AcademicProcess.objects.filter(student_id=st.id).delete()[0]
+
+    counts["attendance_rows"] = AttendanceRow.objects.filter(student_id=uid).delete()[0]
+
+    key = str(uid)
+    touched = 0
+    try:
+        bundles = SectionGrades.objects.filter(grades__has_key=key)  # noqa
+    except Exception:
+        bundles = SectionGrades.objects.all()
+
+    for b in bundles:
+        g = b.grades or {}
+        if key in g:
+            g.pop(key, None)
+            b.grades = g
+            b.save(update_fields=["grades", "updated_at"])
+            touched += 1
+
+    counts["section_grades_touched"] = touched
+
+    if st:
+        counts["student_profiles"] = Student.objects.filter(id=st.id).delete()[0]
+
+    counts["user_roles"] = UserRole.objects.filter(user_id=uid).delete()[0]
+    counts["users"] = User.objects.filter(id=uid).delete()[0]
+
+    return counts
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def users_purge(request):
+    """
+    POST /api/users/purge
+
+    body:
+    {
+      "mode": "role" | "ids",
+      "role": "STUDENT",          # si mode=role
+      "user_ids": [1,2,3],        # si mode=ids
+      "dry_run": true|false
+    }
+
+    - Solo STAFF o ADMIN_ACADEMIC
+    - Por seguridad: NO permite borrarte a ti mismo
+    """
+    not_ok = _require_staff(request)
+    if not_ok:
+        return not_ok
+
+    body = request.data or {}
+    mode = (body.get("mode") or "").strip().lower()
+    dry_run = bool(body.get("dry_run", False))
+
+    if mode not in ("role", "ids"):
+        return Response({"detail": "mode inválido. Usa 'role' o 'ids'."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if mode == "role":
+        role = (body.get("role") or "").strip()
+        if not role:
+            return Response({"detail": "role es requerido cuando mode=role"}, status=status.HTTP_400_BAD_REQUEST)
+        qs = _qs_users_by_role_name(role)
+    else:
+        user_ids = body.get("user_ids") or []
+        if not isinstance(user_ids, list) or not user_ids:
+            return Response({"detail": "user_ids debe ser lista no vacía cuando mode=ids"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user_ids = [int(x) for x in user_ids]
+        except Exception:
+            return Response({"detail": "user_ids inválidos"}, status=status.HTTP_400_BAD_REQUEST)
+        qs = User.objects.filter(id__in=user_ids)
+
+    qs = qs.exclude(id=request.user.id)
+
+    safe_targets = []
+    for u in qs:
+        has_student = False
+        try:
+            _ = u.student_profile
+            has_student = True
+        except Exception:
+            has_student = False
+
+        if has_student:
+            safe_targets.append(u)
+
+    if not safe_targets:
+        return Response({
+            "dry_run": dry_run,
+            "targets": 0,
+            "message": "No hay usuarios tipo STUDENT para purgar (o intentaste borrar tu propio usuario)."
+        })
+
+    if dry_run:
+        preview = []
+        for u in safe_targets[:200]:
+            preview.append({
+                "id": u.id,
+                "username": getattr(u, "username", ""),
+                "email": getattr(u, "email", ""),
+                "full_name": getattr(u, "full_name", ""),
+            })
+        return Response({
+            "dry_run": True,
+            "targets": len(safe_targets),
+            "sample": preview,
+            "message": "Vista previa. Enviar dry_run=false para ejecutar."
+        })
+
+    totals = {
+        "grade_records": 0,
+        "processes": 0,
+        "process_files": 0,
+        "attendance_rows": 0,
+        "section_grades_touched": 0,
+        "student_profiles": 0,
+        "user_roles": 0,
+        "users": 0,
+    }
+
+    with transaction.atomic():
+        for u in safe_targets:
+            c = _purge_one_student(u)
+            for k in totals:
+                totals[k] += int(c.get(k, 0) or 0)
+
+    return Response({
+        "dry_run": False,
+        "targets": len(safe_targets),
+        "deleted": totals,
+        "message": "Purge ejecutado. Se borró la data académica + usuario."
+    })

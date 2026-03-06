@@ -1,14 +1,16 @@
-// Servicio de Investigación: proyectos, cronograma, productos, evaluación, reportes.
-
+/**
+ * research.service.js
+ * Servicio de Investigación: proyectos, cronograma, productos, evaluación, reportes.
+ */
 import api from "../lib/api";
 
 const PREFIX = "/research";
 
 // Helper axios
-function request(method, path, { params, data, headers } = {}) {
+function request(method, path, { params, data, headers, responseType } = {}) {
     const clean = String(path || "").replace(/^\/*/, "");
     return api
-        .request({ url: `${PREFIX}/${clean}`, method, params, data, headers })
+        .request({ url: `${PREFIX}/${clean}`, method, params, data, headers, responseType })
         .then((r) => r.data);
 }
 
@@ -18,11 +20,14 @@ function normalizeProjectPayload(p = {}) {
     if ("line_id" in out) { out.line = out.line_id; delete out.line_id; }
     if (out.start_date) out.start_date = String(out.start_date).slice(0, 10);
     if (out.end_date) out.end_date = String(out.end_date).slice(0, 10);
-    // Si manejas asesores M2M en tu UI:
     if (Array.isArray(out.advisors)) out.advisors = out.advisors.map(Number);
     return out;
 }
 
+/* --------- Dashboard --------- */
+export const Dashboard = {
+    stats: () => request("GET", "dashboard"),
+};
 
 /* --------- Catálogos --------- */
 export const Catalog = {
@@ -68,6 +73,8 @@ export const Deliverables = {
         request("POST", `projects/${projectId}/deliverables`, { data: payload }),
     update: (deliverableId, payload) =>
         request("PATCH", `deliverables/${deliverableId}`, { data: payload }),
+    remove: (deliverableId) =>
+        request("DELETE", `deliverables/${deliverableId}`),
 };
 
 /* --------- Evaluaciones --------- */
@@ -119,12 +126,21 @@ export const Budget = {
         return data;
     },
 
-    exportXlsx: (projectId, params = {}) =>
-        request("GET", `projects/${projectId}/budget/export`, { params }),
+    // FIX: Solicita blob para descarga real de XLSX
+    exportXlsx: async (projectId) => {
+        const resp = await api.get(
+            `${PREFIX}/projects/${projectId}/budget/export`,
+            { responseType: "blob" }
+        );
+        return resp;
+    },
+
+    exportPdf: (projectId) =>
+        request("GET", `projects/${projectId}/budget/export-pdf`),
 };
 
 /* --------- Ética & Propiedad Intelectual --------- */
-export const EthicsIP = {
+export const EthicsIPService = {
     get: (projectId) => request("GET", `projects/${projectId}/ethics-ip`),
     setEthics: (projectId, payload) =>
         request("PUT", `projects/${projectId}/ethics`, { data: payload }),
@@ -167,8 +183,8 @@ export const Publications = {
 
 /* --------- Convocatorias / Revisión --------- */
 export const Calls = {
-    list: (params) => request("GET", `calls`, { params }),
-    create: (payload) => request("POST", `calls`, { data: payload }),
+    list: (params) => request("GET", "calls", { params }),
+    create: (payload) => request("POST", "calls", { data: payload }),
     update: (id, payload) => request("PATCH", `calls/${id}`, { data: payload }),
     remove: (id) => request("DELETE", `calls/${id}`),
 };
@@ -186,6 +202,7 @@ export const Reviews = {
         request("POST", `calls/${callId}/proposals/${proposalId}/assign`, {
             data: { reviewer_id: reviewerId },
         }),
+    // FIX: Ahora devuelve { rubric_template, review }
     rubric: (callId, proposalId) =>
         request("GET", `calls/${callId}/proposals/${proposalId}/rubric`),
     save: (callId, proposalId, payload) =>

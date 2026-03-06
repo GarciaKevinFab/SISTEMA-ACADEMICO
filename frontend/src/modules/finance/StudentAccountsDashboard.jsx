@@ -149,16 +149,21 @@ export default function StudentAccountsDashboard() {
         }
     };
 
-    return (
-       <div className="space-y-6 pb-24 sm:pb-6">
+   return (
+  <div className="space-y-6 pb-24 sm:pb-6">
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-  <div>
-    <h2 className="text-2xl font-bold">Estados de cuenta</h2>
-    <p className="text-sm text-gray-600">Cargos, pagos, morosidad y constancia</p>
-  </div>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 className="text-2xl font-bold text-white">
+          Estados de cuenta
+        </h2>
+        <p className="text-sm text-white/80">
+          Cargos, pagos, morosidad y constancia
+        </p>
+      </div>
 
-  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+
     <Button
       variant="outline"
       onClick={exportPdf}

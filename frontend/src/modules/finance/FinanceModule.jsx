@@ -4,12 +4,11 @@ import { useAuth } from "../../context/AuthContext";
 import CashBanksDashboard from "../../components/finance/CashBanksDashboard";
 import ReceiptsDashboard from "../../components/finance/ReceiptsDashboard";
 import InventoryDashboard from "../../components/finance/InventoryDashboard";
-import LogisticsDashboard from "../../components/finance/LogisticsDashboard";
 import HRDashboard from "../../components/finance/HRDashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
-import { Banknote, Receipt, Package, Truck, Users, BarChart3, AlertTriangle, TrendingUp, FileText, Coins } from "lucide-react";
+import { Banknote, Receipt, Package, Users, BarChart3, AlertTriangle, TrendingUp, FileText, Coins, ChevronDown } from "lucide-react";
 import { toast } from "../../utils/safeToast";
 import ConceptsCatalog from "./ConceptsCatalog";
 import ReconciliationDashboard from "./ReconciliationDashboard";
@@ -17,7 +16,6 @@ import StudentAccountsDashboard from "./StudentAccountsDashboard";
 import FinanceReports from "./FinanceReports";
 import { fmtCurrency, formatApiError } from "../../utils/format";
 import { PERMS } from "../../auth/permissions";
-import { ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -45,15 +43,13 @@ const FinanceModule = () => {
   const canConcepts = hasAny([PERMS["fin.concepts.manage"]]);
   const canReconcile = hasAny([PERMS["fin.reconciliation.view"]]);
   const canReports = hasAny([PERMS["fin.reports.view"]]);
-  const canInventory = hasAny([PERMS["fin.inventory.view"]]);
-  const canLogistics = hasAny([PERMS["fin.logistics.view"]]);
+  const canInventory = hasAny([PERMS["fin.inventory.view"]]); // Ahora este permiso cubre Logística e Inventario
   const canHR = hasAny([PERMS["hr.view"]]);
 
   const roleLabel = (() => {
     if (hasAny([PERMS["fin.concepts.manage"], PERMS["fin.reports.view"], PERMS["fin.reconciliation.view"]])) return "Administrador Financiero";
     if (canCashBanks || canReceipts || canStdAccounts) return "Caja";
-    if (canInventory) return "Almacén";
-    if (canLogistics) return "Logística";
+    if (canInventory) return "Logística y Almacén"; // Actualizado
     if (canHR) return "RR.HH.";
     return "Usuario";
   })();
@@ -61,15 +57,10 @@ const FinanceModule = () => {
   const fetchDashboardStats = useCallback(async (signal) => {
     try {
       setLoading(true);
-
-      // ✅ axios soporta AbortController con { signal }
       const { data } = await api.get("/finance/dashboard/stats", { signal });
-
       setDashboardStats(data?.stats ?? data ?? {});
     } catch (error) {
-      // ✅ si se aborta, no muestres error
       if (error?.name === "CanceledError" || error?.code === "ERR_CANCELED") return;
-
       showApiError(error, "No se pudieron cargar las estadísticas");
     } finally {
       setLoading(false);
@@ -183,17 +174,7 @@ const FinanceModule = () => {
                   variant="outline"
                 >
                   <Package className="h-6 w-6" aria-hidden="true" />
-                  <span className="text-sm">Inventario</span>
-                </Button>
-              )}
-              {canLogistics && (
-                <Button
-                  onClick={() => setActiveTab("logistics")}
-                  className="h-20 flex flex-col items-center justify-center space-y-2"
-                  variant="outline"
-                >
-                  <Truck className="h-6 w-6" aria-hidden="true" />
-                  <span className="text-sm">Logística</span>
+                  <span className="text-sm">Logística e Inv.</span>
                 </Button>
               )}
               {canHR && (
@@ -242,15 +223,13 @@ const FinanceModule = () => {
                   ...(canConcepts ? [{ key: "concepts", label: "Conceptos" }] : []),
                   ...(canReconcile ? [{ key: "reconciliation", label: "Conciliación" }] : []),
                   ...(canReports ? [{ key: "reports", label: "Reportes" }] : []),
-                  ...(canInventory ? [{ key: "inventory", label: "Inventario" }] : []),
-                  ...(canLogistics ? [{ key: "logistics", label: "Logística" }] : []),
+                  ...(canInventory ? [{ key: "inventory", label: "Inventario" }] : []), // Ahora incluye Logística
                   ...(canHR ? [{ key: "hr", label: "RRHH" }] : []),
                 ].find((t) => t.key === activeTab);
 
                 return current?.label ?? "Dashboard";
               })()}
             </Button>
-
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -286,11 +265,7 @@ const FinanceModule = () => {
                 )}
 
                 {canInventory && (
-                  <DropdownMenuItem onClick={() => setActiveTab("inventory")}>Inventario</DropdownMenuItem>
-                )}
-
-                {canLogistics && (
-                  <DropdownMenuItem onClick={() => setActiveTab("logistics")}>Logística</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setActiveTab("inventory")}>Logística e Inventario</DropdownMenuItem>
                 )}
 
                 {canHR && (
@@ -369,16 +344,7 @@ const FinanceModule = () => {
               <TabsTrigger value="inventory" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
                 <span className="inline-flex items-center gap-2">
                   <Package className="h-4 w-4" aria-hidden="true" />
-                  Inventario
-                </span>
-              </TabsTrigger>
-            )}
-
-            {canLogistics && (
-              <TabsTrigger value="logistics" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                <span className="inline-flex items-center gap-2">
-                  <Truck className="h-4 w-4" aria-hidden="true" />
-                  Logística
+                  Logística e Inv.
                 </span>
               </TabsTrigger>
             )}
@@ -417,15 +383,10 @@ const FinanceModule = () => {
       <TabsContent value="inventory">
         {canInventory ? <InventoryDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
       </TabsContent>
-      <TabsContent value="logistics">
-        {canLogistics ? <LogisticsDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
-      </TabsContent>
       <TabsContent value="hr">
         {canHR ? <HRDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
       </TabsContent>
     </Tabs>
-
-
   );
 };
 

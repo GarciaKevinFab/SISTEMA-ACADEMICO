@@ -167,3 +167,17 @@ class AdmissionCallsViewSet(viewsets.ModelViewSet):
 def public_admission_calls(request):
     qs = AdmissionCall.objects.filter(published=True).order_by("-updated_at")
     return Response(AdmissionCallSerializer(qs[:100], many=True).data)
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def active_announcements(request):
+    """GET /api/portal/announcements/active — Noticias publicadas como anuncios"""
+    qs = NewsItem.objects.filter(published=True).order_by("-publish_at", "-created_at")[:5]
+    items = []
+    for n in qs:
+        items.append({
+            "title": n.title,
+            "date": str((n.publish_at or n.created_at).date()) if (n.publish_at or n.created_at) else "",
+            "excerpt": (n.summary or n.body or "")[:150],
+        })
+    return Response(items)

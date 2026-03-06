@@ -4,6 +4,7 @@ from rest_framework import viewsets, permissions, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
+from django.utils.crypto import get_random_string
 
 from acl.models import Role
 from .serializers import UserSerializer, UserCreateSerializer, UserUpdateSerializer
@@ -64,11 +65,11 @@ class UsersViewSet(viewsets.GenericViewSet,
     @action(detail=True, methods=["post"], url_path="reset-password")
     def reset_password(self, request, pk=None):
         user = self.get_object()
-        tmp = "Temp12345!"  # puedes randomizar luego
+        tmp = get_random_string(10)  # ✅ random
         user.set_password(tmp)
-        user.save(update_fields=["password"])
+        user.must_change_password = True  # ✅ obliga cambio
+        user.save(update_fields=["password", "must_change_password"])
         return Response({"status": "password_reset", "temporary_password": tmp})
-
     # POST /users/:id/roles  { "roles": ["ADMIN","STUDENT"] }
     @action(detail=True, methods=["post"], url_path="roles")
     def assign_roles(self, request, pk=None):

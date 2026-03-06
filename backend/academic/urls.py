@@ -5,122 +5,196 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     PlansViewSet, SectionsViewSet, TeachersViewSet, ClassroomsViewSet,
 
-    KardexView, KardexBoletaPDFView, KardexConstanciaPDFView,
-    SectionsScheduleConflictsView,KardexExportXlsxView,
+    KardexView, KardexExportXlsxView, KardexBoletaPDFView,
+    KardexBoletaPeriodoPDFView, KardexBoletaAnioPDFView, KardexConstanciaPDFView,
+    KardexRecordNotasPDFView,
 
-    ProcessesCreateView, ProcessesListView, ProcessesMineView, ProcessDetailView,
-    ProcessStatusView, ProcessNotifyView, ProcessFilesView, ProcessFileDeleteView,
-
-    AttendanceSessionsView, AttendanceSessionCloseView, AttendanceSessionSetView,
-    SyllabusView, EvaluationConfigView,
-
-    AcademicReportsSummaryView, AcademicReportPerformanceXlsxView, AcademicReportOccupancyXlsxView,
-
+    SectionsScheduleConflictsView,
     AvailableCoursesView,
 
     EnrollmentValidateView, EnrollmentSuggestionsView, EnrollmentCommitView,
     EnrollmentCertificateView, EnrollmentCertificatePDFView,
+
     ScheduleExportView, ScheduleExportPDFView,
 
-    # ✅ NUEVOS
+    AttendanceSessionsView, AttendanceSessionCloseView, AttendanceSessionSetView,
+    AttendanceImportPreviewView, AttendanceImportSaveView,
+
+    SyllabusView, EvaluationConfigView,
+
+    AcademicReportsSummaryView, AcademicReportPerformanceXlsxView, AcademicReportOccupancyXlsxView,
+
     TeacherSectionsView, SectionStudentsView,
     SectionGradesView, GradesSaveView, GradesSubmitView, GradesReopenView,
+
     SectionActaView, SectionActaPDFView, SectionActaQRView, SectionActaQRPngView,
-    AttendanceImportPreviewView, AttendanceImportSaveView,
+
+    # ── Procesos (EXPANDIDO) ──
+    ProcessTypesView,
+    ProcessesCreateView, ProcessesListView, ProcessesMineView, ProcessDetailView,
+    ProcessStatusView, ProcessNotifyView, ProcessFilesView, ProcessFileDeleteView,
+    ProcessDashboardView,
+
+    AcademicCareersListView, CoursesListView, TeacherSectionsMeView,
+    EnrollmentAvailableView,
+
+    # ── Períodos académicos ──
+    AcademicPeriodsListView,
+    AcademicPeriodEnrollmentWindowView,
+
+    # ── NUEVO: overview de alumnos para admin ──
+    StudentsOverviewView,
+
+    # ── Dashboards ──
+    student_dashboard, student_grades_summary, student_schedule,
+    teacher_dashboard, teacher_schedule_today,
+    enrollment_stats, acts_pending, sections_conflicts_get,
 )
 
+from .views.process_document_gen import ProcessGenerateDocumentView
+
+# ── Router ──────────────────────────────────────────────────────
 router = DefaultRouter(trailing_slash=False)
-router.register(r'academic/plans', PlansViewSet, basename='plans')
-router.register(r'sections', SectionsViewSet, basename='sections')
-router.register(r'teachers', TeachersViewSet, basename='teachers')
-router.register(r'classrooms', ClassroomsViewSet, basename='classrooms')
+router.register(r"plans",      PlansViewSet,      basename="plans")
+router.register(r"sections",   SectionsViewSet,   basename="sections")
+router.register(r"teachers",   TeachersViewSet,   basename="teachers")
+router.register(r"classrooms", ClassroomsViewSet, basename="classrooms")
 
 sections_list = SectionsViewSet.as_view({"get": "list", "post": "create"})
 sections_detail = SectionsViewSet.as_view({
-    "get": "retrieve",
-    "put": "update",
-    "patch": "partial_update",
+    "get":    "retrieve",
+    "put":    "update",
+    "patch":  "partial_update",
     "delete": "destroy",
 })
 
 urlpatterns = [
-    path('', include(router.urls)),
+    # ── Router ──────────────────────────────────────────────────
+    path("", include(router.urls)),
 
-    # Courses
-    path('courses/available', AvailableCoursesView.as_view()),
+    # ── Cursos ──────────────────────────────────────────────────
+    path("courses",           CoursesListView.as_view()),
+    path("courses/available", AvailableCoursesView.as_view()),
 
-    # Enrollment
-    path('enrollments/validate', EnrollmentValidateView.as_view()),
-    path('enrollments/suggestions', EnrollmentSuggestionsView.as_view()),
-    path('enrollments/commit', EnrollmentCommitView.as_view()),
-    path('enrollments/<int:enrollment_id>/certificate', EnrollmentCertificateView.as_view()),
-    path('enrollments/<int:enrollment_id>/certificate/pdf', EnrollmentCertificatePDFView.as_view()),
+    # ── Carreras ────────────────────────────────────────────────
+    path("careers", AcademicCareersListView.as_view()),
 
-    # Schedule export
-    path('schedules/export', ScheduleExportView.as_view()),
-    path('schedules/export/pdf', ScheduleExportPDFView.as_view()),
+    # ── Matrícula ────────────────────────────────────────────────
+    path("enrollments/students-overview",                    StudentsOverviewView.as_view()),      # ← NUEVO
+    path("enrollments/available",                            EnrollmentAvailableView.as_view()),
+    path("enrollments/validate",                             EnrollmentValidateView.as_view()),
+    path("enrollments/suggestions",                          EnrollmentSuggestionsView.as_view()),
+    path("enrollments/commit",                               EnrollmentCommitView.as_view()),
+    path("enrollments/<int:enrollment_id>/certificate",      EnrollmentCertificateView.as_view()),
+    path("enrollments/<int:enrollment_id>/certificate/pdf",  EnrollmentCertificatePDFView.as_view()),
 
-    # Hard routes sections / sections/
-    re_path(r'^sections/?$', sections_list, name='sections-list-hard'),
-    re_path(r'^sections/(?P<pk>[^/.]+)/?$', sections_detail, name='sections-detail-hard'),
+    # ── Períodos académicos ──────────────────────────────────────
+    path("periods",                                      AcademicPeriodsListView.as_view()),
+    path("periods/<str:code>/enrollment-window",         AcademicPeriodEnrollmentWindowView.as_view()),
 
-    path('sections/schedule/conflicts', SectionsScheduleConflictsView.as_view()),
+    # ── Kardex / PDFs ────────────────────────────────────────────
+    path("kardex/<str:student_id>",                      KardexView.as_view()),
+    path("kardex/<str:student_id>/export/xlsx",          KardexExportXlsxView.as_view()),
+    path("kardex/<str:student_id>/boleta/pdf",           KardexBoletaPDFView.as_view()),
+    path("kardex/<str:student_id>/boleta/periodo/pdf",   KardexBoletaPeriodoPDFView.as_view()),
+    path("kardex/<str:student_id>/boleta/anio/pdf",      KardexBoletaAnioPDFView.as_view()),
+    path("kardex/<str:student_id>/constancia/pdf",       KardexConstanciaPDFView.as_view()),
+    path("kardex/<str:student_id>/record-notas/pdf",     KardexRecordNotasPDFView.as_view()),
 
-    # Attendance
-    path('sections/<int:section_id>/attendance/sessions', AttendanceSessionsView.as_view()),
-    path('sections/<int:section_id>/attendance/sessions/<int:session_id>/close', AttendanceSessionCloseView.as_view()),
-    path('sections/<int:section_id>/attendance/sessions/<int:session_id>', AttendanceSessionSetView.as_view()),
+    # ── Horarios export ──────────────────────────────────────────
+    path("schedules/export",     ScheduleExportView.as_view()),
+    path("schedules/export/pdf", ScheduleExportPDFView.as_view()),
 
-    # Attendance Import
-    path('attendance/import/preview', AttendanceImportPreviewView.as_view()),
-    path('attendance/import/save', AttendanceImportSaveView.as_view()),
+    # ── Sections "hard" (compat) ─────────────────────────────────
+    re_path(r"^sections/?$",                  sections_list,   name="sections-list-hard"),
+    re_path(r"^sections/(?P<pk>[^/.]+)/?$",   sections_detail, name="sections-detail-hard"),
+    path("sections/schedule/conflicts",       SectionsScheduleConflictsView.as_view()),
 
-    # Syllabus
-    path('sections/<int:section_id>/syllabus', SyllabusView.as_view()),
+    # ── Asistencia ───────────────────────────────────────────────
+    path("sections/<int:section_id>/attendance/sessions",
+         AttendanceSessionsView.as_view()),
+    path("sections/<int:section_id>/attendance/sessions/<int:session_id>/close",
+         AttendanceSessionCloseView.as_view()),
+    path("sections/<int:section_id>/attendance/sessions/<int:session_id>",
+         AttendanceSessionSetView.as_view()),
+    path("attendance/import/preview", AttendanceImportPreviewView.as_view()),
+    path("attendance/import/save",    AttendanceImportSaveView.as_view()),
 
-    # Evaluation config
-    path('sections/<int:section_id>/evaluation', EvaluationConfigView.as_view()),
+    # ── Sílabos / Evaluación ─────────────────────────────────────
+    path("sections/<int:section_id>/syllabus",   SyllabusView.as_view()),
+    path("sections/<int:section_id>/evaluation", EvaluationConfigView.as_view()),
 
-# Kardex + PDFs
-path('academic/kardex/<str:student_id>', KardexView.as_view()),
-path('academic/kardex/<str:student_id>/export/xlsx', KardexExportXlsxView.as_view()),
-path('academic/kardex/<str:student_id>/boleta', KardexBoletaPDFView.as_view()),
-path('academic/kardex/<str:student_id>/boleta/pdf', KardexBoletaPDFView.as_view()),
-path('academic/kardex/<str:student_id>/constancia', KardexConstanciaPDFView.as_view()),
-path('academic/kardex/<str:student_id>/constancia/pdf', KardexConstanciaPDFView.as_view()),
+    # ══════════════════════════════════════════════════════════════
+    #  PROCESOS ACADÉMICOS — EXPANDIDO
+    # ══════════════════════════════════════════════════════════════
+    path("processes/types",     ProcessTypesView.as_view()),
+    path("processes/dashboard", ProcessDashboardView.as_view()),
+    path("processes",     ProcessesListView.as_view()),
+    path("processes/my",  ProcessesMineView.as_view()),
 
+    path("processes/withdraw",    ProcessesCreateView.as_view(), {"ptype": "RETIRO"}),
+    path("processes/reservation", ProcessesCreateView.as_view(), {"ptype": "RESERVA"}),
+    path("processes/validation",  ProcessesCreateView.as_view(), {"ptype": "CONVALIDACION"}),
+    path("processes/transfer",    ProcessesCreateView.as_view(), {"ptype": "TRASLADO"}),
+    path("processes/rejoin",      ProcessesCreateView.as_view(), {"ptype": "REINCORPORACION"}),
 
-    # Procesos
-    path('processes/withdraw', ProcessesCreateView.as_view(), {'ptype': 'RETIRO'}),
-    path('processes/reservation', ProcessesCreateView.as_view(), {'ptype': 'RESERVA'}),
-    path('processes/validation', ProcessesCreateView.as_view(), {'ptype': 'CONVALIDACION'}),
-    path('processes/transfer', ProcessesCreateView.as_view(), {'ptype': 'TRASLADO'}),
-    path('processes/rejoin', ProcessesCreateView.as_view(), {'ptype': 'REINCORPORACION'}),
+    path("processes/retiro",           ProcessesCreateView.as_view(), {"ptype": "RETIRO"}),
+    path("processes/reserva",          ProcessesCreateView.as_view(), {"ptype": "RESERVA"}),
+    path("processes/reingreso",        ProcessesCreateView.as_view(), {"ptype": "REINGRESO"}),
+    path("processes/reincorporacion",  ProcessesCreateView.as_view(), {"ptype": "REINCORPORACION"}),
+    path("processes/baja-definitiva",  ProcessesCreateView.as_view(), {"ptype": "BAJA_DEFINITIVA"}),
+    path("processes/traslado-interno", ProcessesCreateView.as_view(), {"ptype": "TRASLADO_INTERNO"}),
+    path("processes/cambio-programa",  ProcessesCreateView.as_view(), {"ptype": "CAMBIO_PROGRAMA"}),
 
-    path('processes', ProcessesListView.as_view()),
-    path('processes/my', ProcessesMineView.as_view()),
-    path('processes/<int:pid>', ProcessDetailView.as_view()),
-    path('processes/<int:pid>/status', ProcessStatusView.as_view()),
-    path('processes/<int:pid>/notify', ProcessNotifyView.as_view()),
-    path('processes/<int:pid>/files', ProcessFilesView.as_view()),
-    path('processes/<int:pid>/files/<int:file_id>', ProcessFileDeleteView.as_view()),
+    path("processes/anulacion-matricula",     ProcessesCreateView.as_view(), {"ptype": "ANULACION_MATRICULA"}),
+    path("processes/rectificacion-matricula", ProcessesCreateView.as_view(), {"ptype": "RECTIFICACION_MATRICULA"}),
+    path("processes/matricula-extemporanea",  ProcessesCreateView.as_view(), {"ptype": "MATRICULA_EXTEMPORANEA"}),
 
-    # Reportes
-    path('academic/reports/summary', AcademicReportsSummaryView.as_view()),
-    path('academic/reports/performance.xlsx', AcademicReportPerformanceXlsxView.as_view()),
-    path('academic/reports/occupancy.xlsx', AcademicReportOccupancyXlsxView.as_view()),
+    path("processes/reapertura-acta",      ProcessesCreateView.as_view(), {"ptype": "REAPERTURA_ACTA"}),
+    path("processes/rectificacion-nota",   ProcessesCreateView.as_view(), {"ptype": "RECTIFICACION_NOTA"}),
+    path("processes/anulacion-evaluacion", ProcessesCreateView.as_view(), {"ptype": "ANULACION_EVALUACION"}),
+    path("processes/nota-subsanacion",     ProcessesCreateView.as_view(), {"ptype": "NOTA_SUBSANACION"}),
 
-    # ✅ Docente / Estudiantes / Notas
-    path('teachers/<int:teacher_user_id>/sections', TeacherSectionsView.as_view()),
-    path('sections/<int:section_id>/students', SectionStudentsView.as_view()),
-    path('sections/<int:section_id>/grades', SectionGradesView.as_view()),
-    path('grades/save', GradesSaveView.as_view()),
-    path('grades/submit', GradesSubmitView.as_view()),
-    path('grades/reopen', GradesReopenView.as_view()),
+    path("processes/convalidacion",    ProcessesCreateView.as_view(), {"ptype": "CONVALIDACION"}),
+    path("processes/equivalencia",     ProcessesCreateView.as_view(), {"ptype": "EQUIVALENCIA"}),
+    path("processes/traslado-externo", ProcessesCreateView.as_view(), {"ptype": "TRASLADO_EXTERNO"}),
 
-    # ✅ Acta
-    path('sections/<int:section_id>/acta', SectionActaView.as_view()),
-    path('sections/<int:section_id>/acta/pdf', SectionActaPDFView.as_view()),
-    path('sections/<int:section_id>/acta/qr', SectionActaQRView.as_view()),
-    path('sections/<int:section_id>/acta/qr/png', SectionActaQRPngView.as_view()),
+    path("processes/<str:ptype>/create", ProcessesCreateView.as_view()),
+
+    path("processes/<int:pid>",                      ProcessDetailView.as_view()),
+    path("processes/<int:pid>/status",               ProcessStatusView.as_view()),
+    path("processes/<int:pid>/notify",               ProcessNotifyView.as_view()),
+    path("processes/<int:pid>/files",                ProcessFilesView.as_view()),
+    path("processes/<int:pid>/files/<int:file_id>",  ProcessFileDeleteView.as_view()),
+    path("processes/<int:pid>/generate-document",    ProcessGenerateDocumentView.as_view()),
+
+    # ── Reportes ─────────────────────────────────────────────────
+    path("reports/summary",            AcademicReportsSummaryView.as_view()),
+    path("reports/performance.xlsx",   AcademicReportPerformanceXlsxView.as_view()),
+    path("reports/occupancy.xlsx",     AcademicReportOccupancyXlsxView.as_view()),
+
+    # ── Docentes / Notas ─────────────────────────────────────────
+    path("teachers/me/sections",                       TeacherSectionsMeView.as_view()),
+    path("teachers/<int:teacher_user_id>/sections",    TeacherSectionsView.as_view()),
+    path("sections/<int:section_id>/students",         SectionStudentsView.as_view()),
+    path("sections/<int:section_id>/grades",           SectionGradesView.as_view()),
+    path("grades/save",                                GradesSaveView.as_view()),
+    path("grades/submit",                              GradesSubmitView.as_view()),
+    path("grades/reopen",                              GradesReopenView.as_view()),
+
+    # ── Actas ────────────────────────────────────────────────────
+    path("sections/<int:section_id>/acta",         SectionActaView.as_view()),
+    path("sections/<int:section_id>/acta/pdf",     SectionActaPDFView.as_view()),
+    path("sections/<int:section_id>/acta/qr",      SectionActaQRView.as_view()),
+    path("sections/<int:section_id>/acta/qr/png",  SectionActaQRPngView.as_view()),
+
+    # ── Dashboards ───────────────────────────────────────────────
+    path("student/dashboard",      student_dashboard),
+    path("student/grades/summary", student_grades_summary),
+    path("student/schedule",       student_schedule),
+    path("teacher/dashboard",      teacher_dashboard),
+    path("teacher/schedule/today", teacher_schedule_today),
+    path("enrollment/stats",       enrollment_stats),
+    path("acts/pending",           acts_pending),
+    path("sections/conflicts",     sections_conflicts_get),
 ]

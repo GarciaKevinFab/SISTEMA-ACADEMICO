@@ -95,12 +95,15 @@ export default function ReconciliationDashboard() {
         <div className="space-y-6 pb-24 sm:pb-6">
 
   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-    <div className="min-w-0">
-      <h2 className="text-2xl font-bold">Conciliación bancaria</h2>
-      <p className="text-sm text-gray-600">
-        Marca movimientos conciliados y registra el saldo de extracto
-      </p>
-    </div>
+  <div className="min-w-0">
+    <h2 className="text-2xl font-bold text-white">
+      Conciliación bancaria
+    </h2>
+    <p className="text-sm text-white/80">
+      Marca movimientos conciliados y registra el saldo de extracto
+    </p>
+  </div>
+
 
     <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
       <Button variant="outline" onClick={load} className="w-full sm:w-auto">

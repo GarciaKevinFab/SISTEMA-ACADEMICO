@@ -2,7 +2,8 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction, IntegrityError
 from rest_framework import serializers
-
+from catalogs.models import Campus, Classroom
+from academic.models import Course
 from .models import (
     Period, Campus, Classroom, Teacher,
     InstitutionSetting, MediaAsset, ImportJob, BackupExport
@@ -14,31 +15,32 @@ User = get_user_model()
 # ------------------ Catálogos base ------------------
 class PeriodSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Period
+        model  = Period
         fields = "__all__"
 
 
 class CampusSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Campus
+        model  = Campus
         fields = "__all__"
 
 
 class ClassroomSerializer(serializers.ModelSerializer):
     """
-    ✅ FIX 400:
-    Frontend manda campus_id, el modelo tiene FK "campus".
+    Serializer para crear/editar aulas desde el panel de catálogos.
+    Expone code y name como campos separados (sin aliases).
     """
     campus_id = serializers.PrimaryKeyRelatedField(
         source="campus",
         queryset=Campus.objects.all(),
         write_only=True,
-        required=True
+        required=True,
     )
+    campus = CampusSerializer(read_only=True)
 
     class Meta:
-        model = Classroom
-        fields = ["id", "campus_id", "campus", "code", "name", "capacity"]
+        model        = Classroom
+        fields       = ["id", "campus_id", "campus", "code", "name", "capacity"]
         read_only_fields = ["id", "campus"]
 
     def to_representation(self, instance):
@@ -49,25 +51,16 @@ class ClassroomSerializer(serializers.ModelSerializer):
 
 # ------------------ Teacher ------------------
 class TeacherSerializer(serializers.ModelSerializer):
-    """
-    Frontend envía:
-    { document, full_name, email, phone, specialization }
-
-    ✅ Arreglos:
-    - full_name ahora ES el campo del modelo (se guarda en Teacher.full_name).
-    - NO usamos first_name/last_name (tu User no los tiene).
-    - display_name: Teacher.full_name > User.full_name/name > username/email.
-    """
     display_name = serializers.SerializerMethodField(read_only=True)
 
-    document = serializers.CharField(required=False, allow_blank=True)
-    full_name = serializers.CharField(required=False, allow_blank=True)   # ✅ YA NO write_only
-    email = serializers.EmailField(required=False, allow_blank=True)
-    phone = serializers.CharField(required=False, allow_blank=True)
-    specialization = serializers.CharField(required=False, allow_blank=True)
+    courses = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Course.objects.all(),
+        required=False,
+    )
 
     class Meta:
-        model = Teacher
+        model  = Teacher
         fields = [
             "id",
             "user",
@@ -77,10 +70,12 @@ class TeacherSerializer(serializers.ModelSerializer):
             "email",
             "phone",
             "specialization",
+            "courses",
         ]
         read_only_fields = ["id", "user", "display_name"]
 
-    # ---------- helpers ----------
+    # ── helpers ────────────────────────────────────────────────────────────────
+
     def _user_field_names(self):
         return {f.name for f in User._meta.fields}
 
@@ -88,12 +83,10 @@ class TeacherSerializer(serializers.ModelSerializer):
         return getattr(User, "USERNAME_FIELD", "username")
 
     def _build_user_kwargs(self, username_value: str, email: str, full_name: str):
-        fields = self._user_field_names()
+        fields      = self._user_field_names()
         uname_field = self._username_field()
+        kwargs      = {}
 
-        kwargs = {}
-
-        # username/login field real
         if uname_field in fields:
             kwargs[uname_field] = username_value
         elif "username" in fields:
@@ -102,7 +95,6 @@ class TeacherSerializer(serializers.ModelSerializer):
         if "email" in fields:
             kwargs["email"] = (email or "").strip().lower()
 
-        # nombre (según tu User custom)
         if "full_name" in fields:
             kwargs["full_name"] = (full_name or "").strip()
         elif "name" in fields:
@@ -112,7 +104,7 @@ class TeacherSerializer(serializers.ModelSerializer):
 
     def _get_or_create_user(self, username_value: str, email: str, full_name: str):
         uname_field = self._username_field()
-        lookup = {uname_field: username_value}
+        lookup      = {uname_field: username_value}
 
         try:
             return User.objects.get(**lookup)
@@ -123,7 +115,6 @@ class TeacherSerializer(serializers.ModelSerializer):
 
         try:
             if hasattr(User.objects, "create_user"):
-                # algunos managers exigen password -> intentamos ambas firmas
                 try:
                     user = User.objects.create_user(**kwargs)
                 except TypeError:
@@ -131,7 +122,6 @@ class TeacherSerializer(serializers.ModelSerializer):
             else:
                 user = User.objects.create(**kwargs)
 
-            # por si tu create_user no lo hace
             user.set_unusable_password()
             user.save(update_fields=["password"])
             return user
@@ -139,13 +129,12 @@ class TeacherSerializer(serializers.ModelSerializer):
         except IntegrityError:
             return User.objects.get(**lookup)
 
-    # ---------- display ----------
+    # ── display ────────────────────────────────────────────────────────────────
+
     def get_display_name(self, obj):
-        # primero lo que el frontend guarda en Teacher
         if (obj.full_name or "").strip():
             return obj.full_name.strip()
 
-        # luego user si existe
         u = getattr(obj, "user", None)
         if u:
             if hasattr(u, "full_name") and (u.full_name or "").strip():
@@ -157,23 +146,34 @@ class TeacherSerializer(serializers.ModelSerializer):
             if hasattr(u, "email") and (u.email or "").strip():
                 return u.email.strip()
 
-        # fallback final
         return (obj.document or "").strip() or "Docente"
 
-    # ---------- create / update ----------
+    # ── create / update ────────────────────────────────────────────────────────
+    # FIX: estos métodos estaban a nivel de módulo (indentación incorrecta),
+    # por eso Django usaba el create() base de ModelSerializer y nunca
+    # ejecutaba la lógica de creación de usuario ni de M2M.
+    # Al moverlos dentro de la clase queda todo operativo.
+
     @transaction.atomic
     def create(self, validated_data):
-        full_name = (validated_data.get("full_name", "") or "").strip()
-        email = (validated_data.get("email", "") or "").strip().lower()
-        document = (validated_data.get("document", "") or "").strip()
+        # Sacar M2M antes del create
+        courses = validated_data.pop("courses", [])
 
-        # crea Teacher primero (porque tu modelo ya guarda full_name)
+        full_name = (validated_data.get("full_name", "") or "").strip()
+        email     = (validated_data.get("email",     "") or "").strip().lower()
+        document  = (validated_data.get("document",  "") or "").strip()
+
+        # Crear Teacher sin relaciones M2M
         teacher = Teacher.objects.create(**validated_data)
 
-        # si quieres user automático, lo hacemos SOLO si hay email o documento
+        # Asignar cursos si el campo existe
+        if hasattr(teacher, "courses"):
+            teacher.courses.set(courses or [])
+
+        # Crear/adjuntar User si corresponde
         username_value = email or document
         if username_value and teacher.user is None:
-            user = self._get_or_create_user(username_value, email, full_name)
+            user         = self._get_or_create_user(username_value, email, full_name)
             teacher.user = user
             teacher.save(update_fields=["user"])
 
@@ -181,12 +181,19 @@ class TeacherSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        # actualiza Teacher
+        # Manejar M2M aparte
+        courses = validated_data.pop("courses", None)
+
+        # Actualizar campos normales
         for k, v in validated_data.items():
             setattr(instance, k, v)
         instance.save()
 
-        # si tiene user, actualiza email/full_name si el user tiene esos campos
+        # Actualizar M2M si vino en el payload
+        if courses is not None and hasattr(instance, "courses"):
+            instance.courses.set(courses or [])
+
+        # Si tiene user, sincronizar email/full_name
         u = getattr(instance, "user", None)
         if u:
             fields = self._user_field_names()
@@ -209,7 +216,7 @@ class TeacherSerializer(serializers.ModelSerializer):
 # ------------------ InstitutionSetting ------------------
 class InstitutionSettingSerializer(serializers.ModelSerializer):
     class Meta:
-        model = InstitutionSetting
+        model  = InstitutionSetting
         fields = ["id", "data"]
 
 
@@ -218,7 +225,7 @@ class MediaAssetSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
 
     class Meta:
-        model = MediaAsset
+        model  = MediaAsset
         fields = ["id", "kind", "file", "url", "uploaded_at"]
 
     def get_url(self, obj):
@@ -231,17 +238,17 @@ class MediaAssetSerializer(serializers.ModelSerializer):
 # ------------------ ImportJob ------------------
 class ImportJobSerializer(serializers.ModelSerializer):
     class Meta:
-        model = ImportJob
+        model  = ImportJob
         fields = ["id", "type", "status", "mapping", "file", "result", "created_at"]
 
 
 # ------------------ BackupExport ------------------
 class BackupExportSerializer(serializers.ModelSerializer):
-    size = serializers.SerializerMethodField()
+    size     = serializers.SerializerMethodField()
     file_url = serializers.SerializerMethodField()
 
     class Meta:
-        model = BackupExport
+        model  = BackupExport
         fields = ["id", "scope", "file_url", "created_at", "size"]
 
     def get_size(self, obj):

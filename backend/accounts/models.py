@@ -10,7 +10,12 @@ class UserManager(BaseUserManager):
 
         email = self.normalize_email(email)
         user = self.model(username=username, email=email, full_name=full_name)
+
+        # ✅ si no mandan password => temporal => obliga cambio
+        is_temp = not password
         user.set_password(password or "Temp12345!")
+        user.must_change_password = is_temp
+
         user.is_active = True
         user.save(using=self._db)
         return user
@@ -20,8 +25,13 @@ class UserManager(BaseUserManager):
         user.is_staff = True
         user.is_superuser = True
         user.is_active = True
+
+        # ✅ superuser NO debería estar obligado a cambiar (por si password vino vacío)
+        user.must_change_password = False
+
         user.save(using=self._db)
         return user
+
 
 class User(AbstractBaseUser, PermissionsMixin):
     username = models.CharField(max_length=120, unique=True)
@@ -31,7 +41,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 
-    # ✅ Solo UNA relación: User -> Role
+    must_change_password = models.BooleanField(default=False)  # ✅ NUEVO
+
     roles = models.ManyToManyField("acl.Role", blank=True, related_name="members")
 
     objects = UserManager()

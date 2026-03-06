@@ -1,9 +1,10 @@
 // src/services/academic.service.js
 import api from "../lib/api";
 
-/* -------------------------------------------------------
-   Helpers
-------------------------------------------------------- */
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════════ */
+
 const pickFirstArray = (data, keys = []) => {
     if (Array.isArray(data)) return data;
     for (const k of keys) {
@@ -12,363 +13,441 @@ const pickFirstArray = (data, keys = []) => {
     return [];
 };
 
-const asBlobGet = async (url, params = {}) => {
-    const res = await api.get(url, { params, responseType: "blob" });
-    return res; // axios response (blob en res.data)
+const wrapAxiosError = (e) => {
+    const data = e?.response?.data;
+    const msg =
+        data?.detail ||
+        data?.message ||
+        (data && typeof data === "object"
+            ? Object.entries(data)
+                .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
+                .join(" | ")
+            : null) ||
+        (typeof data === "string" ? data : null) ||
+        e?.message ||
+        "Error en la solicitud";
+
+    const err = new Error(msg);
+    err.original = e;
+    err.response = e?.response;
+    err.status = e?.response?.status;
+    err.data = data;
+    err.url = e?.config?.url;
+    err.method = e?.config?.method;
+    return err;
 };
 
-const asJson = async (method, url, payload, config = {}) => {
+const toggleSlash = (url) => {
+    if (!url) return url;
+    const [base, qs] = url.split("?");
+    const altBase = base.endsWith("/") ? base.slice(0, -1) : `${base}/`;
+    return qs ? `${altBase}?${qs}` : altBase;
+};
+
+const shouldRetryBySlash = (status) =>
+    status === 404 || status === 301 || status === 302 || status === 307 || status === 308;
+
+const requestJsonSmart = async (method, url, payload, config = {}) => {
     try {
-        const res = await api.request({
-            method,
-            url,
-            data: payload,
-            ...config,
-        });
+        const res = await api.request({ method, url, data: payload, ...config });
         return res.data;
     } catch (e) {
-        const data = e?.response?.data;
-        const msg =
-            data?.detail ||
-            data?.message ||
-            (data && typeof data === "object"
-                ? Object.entries(data)
-                    .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
-                    .join(" | ")
-                : null) ||
-            (typeof data === "string" ? data : null) ||
-            e?.message ||
-            "Error en la solicitud";
-        throw new Error(msg);
+        const status = e?.response?.status;
+        if (shouldRetryBySlash(status)) {
+            const altUrl = toggleSlash(url);
+            try {
+                const res2 = await api.request({ method, url: altUrl, data: payload, ...config });
+                return res2.data;
+            } catch (e2) {
+                throw wrapAxiosError(e2);
+            }
+        }
+        throw wrapAxiosError(e);
     }
 };
 
-/* -------------------------------------------------------
-   Catálogos base
-   (OJO: tus carreras están en admission y viven en /api/careers)
-------------------------------------------------------- */
-export const Careers = {
-    /**
-     * Backend admission:
-     * - puede devolver: [ {id,name,...} ]
-     * - o: {careers:[...]}
-     */
-    list: async () => {
-        const data = await asJson("GET", "/careers");
-        const arr = pickFirstArray(data, ["careers", "items", "results"]);
-        return { careers: arr };
-    },
+const asBlobGet = async (url, params = {}) =>
+    api.get(url, { params, responseType: "blob" });
 
-    create: async (payload) => asJson("POST", "/careers", payload),
-
-    update: async (id, payload) => asJson("PUT", `/careers/${id}`, payload),
-
-    remove: async (id) => asJson("DELETE", `/careers/${id}`),
-
-    toggleActive: async (id) => asJson("POST", `/careers/${id}/toggle-active`, {}),
+const asBlobGetSmart = async (url, params = {}) => {
+    try {
+        return await asBlobGet(url, params);
+    } catch (e) {
+        const status = e?.response?.status;
+        if (shouldRetryBySlash(status)) {
+            const altUrl = toggleSlash(url);
+            try {
+                return await asBlobGet(altUrl, params);
+            } catch (e2) {
+                throw wrapAxiosError(e2);
+            }
+        }
+        throw wrapAxiosError(e);
+    }
 };
 
-/* -------------------------------------------------------
-   Planes (mallas) - academic app (stub router: /academic/plans)
-------------------------------------------------------- */
+
+/* ═══════════════════════════════════════════════════════════════
+   CARRERAS
+   ═══════════════════════════════════════════════════════════════ */
+export const Careers = {
+    list: async () => {
+        const data = await requestJsonSmart("GET", "/academic/careers", null);
+        return { careers: pickFirstArray(data, ["careers", "items", "results"]) };
+    },
+    create: async (payload) => requestJsonSmart("POST", "/academic/careers", payload),
+    update: async (id, payload) => requestJsonSmart("PUT", `/academic/careers/${id}`, payload),
+    remove: async (id) => requestJsonSmart("DELETE", `/academic/careers/${id}`, null),
+    toggleActive: async (id) => requestJsonSmart("POST", `/academic/careers/${id}/toggle-active`, {}),
+};
+
+
+/* ═══════════════════════════════════════════════════════════════
+   CURSOS (catálogo)
+   ═══════════════════════════════════════════════════════════════ */
+export const Courses = {
+    list: async (params = {}) => {
+        const data = await requestJsonSmart("GET", "/academic/courses", null, { params });
+        return { items: pickFirstArray(data, ["items", "courses", "results"]) };
+    },
+};
+
+
+/* ═══════════════════════════════════════════════════════════════
+   PLANES (mallas)
+   ═══════════════════════════════════════════════════════════════ */
 export const Plans = {
     list: async () => {
-        const data = await asJson("GET", "/academic/plans");
-        const arr = pickFirstArray(data, ["plans", "items", "results"]);
-        // tu backend stub usa ok(plans=[...])
-        return { plans: arr };
+        const data = await requestJsonSmart("GET", "/academic/plans", null);
+        const root = data?.data ?? data?.payload ?? data;
+        const arr =
+            pickFirstArray(root, ["plans", "items", "results"]) ||
+            pickFirstArray(data, ["plans", "items", "results"]) ||
+            [];
+        return { plans: Array.isArray(arr) ? arr : [] };
     },
 
-    create: async (payload) => {
-        const data = await asJson("POST", "/academic/plans", payload);
-        // stub retorna {plan: {...}}
-        return data;
-    },
+    create: async (payload) => requestJsonSmart("POST", "/academic/plans", payload),
+    update: async (id, payload) => requestJsonSmart("PATCH", `/academic/plans/${id}`, payload),
+    updatePut: async (id, payload) => requestJsonSmart("PUT", `/academic/plans/${id}`, payload),
+    remove: async (id) => requestJsonSmart("DELETE", `/academic/plans/${id}`, null),
 
-    update: async (id, payload) => asJson("PUT", `/academic/plans/${id}`, payload),
+    listCourses: async (planId, params) =>
+        requestJsonSmart("GET", `/academic/plans/${planId}/courses`, null, { params: params || undefined }),
 
-    remove: async (id) => asJson("DELETE", `/academic/plans/${id}`),
-
-    // Cursos de un plan
-    listCourses: async (planId) => {
-        const data = await asJson("GET", `/academic/plans/${planId}/courses`);
-        const arr = pickFirstArray(data, ["courses", "items", "results"]);
-        return { courses: arr };
-    },
-
-    addCourse: async (planId, payload) =>
-        asJson("POST", `/academic/plans/${planId}/courses`, payload),
-
-    updateCourse: async (planId, courseId, payload) =>
-        asJson("PUT", `/academic/plans/${planId}/courses/${courseId}`, payload),
-
-    removeCourse: async (planId, courseId) =>
-        asJson("DELETE", `/academic/plans/${planId}/courses/${courseId}`),
-
-    // Prerrequisitos (según tu stub: PUT /academic/plans/:id/courses/:course_id/prereqs)
-    setPrereqs: async (planId, courseId, prereqIds) =>
-        asJson("PUT", `/academic/plans/${planId}/courses/${courseId}/prereqs`, {
-            prerequisites: prereqIds,
+    listAllCourses: async (planId, params) =>
+        requestJsonSmart("GET", `/academic/plans/${planId}/courses`, null, {
+            params: { all: 1, ...(params || {}) },
         }),
 
-    // si en algún momento lo implementas en backend real:
-    listPrereqs: async (planId, courseId) =>
-        asJson("GET", `/academic/plans/${planId}/courses/${courseId}/prereqs`),
+    addCourse: async (planId, payload) => requestJsonSmart("POST", `/academic/plans/${planId}/courses`, payload),
+    updateCourse: async (planId, courseId, payload) => requestJsonSmart("PUT", `/academic/plans/${planId}/courses/${courseId}`, payload),
+    removeCourse: async (planId, courseId) => requestJsonSmart("DELETE", `/academic/plans/${planId}/courses/${courseId}`, null),
+    setPrereqs: async (planId, courseId, prereqIds) => requestJsonSmart("PUT", `/academic/plans/${planId}/courses/${courseId}/prereqs`, { prerequisites: prereqIds }),
+    listPrereqs: async (planId, courseId) => requestJsonSmart("GET", `/academic/plans/${planId}/courses/${courseId}/prereqs`, null),
 };
 
-/* -------------------------------------------------------
-   Secciones / horarios
-------------------------------------------------------- */
+
+/* ═══════════════════════════════════════════════════════════════
+   SECCIONES / HORARIOS
+   ═══════════════════════════════════════════════════════════════ */
 export const Sections = {
     list: async (params = {}) => {
-        const data = await asJson("GET", "/sections", null, { params });
-        const arr = pickFirstArray(data, ["sections", "items", "results"]);
-        return { sections: arr };
+        const data = await requestJsonSmart("GET", "/academic/sections", null, { params });
+        return { sections: pickFirstArray(data, ["sections", "items", "results"]) };
     },
 
-    create: async (payload) => asJson("POST", "/sections", payload),
+    create: async (payload) => requestJsonSmart("POST", "/academic/sections", payload),
+    update: async (id, payload) => requestJsonSmart("PUT", `/academic/sections/${id}`, payload),
+    patch: async (id, payload) => requestJsonSmart("PATCH", `/academic/sections/${id}`, payload),
+    remove: async (id) => requestJsonSmart("DELETE", `/academic/sections/${id}`, null),
+    checkConflicts: async (payload) => requestJsonSmart("POST", "/academic/sections/schedule/conflicts", payload),
+    listSchedule: async (sectionId) => requestJsonSmart("GET", `/academic/sections/${sectionId}/schedule`, null),
+    setSchedule: async (sectionId, slots) => requestJsonSmart("PUT", `/academic/sections/${sectionId}/schedule`, { slots }),
 
-    update: async (id, payload) => asJson("PUT", `/sections/${id}`, payload),
-
-    remove: async (id) => asJson("DELETE", `/sections/${id}`),
-
-    // Validaciones
-    checkConflicts: async (payload) =>
-        asJson("POST", "/sections/schedule/conflicts", payload),
+    windowStatus: async (sectionId) =>
+        requestJsonSmart("GET", `/academic/sections/${sectionId}/window-status`, null),
 
     rooms: async () => {
-        const data = await asJson("GET", "/classrooms");
-        const arr = pickFirstArray(data, ["classrooms", "items", "results"]);
-        return { classrooms: arr };
+        const data = await requestJsonSmart("GET", "/academic/classrooms", null);
+        return { classrooms: pickFirstArray(data, ["classrooms", "items", "results"]) };
     },
-
     teachers: async () => {
-        const data = await asJson("GET", "/teachers");
-        const arr = pickFirstArray(data, ["teachers", "items", "results"]);
-        return { teachers: arr };
+        const data = await requestJsonSmart("GET", "/academic/teachers", null);
+        return { teachers: pickFirstArray(data, ["teachers", "items", "results"]) };
     },
-
-    // Horarios por sección (si tu backend lo implementa)
-    listSchedule: async (sectionId) =>
-        asJson("GET", `/sections/${sectionId}/schedule`),
-
-    setSchedule: async (sectionId, slots) =>
-        asJson("PUT", `/sections/${sectionId}/schedule`, { slots }),
 };
 
-/* -------------------------------------------------------
-   Kárdex / PDFs
-------------------------------------------------------- */
-export const Kardex = {
-    ofStudent: (studentKey) =>
-        api.get(`/academic/kardex/${studentKey}`).then((r) => r.data),
 
-    exportXlsx: (studentKey, params) =>
-        api.get(`/academic/kardex/${studentKey}/export/xlsx`, {
-            params,
-            responseType: "blob",
-        }),
-
-    exportPdf: (studentKey, params) =>
-        api.get(`/academic/kardex/${studentKey}/boleta/pdf`, {
-            params,
-            responseType: "blob",
-        }),
-
-    exportConstanciaPdf: (studentKey) =>
-        api.get(`/academic/kardex/${studentKey}/constancia/pdf`, {
-            responseType: "blob",
-        }),
-};
-
-/* -------------------------------------------------------
-   Procesos académicos
-------------------------------------------------------- */
-export const Processes = {
-    retiro: async (payload) => asJson("POST", "/processes/withdraw", payload),
-    reserva: async (payload) => asJson("POST", "/processes/reservation", payload),
-    convalidacion: async (payload) => asJson("POST", "/processes/validation", payload),
-    traslado: async (payload) => asJson("POST", "/processes/transfer", payload),
-    reincorporacion: async (payload) => asJson("POST", "/processes/rejoin", payload),
-};
-
+/* ═══════════════════════════════════════════════════════════════
+   PERÍODOS ACADÉMICOS + VENTANA DE MATRÍCULA
+   ═══════════════════════════════════════════════════════════════ */
 export const Periods = {
-    list: async () => asJson("GET", "/academic/periods"),
+    list: async () =>
+        requestJsonSmart("GET", "/academic/periods", null),
+
+    getEnrollmentWindow: async (code) =>
+        requestJsonSmart("GET", `/academic/periods/${code}/enrollment-window`, null),
+
+    setEnrollmentWindow: async (code, payload) =>
+        requestJsonSmart("PUT", `/academic/periods/${code}/enrollment-window`, payload),
 };
 
-/* -------------------------------------------------------
-   Asistencia
-------------------------------------------------------- */
-export const Attendance = {
-    createSession: async (sectionId, payload = {}) =>
-        asJson("POST", `/sections/${sectionId}/attendance/sessions`, payload),
 
-    listSessions: async (sectionId) =>
-        asJson("GET", `/sections/${sectionId}/attendance/sessions`),
-
-    closeSession: async (sectionId, sessionId) =>
-        asJson("POST", `/sections/${sectionId}/attendance/sessions/${sessionId}/close`, {}),
-
-    set: async (sectionId, sessionId, rows) =>
-        asJson("PUT", `/sections/${sectionId}/attendance/sessions/${sessionId}`, { rows }),
-};
-
-/* -------------------------------------------------------
-   Sugerencias de matrícula
-------------------------------------------------------- */
+/* ═══════════════════════════════════════════════════════════════
+   MATRÍCULA
+   ═══════════════════════════════════════════════════════════════ */
 export const Enrollment = {
-    suggestions: async (payload) => asJson("POST", "/enrollments/suggestions", payload),
+    available: async (params = {}) =>
+        requestJsonSmart("GET", "/academic/enrollments/available", null, { params }),
+
+    validate: async (payload) =>
+        requestJsonSmart("POST", "/academic/enrollments/validate", payload),
+
+    commit: async (payload) =>
+        requestJsonSmart("POST", "/academic/enrollments/commit", payload),
+
+    suggestions: async (payload) =>
+        requestJsonSmart("POST", "/academic/enrollments/suggestions", payload),
+
+    /**
+     * Lista todos los alumnos con su estado de matrícula en el período.
+     * Solo disponible para admins.
+     *
+     * @param {object} params
+     * @param {string} params.academic_period  — requerido, ej: "2026-I"
+     * @param {string} [params.search]         — filtra por nombre o DNI
+     * @param {number} [params.career_id]      — filtra por carrera
+     * @param {number} [params.page]           — default 1
+     * @param {number} [params.page_size]      — default 200, max 500
+     *
+     * @returns {{ academic_period, total, page, page_size, students[] }}
+     *
+     * Cada student:
+     *   id, full_name, dni, career_name, career_id, plan_name, plan_id,
+     *   semester, is_enrolled, enrollment_id,
+     *   enrolled_courses_count, enrolled_credits
+     */
+    studentsOverview: async (params = {}) =>
+        requestJsonSmart("GET", "/academic/enrollments/students-overview", null, { params }),
 };
 
-/* -------------------------------------------------------
-   Sílabos & Evaluación
-------------------------------------------------------- */
+
+/* ═══════════════════════════════════════════════════════════════
+   KÁRDEX / PDFs
+   ═══════════════════════════════════════════════════════════════ */
+export const Kardex = {
+    ofStudent: (studentKey) => requestJsonSmart("GET", `/academic/kardex/${studentKey}`, null),
+    exportXlsx: (studentKey, params) => api.get(`/academic/kardex/${studentKey}/export/xlsx`, { params, responseType: "blob" }),
+    exportBoletaPdf: (studentKey) => asBlobGetSmart(`/academic/kardex/${studentKey}/boleta/pdf`),
+    exportBoletaPeriodoPdf: (studentKey, period) => asBlobGetSmart(`/academic/kardex/${studentKey}/boleta/periodo/pdf`, { period }),
+    exportConstanciaPdf: (studentKey) => asBlobGetSmart(`/academic/kardex/${studentKey}/constancia/pdf`),
+    exportBoletaAnioPdf: (studentKey, period) => asBlobGetSmart(`/academic/kardex/${studentKey}/boleta/anio/pdf`, { period }),
+    exportRecordNotasPdf: (studentKey) => asBlobGetSmart(`/academic/kardex/${studentKey}/record-notas/pdf`),
+};
+
+
+/* ═══════════════════════════════════════════════════════════════
+   PROCESOS ACADÉMICOS — 17 tipos en 4 grupos
+   ═══════════════════════════════════════════════════════════════ */
+export const Processes = {
+    create: async (type, data) => requestJsonSmart("POST", `/academic/processes/${type}/create`, data),
+    types: async () => requestJsonSmart("GET", "/academic/processes/types", null),
+
+    // ── Legacy (compatibilidad) ──
+    retiro: async (p) => requestJsonSmart("POST", "/academic/processes/withdraw", p),
+    reserva: async (p) => requestJsonSmart("POST", "/academic/processes/reservation", p),
+    convalidacion: async (p) => requestJsonSmart("POST", "/academic/processes/validation", p),
+    traslado: async (p) => requestJsonSmart("POST", "/academic/processes/transfer", p),
+    reincorporacion: async (p) => requestJsonSmart("POST", "/academic/processes/rejoin", p),
+
+    // ── Movimientos del alumno ──
+    reingreso: async (p) => requestJsonSmart("POST", "/academic/processes/reingreso", p),
+    bajaDefinitiva: async (p) => requestJsonSmart("POST", "/academic/processes/baja-definitiva", p),
+    trasladoInterno: async (p) => requestJsonSmart("POST", "/academic/processes/traslado-interno", p),
+    cambioPrograma: async (p) => requestJsonSmart("POST", "/academic/processes/cambio-programa", p),
+
+    // ── Matrícula ──
+    anulacionMatricula: async (p) => requestJsonSmart("POST", "/academic/processes/anulacion-matricula", p),
+    rectificacionMatricula: async (p) => requestJsonSmart("POST", "/academic/processes/rectificacion-matricula", p),
+    matriculaExtemporanea: async (p) => requestJsonSmart("POST", "/academic/processes/matricula-extemporanea", p),
+
+    // ── Notas / Actas ──
+    reaperturaActa: async (p) => requestJsonSmart("POST", "/academic/processes/reapertura-acta", p),
+    rectificacionNota: async (p) => requestJsonSmart("POST", "/academic/processes/rectificacion-nota", p),
+    anulacionEvaluacion: async (p) => requestJsonSmart("POST", "/academic/processes/anulacion-evaluacion", p),
+    notaSubsanacion: async (p) => requestJsonSmart("POST", "/academic/processes/nota-subsanacion", p),
+
+    // ── Convalidaciones / Equivalencias ──
+    equivalencia: async (p) => requestJsonSmart("POST", "/academic/processes/equivalencia", p),
+    trasladoExterno: async (p) => requestJsonSmart("POST", "/academic/processes/traslado-externo", p),
+};
+
+
+/* ═══════════════════════════════════════════════════════════════
+   SÍLABOS & EVALUACIÓN
+   ═══════════════════════════════════════════════════════════════ */
 export const Syllabus = {
-    get: async (sectionId) => asJson("GET", `/sections/${sectionId}/syllabus`),
+    get: async (sectionId) =>
+        requestJsonSmart("GET", `/academic/sections/${sectionId}/syllabus`, null),
 
     upload: async (sectionId, file) => {
         const fd = new FormData();
         fd.append("file", file);
-        return asJson("POST", `/sections/${sectionId}/syllabus`, fd, {
+        return requestJsonSmart("POST", `/academic/sections/${sectionId}/syllabus`, fd, {
             headers: { "Content-Type": "multipart/form-data" },
         });
     },
 
-    delete: async (sectionId) => asJson("DELETE", `/sections/${sectionId}/syllabus`),
+    delete: async (sectionId) =>
+        requestJsonSmart("DELETE", `/academic/sections/${sectionId}/syllabus`, null),
 };
 
 export const Evaluation = {
-    getConfig: async (sectionId) => asJson("GET", `/sections/${sectionId}/evaluation`),
+    getConfig: async (sectionId) =>
+        requestJsonSmart("GET", `/academic/sections/${sectionId}/evaluation`, null),
 
     setConfig: async (sectionId, config) =>
-        asJson("PUT", `/sections/${sectionId}/evaluation`, { config }),
+        requestJsonSmart("PUT", `/academic/sections/${sectionId}/evaluation`, { config }),
 };
 
-/* -------------------------------------------------------
-   Procesos: bandeja/archivos/estado
-------------------------------------------------------- */
+
+/* ═══════════════════════════════════════════════════════════════
+   ASISTENCIA
+   ═══════════════════════════════════════════════════════════════ */
+export const Attendance = {
+    createSession: async (sectionId, payload = {}) =>
+        requestJsonSmart("POST", `/academic/sections/${sectionId}/attendance/sessions`, payload),
+
+    listSessions: async (sectionId) =>
+        requestJsonSmart("GET", `/academic/sections/${sectionId}/attendance/sessions`, null),
+
+    closeSession: async (sectionId, sessionId) =>
+        requestJsonSmart("POST", `/academic/sections/${sectionId}/attendance/sessions/${sessionId}/close`, {}),
+
+    set: async (sectionId, sessionId, rows) =>
+        requestJsonSmart("PUT", `/academic/sections/${sectionId}/attendance/sessions/${sessionId}`, { rows }),
+};
+
+export const AttendanceImport = {
+    preview: async (sectionId, file) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("section_id", sectionId);
+        return requestJsonSmart("POST", "/academic/attendance/import/preview", fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
+    },
+    save: async (sectionId, attendanceData) =>
+        requestJsonSmart("POST", "/academic/attendance/import/save", {
+            section_id: sectionId,
+            attendance_data: attendanceData,
+        }),
+};
+
+
+/* ═══════════════════════════════════════════════════════════════
+   PROCESOS — BANDEJA / ARCHIVOS / ESTADO
+   ═══════════════════════════════════════════════════════════════ */
 export const ProcessFiles = {
-    list: async (processId) => asJson("GET", `/processes/${processId}/files`),
+    list: async (processId) =>
+        requestJsonSmart("GET", `/academic/processes/${processId}/files`, null),
 
     upload: async (processId, file, meta = {}) => {
         const fd = new FormData();
         fd.append("file", file);
         if (meta.note) fd.append("note", meta.note);
-        return asJson("POST", `/processes/${processId}/files`, fd, {
+        return requestJsonSmart("POST", `/academic/processes/${processId}/files`, fd, {
             headers: { "Content-Type": "multipart/form-data" },
         });
     },
 
     remove: async (processId, fileId) =>
-        asJson("DELETE", `/processes/${processId}/files/${fileId}`),
+        requestJsonSmart("DELETE", `/academic/processes/${processId}/files/${fileId}`, null),
+
+    generate: async (processId, opts = {}) =>
+        requestJsonSmart("POST", `/academic/processes/${processId}/generate-document`, opts),
 };
 
 export const ProcessesInbox = {
-    myRequests: async (params = {}) => asJson("GET", "/processes/my", null, { params }),
+    myRequests: async (params = {}) =>
+        requestJsonSmart("GET", "/academic/processes/my", null, { params }),
 
-    listAll: async (params = {}) => asJson("GET", "/processes", null, { params }),
+    listAll: async (params = {}) =>
+        requestJsonSmart("GET", "/academic/processes", null, { params }),
 
-    get: async (id) => asJson("GET", `/processes/${id}`),
+    get: async (id) =>
+        requestJsonSmart("GET", `/academic/processes/${id}`, null),
 
-    setStatus: async (id, payload) => asJson("POST", `/processes/${id}/status`, payload),
+    setStatus: async (id, payload) =>
+        requestJsonSmart("POST", `/academic/processes/${id}/status`, payload),
 
-    notify: async (id, payload) => asJson("POST", `/processes/${id}/notify`, payload),
+    updateStatus: async (id, payload) =>
+        requestJsonSmart("POST", `/academic/processes/${id}/status`, payload),
+
+    notify: async (id, payload) =>
+        requestJsonSmart("POST", `/academic/processes/${id}/notify`, payload),
+
+    files: async (pid) =>
+        requestJsonSmart("GET", `/academic/processes/${pid}/files`, null),
+
+    uploadFile: async (pid, formData) =>
+        requestJsonSmart("POST", `/academic/processes/${pid}/files`, formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+        }),
+
+    deleteFile: async (pid, fileId) =>
+        requestJsonSmart("DELETE", `/academic/processes/${pid}/files/${fileId}`, null),
+
+    dashboard: async () =>
+        requestJsonSmart("GET", "/academic/processes/dashboard", null),
+
+    types: async () =>
+        requestJsonSmart("GET", "/academic/processes/types", null),
 };
 
-/* -------------------------------------------------------
-   Reportes
-------------------------------------------------------- */
+
+/* ═══════════════════════════════════════════════════════════════
+   REPORTES
+   ═══════════════════════════════════════════════════════════════ */
 export const AcademicReports = {
-    summary: async (params = {}) => asJson("GET", "/academic/reports/summary", null, { params }),
-
-    exportPerformance: async (params = {}) =>
-        asBlobGet("/academic/reports/performance.xlsx", params),
-
-    exportOccupancy: async (params = {}) =>
-        asBlobGet("/academic/reports/occupancy.xlsx", params),
+    summary: async (params) => {
+        const data = await requestJsonSmart("GET", "/academic/reports/summary", null, { params });
+        return data?.summary ?? data;
+    },
+    careers: async () => {
+        const data = await requestJsonSmart("GET", "/academic/careers", null);
+        return data?.careers ?? [];
+    },
+    exportPerformance: async (params) =>
+        api.get("/academic/reports/performance.xlsx", { params, responseType: "blob" }),
+    exportOccupancy: async (params) =>
+        api.get("/academic/reports/occupancy.xlsx", { params, responseType: "blob" }),
 };
 
-/* -------------------------------------------------------
-   Docente / Secciones / Estudiantes / Notas (para módulo docente)
-------------------------------------------------------- */
+
+/* ═══════════════════════════════════════════════════════════════
+   DOCENTES / NOTAS / ACTAS
+   ═══════════════════════════════════════════════════════════════ */
 export const Teacher = {
-    /**
-     * GET /teachers/:teacher_user_id/sections
-     * Esperado:
-     * - { sections: [...] }
-     * o - [...] (si tu backend devuelve array directo)
-     */
     sections: async (teacherUserId) => {
-        const data = await asJson("GET", `/teachers/${teacherUserId}/sections`);
-        const arr = pickFirstArray(data, ["sections", "items", "results"]);
-        return { sections: arr };
+        const data = await requestJsonSmart("GET", `/academic/teachers/${teacherUserId}/sections`, null);
+        return { sections: pickFirstArray(data, ["sections", "items", "results"]) };
     },
+    sectionsMe: async () =>
+        requestJsonSmart("GET", "/academic/teachers/me/sections", null),
 };
 
 export const SectionStudents = {
-    /**
-     * GET /sections/:section_id/students
-     * Esperado:
-     * - { students: [...] }
-     * o - [...]
-     */
     list: async (sectionId) => {
-        const data = await asJson("GET", `/sections/${sectionId}/students`);
-        const arr = pickFirstArray(data, ["students", "items", "results"]);
-        return { students: arr };
+        const data = await requestJsonSmart("GET", `/academic/sections/${sectionId}/students`, null);
+        return { students: pickFirstArray(data, ["students", "items", "results"]) };
     },
 };
 
 export const Grades = {
-    /**
-     * GET /sections/:section_id/grades
-     * Esperado:
-     * - { grades: { [studentId]: {PARCIAL_1:..., ...} } }
-     */
-    get: async (sectionId) => asJson("GET", `/sections/${sectionId}/grades`),
-
-    /**
-     * POST /grades/save
-     * payload: { section_id, grades }
-     */
-    save: async (sectionId, grades) =>
-        asJson("POST", "/grades/save", { section_id: sectionId, grades }),
-
-    /**
-     * POST /grades/submit
-     */
-    submit: async (sectionId, grades) =>
-        asJson("POST", "/grades/submit", { section_id: sectionId, grades }),
-
-    /**
-     * POST /grades/reopen
-     */
-    reopen: async (sectionId) =>
-        asJson("POST", "/grades/reopen", { section_id: sectionId }),
-};
-
-export const AttendanceImport = {
-    /**
-     * POST /attendance/import/preview (multipart)
-     * formData: file + section_id
-     */
-    preview: async (sectionId, file) => {
-        const fd = new FormData();
-        fd.append("file", file);
-        fd.append("section_id", sectionId);
-
-        return asJson("POST", "/attendance/import/preview", fd, {
-            headers: { "Content-Type": "multipart/form-data" },
-        });
-    },
-
-    /**
-     * POST /attendance/import/save
-     * payload: { section_id, attendance_data }
-     */
-    save: async (sectionId, attendanceData) =>
-        asJson("POST", "/attendance/import/save", {
-            section_id: sectionId,
-            attendance_data: attendanceData,
-        }),
+    get: async (sectionId) => requestJsonSmart("GET", `/academic/sections/${sectionId}/grades`, null),
+    save: async (sectionId, grades) => requestJsonSmart("POST", "/academic/grades/save", { section_id: sectionId, grades }),
+    submit: async (sectionId, grades) => requestJsonSmart("POST", "/academic/grades/submit", { section_id: sectionId, grades }),
+    reopen: async (sectionId) => requestJsonSmart("POST", "/academic/grades/reopen", { section_id: sectionId }),
 };

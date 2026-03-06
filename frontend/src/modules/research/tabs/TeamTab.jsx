@@ -1,108 +1,221 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "../../../components/ui/card";
-import { Button } from "../../../components/ui/button";
-import { Input } from "../../../components/ui/input";
-import { Label } from "../../../components/ui/label";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../../components/ui/select";
-import { toast } from "sonner";
+/**
+ * tabs/TeamTab.jsx
+ * Gestión del equipo de investigación
+ *
+ * FIX: confirm() nativo → AlertDialog (DeleteConfirm)
+ */
+import { useState, useEffect, useCallback } from "react";
 import { Team } from "../../../services/research.service";
-import { Plus, Trash2, Save, Users } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle,
+    DialogFooter, DialogClose,
+} from "@/components/ui/dialog";
+import {
+    AlertDialog, AlertDialogAction, AlertDialogCancel,
+    AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+    AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Slider } from "@/components/ui/slider";
+
+import { Plus, Edit, Trash2, Loader2, Users } from "lucide-react";
+import { toast } from "sonner";
 
 export default function TeamTab({ projectId }) {
-    const [rows, setRows] = useState([]);
-    const [newRow, setNewRow] = useState({ full_name: "", role: "INVESTIGADOR", dedication_pct: 100, email: "", orcid: "" });
+    const [members, setMembers] = useState([]);
+    const [loading, setLoading] = useState(false);
+
+    const [dialog, setDialog] = useState(false);
+    const [editing, setEditing] = useState(null);
+    const [form, setForm] = useState({
+        full_name: "", role: "", dedication_pct: 50,
+        email: "", orcid: "",
+    });
+
+    const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null, name: "" });
 
     const load = useCallback(async () => {
+        if (!projectId) return;
+        setLoading(true);
         try {
-            const d = await Team.list(projectId);
-            setRows(d?.items || d || []);
-        } catch (e) { toast.error(e.message || "Error al cargar equipo"); }
+            const data = await Team.list(projectId);
+            setMembers(Array.isArray(data) ? data : []);
+        } catch {
+            toast.error("Error al cargar equipo");
+        } finally {
+            setLoading(false);
+        }
     }, [projectId]);
 
     useEffect(() => { load(); }, [load]);
 
-    const add = async () => {
-        if (!newRow.full_name) return toast.error("Nombre requerido");
+    const openNew = () => {
+        setEditing(null);
+        setForm({ full_name: "", role: "", dedication_pct: 50, email: "", orcid: "" });
+        setDialog(true);
+    };
+
+    const openEdit = (m) => {
+        setEditing(m);
+        setForm({
+            full_name: m.full_name || "",
+            role: m.role || "",
+            dedication_pct: m.dedication_pct || 0,
+            email: m.email || "",
+            orcid: m.orcid || "",
+        });
+        setDialog(true);
+    };
+
+    const save = async () => {
         try {
-            await Team.add(projectId, { ...newRow, dedication_pct: Number(newRow.dedication_pct || 0) });
-            setNewRow({ full_name: "", role: "INVESTIGADOR", dedication_pct: 100, email: "", orcid: "" });
+            if (editing) {
+                await Team.update(projectId, editing.id, form);
+                toast.success("Miembro actualizado");
+            } else {
+                await Team.add(projectId, form);
+                toast.success("Miembro agregado");
+            }
+            setDialog(false);
             load();
-            toast.success("Integrante agregado");
-        } catch (e) { toast.error(e.message || "No se pudo agregar"); }
+        } catch {
+            toast.error("Error al guardar");
+        }
     };
 
-    const remove = async (m) => {
-        if (!confirm(`¿Eliminar a ${m.full_name}?`)) return;
-        try { await Team.remove(projectId, m.id); load(); } catch (e) { toast.error(e.message || "No se pudo eliminar"); }
-    };
-
-    const update = async (m, patch) => {
-        try { await Team.update(projectId, m.id, patch); load(); }
-        catch (e) { toast.error(e.message || "No se pudo actualizar"); }
+    const handleDelete = async () => {
+        try {
+            await Team.remove(projectId, deleteConfirm.id);
+            toast.success("Miembro eliminado");
+            setDeleteConfirm({ open: false, id: null, name: "" });
+            load();
+        } catch {
+            toast.error("Error al eliminar");
+        }
     };
 
     return (
-        <div className="space-y-4">
-            <h4 className="font-semibold flex items-center gap-2"><Users className="h-4 w-4" />Equipo</h4>
-
-            <Card>
-                <CardHeader><CardTitle>Nuevo integrante</CardTitle></CardHeader>
-                <CardContent className="grid md:grid-cols-5 gap-3">
-                    <div className="md:col-span-2"><Label>Nombre completo</Label><Input value={newRow.full_name} onChange={e => setNewRow({ ...newRow, full_name: e.target.value })} /></div>
-                    <div><Label>Rol</Label>
-                        <Select value={newRow.role} onValueChange={v => setNewRow({ ...newRow, role: v })}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="INVESTIGADOR">Investigador</SelectItem>
-                                <SelectItem value="CO_INVESTIGADOR">Co-investigador</SelectItem>
-                                <SelectItem value="TESISTA">Tesista</SelectItem>
-                                <SelectItem value="ASISTENTE">Asistente</SelectItem>
-                            </SelectContent>
-                        </Select>
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+                <CardTitle className="text-base">Equipo de Investigación</CardTitle>
+                <Button size="sm" onClick={openNew}>
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Miembro
+                </Button>
+            </CardHeader>
+            <CardContent>
+                {loading ? (
+                    <div className="flex justify-center py-8">
+                        <Loader2 className="h-5 w-5 animate-spin" />
                     </div>
-                    <div><Label>Dedicación %</Label><Input type="number" min="0" max="100" value={newRow.dedication_pct} onChange={e => setNewRow({ ...newRow, dedication_pct: e.target.value })} /></div>
-                    <div><Label>Email</Label><Input value={newRow.email} onChange={e => setNewRow({ ...newRow, email: e.target.value })} /></div>
-                    <div className="md:col-span-4"><Label>ORCID</Label><Input value={newRow.orcid} onChange={e => setNewRow({ ...newRow, orcid: e.target.value })} placeholder="0000-0000-0000-0000" /></div>
-                    <div className="md:col-span-5 flex justify-end"><Button onClick={add}><Plus className="h-4 w-4 mr-2" />Agregar</Button></div>
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-gray-50 border-b"><tr>
-                                <th className="p-2 text-left text-xs">Nombre</th><th className="p-2 text-left text-xs">Rol</th><th className="p-2 text-left text-xs">Dedicación</th><th className="p-2 text-left text-xs">Email</th><th className="p-2 text-left text-xs">ORCID</th><th className="p-2 text-right text-xs">Acciones</th>
-                            </tr></thead>
-                            <tbody className="divide-y">
-                                {rows.map(r => (
-                                    <tr key={r.id}>
-                                        <td className="p-2">{r.full_name}</td>
-                                        <td className="p-2">
-                                            <Select value={r.role || "INVESTIGADOR"} onValueChange={v => update(r, { role: v })}>
-                                                <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="INVESTIGADOR">Investigador</SelectItem>
-                                                    <SelectItem value="CO_INVESTIGADOR">Co-investigador</SelectItem>
-                                                    <SelectItem value="TESISTA">Tesista</SelectItem>
-                                                    <SelectItem value="ASISTENTE">Asistente</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </td>
-                                        <td className="p-2 w-[110px]"><Input type="number" min="0" max="100" value={r.dedication_pct ?? 0} onChange={e => update(r, { dedication_pct: Number(e.target.value || 0) })} /></td>
-                                        <td className="p-2">{r.email || "-"}</td>
-                                        <td className="p-2">{r.orcid || "-"}</td>
-                                        <td className="p-2 text-right">
-                                            <Button variant="outline" size="sm" onClick={() => remove(r)}><Trash2 className="h-4 w-4" /></Button>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {rows.length === 0 && <tr><td className="p-4 text-center text-gray-500" colSpan={6}>Sin integrantes</td></tr>}
-                            </tbody>
-                        </table>
+                ) : members.length === 0 ? (
+                    <div className="text-center py-8 text-slate-500">
+                        <Users className="h-10 w-10 mx-auto mb-2 text-slate-300" />
+                        <p>No hay miembros registrados</p>
                     </div>
-                </CardContent>
-            </Card>
-        </div>
+                ) : (
+                    <div className="space-y-2">
+                        {members.map(m => (
+                            <div key={m.id} className="border rounded-lg p-3 flex items-center justify-between">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-medium">{m.full_name}</span>
+                                        <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                                            {m.role}
+                                        </span>
+                                    </div>
+                                    <div className="flex gap-4 mt-1 text-xs text-slate-500">
+                                        {m.email && <span>{m.email}</span>}
+                                        {m.orcid && <span>ORCID: {m.orcid}</span>}
+                                        <span>Dedicación: {m.dedication_pct}%</span>
+                                    </div>
+                                </div>
+                                <div className="flex gap-1">
+                                    <Button variant="ghost" size="icon" onClick={() => openEdit(m)}>
+                                        <Edit className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => setDeleteConfirm({ open: true, id: m.id, name: m.full_name })}
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </CardContent>
+
+            {/* Dialog */}
+            <Dialog open={dialog} onOpenChange={setDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{editing ? "Editar Miembro" : "Nuevo Miembro"}</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                        <Input
+                            placeholder="Nombre completo"
+                            value={form.full_name}
+                            onChange={(e) => setForm(p => ({ ...p, full_name: e.target.value }))}
+                        />
+                        <Input
+                            placeholder="Rol (ej: Investigador principal, Tesista)"
+                            value={form.role}
+                            onChange={(e) => setForm(p => ({ ...p, role: e.target.value }))}
+                        />
+                        <div className="grid grid-cols-2 gap-3">
+                            <Input
+                                placeholder="Email"
+                                value={form.email}
+                                onChange={(e) => setForm(p => ({ ...p, email: e.target.value }))}
+                            />
+                            <Input
+                                placeholder="ORCID"
+                                value={form.orcid}
+                                onChange={(e) => setForm(p => ({ ...p, orcid: e.target.value }))}
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-500">
+                                Dedicación: {form.dedication_pct}%
+                            </label>
+                            <Slider
+                                value={[form.dedication_pct]}
+                                max={100}
+                                step={5}
+                                onValueChange={([v]) => setForm(p => ({ ...p, dedication_pct: v }))}
+                                className="mt-2"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+                        <Button onClick={save}>Guardar</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* DeleteConfirm */}
+            <AlertDialog open={deleteConfirm.open} onOpenChange={(v) => setDeleteConfirm(p => ({ ...p, open: v }))}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Eliminar miembro?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Se eliminará a "{deleteConfirm.name}" del equipo.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={handleDelete}>
+                            Eliminar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </Card>
     );
 }

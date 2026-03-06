@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -11,9 +17,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger
+  DialogTrigger,
 } from '../ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { toast } from '../../utils/safeToast';
@@ -25,7 +37,7 @@ import {
   CreditCard,
   X,
   CheckCircle,
-  FileText
+  FileText,
 } from 'lucide-react';
 
 import api from '../../lib/api';
@@ -33,14 +45,19 @@ import { Receipts } from '../../services/finance.service';
 
 const ReceiptsDashboard = () => {
   const { user } = useContext(AuthContext);
+
+  // 1. ESTADOS (HOOKS) SIEMPRE ARRIBA:
+  // Nunca poner hooks dentro de un 'if' o después de un 'return'
   const [receipts, setReceipts] = useState([]);
   const [filteredReceipts, setFilteredReceipts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [errors, setErrors] = useState({}); // ✅ Agregado correctamente aquí
+
   const [openDialogs, setOpenDialogs] = useState({
     newReceipt: false,
     payReceipt: false,
     cancelReceipt: false,
-    verifyReceipt: false
+    verifyReceipt: false,
   });
 
   const [filters, setFilters] = useState({
@@ -48,7 +65,7 @@ const ReceiptsDashboard = () => {
     concept: '',
     customer_document: '',
     date_from: '',
-    date_to: ''
+    date_to: '',
   });
 
   const [newReceipt, setNewReceipt] = useState({
@@ -58,14 +75,14 @@ const ReceiptsDashboard = () => {
     customer_name: '',
     customer_document: '',
     customer_email: '',
-    due_date: ''
+    due_date: '',
   });
 
   const [paymentData, setPaymentData] = useState({
     receipt_id: '',
     payment_method: 'CASH',
     payment_reference: '',
-    idempotency_key: ''
+    idempotency_key: '',
   });
 
   const receiptConcepts = {
@@ -74,7 +91,7 @@ const ReceiptsDashboard = () => {
     CERTIFICATE: 'Constancia/Certificado',
     PROCEDURE: 'Trámite',
     ACADEMIC_SERVICES: 'Servicios Académicos',
-    OTHER: 'Otros'
+    OTHER: 'Otros',
   };
 
   const paymentMethods = {
@@ -83,14 +100,14 @@ const ReceiptsDashboard = () => {
     BANK_TRANSFER: 'Transferencia Bancaria',
     CHECK: 'Cheque',
     DEBIT_CARD: 'Tarjeta de Débito',
-    CREDIT_CARD: 'Tarjeta de Crédito'
+    CREDIT_CARD: 'Tarjeta de Crédito',
   };
 
   const receiptStatuses = {
     PENDING: { label: 'Pendiente', color: 'bg-yellow-500' },
     PAID: { label: 'Pagado', color: 'bg-green-500' },
     CANCELLED: { label: 'Anulado', color: 'bg-red-500' },
-    REFUNDED: { label: 'Reembolsado', color: 'bg-blue-500' }
+    REFUNDED: { label: 'Reembolsado', color: 'bg-blue-500' },
   };
 
   useEffect(() => {
@@ -99,6 +116,7 @@ const ReceiptsDashboard = () => {
 
   useEffect(() => {
     filterReceipts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receipts, filters]);
 
   const fetchReceipts = async () => {
@@ -108,7 +126,9 @@ const ReceiptsDashboard = () => {
       setReceipts(data.receipts || []);
     } catch (error) {
       console.error('Error fetching receipts:', error);
-      toast.error('Error', { description: 'No se pudieron cargar las boletas' });
+      toast.error('Error', {
+        description: 'No se pudieron cargar las boletas',
+      });
     } finally {
       setLoading(false);
     }
@@ -146,21 +166,36 @@ const ReceiptsDashboard = () => {
     setFilteredReceipts(filtered);
   };
 
+  // ✅ Función para validar antes de enviar
+  const validateForm = () => {
+    const newErrors = {};
+    if (!newReceipt.description) newErrors.description = 'La descripción es requerida';
+    if (!newReceipt.amount || Number(newReceipt.amount) <= 0) newErrors.amount = 'Monto inválido';
+    if (!newReceipt.customer_name) newErrors.customer_name = 'Nombre requerido';
+    if (!newReceipt.customer_document) newErrors.customer_document = 'Documento requerido';
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const createReceipt = async () => {
+    if (!validateForm()) return; // Detener si hay errores
+
     try {
       const payload = {
         ...newReceipt,
         amount: Number(newReceipt.amount),
-        due_date: newReceipt.due_date || null
+        due_date: newReceipt.due_date || null,
       };
 
       const data = await Receipts.create(payload);
 
       toast.success('Éxito', {
-        description: `Boleta ${data.receipt.receipt_number} creada correctamente`
+        description: `Boleta ${data.receipt.receipt_number} creada correctamente`,
       });
 
       setOpenDialogs((prev) => ({ ...prev, newReceipt: false }));
+      // Reset form
       setNewReceipt({
         concept: 'ENROLLMENT',
         description: '',
@@ -168,16 +203,22 @@ const ReceiptsDashboard = () => {
         customer_name: '',
         customer_document: '',
         customer_email: '',
-        due_date: ''
+        due_date: '',
       });
+      setErrors({}); // Limpiar errores
 
       fetchReceipts();
     } catch (error) {
       console.error('Error creating receipt:', error);
-      const msg =
-        error?.response?.data?.detail ||
-        error?.message ||
-        'No se pudo crear la boleta';
+
+      // ✅ FIX CRÍTICO: Evitar que objetos crasheen React
+      let msg = error?.response?.data?.detail || error?.message || 'No se pudo crear la boleta';
+
+      if (typeof msg === 'object') {
+        // Si el backend devuelve { campo: "error" }, lo convertimos a string
+        msg = Object.values(msg).join(', ') || JSON.stringify(msg);
+      }
+
       toast.error('Error', { description: msg });
     }
   };
@@ -192,28 +233,31 @@ const ReceiptsDashboard = () => {
         paymentData.receipt_id,
         {
           payment_method: paymentData.payment_method,
-          payment_reference: paymentData.payment_reference || null
+          payment_reference: paymentData.payment_reference || null,
         },
         { 'Idempotency-Key': idempotencyKey }
       );
 
-      toast.success('Éxito', { description: 'Pago registrado correctamente' });
+      toast.success('Éxito', {
+        description: 'Pago registrado correctamente',
+      });
 
       setOpenDialogs((prev) => ({ ...prev, payReceipt: false }));
       setPaymentData({
         receipt_id: '',
         payment_method: 'CASH',
         payment_reference: '',
-        idempotency_key: ''
+        idempotency_key: '',
       });
 
       fetchReceipts();
     } catch (error) {
       console.error('Error processing payment:', error);
-      const msg =
-        error?.response?.data?.detail ||
-        error?.message ||
-        'No se pudo registrar el pago';
+
+      // ✅ FIX CRÍTICO para el error de objeto
+      let msg = error?.response?.data?.detail || error?.message || 'No se pudo registrar el pago';
+      if (typeof msg === 'object') msg = JSON.stringify(msg);
+
       toast.error('Error', { description: msg });
     }
   };
@@ -226,10 +270,9 @@ const ReceiptsDashboard = () => {
       fetchReceipts();
     } catch (error) {
       console.error('Error canceling receipt:', error);
-      const msg =
-        error?.response?.data?.detail ||
-        error?.message ||
-        'No se pudo anular la boleta';
+      let msg = error?.response?.data?.detail || error?.message || 'No se pudo anular';
+      if (typeof msg === 'object') msg = JSON.stringify(msg);
+
       toast.error('Error', { description: msg });
     }
   };
@@ -238,10 +281,10 @@ const ReceiptsDashboard = () => {
     try {
       const res = await Receipts.pdf(receiptId);
 
-      const blob = new Blob([res.data], { type: "application/pdf" });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
 
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = url;
       a.download = `boleta_${receiptNumber}.pdf`;
       document.body.appendChild(a);
@@ -249,17 +292,18 @@ const ReceiptsDashboard = () => {
       document.body.removeChild(a);
 
       window.URL.revokeObjectURL(url);
-      toast.success("Éxito", { description: "PDF descargado correctamente" });
+      toast.success('Éxito', { description: 'PDF descargado correctamente' });
     } catch (error) {
       console.error(error);
-      toast.error("Error", { description: "No se pudo descargar el PDF" });
+      toast.error('Error', { description: 'No se pudo descargar el PDF' });
     }
   };
 
-
   const openVerificationUrl = (receiptId) => {
-    // si luego haces /api/verificar/<id>, aquí quedará OK.
-    const verificationUrl = `${api.defaults.baseURL.replace(/\/api\/?$/, '')}/api/verificar/${receiptId}`;
+    const verificationUrl = `${api.defaults.baseURL.replace(
+      /\/api\/?$/,
+      ''
+    )}/api/verificar/${receiptId}`;
     window.open(verificationUrl, '_blank');
   };
 
@@ -269,7 +313,7 @@ const ReceiptsDashboard = () => {
       concept: '',
       customer_document: '',
       date_from: '',
-      date_to: ''
+      date_to: '',
     });
   };
 
@@ -283,7 +327,6 @@ const ReceiptsDashboard = () => {
 
   return (
     <div className="space-y-6 pb-24 sm:pb-6">
-
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="border-l-4 border-l-yellow-500">
@@ -319,7 +362,8 @@ const ReceiptsDashboard = () => {
                 .filter(
                   (r) =>
                     r.status === 'PAID' &&
-                    new Date(r.issued_at).toDateString() === new Date().toDateString()
+                    new Date(r.issued_at).toDateString() ===
+                    new Date().toDateString()
                 )
                 .reduce((sum, r) => sum + Number(r.amount || 0), 0)
                 .toFixed(2)}
@@ -358,7 +402,9 @@ const ReceiptsDashboard = () => {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>Gestión de Boletas Internas</CardTitle>
-                <CardDescription>Emisión y control de boletas no tributarias</CardDescription>
+                <CardDescription>
+                  Emisión y control de boletas no tributarias
+                </CardDescription>
               </div>
 
               <Dialog
@@ -374,21 +420,7 @@ const ReceiptsDashboard = () => {
                   </Button>
                 </DialogTrigger>
 
-                <DialogContent
-  className="
-    w-[95vw] 
-    max-w-md 
-    max-h-[85vh] 
-    overflow-y-auto
-    [&>button]:h-10
-    [&>button]:w-10
-    [&>button]:p-2
-    [&>button]:top-3
-    [&>button]:right-3
-  "
->
-
-
+                <DialogContent className="w-[95vw] max-w-md max-h-[85vh] overflow-y-auto [&>button]:h-10 [&>button]:w-10 [&>button]:p-2 [&>button]:top-3 [&>button]:right-3">
                   <DialogHeader>
                     <DialogTitle>Crear Nueva Boleta</DialogTitle>
                     <DialogDescription>
@@ -409,11 +441,13 @@ const ReceiptsDashboard = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {Object.entries(receiptConcepts).map(([key, label]) => (
-                            <SelectItem key={key} value={key}>
-                              {label}
-                            </SelectItem>
-                          ))}
+                          {Object.entries(receiptConcepts).map(
+                            ([key, label]) => (
+                              <SelectItem key={key} value={key}>
+                                {label}
+                              </SelectItem>
+                            )
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -426,11 +460,15 @@ const ReceiptsDashboard = () => {
                         onChange={(e) =>
                           setNewReceipt((prev) => ({
                             ...prev,
-                            description: e.target.value
+                            description: e.target.value,
                           }))
                         }
                         placeholder="Descripción del servicio"
+                        className={errors.description ? "border-red-500" : ""}
                       />
+                      {errors.description && (
+                        <p className="text-xs text-red-500 mt-1">{errors.description}</p>
+                      )}
                     </div>
 
                     <div>
@@ -443,11 +481,15 @@ const ReceiptsDashboard = () => {
                         onChange={(e) =>
                           setNewReceipt((prev) => ({
                             ...prev,
-                            amount: e.target.value
+                            amount: e.target.value,
                           }))
                         }
                         placeholder="0.00"
+                        className={errors.amount ? "border-red-500" : ""}
                       />
+                      {errors.amount && (
+                        <p className="text-xs text-red-500 mt-1">{errors.amount}</p>
+                      )}
                     </div>
 
                     <div>
@@ -458,11 +500,15 @@ const ReceiptsDashboard = () => {
                         onChange={(e) =>
                           setNewReceipt((prev) => ({
                             ...prev,
-                            customer_name: e.target.value
+                            customer_name: e.target.value,
                           }))
                         }
                         placeholder="Nombre completo"
+                        className={errors.customer_name ? "border-red-500" : ""}
                       />
+                      {errors.customer_name && (
+                        <p className="text-xs text-red-500 mt-1">{errors.customer_name}</p>
+                      )}
                     </div>
 
                     <div>
@@ -473,12 +519,16 @@ const ReceiptsDashboard = () => {
                         onChange={(e) =>
                           setNewReceipt((prev) => ({
                             ...prev,
-                            customer_document: e.target.value
+                            customer_document: e.target.value,
                           }))
                         }
                         placeholder="DNI o RUC"
                         maxLength={11}
+                        className={errors.customer_document ? "border-red-500" : ""}
                       />
+                      {errors.customer_document && (
+                        <p className="text-xs text-red-500 mt-1">{errors.customer_document}</p>
+                      )}
                     </div>
 
                     <div>
@@ -490,7 +540,7 @@ const ReceiptsDashboard = () => {
                         onChange={(e) =>
                           setNewReceipt((prev) => ({
                             ...prev,
-                            customer_email: e.target.value
+                            customer_email: e.target.value,
                           }))
                         }
                         placeholder="cliente@email.com"
@@ -506,7 +556,7 @@ const ReceiptsDashboard = () => {
                         onChange={(e) =>
                           setNewReceipt((prev) => ({
                             ...prev,
-                            due_date: e.target.value
+                            due_date: e.target.value,
                           }))
                         }
                       />
@@ -514,15 +564,7 @@ const ReceiptsDashboard = () => {
                   </div>
 
                   <DialogFooter>
-                    <Button
-                      onClick={createReceipt}
-                      disabled={
-                        !newReceipt.description ||
-                        !newReceipt.amount ||
-                        !newReceipt.customer_name ||
-                        !newReceipt.customer_document
-                      }
-                    >
+                    <Button onClick={createReceipt}>
                       Crear Boleta
                     </Button>
                   </DialogFooter>
@@ -536,7 +578,7 @@ const ReceiptsDashboard = () => {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-medium">Filtros</h3>
                   <Button variant="outline" size="sm" onClick={clearFilters}>
-                    Limpiar
+                    Buscar
                   </Button>
                 </div>
 
@@ -548,7 +590,7 @@ const ReceiptsDashboard = () => {
                       onValueChange={(value) =>
                         setFilters((prev) => ({
                           ...prev,
-                          status: value === 'ALL' ? '' : value
+                          status: value === 'ALL' ? '' : value,
                         }))
                       }
                     >
@@ -557,11 +599,13 @@ const ReceiptsDashboard = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="ALL">Todos</SelectItem>
-                        {Object.entries(receiptStatuses).map(([key, { label }]) => (
-                          <SelectItem key={key} value={key}>
-                            {label}
-                          </SelectItem>
-                        ))}
+                        {Object.entries(receiptStatuses).map(
+                          ([key, { label }]) => (
+                            <SelectItem key={key} value={key}>
+                              {label}
+                            </SelectItem>
+                          )
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -573,7 +617,7 @@ const ReceiptsDashboard = () => {
                       onValueChange={(value) =>
                         setFilters((prev) => ({
                           ...prev,
-                          concept: value === 'ALL' ? '' : value
+                          concept: value === 'ALL' ? '' : value,
                         }))
                       }
                     >
@@ -598,7 +642,7 @@ const ReceiptsDashboard = () => {
                       onChange={(e) =>
                         setFilters((prev) => ({
                           ...prev,
-                          customer_document: e.target.value
+                          customer_document: e.target.value,
                         }))
                       }
                       placeholder="DNI/RUC"
@@ -613,7 +657,7 @@ const ReceiptsDashboard = () => {
                       onChange={(e) =>
                         setFilters((prev) => ({
                           ...prev,
-                          date_from: e.target.value
+                          date_from: e.target.value,
                         }))
                       }
                     />
@@ -627,7 +671,7 @@ const ReceiptsDashboard = () => {
                       onChange={(e) =>
                         setFilters((prev) => ({
                           ...prev,
-                          date_to: e.target.value
+                          date_to: e.target.value,
                         }))
                       }
                     />
@@ -636,37 +680,46 @@ const ReceiptsDashboard = () => {
               </div>
 
               {/* Receipts List */}
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2"> 
-  {filteredReceipts.length === 0 ? (
-    <div className="text-center py-8 text-gray-500">
-      No se encontraron boletas
-    </div>
-  ) : (
-    filteredReceipts.map((receipt) => (
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                {filteredReceipts.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    No se encontraron boletas
+                  </div>
+                ) : (
+                  filteredReceipts.map((receipt) => (
                     <div
-                          key={receipt.id}
-                          className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                      key={receipt.id}
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
                     >
                       <div className="flex items-center space-x-4">
                         <Receipt className="h-8 w-8 text-blue-500" />
                         <div>
-                          <p className="font-semibold">{receipt.receipt_number}</p>
+                          <p className="font-semibold">
+                            {receipt.receipt_number}
+                          </p>
                           <p className="text-sm text-gray-600">
                             {receiptConcepts[receipt.concept]}
                           </p>
-                          <p className="text-xs text-gray-500">{receipt.customer_name}</p>
+                          <p className="text-xs text-gray-500">
+                            {receipt.customer_name}
+                          </p>
                         </div>
                       </div>
 
                       <div className="flex items-center space-x-4">
                         <div className="text-right">
-                          <p className="font-semibold">S/. {Number(receipt.amount).toFixed(2)}</p>
+                          <p className="font-semibold">
+                            S/. {Number(receipt.amount).toFixed(2)}
+                          </p>
                           <p className="text-xs text-gray-500">
                             {new Date(receipt.issued_at).toLocaleDateString()}
                           </p>
                         </div>
 
-                        <Badge className={`${receiptStatuses[receipt.status].color} text-white`}>
+                        <Badge
+                          className={`${receiptStatuses[receipt.status].color
+                            } text-white`}
+                        >
                           {receiptStatuses[receipt.status].label}
                         </Badge>
 
@@ -678,11 +731,11 @@ const ReceiptsDashboard = () => {
                               onClick={() => {
                                 setPaymentData((prev) => ({
                                   ...prev,
-                                  receipt_id: receipt.id
+                                  receipt_id: receipt.id,
                                 }));
                                 setOpenDialogs((prev) => ({
                                   ...prev,
-                                  payReceipt: true
+                                  payReceipt: true,
                                 }));
                               }}
                             >
@@ -695,7 +748,10 @@ const ReceiptsDashboard = () => {
                             size="sm"
                             variant="outline"
                             onClick={() =>
-                              downloadReceiptPDF(receipt.id, receipt.receipt_number)
+                              downloadReceiptPDF(
+                                receipt.id,
+                                receipt.receipt_number
+                              )
                             }
                           >
                             <Download className="h-4 w-4" />
@@ -710,18 +766,19 @@ const ReceiptsDashboard = () => {
                             <QrCode className="h-4 w-4" />
                           </Button>
 
-                          {user?.role === 'FINANCE_ADMIN' && receipt.status !== 'CANCELLED' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                const reason = prompt('Motivo de anulación:');
-                                if (reason) cancelReceipt(receipt.id, reason);
-                              }}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          )}
+                          {user?.role === 'FINANCE_ADMIN' &&
+                            receipt.status !== 'CANCELLED' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  const reason = prompt('Motivo de anulación:');
+                                  if (reason) cancelReceipt(receipt.id, reason);
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            )}
                         </div>
                       </div>
                     </div>
@@ -811,7 +868,7 @@ const ReceiptsDashboard = () => {
                 onValueChange={(value) =>
                   setPaymentData((prev) => ({
                     ...prev,
-                    payment_method: value
+                    payment_method: value,
                   }))
                 }
               >
@@ -836,7 +893,7 @@ const ReceiptsDashboard = () => {
                 onChange={(e) =>
                   setPaymentData((prev) => ({
                     ...prev,
-                    payment_reference: e.target.value
+                    payment_reference: e.target.value,
                   }))
                 }
                 placeholder="Número de operación, voucher, etc."

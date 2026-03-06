@@ -1,6 +1,7 @@
 // src/services/admission.service.js
 import api from "../lib/api";
-
+import axios from "axios";
+import { API_BASE } from "../utils/config";
 /* ------------------------------------------
    Helpers
 -------------------------------------------*/
@@ -57,7 +58,6 @@ const normalizeCall = (c) => {
         required_documents: c.required_documents ?? [],
         careers,
 
-        // ✅ campos opcionales que podrían venir
         regulation_url: c.regulation_url ?? c.reglamento_url ?? c.rules_url ?? c.regulation_pdf ?? c.reglamento_pdf ?? null,
 
         career_vacancies: c.career_vacancies ?? c.vacancies_map ?? null,
@@ -67,6 +67,11 @@ const normalizeCall = (c) => {
 };
 
 export const listAdmissionCalls = async () => (await api.get("/admission-calls")).data;
+
+export const deleteAdmissionCall = async (call_id) => {
+    return (await api.delete(`/admission-calls/${call_id}`)).data;
+};
+
 
 export const createAdmissionCall = async (form) => {
     const careersArray = (form.available_careers || []).map((id) => ({
@@ -91,7 +96,6 @@ export const createAdmissionCall = async (form) => {
         maximum_age: Number(form.maximum_age || 0),
         required_documents: form.required_documents || [],
 
-        // sinónimos
         year: form.academic_year,
         period: form.academic_period,
         start_date: toISO(form.registration_start),
@@ -123,28 +127,23 @@ export const AdmissionCalls = {
             }
         }
 
-        // Si todos fallan:
         if (lastErr) console.error("listPublic failed:", lastErr);
         return [];
     },
 
-    // ✅ NUEVO: obtener por id (si backend lo soporta) + fallback a buscar en listPublic
     getPublicById: async (id) => {
         const endpoints = [
             `/admission-calls/public/${id}`,
             `/portal/public/admission-calls/${id}`,
-            `/admission-calls/${id}`, // (si existiera sin auth; si no, caerá al fallback)
+            `/admission-calls/${id}`,
         ];
 
         let lastErr = null;
 
-        // 1) intentar endpoints directos
         for (const url of endpoints) {
             try {
                 const { data } = await api.get(url);
-                // Si backend devuelve objeto directo:
                 if (data && typeof data === "object" && !Array.isArray(data)) {
-                    // a veces viene {call: {...}} o {data: {...}}
                     const maybe = data.call || data.data || data.item || data;
                     if (maybe && typeof maybe === "object") return normalizeCall(maybe);
                 }
@@ -153,7 +152,6 @@ export const AdmissionCalls = {
             }
         }
 
-        // 2) fallback: buscar en la lista pública
         try {
             const list = await AdmissionCalls.listPublic();
             const found = list.find((c) => String(c.id) === String(id));
@@ -210,6 +208,7 @@ export const Evaluation = {
     saveScores: async (application_id, rubric) =>
         (await api.post(`/evaluation/${application_id}/scores`, rubric)).data,
     bulkCompute: async (call_id) => (await api.post(`/evaluation/compute`, { call_id })).data,
+    importScores: async (payload) => (await api.post("/evaluation/import", payload)).data,
 };
 
 /* ------------------------------------------
@@ -256,18 +255,27 @@ export const createApplicant = async (payload) => (await api.post("/applicants",
 const normalizeDoc = (d) => ({
     id: d.id,
     document_type: d.document_type,
+    file_name: d.file_name || d.original_name || d.name || null,
     url: d.file_url || d.url,
-    review_status: d.status || "UPLOADED",
-    observations: d.observations || "",
+    mime_type: d.mime_type || d.content_type || null,
+    review_status: d.status || d.review_status || "UPLOADED",
+    observations: d.observations || d.note || "",
 });
 
 export const ApplicantDocs = {
+    /** Lista documentos de una postulación (admin o postulante) */
     async list(applicationId) {
         const { data } = await api.get(`/applications/${applicationId}/documents`);
         const arr = Array.isArray(data?.documents) ? data.documents : Array.isArray(data) ? data : [];
         return arr.map(normalizeDoc);
     },
 
+    /** Alias: mis documentos = list (mismo endpoint, filtrado por auth) */
+    async listMine(applicationId) {
+        return this.list(applicationId);
+    },
+
+    /** Revisar documento (admin) */
     async review(applicationId, documentId, { review_status, observations }) {
         const { data } = await api.post(
             `/applications/${applicationId}/documents/${documentId}/review`,
@@ -275,9 +283,25 @@ export const ApplicantDocs = {
         );
         return normalizeDoc(data);
     },
-};
 
-ApplicantDocs.listMine = (applicationId) => ApplicantDocs.list(applicationId);
+    /** Subir documento individual (postulante) */
+    async upload(applicationId, formData) {
+        const { data } = await api.post(
+            `/applications/${applicationId}/documents`,
+            formData,
+            { headers: { "Content-Type": "multipart/form-data" } }
+        );
+        return normalizeDoc(data);
+    },
+
+    /** Eliminar documento (postulante, solo si no está aprobado) */
+    async delete(applicationId, documentId) {
+        const { data } = await api.delete(
+            `/applications/${applicationId}/documents/${documentId}`
+        );
+        return data;
+    },
+};
 
 /* ------------------------------------------
    Cronograma por convocatoria
@@ -300,4 +324,89 @@ export const Payments = {
     void: async (payment_id) => (await api.post(`/admission-payments/${payment_id}/void`)).data,
     receiptPdf: async (payment_id) =>
         await api.get(`/admission-payments/${payment_id}/receipt.pdf`, { responseType: "blob" }),
+};
+
+/* ------------------------------------------
+   Público: Postulación + Búsqueda + Constancias
+-------------------------------------------*/
+export const AdmissionPublic = {
+    /**
+     * Registrar postulación pública (sin login).
+     * Acepta JSON puro o FormData (con documentos adjuntos).
+     *
+     * Si recibe FormData:
+     *   - campo "data": JSON string con payload de postulación
+     *   - campos "doc_FOTO_CARNET", "doc_COPIA_DNI", etc.: archivos
+     *
+     * Si recibe objeto plano: se envía como JSON.
+     */
+    apply: async (payload) => {
+        const isFormData = payload instanceof FormData;
+
+        const { data } = await axios.post(
+            `${API_BASE}/admission/public/apply`,
+            payload,
+            {
+                headers: isFormData
+                    ? { "Content-Type": "multipart/form-data" }
+                    : { "Content-Type": "application/json" },
+            }
+        );
+        return data;
+    },
+
+    /** Consultar resultados públicos */
+    results: async (callId, dni) => {
+        const { data } = await axios.get(`${API_BASE}/admission/public/results`, {
+            params: { call_id: callId, dni },
+            headers: { "Content-Type": "application/json" },
+        });
+        return data;
+    },
+
+    /**
+     * Buscar postulante por DNI (para constancias).
+     * GET /admission/public/search?dni=XXXXXXXX
+     *
+     * Retorna datos completos: nombre, carrera, foto_url, estado, puntaje, etc.
+     */
+    searchByDni: async (dni) => {
+        const { data } = await axios.get(`${API_BASE}/admission/public/search`, {
+            params: { dni },
+        });
+        return data;
+    },
+
+    /**
+     * Descargar Constancia de Inscripción (PDF).
+     * GET /admission/public/certificates/inscripcion?application_id=XXX
+     * Retorna blob PDF.
+     */
+    downloadInscripcion: async (applicationId) => {
+        const resp = await axios.get(
+            `${API_BASE}/admission/public/certificates/inscripcion`,
+            {
+                params: { application_id: applicationId },
+                responseType: "blob",
+            }
+        );
+        return resp.data;
+    },
+
+    /**
+     * Descargar Constancia de Ingreso (PDF).
+     * GET /admission/public/certificates/ingreso?application_id=XXX
+     * Solo disponible si status = ADMITTED.
+     * Retorna blob PDF.
+     */
+    downloadIngreso: async (applicationId) => {
+        const resp = await axios.get(
+            `${API_BASE}/admission/public/certificates/ingreso`,
+            {
+                params: { application_id: applicationId },
+                responseType: "blob",
+            }
+        );
+        return resp.data;
+    },
 };

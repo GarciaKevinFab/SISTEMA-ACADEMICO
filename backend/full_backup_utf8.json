@@ -1,0 +1,2598 @@
+﻿[
+{
+  "model": "accounts.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$tH9EfaDsGIFbQmbRh2j2q5$w5A7dMjklVIXSGNFCfKMlB88HbUvf3MeCcDPekClTGs=",
+    "last_login": null,
+    "is_superuser": true,
+    "username": "admin",
+    "email": "admin@sistema.com",
+    "full_name": "Administrador del Sistema",
+    "is_active": true,
+    "is_staff": true,
+    "groups": [],
+    "user_permissions": [],
+    "roles": [
+      1
+    ]
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 1,
+  "fields": {
+    "code": "admin.access.manage",
+    "label": "admin.access.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 2,
+  "fields": {
+    "code": "admin.audit.view",
+    "label": "admin.audit.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 3,
+  "fields": {
+    "code": "admin.audit.export",
+    "label": "admin.audit.export"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 4,
+  "fields": {
+    "code": "security.policies.manage",
+    "label": "security.policies.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 5,
+  "fields": {
+    "code": "security.sessions.inspect",
+    "label": "security.sessions.inspect"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 6,
+  "fields": {
+    "code": "academic.plans.view",
+    "label": "academic.plans.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 7,
+  "fields": {
+    "code": "academic.plans.edit",
+    "label": "academic.plans.edit"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 8,
+  "fields": {
+    "code": "academic.sections.view",
+    "label": "academic.sections.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 9,
+  "fields": {
+    "code": "academic.sections.create",
+    "label": "academic.sections.create"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 10,
+  "fields": {
+    "code": "academic.sections.conflicts",
+    "label": "academic.sections.conflicts"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 11,
+  "fields": {
+    "code": "academic.enrollment.view",
+    "label": "academic.enrollment.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 12,
+  "fields": {
+    "code": "academic.enrollment.commit",
+    "label": "academic.enrollment.commit"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 13,
+  "fields": {
+    "code": "academic.grades.edit",
+    "label": "academic.grades.edit"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 14,
+  "fields": {
+    "code": "academic.grades.submit",
+    "label": "academic.grades.submit"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 15,
+  "fields": {
+    "code": "academic.grades.reopen",
+    "label": "academic.grades.reopen"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 16,
+  "fields": {
+    "code": "academic.syllabus.upload",
+    "label": "academic.syllabus.upload"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 17,
+  "fields": {
+    "code": "academic.syllabus.delete",
+    "label": "academic.syllabus.delete"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 18,
+  "fields": {
+    "code": "academic.evaluation.config",
+    "label": "academic.evaluation.config"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 19,
+  "fields": {
+    "code": "academic.kardex.view",
+    "label": "academic.kardex.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 20,
+  "fields": {
+    "code": "academic.reports.view",
+    "label": "academic.reports.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 21,
+  "fields": {
+    "code": "academic.attendance.view",
+    "label": "academic.attendance.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 22,
+  "fields": {
+    "code": "academic.attendance.edit",
+    "label": "academic.attendance.edit"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 23,
+  "fields": {
+    "code": "academic.acts.view",
+    "label": "academic.acts.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 24,
+  "fields": {
+    "code": "academic.acts.close",
+    "label": "academic.acts.close"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 25,
+  "fields": {
+    "code": "academic.acts.export",
+    "label": "academic.acts.export"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 26,
+  "fields": {
+    "code": "academic.view",
+    "label": "academic.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 27,
+  "fields": {
+    "code": "academic.plans.manage",
+    "label": "academic.plans.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 28,
+  "fields": {
+    "code": "academic.sections.manage",
+    "label": "academic.sections.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 29,
+  "fields": {
+    "code": "academic.grades.manage",
+    "label": "academic.grades.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 30,
+  "fields": {
+    "code": "academic.attendance.manage",
+    "label": "academic.attendance.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 31,
+  "fields": {
+    "code": "academic.processes.inbox.view",
+    "label": "academic.processes.inbox.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 32,
+  "fields": {
+    "code": "admission.calls.view",
+    "label": "admission.calls.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 33,
+  "fields": {
+    "code": "admission.calls.manage",
+    "label": "admission.calls.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 34,
+  "fields": {
+    "code": "admission.applicants.manage",
+    "label": "admission.applicants.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 35,
+  "fields": {
+    "code": "admission.documents.review",
+    "label": "admission.documents.review"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 36,
+  "fields": {
+    "code": "admission.schedule.manage",
+    "label": "admission.schedule.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 37,
+  "fields": {
+    "code": "admission.evaluation.board",
+    "label": "admission.evaluation.board"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 38,
+  "fields": {
+    "code": "admission.results.publish",
+    "label": "admission.results.publish"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 39,
+  "fields": {
+    "code": "admission.payments.manage",
+    "label": "admission.payments.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 40,
+  "fields": {
+    "code": "admission.reports.view",
+    "label": "admission.reports.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 41,
+  "fields": {
+    "code": "admission.certificates.issue",
+    "label": "admission.certificates.issue"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 42,
+  "fields": {
+    "code": "admission.dashboard.view",
+    "label": "admission.dashboard.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 43,
+  "fields": {
+    "code": "admission.applicant.profile.view",
+    "label": "admission.applicant.profile.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 44,
+  "fields": {
+    "code": "mpv.processes.review",
+    "label": "mpv.processes.review"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 45,
+  "fields": {
+    "code": "mpv.processes.resolve",
+    "label": "mpv.processes.resolve"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 46,
+  "fields": {
+    "code": "mpv.files.upload",
+    "label": "mpv.files.upload"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 47,
+  "fields": {
+    "code": "mpv.reports.view",
+    "label": "mpv.reports.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 48,
+  "fields": {
+    "code": "mpv.public.intake",
+    "label": "mpv.public.intake"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 49,
+  "fields": {
+    "code": "mpv.public.tracking",
+    "label": "mpv.public.tracking"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 50,
+  "fields": {
+    "code": "desk.intake.manage",
+    "label": "desk.intake.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 51,
+  "fields": {
+    "code": "desk.reports.view",
+    "label": "desk.reports.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 52,
+  "fields": {
+    "code": "desk.track.view",
+    "label": "desk.track.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 53,
+  "fields": {
+    "code": "fin.concepts.manage",
+    "label": "fin.concepts.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 54,
+  "fields": {
+    "code": "fin.cashbanks.view",
+    "label": "fin.cashbanks.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 55,
+  "fields": {
+    "code": "fin.reconciliation.view",
+    "label": "fin.reconciliation.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 56,
+  "fields": {
+    "code": "fin.student.accounts.view",
+    "label": "fin.student.accounts.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 57,
+  "fields": {
+    "code": "fin.reports.view",
+    "label": "fin.reports.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 58,
+  "fields": {
+    "code": "fin.payments.receive",
+    "label": "fin.payments.receive"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 59,
+  "fields": {
+    "code": "fin.cash.movements",
+    "label": "fin.cash.movements"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 60,
+  "fields": {
+    "code": "fin.electronic.invoice.issue",
+    "label": "fin.electronic.invoice.issue"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 61,
+  "fields": {
+    "code": "fin.ar.manage",
+    "label": "fin.ar.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 62,
+  "fields": {
+    "code": "fin.ap.manage",
+    "label": "fin.ap.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 63,
+  "fields": {
+    "code": "fin.inventory.view",
+    "label": "fin.inventory.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 64,
+  "fields": {
+    "code": "fin.inventory.manage",
+    "label": "fin.inventory.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 65,
+  "fields": {
+    "code": "fin.logistics.view",
+    "label": "fin.logistics.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 66,
+  "fields": {
+    "code": "logistics.procure.manage",
+    "label": "logistics.procure.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 67,
+  "fields": {
+    "code": "logistics.warehouse.dispatch",
+    "label": "logistics.warehouse.dispatch"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 68,
+  "fields": {
+    "code": "hr.view",
+    "label": "hr.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 69,
+  "fields": {
+    "code": "hr.people.manage",
+    "label": "hr.people.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 70,
+  "fields": {
+    "code": "hr.payroll.view",
+    "label": "hr.payroll.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 71,
+  "fields": {
+    "code": "finance.dashboard.view",
+    "label": "finance.dashboard.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 72,
+  "fields": {
+    "code": "minedu.integration.view",
+    "label": "minedu.integration.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 73,
+  "fields": {
+    "code": "minedu.integration.export",
+    "label": "minedu.integration.export"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 74,
+  "fields": {
+    "code": "minedu.integration.validate",
+    "label": "minedu.integration.validate"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 75,
+  "fields": {
+    "code": "minedu.integrations.run",
+    "label": "minedu.integrations.run"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 76,
+  "fields": {
+    "code": "portal.content.manage",
+    "label": "portal.content.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 77,
+  "fields": {
+    "code": "portal.content.publish",
+    "label": "portal.content.publish"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 78,
+  "fields": {
+    "code": "research.calls.view",
+    "label": "research.calls.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 79,
+  "fields": {
+    "code": "research.calls.manage",
+    "label": "research.calls.manage"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 80,
+  "fields": {
+    "code": "research.projects.view",
+    "label": "research.projects.view"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 81,
+  "fields": {
+    "code": "research.projects.edit",
+    "label": "research.projects.edit"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 82,
+  "fields": {
+    "code": "research.tabs.reports",
+    "label": "research.tabs.reports"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 83,
+  "fields": {
+    "code": "sia.export.enrollment",
+    "label": "sia.export.enrollment"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 84,
+  "fields": {
+    "code": "sia.export.grades",
+    "label": "sia.export.grades"
+  }
+},
+{
+  "model": "acl.permission",
+  "pk": 85,
+  "fields": {
+    "code": "sia.export.certificates",
+    "label": "sia.export.certificates"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 1,
+  "fields": {
+    "name": "ADMIN_SYSTEM",
+    "description": "ADMIN_SYSTEM"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 2,
+  "fields": {
+    "name": "ACCESS_ADMIN",
+    "description": "ACCESS_ADMIN"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 3,
+  "fields": {
+    "name": "SECURITY_ADMIN",
+    "description": "SECURITY_ADMIN"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 4,
+  "fields": {
+    "name": "ADMIN_ACADEMIC",
+    "description": "ADMIN_ACADEMIC"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 5,
+  "fields": {
+    "name": "REGISTRAR",
+    "description": "REGISTRAR"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 6,
+  "fields": {
+    "name": "TEACHER",
+    "description": "TEACHER"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 7,
+  "fields": {
+    "name": "STUDENT",
+    "description": "STUDENT"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 8,
+  "fields": {
+    "name": "ADMISSION_OFFICER",
+    "description": "ADMISSION_OFFICER"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 9,
+  "fields": {
+    "name": "MPV_OFFICER",
+    "description": "MPV_OFFICER"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 10,
+  "fields": {
+    "name": "MPV_MANAGER",
+    "description": "MPV_MANAGER"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 11,
+  "fields": {
+    "name": "CASHIER",
+    "description": "CASHIER"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 12,
+  "fields": {
+    "name": "ACCOUNTANT",
+    "description": "ACCOUNTANT"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 13,
+  "fields": {
+    "name": "FINANCE_ADMIN",
+    "description": "FINANCE_ADMIN"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 14,
+  "fields": {
+    "name": "WAREHOUSE",
+    "description": "WAREHOUSE"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 15,
+  "fields": {
+    "name": "LOGISTICS",
+    "description": "LOGISTICS"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 16,
+  "fields": {
+    "name": "HR_ADMIN",
+    "description": "HR_ADMIN"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 17,
+  "fields": {
+    "name": "MINEDU_INTEGRATION",
+    "description": "MINEDU_INTEGRATION"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 18,
+  "fields": {
+    "name": "PORTAL_ADMIN",
+    "description": "PORTAL_ADMIN"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 19,
+  "fields": {
+    "name": "RESEARCH_COORDINATOR",
+    "description": "RESEARCH_COORDINATOR"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 20,
+  "fields": {
+    "name": "TEACHER_RESEARCHER",
+    "description": "TEACHER_RESEARCHER"
+  }
+},
+{
+  "model": "acl.role",
+  "pk": 21,
+  "fields": {
+    "name": "CALLS_COMMITTEE",
+    "description": "CALLS_COMMITTEE"
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 1,
+  "fields": {
+    "role": 1,
+    "permission": 1
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 2,
+  "fields": {
+    "role": 1,
+    "permission": 2
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 3,
+  "fields": {
+    "role": 1,
+    "permission": 3
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 4,
+  "fields": {
+    "role": 1,
+    "permission": 4
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 5,
+  "fields": {
+    "role": 1,
+    "permission": 5
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 6,
+  "fields": {
+    "role": 1,
+    "permission": 6
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 7,
+  "fields": {
+    "role": 1,
+    "permission": 7
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 8,
+  "fields": {
+    "role": 1,
+    "permission": 8
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 9,
+  "fields": {
+    "role": 1,
+    "permission": 9
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 10,
+  "fields": {
+    "role": 1,
+    "permission": 10
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 11,
+  "fields": {
+    "role": 1,
+    "permission": 11
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 12,
+  "fields": {
+    "role": 1,
+    "permission": 12
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 13,
+  "fields": {
+    "role": 1,
+    "permission": 13
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 14,
+  "fields": {
+    "role": 1,
+    "permission": 14
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 15,
+  "fields": {
+    "role": 1,
+    "permission": 15
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 16,
+  "fields": {
+    "role": 1,
+    "permission": 16
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 17,
+  "fields": {
+    "role": 1,
+    "permission": 17
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 18,
+  "fields": {
+    "role": 1,
+    "permission": 18
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 19,
+  "fields": {
+    "role": 1,
+    "permission": 19
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 20,
+  "fields": {
+    "role": 1,
+    "permission": 20
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 21,
+  "fields": {
+    "role": 1,
+    "permission": 21
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 22,
+  "fields": {
+    "role": 1,
+    "permission": 22
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 23,
+  "fields": {
+    "role": 1,
+    "permission": 23
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 24,
+  "fields": {
+    "role": 1,
+    "permission": 24
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 25,
+  "fields": {
+    "role": 1,
+    "permission": 25
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 26,
+  "fields": {
+    "role": 1,
+    "permission": 26
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 27,
+  "fields": {
+    "role": 1,
+    "permission": 27
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 28,
+  "fields": {
+    "role": 1,
+    "permission": 28
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 29,
+  "fields": {
+    "role": 1,
+    "permission": 29
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 30,
+  "fields": {
+    "role": 1,
+    "permission": 30
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 31,
+  "fields": {
+    "role": 1,
+    "permission": 31
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 32,
+  "fields": {
+    "role": 1,
+    "permission": 32
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 33,
+  "fields": {
+    "role": 1,
+    "permission": 33
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 34,
+  "fields": {
+    "role": 1,
+    "permission": 34
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 35,
+  "fields": {
+    "role": 1,
+    "permission": 35
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 36,
+  "fields": {
+    "role": 1,
+    "permission": 36
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 37,
+  "fields": {
+    "role": 1,
+    "permission": 37
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 38,
+  "fields": {
+    "role": 1,
+    "permission": 38
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 39,
+  "fields": {
+    "role": 1,
+    "permission": 39
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 40,
+  "fields": {
+    "role": 1,
+    "permission": 40
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 41,
+  "fields": {
+    "role": 1,
+    "permission": 41
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 42,
+  "fields": {
+    "role": 1,
+    "permission": 42
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 43,
+  "fields": {
+    "role": 1,
+    "permission": 43
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 44,
+  "fields": {
+    "role": 1,
+    "permission": 44
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 45,
+  "fields": {
+    "role": 1,
+    "permission": 45
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 46,
+  "fields": {
+    "role": 1,
+    "permission": 46
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 47,
+  "fields": {
+    "role": 1,
+    "permission": 47
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 48,
+  "fields": {
+    "role": 1,
+    "permission": 48
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 49,
+  "fields": {
+    "role": 1,
+    "permission": 49
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 50,
+  "fields": {
+    "role": 1,
+    "permission": 50
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 51,
+  "fields": {
+    "role": 1,
+    "permission": 51
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 52,
+  "fields": {
+    "role": 1,
+    "permission": 52
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 53,
+  "fields": {
+    "role": 1,
+    "permission": 53
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 54,
+  "fields": {
+    "role": 1,
+    "permission": 54
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 55,
+  "fields": {
+    "role": 1,
+    "permission": 55
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 56,
+  "fields": {
+    "role": 1,
+    "permission": 56
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 57,
+  "fields": {
+    "role": 1,
+    "permission": 57
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 58,
+  "fields": {
+    "role": 1,
+    "permission": 58
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 59,
+  "fields": {
+    "role": 1,
+    "permission": 59
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 60,
+  "fields": {
+    "role": 1,
+    "permission": 60
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 61,
+  "fields": {
+    "role": 1,
+    "permission": 61
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 62,
+  "fields": {
+    "role": 1,
+    "permission": 62
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 63,
+  "fields": {
+    "role": 1,
+    "permission": 63
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 64,
+  "fields": {
+    "role": 1,
+    "permission": 64
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 65,
+  "fields": {
+    "role": 1,
+    "permission": 65
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 66,
+  "fields": {
+    "role": 1,
+    "permission": 66
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 67,
+  "fields": {
+    "role": 1,
+    "permission": 67
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 68,
+  "fields": {
+    "role": 1,
+    "permission": 68
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 69,
+  "fields": {
+    "role": 1,
+    "permission": 69
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 70,
+  "fields": {
+    "role": 1,
+    "permission": 70
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 71,
+  "fields": {
+    "role": 1,
+    "permission": 71
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 72,
+  "fields": {
+    "role": 1,
+    "permission": 72
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 73,
+  "fields": {
+    "role": 1,
+    "permission": 73
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 74,
+  "fields": {
+    "role": 1,
+    "permission": 74
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 75,
+  "fields": {
+    "role": 1,
+    "permission": 75
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 76,
+  "fields": {
+    "role": 1,
+    "permission": 76
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 77,
+  "fields": {
+    "role": 1,
+    "permission": 77
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 78,
+  "fields": {
+    "role": 1,
+    "permission": 78
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 79,
+  "fields": {
+    "role": 1,
+    "permission": 79
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 80,
+  "fields": {
+    "role": 1,
+    "permission": 80
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 81,
+  "fields": {
+    "role": 1,
+    "permission": 81
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 82,
+  "fields": {
+    "role": 1,
+    "permission": 82
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 83,
+  "fields": {
+    "role": 1,
+    "permission": 83
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 84,
+  "fields": {
+    "role": 1,
+    "permission": 84
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 85,
+  "fields": {
+    "role": 1,
+    "permission": 85
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 86,
+  "fields": {
+    "role": 2,
+    "permission": 1
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 87,
+  "fields": {
+    "role": 2,
+    "permission": 2
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 88,
+  "fields": {
+    "role": 2,
+    "permission": 3
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 89,
+  "fields": {
+    "role": 3,
+    "permission": 2
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 90,
+  "fields": {
+    "role": 3,
+    "permission": 4
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 91,
+  "fields": {
+    "role": 3,
+    "permission": 5
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 92,
+  "fields": {
+    "role": 4,
+    "permission": 6
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 93,
+  "fields": {
+    "role": 4,
+    "permission": 7
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 94,
+  "fields": {
+    "role": 4,
+    "permission": 8
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 95,
+  "fields": {
+    "role": 4,
+    "permission": 9
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 96,
+  "fields": {
+    "role": 4,
+    "permission": 10
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 97,
+  "fields": {
+    "role": 4,
+    "permission": 11
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 98,
+  "fields": {
+    "role": 4,
+    "permission": 12
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 99,
+  "fields": {
+    "role": 4,
+    "permission": 13
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 100,
+  "fields": {
+    "role": 4,
+    "permission": 14
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 101,
+  "fields": {
+    "role": 4,
+    "permission": 15
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 102,
+  "fields": {
+    "role": 4,
+    "permission": 16
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 103,
+  "fields": {
+    "role": 4,
+    "permission": 17
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 104,
+  "fields": {
+    "role": 4,
+    "permission": 18
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 105,
+  "fields": {
+    "role": 4,
+    "permission": 19
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 106,
+  "fields": {
+    "role": 4,
+    "permission": 20
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 107,
+  "fields": {
+    "role": 4,
+    "permission": 21
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 108,
+  "fields": {
+    "role": 4,
+    "permission": 22
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 109,
+  "fields": {
+    "role": 4,
+    "permission": 23
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 110,
+  "fields": {
+    "role": 4,
+    "permission": 24
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 111,
+  "fields": {
+    "role": 4,
+    "permission": 25
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 112,
+  "fields": {
+    "role": 4,
+    "permission": 26
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 113,
+  "fields": {
+    "role": 4,
+    "permission": 27
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 114,
+  "fields": {
+    "role": 4,
+    "permission": 28
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 115,
+  "fields": {
+    "role": 4,
+    "permission": 29
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 116,
+  "fields": {
+    "role": 4,
+    "permission": 30
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 117,
+  "fields": {
+    "role": 4,
+    "permission": 31
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 118,
+  "fields": {
+    "role": 4,
+    "permission": 83
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 119,
+  "fields": {
+    "role": 4,
+    "permission": 84
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 120,
+  "fields": {
+    "role": 4,
+    "permission": 85
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 121,
+  "fields": {
+    "role": 5,
+    "permission": 8
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 122,
+  "fields": {
+    "role": 5,
+    "permission": 9
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 123,
+  "fields": {
+    "role": 5,
+    "permission": 10
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 124,
+  "fields": {
+    "role": 5,
+    "permission": 15
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 125,
+  "fields": {
+    "role": 5,
+    "permission": 83
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 126,
+  "fields": {
+    "role": 5,
+    "permission": 20
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 127,
+  "fields": {
+    "role": 5,
+    "permission": 84
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 128,
+  "fields": {
+    "role": 5,
+    "permission": 23
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 129,
+  "fields": {
+    "role": 5,
+    "permission": 24
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 130,
+  "fields": {
+    "role": 5,
+    "permission": 25
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 131,
+  "fields": {
+    "role": 5,
+    "permission": 26
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 132,
+  "fields": {
+    "role": 5,
+    "permission": 28
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 133,
+  "fields": {
+    "role": 6,
+    "permission": 8
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 134,
+  "fields": {
+    "role": 6,
+    "permission": 13
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 135,
+  "fields": {
+    "role": 6,
+    "permission": 14
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 136,
+  "fields": {
+    "role": 6,
+    "permission": 16
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 137,
+  "fields": {
+    "role": 6,
+    "permission": 18
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 138,
+  "fields": {
+    "role": 6,
+    "permission": 21
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 139,
+  "fields": {
+    "role": 6,
+    "permission": 22
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 140,
+  "fields": {
+    "role": 6,
+    "permission": 26
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 141,
+  "fields": {
+    "role": 6,
+    "permission": 29
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 142,
+  "fields": {
+    "role": 6,
+    "permission": 30
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 143,
+  "fields": {
+    "role": 7,
+    "permission": 19
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 144,
+  "fields": {
+    "role": 7,
+    "permission": 11
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 145,
+  "fields": {
+    "role": 7,
+    "permission": 12
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 146,
+  "fields": {
+    "role": 8,
+    "permission": 32
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 147,
+  "fields": {
+    "role": 8,
+    "permission": 33
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 148,
+  "fields": {
+    "role": 8,
+    "permission": 34
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 149,
+  "fields": {
+    "role": 8,
+    "permission": 35
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 150,
+  "fields": {
+    "role": 8,
+    "permission": 36
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 151,
+  "fields": {
+    "role": 8,
+    "permission": 37
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 152,
+  "fields": {
+    "role": 8,
+    "permission": 38
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 153,
+  "fields": {
+    "role": 8,
+    "permission": 39
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 154,
+  "fields": {
+    "role": 8,
+    "permission": 40
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 155,
+  "fields": {
+    "role": 8,
+    "permission": 41
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 156,
+  "fields": {
+    "role": 8,
+    "permission": 42
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 157,
+  "fields": {
+    "role": 8,
+    "permission": 43
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 158,
+  "fields": {
+    "role": 9,
+    "permission": 50
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 159,
+  "fields": {
+    "role": 9,
+    "permission": 51
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 160,
+  "fields": {
+    "role": 9,
+    "permission": 44
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 161,
+  "fields": {
+    "role": 9,
+    "permission": 46
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 162,
+  "fields": {
+    "role": 9,
+    "permission": 47
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 163,
+  "fields": {
+    "role": 10,
+    "permission": 50
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 164,
+  "fields": {
+    "role": 10,
+    "permission": 51
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 165,
+  "fields": {
+    "role": 10,
+    "permission": 44
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 166,
+  "fields": {
+    "role": 10,
+    "permission": 45
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 167,
+  "fields": {
+    "role": 10,
+    "permission": 46
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 168,
+  "fields": {
+    "role": 10,
+    "permission": 47
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 169,
+  "fields": {
+    "role": 11,
+    "permission": 54
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 170,
+  "fields": {
+    "role": 11,
+    "permission": 71
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 171,
+  "fields": {
+    "role": 11,
+    "permission": 56
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 172,
+  "fields": {
+    "role": 11,
+    "permission": 58
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 173,
+  "fields": {
+    "role": 11,
+    "permission": 59
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 174,
+  "fields": {
+    "role": 12,
+    "permission": 53
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 175,
+  "fields": {
+    "role": 12,
+    "permission": 55
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 176,
+  "fields": {
+    "role": 12,
+    "permission": 71
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 177,
+  "fields": {
+    "role": 12,
+    "permission": 57
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 178,
+  "fields": {
+    "role": 12,
+    "permission": 60
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 179,
+  "fields": {
+    "role": 12,
+    "permission": 61
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 180,
+  "fields": {
+    "role": 12,
+    "permission": 62
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 181,
+  "fields": {
+    "role": 13,
+    "permission": 64
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 182,
+  "fields": {
+    "role": 13,
+    "permission": 71
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 183,
+  "fields": {
+    "role": 13,
+    "permission": 53
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 184,
+  "fields": {
+    "role": 13,
+    "permission": 54
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 185,
+  "fields": {
+    "role": 13,
+    "permission": 55
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 186,
+  "fields": {
+    "role": 13,
+    "permission": 56
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 187,
+  "fields": {
+    "role": 13,
+    "permission": 57
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 188,
+  "fields": {
+    "role": 13,
+    "permission": 58
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 189,
+  "fields": {
+    "role": 13,
+    "permission": 59
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 190,
+  "fields": {
+    "role": 13,
+    "permission": 60
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 191,
+  "fields": {
+    "role": 13,
+    "permission": 61
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 192,
+  "fields": {
+    "role": 13,
+    "permission": 62
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 193,
+  "fields": {
+    "role": 14,
+    "permission": 67
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 194,
+  "fields": {
+    "role": 14,
+    "permission": 63
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 195,
+  "fields": {
+    "role": 15,
+    "permission": 65
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 196,
+  "fields": {
+    "role": 15,
+    "permission": 66
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 197,
+  "fields": {
+    "role": 16,
+    "permission": 68
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 198,
+  "fields": {
+    "role": 16,
+    "permission": 69
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 199,
+  "fields": {
+    "role": 16,
+    "permission": 70
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 200,
+  "fields": {
+    "role": 17,
+    "permission": 72
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 201,
+  "fields": {
+    "role": 17,
+    "permission": 73
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 202,
+  "fields": {
+    "role": 17,
+    "permission": 74
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 203,
+  "fields": {
+    "role": 17,
+    "permission": 75
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 204,
+  "fields": {
+    "role": 18,
+    "permission": 76
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 205,
+  "fields": {
+    "role": 18,
+    "permission": 77
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 206,
+  "fields": {
+    "role": 19,
+    "permission": 80
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 207,
+  "fields": {
+    "role": 19,
+    "permission": 81
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 208,
+  "fields": {
+    "role": 19,
+    "permission": 82
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 209,
+  "fields": {
+    "role": 19,
+    "permission": 78
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 210,
+  "fields": {
+    "role": 19,
+    "permission": 79
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 211,
+  "fields": {
+    "role": 20,
+    "permission": 80
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 212,
+  "fields": {
+    "role": 20,
+    "permission": 81
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 213,
+  "fields": {
+    "role": 20,
+    "permission": 78
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 214,
+  "fields": {
+    "role": 21,
+    "permission": 78
+  }
+},
+{
+  "model": "acl.rolepermission",
+  "pk": 215,
+  "fields": {
+    "role": 21,
+    "permission": 79
+  }
+},
+{
+  "model": "acl.userrole",
+  "pk": 1,
+  "fields": {
+    "user": [
+      "admin"
+    ],
+    "role": 1
+  }
+}
+]

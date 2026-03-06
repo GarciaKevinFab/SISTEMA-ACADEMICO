@@ -8,6 +8,8 @@ from .views import (
     dashboard_stats,
     procedures_summary, procedures_report_sla, procedures_report_volume,
     public_create, public_upload_file, public_track,
+    public_procedure_types,  # ✅ NUEVO
+    my_procedures
 )
 
 router = DefaultRouter(trailing_slash=False)
@@ -22,6 +24,8 @@ urlpatterns = [
 
     # Dashboard (acepta / y sin /)
     re_path(r"^dashboard/stats/?$", dashboard_stats, name="dashboard-stats"),
+    # Mis trámites (dashboard estudiante)
+    path("my", my_procedures),
 
     # Reportes (acepta / y sin /)
     re_path(r"^procedures/reports/summary/?$", procedures_summary, name="proc-summary"),
@@ -29,6 +33,7 @@ urlpatterns = [
     re_path(r"^procedures/reports/volume\.xlsx/?$", procedures_report_volume, name="proc-volume"),
 
     # Público (acepta / y sin /)
+    re_path(r"^public/procedure-types/?$", public_procedure_types, name="public-procedure-types"),  # ✅ NUEVO
     re_path(r"^public/procedures/?$", public_create, name="public-create"),
     re_path(r"^public/procedures/(?P<code>[^/]+)/files/?$", public_upload_file, name="public-upload"),
     re_path(r"^public/procedures/track/?$", public_track, name="public-track"),

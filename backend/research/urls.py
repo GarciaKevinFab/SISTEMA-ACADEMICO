@@ -1,100 +1,100 @@
+"""
+research/urls.py
+"""
 from django.urls import path
 from .views import (
+    # Dashboard
+    dashboard_stats,
     # Catálogos
     catalog_lines, catalog_line_detail,
     catalog_advisors, catalog_advisor_detail,
-
     # Proyectos
     projects_collection, project_detail, project_change_status,
-
     # Cronograma
     schedule_list, schedule_bulk,
-
     # Entregables
     deliverables_collection, deliverable_update,
-
     # Evaluaciones
     evaluations_collection,
-
     # Equipo
     team_collection, team_member_detail,
-
     # Presupuesto
     budget_list, budget_create_item, budget_item_detail,
     budget_upload_receipt, budget_export_xlsx, budget_export_pdf_stub,
-
     # Ética & PI
     ethics_ip_get, ethics_set, ethics_upload_doc, ip_set, ip_upload_doc,
-
     # Publicaciones
     publications_collection, publication_detail,
-
     # Convocatorias / Propuestas / Revisión
     calls_collection, call_detail, proposals_collection, proposal_submit,
     review_assign, review_rubric_get, review_save, calls_ranking, calls_ranking_export,
-
     # Reportes
     reports_summary, reports_summary_export_stub,
 )
 
+app_name = "research"
+
 urlpatterns = [
-    # Catálogos
-    path('catalog/lines', catalog_lines),                 # GET | POST
-    path('catalog/lines/<int:id>', catalog_line_detail),  # PATCH | DELETE
-    path('catalog/advisors', catalog_advisors),           # GET | POST
-    path('catalog/advisors/<int:id>', catalog_advisor_detail),  # PATCH | DELETE
+    # ── Dashboard ──
+    path("dashboard",                   dashboard_stats),
 
-    # Proyectos
-    path('projects', projects_collection),                       # GET | POST
-    path('projects/<int:id>', project_detail),                   # GET | PATCH | DELETE
-    path('projects/<int:id>/status', project_change_status),     # POST
+    # ── Catálogos ──
+    path("catalog/lines",             catalog_lines),
+    path("catalog/lines/<int:id>",    catalog_line_detail),
+    path("catalog/advisors",          catalog_advisors),
+    path("catalog/advisors/<int:id>", catalog_advisor_detail),
 
-    # Cronograma
-    path('projects/<int:projectId>/schedule', schedule_list),           # GET
-    path('projects/<int:projectId>/schedule/bulk', schedule_bulk),      # POST
+    # ── Proyectos ──
+    path("projects",                       projects_collection),
+    path("projects/<int:id>",              project_detail),
+    path("projects/<int:id>/status",       project_change_status),
 
-    # Entregables
-    path('projects/<int:projectId>/deliverables', deliverables_collection),  # GET | POST
-    path('deliverables/<int:deliverableId>', deliverable_update),            # PATCH
+    # ── Cronograma ──
+    path("projects/<int:projectId>/schedule",      schedule_list),
+    path("projects/<int:projectId>/schedule/bulk",  schedule_bulk),
 
-    # Evaluaciones
-    path('projects/<int:projectId>/evaluations', evaluations_collection),    # GET | POST
+    # ── Entregables ──
+    path("projects/<int:projectId>/deliverables",   deliverables_collection),
+    path("deliverables/<int:deliverableId>",        deliverable_update),
 
-    # Equipo
-    path('projects/<int:projectId>/team', team_collection),                  # GET | POST
-    path('projects/<int:projectId>/team/<int:memberId>', team_member_detail),# PATCH | DELETE
+    # ── Evaluaciones ──
+    path("projects/<int:projectId>/evaluations",    evaluations_collection),
 
-    # Presupuesto
-    path('projects/<int:projectId>/budget', budget_list),                    # GET
-    path('projects/<int:projectId>/budget/items', budget_create_item),       # POST
-    path('projects/<int:projectId>/budget/items/<int:itemId>', budget_item_detail),  # PATCH | DELETE
-    path('projects/<int:projectId>/budget/items/<int:itemId>/receipt', budget_upload_receipt),  # POST
-    path('projects/<int:projectId>/budget/export', budget_export_xlsx),      # GET
-    path('projects/<int:projectId>/budget/export-pdf', budget_export_pdf_stub),  # GET (stub)
+    # ── Equipo ──
+    path("projects/<int:projectId>/team",                        team_collection),
+    path("projects/<int:projectId>/team/<int:memberId>",         team_member_detail),
 
-    # Ética & PI
-    path('projects/<int:projectId>/ethics-ip', ethics_ip_get),               # GET
-    path('projects/<int:projectId>/ethics', ethics_set),                     # PUT
-    path('projects/<int:projectId>/ethics/doc', ethics_upload_doc),          # POST
-    path('projects/<int:projectId>/ip', ip_set),                             # PUT
-    path('projects/<int:projectId>/ip/doc', ip_upload_doc),                  # POST
+    # ── Presupuesto ──
+    path("projects/<int:projectId>/budget",                              budget_list),
+    path("projects/<int:projectId>/budget/items",                        budget_create_item),
+    path("projects/<int:projectId>/budget/items/<int:itemId>",           budget_item_detail),
+    path("projects/<int:projectId>/budget/items/<int:itemId>/receipt",   budget_upload_receipt),
+    path("projects/<int:projectId>/budget/export",                       budget_export_xlsx),
+    path("projects/<int:projectId>/budget/export-pdf",                   budget_export_pdf_stub),
 
-    # Publicaciones
-    path('projects/<int:projectId>/publications', publications_collection),        # GET | POST
-    path('projects/<int:projectId>/publications/<int:pubId>', publication_detail), # PATCH | DELETE
+    # ── Ética & PI ──
+    path("projects/<int:projectId>/ethics-ip",  ethics_ip_get),
+    path("projects/<int:projectId>/ethics",     ethics_set),
+    path("projects/<int:projectId>/ethics/doc", ethics_upload_doc),
+    path("projects/<int:projectId>/ip",         ip_set),
+    path("projects/<int:projectId>/ip/doc",     ip_upload_doc),
 
-    # Convocatorias / Revisión
-    path('calls', calls_collection),                                   # GET | POST
-    path('calls/<int:id>', call_detail),                               # PATCH | DELETE
-    path('calls/<int:callId>/proposals', proposals_collection),        # GET | POST
-    path('calls/<int:callId>/proposals/<int:proposalId>/submit', proposal_submit),  # POST
-    path('calls/<int:callId>/proposals/<int:proposalId>/assign', review_assign),    # POST
-    path('calls/<int:callId>/proposals/<int:proposalId>/rubric', review_rubric_get),# GET
-    path('calls/<int:callId>/proposals/<int:proposalId>/review', review_save),      # POST
-    path('calls/<int:callId>/ranking', calls_ranking),                               # GET
-    path('calls/<int:callId>/ranking/export', calls_ranking_export),                 # GET (stub)
+    # ── Publicaciones ──
+    path("projects/<int:projectId>/publications",              publications_collection),
+    path("projects/<int:projectId>/publications/<int:pubId>",  publication_detail),
 
-    # Reportes
-    path('reports/summary', reports_summary),                           # GET
-    path('reports/summary/export', reports_summary_export_stub),        # POST | GET (stub)
+    # ── Convocatorias / Revisión ──
+    path("calls",                                                     calls_collection),
+    path("calls/<int:id>",                                            call_detail),
+    path("calls/<int:callId>/proposals",                              proposals_collection),
+    path("calls/<int:callId>/proposals/<int:proposalId>/submit",      proposal_submit),
+    path("calls/<int:callId>/proposals/<int:proposalId>/assign",      review_assign),
+    path("calls/<int:callId>/proposals/<int:proposalId>/rubric",      review_rubric_get),
+    path("calls/<int:callId>/proposals/<int:proposalId>/review",      review_save),
+    path("calls/<int:callId>/ranking",                                calls_ranking),
+    path("calls/<int:callId>/ranking/export",                         calls_ranking_export),
+
+    # ── Reportes ──
+    path("reports/summary",        reports_summary),
+    path("reports/summary/export", reports_summary_export_stub),
 ]

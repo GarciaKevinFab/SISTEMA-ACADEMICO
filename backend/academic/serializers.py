@@ -2,12 +2,15 @@
 from datetime import datetime
 from rest_framework import serializers
 
+from catalogs.models import Career  # ✅ Career único
 from .models import (
-    Career, Course, Plan, PlanCourse, CoursePrereq,
+    Course, Plan, PlanCourse, CoursePrereq,
     Classroom, Teacher, Section, SectionScheduleSlot,
     AcademicPeriod, Syllabus, EvaluationConfig,
-    AttendanceSession, AttendanceRow, AcademicProcess, ProcessFile
+    AttendanceSession, AttendanceRow, AcademicProcess, ProcessFile,
+    AcademicGradeRecord
 )
+
 
 DAY_TO_INT = {"MON": 1, "TUE": 2, "WED": 3, "THU": 4, "FRI": 5, "SAT": 6, "SUN": 7}
 INT_TO_DAY = {v: k for k, v in DAY_TO_INT.items()}
@@ -17,7 +20,6 @@ INT_TO_DAY = {v: k for k, v in DAY_TO_INT.items()}
 def safe_full_name(user) -> str:
     if not user:
         return ""
-
     if hasattr(user, "get_full_name"):
         try:
             fn = (user.get_full_name() or "").strip()
@@ -25,95 +27,96 @@ def safe_full_name(user) -> str:
                 return fn
         except Exception:
             pass
-
     for attr in ("full_name", "name"):
         if hasattr(user, attr):
             val = (getattr(user, attr) or "").strip()
             if val:
                 return val
-
     first = (getattr(user, "first_name", "") or "").strip()
-    last = (getattr(user, "last_name", "") or "").strip()
+    last  = (getattr(user, "last_name",  "") or "").strip()
     if first or last:
         return f"{first} {last}".strip()
-
     return (getattr(user, "username", "") or getattr(user, "email", "") or f"User {getattr(user, 'id', '')}").strip()
 
 
 def _parse_hhmm(value: str):
     if value is None:
         raise serializers.ValidationError("Hora requerida")
-
     s = str(value).strip()
-
     for fmt in ("%H:%M", "%H:%M:%S"):
         try:
             return datetime.strptime(s, fmt).time()
         except Exception:
             pass
-
     raise serializers.ValidationError("Formato de hora inválido (usa HH:MM)")
 
 
 # ───────────────────────── Básicos ─────────────────────────
 class CareerSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Career
+        model  = Career
         fields = "__all__"
 
 
 class CourseSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Course
+        model  = Course
         fields = "__all__"
 
 
 # ───────────────────────── Plan ─────────────────────────
 class PlanSerializer(serializers.ModelSerializer):
-    career_id = serializers.IntegerField(source="career.id", read_only=True)
-    career_name = serializers.CharField(source="career.name", read_only=True)
+    career_id   = serializers.IntegerField(source="career.id",   read_only=True)
+    career_name = serializers.CharField(   source="career.name", read_only=True)
 
     class Meta:
-        model = Plan
-        fields = ["id", "name", "career", "career_id", "career_name", "start_year", "semesters", "description"]
+        model  = Plan
+        fields = [
+            "id", "name",
+            "career", "career_id", "career_name",
+            "start_year", "end_year",
+            "semesters", "description",
+        ]
 
 
 class PlanCreateSerializer(serializers.ModelSerializer):
     career_id = serializers.IntegerField(write_only=True)
-    career_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
-        model = Plan
-        fields = ["id", "name", "career_id", "career_name", "start_year", "semesters", "description"]
+        model  = Plan
+        fields = ["id", "name", "career_id", "start_year", "end_year", "semesters", "description"]
+
+    def _career_from_id(self, cid: int):
+        career = Career.objects.filter(id=cid).first()
+        if not career:
+            raise serializers.ValidationError({"career_id": "Carrera no existe en catálogos."})
+        return career
+
+    def validate(self, attrs):
+        instance   = getattr(self, "instance", None)
+        cid        = attrs.get("career_id",  instance.career_id  if instance else None)
+        start_year = attrs.get("start_year", instance.start_year if instance else None)
+        end_year   = attrs.get("end_year",   getattr(instance, "end_year", None) if instance else None)
+        if cid is None or start_year is None or end_year is None:
+            raise serializers.ValidationError({"end_year": "end_year es requerido."})
+        qs = Plan.objects.filter(career_id=cid, start_year=start_year, end_year=end_year, is_deleted=False)
+        if instance:
+            qs = qs.exclude(id=instance.id)
+        if qs.exists():
+            raise serializers.ValidationError({
+                "non_field_errors": [f"Ya existe un plan para esa carrera con el rango {start_year}-{end_year}."]
+            })
+        return attrs
 
     def create(self, validated_data):
-        cid = validated_data.pop("career_id")
-        cname = (validated_data.pop("career_name", "") or "").strip()
-
-        career, _ = Career.objects.get_or_create(
-            id=cid,
-            defaults={"name": cname or f"Carrera {cid}"}
-        )
-        if cname and career.name != cname:
-            career.name = cname
-            career.save(update_fields=["name"])
-
-        return Plan.objects.create(career=career, **validated_data)
+        cid    = validated_data.pop("career_id")
+        career = self._career_from_id(cid)
+        return Plan.objects.create(career=career, is_deleted=False, **validated_data)
 
     def update(self, instance, validated_data):
         cid = validated_data.pop("career_id", None)
-        cname = (validated_data.pop("career_name", "") or "").strip()
-
         if cid is not None:
-            career, _ = Career.objects.get_or_create(
-                id=cid,
-                defaults={"name": cname or f"Carrera {cid}"}
-            )
-            if cname and career.name != cname:
-                career.name = cname
-                career.save(update_fields=["name"])
-            instance.career = career
-
+            instance.career = self._career_from_id(cid)
         for k, v in validated_data.items():
             setattr(instance, k, v)
         instance.save()
@@ -122,78 +125,122 @@ class PlanCreateSerializer(serializers.ModelSerializer):
 
 # ───────────────────────── Cursos de un plan ─────────────────────────
 class PlanCourseOutSerializer(serializers.ModelSerializer):
-    code = serializers.CharField(source="course.code", read_only=True)
-    name = serializers.CharField(source="course.name", read_only=True)
-    credits = serializers.IntegerField(source="course.credits", read_only=True)
+    code          = serializers.SerializerMethodField()
+    name          = serializers.SerializerMethodField()
+    credits       = serializers.IntegerField(read_only=True)
     prerequisites = serializers.SerializerMethodField()
 
     class Meta:
-        model = PlanCourse
-        fields = ["id", "code", "name", "credits", "weekly_hours", "semester", "type", "prerequisites"]
+        model  = PlanCourse
+        fields = ["id", "code", "name", "credits", "semester", "weekly_hours", "type", "prerequisites"]
+
+    def get_code(self, obj):
+        return (getattr(obj, "display_code", "") or "").strip() or obj.course.code
+
+    def get_name(self, obj):
+        return (getattr(obj, "display_name", "") or "").strip() or obj.course.name
 
     def get_prerequisites(self, obj):
-        ids = obj.prereqs.values_list("prerequisite_id", flat=True)
+        ids = CoursePrereq.objects.filter(plan_course=obj).values_list("prerequisite_id", flat=True)
         return [{"id": i} for i in ids]
 
 
 class PlanCourseCreateSerializer(serializers.Serializer):
-    code = serializers.CharField()
-    name = serializers.CharField()
-    credits = serializers.IntegerField(required=False, default=3)
-    weekly_hours = serializers.IntegerField(required=False, default=3)
-    semester = serializers.IntegerField(required=False, default=1)
-    type = serializers.ChoiceField(choices=["MANDATORY", "ELECTIVE"], required=False, default="MANDATORY")
+    code         = serializers.CharField()
+    name         = serializers.CharField()
+    credits      = serializers.IntegerField(required=False, default=3, min_value=0)
+    weekly_hours = serializers.IntegerField(required=False, default=3, min_value=0)
+    semester     = serializers.IntegerField(required=False, default=1, min_value=1)
+    type         = serializers.ChoiceField(choices=["MANDATORY", "ELECTIVE"], required=False, default="MANDATORY")
+
+    def validate(self, attrs):
+        attrs["code"] = (attrs.get("code") or "").strip()
+        attrs["name"] = (attrs.get("name") or "").strip()
+        if not attrs["code"]:
+            raise serializers.ValidationError({"code": "code requerido"})
+        if not attrs["name"]:
+            raise serializers.ValidationError({"name": "name requerido"})
+        return attrs
 
 
 # ───────────────────────── Teachers / Classrooms ─────────────────────────
 class TeacherSerializer(serializers.ModelSerializer):
-    full_name = serializers.SerializerMethodField()
+    full_name    = serializers.SerializerMethodField()
+    display_name = serializers.SerializerMethodField()
 
     class Meta:
-        model = Teacher
-        fields = ["id", "user", "full_name"]
+        model  = Teacher
+        fields = ["id", "user", "full_name", "display_name"]
 
     def get_full_name(self, obj):
+        # Prioriza el campo propio del Teacher (catalogs.Teacher tiene full_name)
+        own = (getattr(obj, "full_name", "") or "").strip()
+        if own:
+            return own
         if not obj.user:
             return f"Teacher #{obj.id}"
         return safe_full_name(obj.user) or f"Teacher #{obj.id}"
 
+    def get_display_name(self, obj):
+        return self.get_full_name(obj)
+
 
 class ClassroomSerializer(serializers.ModelSerializer):
-    name = serializers.CharField(source="code", read_only=True)
+    """
+    FIX: se eliminó `name = serializers.CharField(source="code")`.
+
+    Antes ese alias hacía que tanto `name` como `code` tuvieran el mismo
+    valor (el código del aula), generando entradas duplicadas en el select:
+        "TARM-01-A-101 · TARM-01-A-101 (cap. 30)"
+
+    Ahora se exponen los campos reales del modelo sin aliases.
+    El campo `display_label` construye la etiqueta correcta para el frontend:
+        "Código · Nombre (cap. N)"  →  cuando code ≠ name
+        "Nombre (cap. N)"           →  cuando son iguales o uno está vacío
+    """
+    display_label = serializers.SerializerMethodField()
 
     class Meta:
-        model = Classroom
-        fields = ["id", "name", "code", "capacity"]
+        model  = Classroom
+        fields = ["id", "code", "capacity", "display_label"]
+
+    def get_display_label(self, obj):
+        code = (obj.code or "").strip()
+        cap  = getattr(obj, "capacity", None)
+        base = code or f"Aula #{obj.pk}"
+        return f"{base} (cap. {cap})" if cap else base
 
 
 # ───────────────────────── Sections ─────────────────────────
 class SlotOutSerializer(serializers.ModelSerializer):
     class Meta:
-        model = SectionScheduleSlot
+        model  = SectionScheduleSlot
         fields = ["weekday", "start", "end"]
 
 
 class SectionOutSerializer(serializers.ModelSerializer):
-    course_code = serializers.CharField(source="plan_course.course.code", read_only=True)
-    course_name = serializers.CharField(source="plan_course.course.name", read_only=True)
+    course_code  = serializers.SerializerMethodField()
+    course_name  = serializers.SerializerMethodField()
+    plan_id      = serializers.IntegerField(source="plan_course.plan.id",         read_only=True)
+    plan_name    = serializers.CharField(   source="plan_course.plan.name",        read_only=True)
+    career_name  = serializers.CharField(   source="plan_course.plan.career.name", read_only=True)
+    section_code = serializers.CharField(   source="label",                        read_only=True)
 
-    # ✅ compat frontend: section_code
-    section_code = serializers.CharField(source="label", read_only=True)
-
-    teacher_id = serializers.SerializerMethodField()
+    teacher_id   = serializers.SerializerMethodField()
     teacher_name = serializers.SerializerMethodField()
 
-    room_id = serializers.IntegerField(source="classroom.id", read_only=True)
-    room_name = serializers.CharField(source="classroom.code", read_only=True)
+    room_id   = serializers.IntegerField(source="classroom.id", read_only=True)
+    # FIX: antes era source="classroom.code" → solo mostraba el código en la tabla
+    room_name = serializers.SerializerMethodField()
 
     slots = serializers.SerializerMethodField()
 
     class Meta:
-        model = Section
+        model  = Section
         fields = [
             "id",
             "course_code", "course_name",
+            "plan_id", "plan_name", "career_name",
             "section_code",
             "teacher_id", "teacher_name",
             "room_id", "room_name",
@@ -201,6 +248,18 @@ class SectionOutSerializer(serializers.ModelSerializer):
             "label",
             "slots",
         ]
+
+    def get_course_code(self, obj):
+        pc = getattr(obj, "plan_course", None)
+        if not pc:
+            return ""
+        return pc.display_code or (pc.course.code if pc.course_id else "")
+
+    def get_course_name(self, obj):
+        pc = getattr(obj, "plan_course", None)
+        if not pc:
+            return ""
+        return pc.display_name or (pc.course.name if pc.course_id else "")
 
     def get_teacher_id(self, obj):
         if not obj.teacher or not obj.teacher.user:
@@ -210,51 +269,58 @@ class SectionOutSerializer(serializers.ModelSerializer):
     def get_teacher_name(self, obj):
         if not obj.teacher:
             return ""
+        # Prioriza campo propio del Teacher
+        own = (getattr(obj.teacher, "full_name", "") or "").strip()
+        if own:
+            return own
         return safe_full_name(getattr(obj.teacher, "user", None)) or f"Teacher #{obj.teacher.id}"
+
+    def get_room_name(self, obj):
+        """El modelo academic.Classroom solo tiene 'code', no 'name'."""
+        if not obj.classroom:
+            return ""
+        return (obj.classroom.code or "").strip() or f"Aula #{obj.classroom.pk}"
 
     def get_slots(self, obj):
         out = []
         for s in obj.schedule_slots.all().order_by("weekday", "start"):
             out.append({
-                "day": INT_TO_DAY.get(s.weekday, str(s.weekday)),
+                "day":   INT_TO_DAY.get(s.weekday, str(s.weekday)),
                 "start": str(s.start)[:5],
-                "end": str(s.end)[:5],
+                "end":   str(s.end)[:5],
             })
         return out
 
 
 class SlotInSerializer(serializers.Serializer):
-    day = serializers.ChoiceField(choices=list(DAY_TO_INT.keys()))
+    day   = serializers.ChoiceField(choices=list(DAY_TO_INT.keys()))
     start = serializers.CharField()
-    end = serializers.CharField()
+    end   = serializers.CharField()
 
     def validate(self, attrs):
         st = _parse_hhmm(attrs.get("start"))
         en = _parse_hhmm(attrs.get("end"))
-
         if st >= en:
             raise serializers.ValidationError("start debe ser menor que end")
-
         attrs["_start_time"] = st
-        attrs["_end_time"] = en
+        attrs["_end_time"]   = en
         return attrs
 
 
 class SectionCreateUpdateSerializer(serializers.Serializer):
-    course_id = serializers.IntegerField()
+    course_id  = serializers.IntegerField()
     teacher_id = serializers.IntegerField(required=False, allow_null=True)
-    room_id = serializers.IntegerField(required=False, allow_null=True)
-    capacity = serializers.IntegerField(required=False, min_value=1)
-    period = serializers.CharField(required=False, allow_blank=True)
-    label = serializers.CharField(required=False, allow_blank=True)
-    slots = SlotInSerializer(many=True, required=False)
+    room_id    = serializers.IntegerField(required=False, allow_null=True)
+    capacity   = serializers.IntegerField(required=False, min_value=1)
+    period     = serializers.CharField(required=False, allow_blank=True)
+    label      = serializers.CharField(required=False, allow_blank=True)
+    slots      = SlotInSerializer(many=True, required=False)
 
     def validate_slots(self, slots):
         by_day = {}
         for s in slots:
             d = s["day"]
             by_day.setdefault(d, []).append(s)
-
         for d, items in by_day.items():
             seen = set()
             for it in items:
@@ -262,57 +328,67 @@ class SectionCreateUpdateSerializer(serializers.Serializer):
                 if key in seen:
                     raise serializers.ValidationError(f"Horario duplicado en {d}")
                 seen.add(key)
-
             items_sorted = sorted(items, key=lambda x: x["_start_time"])
             for i in range(len(items_sorted) - 1):
                 cur = items_sorted[i]
                 nxt = items_sorted[i + 1]
                 if cur["_end_time"] > nxt["_start_time"]:
                     raise serializers.ValidationError(f"Solapamiento de horarios en {d}")
-
         return slots
 
 
 # ───────────────────────── Otros ─────────────────────────
 class AcademicPeriodSerializer(serializers.ModelSerializer):
     class Meta:
-        model = AcademicPeriod
+        model  = AcademicPeriod
         fields = "__all__"
 
 
 class SyllabusSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Syllabus
+        model  = Syllabus
         fields = ["id", "section", "file"]
 
 
 class EvaluationConfigSerializer(serializers.ModelSerializer):
     class Meta:
-        model = EvaluationConfig
+        model  = EvaluationConfig
         fields = ["id", "section", "config"]
 
 
 class AttendanceRowSerializer(serializers.ModelSerializer):
     class Meta:
-        model = AttendanceRow
+        model  = AttendanceRow
         fields = ["student_id", "status"]
 
 
 class AttendanceSessionSerializer(serializers.ModelSerializer):
-    rows = AttendanceRowSerializer(many=True, required=False)
-
-    # ✅ tu frontend usa is_closed
+    rows      = AttendanceRowSerializer(many=True, required=False)
     is_closed = serializers.BooleanField(source="closed", read_only=True)
 
     class Meta:
-        model = AttendanceSession
+        model  = AttendanceSession
         fields = ["id", "section", "date", "closed", "is_closed", "rows"]
 
 
 class AcademicProcessSerializer(serializers.ModelSerializer):
     class Meta:
-        model = AcademicProcess
+        model  = AcademicProcess
         fields = "__all__"
+
+
+class AcademicGradeRecordOutSerializer(serializers.ModelSerializer):
+    course_name = serializers.CharField(source="course.name", read_only=True)
+    credits     = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = AcademicGradeRecord
+        fields = ["id", "term", "final_grade", "course", "course_name", "credits"]
+
+    def get_credits(self, obj):
+        if obj.plan_course_id:
+            return int(obj.plan_course.credits or 0)
+        return int(obj.course.credits or 0)
 
 
 class ProcessFileSerializer(serializers.ModelSerializer):
@@ -320,7 +396,7 @@ class ProcessFileSerializer(serializers.ModelSerializer):
     size = serializers.SerializerMethodField()
 
     class Meta:
-        model = ProcessFile
+        model  = ProcessFile
         fields = ["id", "name", "size", "note", "file"]
 
     def get_size(self, obj):
