@@ -324,21 +324,33 @@ def users_detail(request, pk: int):
 
         try:
             with transaction.atomic():
+                # Desvincular Teacher records antes de eliminar (evita ProtectedError)
+                try:
+                    from catalogs.models import Teacher as CatalogTeacher
+                    CatalogTeacher.objects.filter(user_id=pk).update(user=None)
+                except Exception:
+                    pass
+                try:
+                    from academic.models import Teacher as AcademicTeacher
+                    AcademicTeacher.objects.filter(user_id=pk).update(user=None)
+                except Exception:
+                    pass
+
                 user.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         except ProtectedError as e:
             sample = [str(x) for x in list(e.protected_objects)[:10]]
             return Response({
-                "detail": "No se puede eliminar este usuario porque tiene registros relacionados protegidos.",
-                "hint": "Si es un estudiante y quieres borrar también su data académica, usa /api/users/purge.",
+                "detail": "No se puede eliminar este usuario porque tiene registros relacionados protegidos. "
+                          "Si es un estudiante y quieres borrar también su data académica, usa el botón 'Purge estudiantes'.",
                 "protected_sample": sample,
             }, status=status.HTTP_409_CONFLICT)
 
         except IntegrityError:
             return Response({
-                "detail": "No se puede eliminar este usuario por integridad referencial en la base de datos.",
-                "hint": "Elimina relaciones primero o usa /api/users/purge si corresponde."
+                "detail": "No se puede eliminar este usuario por integridad referencial en la base de datos. "
+                          "Usa el botón 'Purge estudiantes' si corresponde."
             }, status=status.HTTP_409_CONFLICT)
 
         except Exception as ex:
@@ -535,23 +547,28 @@ def users_set_password(request, pk: int):
 
 def _purge_one_student(user_obj: User):
     """
-    Borra todo lo de un estudiante:
+    Borra todo lo de un estudiante (eliminación total):
     - AcademicGradeRecord por student_profile
+    - Enrollment + EnrollmentItem + EnrollmentPayment (por student)
     - AcademicProcess + ProcessFile (por student_id = Student.id)
     - AttendanceRow (por student_id = user.id)
     - SectionGrades.grades: elimina llave str(user.id)
     - Student profile
+    - Teacher records (catalogs + academic) si existen
     - UserRole
     - User
     Retorna conteos.
     """
     counts = {
         "grade_records": 0,
+        "enrollments": 0,
+        "enrollment_payments": 0,
         "processes": 0,
         "process_files": 0,
         "attendance_rows": 0,
         "section_grades_touched": 0,
         "student_profiles": 0,
+        "teachers_unlinked": 0,
         "user_roles": 0,
         "users": 0,
     }
@@ -564,17 +581,30 @@ def _purge_one_student(user_obj: User):
     except Exception:
         st = None
 
+    # ── 1. Grade records ──
     if st:
         counts["grade_records"] = AcademicGradeRecord.objects.filter(student=st).delete()[0]
 
+    # ── 2. Enrollments (y sus items / payments) ──
+    if st:
+        try:
+            from academic.models import Enrollment, EnrollmentPayment
+            counts["enrollment_payments"] = EnrollmentPayment.objects.filter(student=st).delete()[0]
+            counts["enrollments"] = Enrollment.objects.filter(student=st).delete()[0]
+        except Exception:
+            pass
+
+    # ── 3. Processes + files ──
     if st:
         proc_ids = list(AcademicProcess.objects.filter(student_id=st.id).values_list("id", flat=True))
         if proc_ids:
             counts["process_files"] = ProcessFile.objects.filter(process_id__in=proc_ids).delete()[0]
         counts["processes"] = AcademicProcess.objects.filter(student_id=st.id).delete()[0]
 
+    # ── 4. Attendance rows ──
     counts["attendance_rows"] = AttendanceRow.objects.filter(student_id=uid).delete()[0]
 
+    # ── 5. Section grades (JSON key) ──
     key = str(uid)
     touched = 0
     try:
@@ -592,10 +622,36 @@ def _purge_one_student(user_obj: User):
 
     counts["section_grades_touched"] = touched
 
+    # ── 6. Student profile ──
     if st:
         counts["student_profiles"] = Student.objects.filter(id=st.id).delete()[0]
 
+    # ── 7. Desvincular Teacher records (PROTECT → SET_NULL ya aplicado,
+    #        pero por seguridad desvinculamos explícitamente) ──
+    try:
+        from catalogs.models import Teacher as CatalogTeacher
+        n = CatalogTeacher.objects.filter(user_id=uid).update(user=None)
+        counts["teachers_unlinked"] += n
+    except Exception:
+        pass
+    try:
+        from academic.models import Teacher as AcademicTeacher
+        n = AcademicTeacher.objects.filter(user_id=uid).update(user=None)
+        counts["teachers_unlinked"] += n
+    except Exception:
+        pass
+
+    # ── 8. Desvincular Applicant (admission) ──
+    try:
+        from admission.models import Applicant
+        Applicant.objects.filter(user_id=uid).update(user=None)
+    except Exception:
+        pass
+
+    # ── 9. UserRole ──
     counts["user_roles"] = UserRole.objects.filter(user_id=uid).delete()[0]
+
+    # ── 10. User (final) ──
     counts["users"] = User.objects.filter(id=uid).delete()[0]
 
     return counts
@@ -646,23 +702,13 @@ def users_purge(request):
 
     qs = qs.exclude(id=request.user.id)
 
-    safe_targets = []
-    for u in qs:
-        has_student = False
-        try:
-            _ = u.student_profile
-            has_student = True
-        except Exception:
-            has_student = False
-
-        if has_student:
-            safe_targets.append(u)
+    safe_targets = list(qs)
 
     if not safe_targets:
         return Response({
             "dry_run": dry_run,
             "targets": 0,
-            "message": "No hay usuarios tipo STUDENT para purgar (o intentaste borrar tu propio usuario)."
+            "message": "No hay usuarios para purgar (o intentaste borrar tu propio usuario)."
         })
 
     if dry_run:
@@ -683,24 +729,46 @@ def users_purge(request):
 
     totals = {
         "grade_records": 0,
+        "enrollments": 0,
+        "enrollment_payments": 0,
         "processes": 0,
         "process_files": 0,
         "attendance_rows": 0,
         "section_grades_touched": 0,
         "student_profiles": 0,
+        "teachers_unlinked": 0,
         "user_roles": 0,
         "users": 0,
     }
 
+    errors = []
+
     with transaction.atomic():
         for u in safe_targets:
-            c = _purge_one_student(u)
-            for k in totals:
-                totals[k] += int(c.get(k, 0) or 0)
+            try:
+                c = _purge_one_student(u)
+                for k in totals:
+                    totals[k] += int(c.get(k, 0) or 0)
+            except Exception as ex:
+                errors.append({
+                    "user_id": u.id,
+                    "username": getattr(u, "username", ""),
+                    "error": str(ex),
+                })
+
+    if errors and totals["users"] == 0:
+        return Response({
+            "dry_run": False,
+            "targets": len(safe_targets),
+            "deleted": totals,
+            "errors": errors,
+            "message": f"Purge falló para {len(errors)} usuario(s). Revisa los errores."
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response({
         "dry_run": False,
         "targets": len(safe_targets),
         "deleted": totals,
-        "message": "Purge ejecutado. Se borró la data académica + usuario."
+        "errors": errors if errors else None,
+        "message": f"Purge ejecutado. {totals['users']} usuario(s) eliminado(s)."
     })

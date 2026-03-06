@@ -1042,9 +1042,9 @@ function PurgeDialog({ open, onClose, purgeMode, purgeRole, selectedCount, purge
                   <span className="text-lg font-800 text-red-700">{purgeDryRun.targets ?? 0}</span>
                 </div>
 
-                {purgeMode === "ids" && (
+                {purgeMode === "ids" && purgeDryRun.targets === 0 && (
                   <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                    Los usuarios que no son estudiantes serán ignorados por el backend.
+                    No se encontraron usuarios para purgar.
                   </p>
                 )}
 
