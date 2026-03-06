@@ -52,11 +52,11 @@ const fmtDateTime = (v) => v ? new Date(v).toLocaleString("es-PE", { day: "2-dig
 const fmtMoney = (n) => Number(n || 0).toFixed(2);
 
 const REQUIRED_DOCS = [
-    { value: "BIRTH_CERTIFICATE", label: "Partida de nacimiento" },
-    { value: "STUDY_CERTIFICATE", label: "Cert. estudios" },
-    { value: "PHOTO", label: "Foto" },
-    { value: "DNI_COPY", label: "Copia DNI" },
-    { value: "CONADIS_COPY", label: "Carné CONADIS" },
+    { value: "FOTO_CARNET", label: "Fotografía tamaño carné" },
+    { value: "COPIA_DNI", label: "Copia DNI" },
+    { value: "PARTIDA_NACIMIENTO", label: "Partida de nacimiento" },
+    { value: "CERTIFICADO_ESTUDIOS", label: "Cert. estudios" },
+    { value: "CARNET_CONADIS", label: "Carné CONADIS" },
 ];
 
 const BASE_FORM = {
@@ -67,7 +67,7 @@ const BASE_FORM = {
     application_fee: 0, max_applications_per_career: 1,
     available_careers: [], career_vacancies: {},
     minimum_age: 16, maximum_age: 35,
-    required_documents: ["BIRTH_CERTIFICATE", "STUDY_CERTIFICATE", "PHOTO", "DNI_COPY"],
+    required_documents: ["FOTO_CARNET", "COPIA_DNI", "PARTIDA_NACIMIENTO", "CERTIFICADO_ESTUDIOS"],
 };
 
 const buildForm = (defs) => ({

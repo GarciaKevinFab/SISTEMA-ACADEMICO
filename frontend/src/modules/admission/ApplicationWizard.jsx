@@ -251,15 +251,17 @@ export default function ApplicationWizard() {
     const callDocs = selectedCall?.required_documents;
     if (callDocs && Array.isArray(callDocs) && callDocs.length > 0) {
       return callDocs.map((cd) => {
-        const def = DEFAULT_REQUIRED_DOCS.find((d) => d.type === cd.type);
+        // Soportar tanto strings ("FOTO_CARNET") como objetos ({type:"FOTO_CARNET",...})
+        const docType = typeof cd === "string" ? cd : cd.type;
+        const def = DEFAULT_REQUIRED_DOCS.find((d) => d.type === docType);
         return {
-          type: cd.type,
-          label: cd.label || def?.label || cd.type,
-          description: cd.description || def?.description || "",
-          accept: cd.accept || def?.accept || "image/jpeg,image/png,application/pdf",
+          type: docType,
+          label: (typeof cd === "object" && cd.label) || def?.label || docType,
+          description: (typeof cd === "object" && cd.description) || def?.description || "",
+          accept: (typeof cd === "object" && cd.accept) || def?.accept || "image/jpeg,image/png,application/pdf",
           icon: def?.icon || FileText,
-          isPhoto: def?.isPhoto || cd.type === "FOTO_CARNET",
-          required: cd.required ?? def?.required ?? true,
+          isPhoto: def?.isPhoto || docType === "FOTO_CARNET",
+          required: (typeof cd === "object" ? cd.required : undefined) ?? def?.required ?? true,
         };
       });
     }

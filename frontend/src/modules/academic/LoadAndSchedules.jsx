@@ -126,7 +126,7 @@ function CourseCard({ course, selected, onClick }) {
                         <span className="font-mono text-[11px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{course.code}</span>
                         {course.credits && <span className="text-[10px] text-slate-400">{course.credits} cr.</span>}
                     </div>
-                    <div className="text-sm font-medium text-slate-800 mt-1 leading-tight line-clamp-2">{course.name}</div>
+                    <div className="text-sm font-medium text-slate-800 mt-1 leading-tight line-clamp-2 uppercase">{course.name}</div>
                 </div>
                 {selected && <CheckCircle2 className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />}
             </div>

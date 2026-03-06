@@ -534,8 +534,9 @@ export default function ApplicantsManagement() {
                                 );
                                 const email = d(r, "email", "");
                                 const phone = d(r, "phone", d(r, "mobile", ""));
-                                const isFem = sexo.toUpperCase().startsWith("F");
-                                const isMasc = sexo.toUpperCase().startsWith("M") && !sexo.toUpperCase().startsWith("MA");
+                                const su = sexo.toUpperCase();
+                                const isFem = su === "F" || su === "FEMENINO" || su.startsWith("FEM");
+                                const isMasc = su === "M" || su === "MASCULINO" || su.startsWith("MASC");
                                 const globalIdx = (page - 1) * PAGE_SIZE + i + 1;
 
                                 return (
@@ -872,8 +873,8 @@ export default function ApplicantsManagement() {
                                 <Select value={editForm.sexo || ""} onValueChange={v => setEditForm(f => ({ ...f, sexo: v }))}>
                                     <SelectTrigger className="h-10 rounded-xl"><SelectValue placeholder="Seleccione…" /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="Masculino">Masculino</SelectItem>
-                                        <SelectItem value="Femenino">Femenino</SelectItem>
+                                        <SelectItem value="MASCULINO">Masculino</SelectItem>
+                                        <SelectItem value="FEMENINO">Femenino</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </FormField>
