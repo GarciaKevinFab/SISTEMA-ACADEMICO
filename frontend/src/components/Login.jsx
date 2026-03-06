@@ -180,9 +180,9 @@ const Login = () => {
                     <button
                       type="submit"
                       disabled={loading}
-                      className={`w-full h-11 rounded-xl text-sm font-800 tracking-wide transition-all duration-200 flex items-center justify-center gap-2 mt-2 ${loading
+                      className={`w-full h-11 rounded-xl text-sm font-extrabold tracking-wide transition-all duration-200 flex items-center justify-center gap-2 mt-2 ${loading
                         ? "bg-slate-300 text-slate-500 cursor-not-allowed"
-                        : "bg-gradient-to-r from-[#1E2F49] to-indigo-800 text-white hover:from-[#162338] hover:to-indigo-700 shadow-lg shadow-blue-950/25 hover:shadow-xl hover:shadow-blue-950/30 hover:scale-[1.01] active:scale-[0.99]"
+                        : "bg-gradient-to-r from-indigo-600 to-indigo-800 !text-white hover:from-indigo-500 hover:to-indigo-700 shadow-lg shadow-indigo-600/30 hover:shadow-xl hover:shadow-indigo-600/40 hover:scale-[1.01] active:scale-[0.99]"
                         }`}
                     >
                       {loading ? <><Loader2 size={15} className="animate-spin" /> Iniciando sesión…</> : "Iniciar Sesión"}

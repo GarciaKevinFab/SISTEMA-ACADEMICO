@@ -28,6 +28,7 @@ import {
   BookOpenCheck,
 } from "lucide-react";
 import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
+import EnrollmentPaymentGate from "./EnrollmentPaymentGate";
 
 /* ─── helpers ─── */
 function formatApiError(err, fallback = "Ocurrió un error") {
@@ -440,6 +441,7 @@ const EnrollmentComponent = () => {
   const [loading, setLoading] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [loadingAvailable, setLoadingAvailable] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState(null);
 
   const windowStatus = useMemo(() => {
     if (!windowInfo) return "FREE";
@@ -460,10 +462,12 @@ const EnrollmentComponent = () => {
       const student = pick(data, ["student", "student_info", "profile"], null);
       const list = pick(data, ["courses", "items", "available_courses"], []);
       const win = pick(data, ["enrollment_window", "window"], null);
+      const payInfo = data?.payment_status || null;
 
       setResolvedStudent(student);
       setCourses(Array.isArray(list) ? list : []);
       setWindowInfo(win);
+      setPaymentStatus(payInfo);
       setSelectedCourses([]);
       setSelectedSections({});
       setValidation({ status: null, errors: [], warnings: [], suggestions: [] });
@@ -868,8 +872,16 @@ const EnrollmentComponent = () => {
             </Card>
           )}
 
-          {/* ── Course Selection ── */}
-          <Card className="border-slate-200 shadow-sm overflow-hidden">
+          {/* ── Payment Gate (solo para estudiantes no-admin) ── */}
+          {!adminMode && resolvedStudent && paymentStatus?.status !== "APPROVED" && (
+            <EnrollmentPaymentGate
+              period={academicPeriod}
+              onPaymentApproved={() => fetchAvailable()}
+            />
+          )}
+
+          {/* ── Course Selection (solo visible si pago aprobado o es admin) ── */}
+          <Card className={`border-slate-200 shadow-sm overflow-hidden ${!adminMode && paymentStatus && paymentStatus.status !== "APPROVED" ? "hidden" : ""}`}>
             <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-blue-100 rounded-lg">

@@ -16,6 +16,7 @@ import StudentAccountsDashboard from "./StudentAccountsDashboard";
 import FinanceReports from "./FinanceReports";
 import { fmtCurrency, formatApiError } from "../../utils/format";
 import { PERMS } from "../../auth/permissions";
+import EnrollmentPaymentsReview from "./EnrollmentPaymentsReview";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -45,6 +46,7 @@ const FinanceModule = () => {
   const canReports = hasAny([PERMS["fin.reports.view"]]);
   const canInventory = hasAny([PERMS["fin.inventory.view"]]); // Ahora este permiso cubre Logística e Inventario
   const canHR = hasAny([PERMS["hr.view"]]);
+  const canEnrollmentPayments = hasAny([PERMS["enrollment.payment.review"], PERMS["enrollment.payment.approve"]]);
 
   const roleLabel = (() => {
     if (hasAny([PERMS["fin.concepts.manage"], PERMS["fin.reports.view"], PERMS["fin.reconciliation.view"]])) return "Administrador Financiero";
@@ -225,6 +227,7 @@ const FinanceModule = () => {
                   ...(canReports ? [{ key: "reports", label: "Reportes" }] : []),
                   ...(canInventory ? [{ key: "inventory", label: "Inventario" }] : []), // Ahora incluye Logística
                   ...(canHR ? [{ key: "hr", label: "RRHH" }] : []),
+                  ...(canEnrollmentPayments ? [{ key: "enrollment-payments", label: "Pagos Matrícula" }] : []),
                 ].find((t) => t.key === activeTab);
 
                 return current?.label ?? "Dashboard";
@@ -270,6 +273,9 @@ const FinanceModule = () => {
 
                 {canHR && (
                   <DropdownMenuItem onClick={() => setActiveTab("hr")}>RRHH</DropdownMenuItem>
+                )}
+                {canEnrollmentPayments && (
+                  <DropdownMenuItem onClick={() => setActiveTab("enrollment-payments")}>Pagos Matrícula</DropdownMenuItem>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -357,6 +363,15 @@ const FinanceModule = () => {
                 </span>
               </TabsTrigger>
             )}
+
+            {canEnrollmentPayments && (
+              <TabsTrigger value="enrollment-payments" className="rounded-lg text-slate-800 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                <span className="inline-flex items-center gap-2">
+                  <Receipt className="h-4 w-4" aria-hidden="true" />
+                  Pagos Matrícula
+                </span>
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
       </div>
@@ -385,6 +400,9 @@ const FinanceModule = () => {
       </TabsContent>
       <TabsContent value="hr">
         {canHR ? <HRDashboard /> : <div className="text-center py-8">No tienes permisos…</div>}
+      </TabsContent>
+      <TabsContent value="enrollment-payments">
+        {canEnrollmentPayments ? <EnrollmentPaymentsReview /> : <div className="text-center py-8">No tienes permisos…</div>}
       </TabsContent>
     </Tabs>
   );

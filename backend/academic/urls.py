@@ -45,6 +45,15 @@ from .views import (
     # ── NUEVO: overview de alumnos para admin ──
     StudentsOverviewView,
 
+    # ── Pago de matrícula ──
+    EnrollmentPaymentStatusView,
+    EnrollmentPaymentUploadView,
+    EnrollmentPaymentReUploadView,
+    EnrollmentPaymentPendingView,
+    EnrollmentPaymentDetailView,
+    EnrollmentPaymentApproveView,
+    EnrollmentPaymentRejectView,
+
     # ── Dashboards ──
     student_dashboard, student_grades_summary, student_schedule,
     teacher_dashboard, teacher_schedule_today,
@@ -167,6 +176,15 @@ urlpatterns = [
     path("processes/<int:pid>/files",                ProcessFilesView.as_view()),
     path("processes/<int:pid>/files/<int:file_id>",  ProcessFileDeleteView.as_view()),
     path("processes/<int:pid>/generate-document",    ProcessGenerateDocumentView.as_view()),
+
+    # ── Pago de Matrícula ──────────────────────────────────────────
+    path("enrollment-payment/status",          EnrollmentPaymentStatusView.as_view()),
+    path("enrollment-payment/upload",          EnrollmentPaymentUploadView.as_view()),
+    path("enrollment-payment/re-upload",       EnrollmentPaymentReUploadView.as_view()),
+    path("enrollment-payment/pending",         EnrollmentPaymentPendingView.as_view()),
+    path("enrollment-payment/<int:pk>",        EnrollmentPaymentDetailView.as_view()),
+    path("enrollment-payment/<int:pk>/approve", EnrollmentPaymentApproveView.as_view()),
+    path("enrollment-payment/<int:pk>/reject",  EnrollmentPaymentRejectView.as_view()),
 
     # ── Reportes ─────────────────────────────────────────────────
     path("reports/summary",            AcademicReportsSummaryView.as_view()),

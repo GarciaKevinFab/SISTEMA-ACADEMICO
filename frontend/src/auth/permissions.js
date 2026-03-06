@@ -65,6 +65,12 @@ export const PERMS = {
     "student.manage.enrollment": "student.manage.enrollment",
     "student.manage.kardex": "student.manage.kardex",
 
+    /* === PAGO DE MATRÍCULA === */
+    "enrollment.payment.view": "enrollment.payment.view",
+    "enrollment.payment.upload": "enrollment.payment.upload",
+    "enrollment.payment.review": "enrollment.payment.review",
+    "enrollment.payment.approve": "enrollment.payment.approve",
+
     /* === ADMISIÓN === */
     "admission.calls.view": "admission.calls.view",
     "admission.calls.manage": "admission.calls.manage",
@@ -248,6 +254,10 @@ export const ROLE_POLICIES = {
         "academic.enrollment.view",
         "academic.enrollment.commit",
         "academic.kardex.view",
+
+        // Pago de matrícula
+        "enrollment.payment.view",
+        "enrollment.payment.upload",
     ],
 
     /* Admisión */
@@ -291,6 +301,9 @@ export const ROLE_POLICIES = {
         "fin.payments.receive",
         "fin.cash.movements",
         "finance.dashboard.view",
+        // Pago de matrícula
+        "enrollment.payment.review",
+        "enrollment.payment.approve",
     ],
 
     ACCOUNTANT: [
@@ -316,6 +329,9 @@ export const ROLE_POLICIES = {
         "fin.ar.manage",
         "fin.ap.manage",
         "fin.inventory.manage",
+        // Pago de matrícula
+        "enrollment.payment.review",
+        "enrollment.payment.approve",
     ],
 
     WAREHOUSE: ["fin.inventory.view", "logistics.warehouse.dispatch"],

@@ -398,3 +398,68 @@ class InstitutionSettings(models.Model):
 
     def __str__(self):
         return f"InstitutionSettings #{self.id}"
+
+
+# ══════════════════════════════════════════════════════════════
+#  PAGO DE MATRÍCULA
+# ══════════════════════════════════════════════════════════════
+
+class EnrollmentPayment(models.Model):
+    """
+    Registro de pago de matrícula por período.
+    El estudiante sube un voucher del Banco de la Nación;
+    finanzas revisa y aprueba/rechaza.
+    Solo con status APPROVED se desbloquea la matrícula.
+    """
+
+    CHANNEL_CHOICES = [
+        ("PAGALO", "Págalo.pe"),
+        ("CAJERO_MULTIRED", "Cajero Multired"),
+        ("AGENCIA_BN", "Agencia Banco de la Nación"),
+    ]
+
+    STATUS_PENDING  = "PENDING"
+    STATUS_APPROVED = "APPROVED"
+    STATUS_REJECTED = "REJECTED"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING,  "Pendiente"),
+        (STATUS_APPROVED, "Aprobado"),
+        (STATUS_REJECTED, "Rechazado"),
+    ]
+
+    student        = models.ForeignKey("students.Student", on_delete=models.CASCADE, related_name="enrollment_payments")
+    period         = models.CharField(max_length=20)
+    amount         = models.DecimalField(max_digits=8, decimal_places=2)
+    discount_tag   = models.CharField(max_length=30, blank=True, default="")
+    surcharge      = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    channel        = models.CharField(max_length=20, choices=CHANNEL_CHOICES)
+    operation_code = models.CharField(max_length=60, blank=True, default="")
+    voucher        = models.FileField(upload_to="enrollment_vouchers/")
+    voucher_name   = models.CharField(max_length=255, blank=True, default="")
+
+    status         = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    reviewer       = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="reviewed_enrollment_payments",
+    )
+    reviewed_at    = models.DateTimeField(null=True, blank=True)
+    rejection_note = models.CharField(max_length=500, blank=True, default="")
+
+    created_at     = models.DateTimeField(auto_now_add=True)
+    updated_at     = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("student", "period")]
+        indexes = [
+            models.Index(fields=["period", "status"]),
+        ]
+
+    def __str__(self):
+        return f"EnrollmentPayment {self.student_id} / {self.period} [{self.status}]"
+
+    @property
+    def total(self):
+        return self.amount + self.surcharge

@@ -451,3 +451,41 @@ export const Grades = {
     submit: async (sectionId, grades) => requestJsonSmart("POST", "/academic/grades/submit", { section_id: sectionId, grades }),
     reopen: async (sectionId) => requestJsonSmart("POST", "/academic/grades/reopen", { section_id: sectionId }),
 };
+
+
+/* ═══════════════════════════════════════════════════════════════
+   PAGO DE MATRÍCULA
+   ═══════════════════════════════════════════════════════════════ */
+export const EnrollmentPayment = {
+    /** Estudiante: estado de su pago para el periodo */
+    status: async (params = {}) =>
+        requestJsonSmart("GET", "/academic/enrollment-payment/status", null, { params }),
+
+    /** Estudiante: subir voucher (FormData con period, channel, operation_code, voucher) */
+    upload: async (formData) =>
+        requestJsonSmart("POST", "/academic/enrollment-payment/upload", formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+        }),
+
+    /** Estudiante: re-subir voucher tras rechazo */
+    reUpload: async (formData) =>
+        requestJsonSmart("POST", "/academic/enrollment-payment/re-upload", formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+        }),
+
+    /** Finanzas: lista pagos pendientes */
+    pending: async (params = {}) =>
+        requestJsonSmart("GET", "/academic/enrollment-payment/pending", null, { params }),
+
+    /** Finanzas: detalle de un pago */
+    detail: async (id) =>
+        requestJsonSmart("GET", `/academic/enrollment-payment/${id}`, null),
+
+    /** Finanzas: aprobar un pago */
+    approve: async (id) =>
+        requestJsonSmart("POST", `/academic/enrollment-payment/${id}/approve`, {}),
+
+    /** Finanzas: rechazar un pago */
+    reject: async (id, note) =>
+        requestJsonSmart("POST", `/academic/enrollment-payment/${id}/reject`, { note }),
+};

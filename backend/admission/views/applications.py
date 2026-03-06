@@ -122,6 +122,117 @@ def applications_collection(request):
     return Response(ApplicationSerializer(obj).data, status=201)
 
 
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def application_detail(request, application_id):
+    """Detalle, edición o eliminación de una postulación individual."""
+    try:
+        app = (
+            Application.objects
+            .select_related("applicant", "call")
+            .prefetch_related("preferences__career")
+            .get(pk=application_id)
+        )
+    except Application.DoesNotExist:
+        return Response({"detail": "Postulación no encontrada"}, status=404)
+
+    # ── GET ──
+    if request.method == "GET":
+        return Response(ApplicationSerializer(app).data)
+
+    # ── PATCH ── Actualizar campos editables
+    if request.method == "PATCH":
+        payload = request.data or {}
+
+        # Campos directos del modelo Application
+        if "status" in payload:
+            app.status = payload["status"]
+        if "career_name" in payload:
+            app.career_name = payload["career_name"]
+
+        # Datos del JSON (data.profile, data.school)
+        data = app.data if isinstance(app.data, dict) else {}
+        profile = data.get("profile") or {}
+        school = data.get("school") or {}
+
+        # Mapeo: campo del formulario → dónde se guarda
+        profile_fields = [
+            "nombres", "apellido_paterno", "apellido_materno",
+            "dni", "sexo", "fecha_nacimiento", "nacionalidad",
+            "email", "phone", "direccion", "estado_civil",
+            "lengua_materna", "autoidentificacion_etnica",
+            "discapacidad", "tipo_discapacidad",
+            "modalidad_admision",
+            # Aliases en inglés
+            "first_names", "last_name_father", "last_name_mother",
+            "document_number", "birth_date", "nationality",
+            "address", "mother_tongue", "ethnic_identity",
+        ]
+        school_fields = [
+            "colegio_procedencia", "anio_egreso",
+            "anio_finalizo_estudios_secundarios",
+            "school_name", "school_type", "school_department",
+            "promotion_year",
+        ]
+
+        changed_data = False
+        for key in profile_fields:
+            if key in payload:
+                profile[key] = payload[key]
+                changed_data = True
+        for key in school_fields:
+            if key in payload:
+                school[key] = payload[key]
+                changed_data = True
+
+        if changed_data:
+            data["profile"] = profile
+            data["school"] = school
+            app.data = data
+
+        # Actualizar Applicant FK si vienen datos de identidad
+        if app.applicant:
+            applicant_dirty = False
+            if "dni" in payload or "document_number" in payload:
+                new_dni = payload.get("dni") or payload.get("document_number")
+                if new_dni and new_dni != app.applicant.dni:
+                    app.applicant.dni = new_dni
+                    applicant_dirty = True
+            if "nombres" in payload or "first_names" in payload:
+                full = payload.get("nombres") or payload.get("first_names", "")
+                ap_pat = payload.get("apellido_paterno") or payload.get("last_name_father", "")
+                ap_mat = payload.get("apellido_materno") or payload.get("last_name_mother", "")
+                parts = [p for p in [ap_pat, ap_mat, full] if p]
+                if parts:
+                    app.applicant.names = " ".join(parts)
+                    applicant_dirty = True
+            if "email" in payload and payload["email"] != (app.applicant.email or ""):
+                app.applicant.email = payload["email"]
+                applicant_dirty = True
+            if "phone" in payload and payload["phone"] != (app.applicant.phone or ""):
+                app.applicant.phone = payload["phone"]
+                applicant_dirty = True
+            if applicant_dirty:
+                app.applicant.save()
+
+        app.save()
+
+        # Refetch para serializar limpio
+        app.refresh_from_db()
+        app = (
+            Application.objects
+            .select_related("applicant", "call")
+            .prefetch_related("preferences__career")
+            .get(pk=application_id)
+        )
+        return Response(ApplicationSerializer(app).data)
+
+    # ── DELETE ──
+    if request.method == "DELETE":
+        app.delete()
+        return Response({"ok": True}, status=204)
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def applications_me(request):

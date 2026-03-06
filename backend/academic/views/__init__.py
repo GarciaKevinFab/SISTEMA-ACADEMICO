@@ -93,6 +93,17 @@ from .attendance import (
 from .classrooms import ClassroomsViewSet
 from .courses    import CoursesListView
 
+# ── Pago de Matrícula ─────────────────────────────────────────────────────
+from .enrollment_payment import (
+    EnrollmentPaymentStatusView,
+    EnrollmentPaymentUploadView,
+    EnrollmentPaymentReUploadView,
+    EnrollmentPaymentPendingView,
+    EnrollmentPaymentDetailView,
+    EnrollmentPaymentApproveView,
+    EnrollmentPaymentRejectView,
+)
+
 # ── Dashboards ─────────────────────────────────────────────────────────────
 from .dashboard_student import (
     student_dashboard,
@@ -189,4 +200,12 @@ __all__ = [
     "enrollment_stats",
     "acts_pending",
     "sections_conflicts_get",
+    # Enrollment Payment
+    "EnrollmentPaymentStatusView",
+    "EnrollmentPaymentUploadView",
+    "EnrollmentPaymentReUploadView",
+    "EnrollmentPaymentPendingView",
+    "EnrollmentPaymentDetailView",
+    "EnrollmentPaymentApproveView",
+    "EnrollmentPaymentRejectView",
 ]

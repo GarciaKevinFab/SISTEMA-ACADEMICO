@@ -27,6 +27,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from .enrollment_payment import check_enrollment_payment
 
 from students.models import Student as StudentProfile
 from academic.models import (
@@ -1026,6 +1027,9 @@ class EnrollmentAvailableView(APIView):
             getattr(st, "nombres", ""),
         ])).strip()
 
+        # ── Payment gate info ──
+        _paid, _pay_info = check_enrollment_payment(st, academic_period)
+
         return ok(
             student={
                 "id":            st.id,
@@ -1039,6 +1043,7 @@ class EnrollmentAvailableView(APIView):
             },
             academic_period=academic_period,
             enrollment_window=_window_info_for_period(per),
+            payment_status=_pay_info,
             current_semester=current_sem,
             courses=out_courses,
         )
@@ -1070,6 +1075,15 @@ class EnrollmentValidateView(APIView):
         st, err = _resolve_student_from_request(request, dni=dni, student_id=student_id)
         if err:
             return err
+
+        # ── Payment gate (solo estudiantes, admins bypass) ──
+        if not _can_admin_enroll(request.user):
+            _paid, _pay_info = check_enrollment_payment(st, academic_period)
+            if not _paid:
+                return Response(
+                    {"detail": "PAGO_PENDIENTE", "payment_status": _pay_info},
+                    status=409,
+                )
 
         validate_resp = _validate_enrollment_payload(
             request=request,
@@ -1200,6 +1214,15 @@ class EnrollmentCommitView(APIView):
         st, err = _resolve_student_from_request(request, dni=dni, student_id=student_id)
         if err:
             return err
+
+        # ── Payment gate (doble seguridad, admins bypass) ──
+        if not _can_admin_enroll(request.user):
+            _paid, _pay_info = check_enrollment_payment(st, academic_period)
+            if not _paid:
+                return Response(
+                    {"detail": "PAGO_PENDIENTE", "payment_status": _pay_info},
+                    status=409,
+                )
 
         validate_resp = _validate_enrollment_payload(
             request=request,

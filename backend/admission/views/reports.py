@@ -270,24 +270,28 @@ def reports_admission_xlsx(request):
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
+        from openpyxl.worksheet.table import Table, TableStyleInfo
 
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Postulantes Admision"
 
-        # Estilos de cabecera
+        # ── Estilos ──
         hdr_font = Font(name="Calibri", bold=True, size=10, color="FFFFFF")
         hdr_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
         hdr_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        thin_side = Side(style="thin")
+        thin_side = Side(style="thin", color="B0B0B0")
         thin_border = Border(
             left=thin_side, right=thin_side,
             top=thin_side, bottom=thin_side,
         )
         data_font = Font(name="Calibri", size=10)
-        data_align = Alignment(vertical="center")
+        data_align = Alignment(vertical="center", wrap_text=False)
+        # Filas alternadas para legibilidad
+        stripe_fill = PatternFill(start_color="F2F7FB", end_color="F2F7FB", fill_type="solid")
+        white_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
 
-        # Escribir cabeceras
+        # ── Cabeceras ──
         for col_idx, (col_name, col_width) in enumerate(REPORT_COLUMNS, start=1):
             cell = ws.cell(row=1, column=col_idx, value=col_name)
             cell.font = hdr_font
@@ -298,15 +302,59 @@ def reports_admission_xlsx(request):
 
         ws.row_dimensions[1].height = 30
 
-        # Escribir datos
+        # ── Datos con filas alternadas ──
         for row_idx, row_data in enumerate(rows_data, start=2):
+            row_fill = stripe_fill if (row_idx % 2 == 0) else white_fill
             for col_idx, value in enumerate(row_data, start=1):
                 cell = ws.cell(row=row_idx, column=col_idx, value=value)
                 cell.font = data_font
                 cell.alignment = data_align
                 cell.border = thin_border
+                cell.fill = row_fill
 
-        # Guardar en buffer
+        # ── Freeze panes (cabecera fija al hacer scroll) ──
+        ws.freeze_panes = "A2"
+
+        # ── Tabla con formato + auto-filter (compatibilidad cross-version) ──
+        last_col = get_column_letter(len(REPORT_COLUMNS))
+        last_row = len(rows_data) + 1
+        table_added = False
+
+        if rows_data:
+            try:
+                tab = Table(
+                    displayName="PostulantesAdmision",
+                    ref=f"A1:{last_col}{last_row}",
+                )
+                style = TableStyleInfo(
+                    name="TableStyleMedium2",
+                    showFirstColumn=False,
+                    showLastColumn=False,
+                    showRowStripes=True,
+                    showColumnStripes=False,
+                )
+                tab.tableStyleInfo = style
+                ws.add_table(tab)
+                table_added = True
+            except Exception:
+                pass
+
+        # Auto-filter solo si no se pudo crear la Tabla (evitar conflicto)
+        if not table_added:
+            ws.auto_filter.ref = f"A1:{last_col}{last_row}"
+
+        # ── Print settings para impresión ──
+        try:
+            from openpyxl.worksheet.properties import PageSetupProperties
+            ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+            ws.page_setup.orientation = "landscape"
+            ws.page_setup.fitToWidth = 1
+            ws.page_setup.fitToHeight = 0
+            ws.print_title_rows = "1:1"  # Repetir cabecera en cada página
+        except Exception:
+            pass  # No critico, el archivo funciona sin esto
+
+        # ── Guardar en buffer ──
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)

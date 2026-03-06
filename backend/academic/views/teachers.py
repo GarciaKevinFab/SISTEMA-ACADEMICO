@@ -161,23 +161,55 @@ class TeachersViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def list(self, request, *args, **kwargs):
-        qs = list_teacher_users_qs()
-        if not qs.exists():
-            ts = Teacher.objects.select_related("user").all()
-            teachers = [{
-                "id": t.user_id,
-                "full_name": _get_full_name(t.user) if t.user else f"Teacher #{t.id}",
-                "email": getattr(t.user, "email", "") if t.user else "",
-                "username": getattr(t.user, "username", "") if t.user else "",
-            } for t in ts]
-            return ok(teachers=teachers)
+        """
+        Retorna docentes combinando:
+          1) Users con rol TEACHER/DOCENTE/PROFESOR (fuente principal)
+          2) catalogs.Teacher con user asignado (cubre legacy sin rol)
+          3) academic.Teacher con user asignado (último fallback)
+        Sin duplicados (por user.id).
+        """
+        seen_ids = set()
+        teachers = []
 
-        teachers = [{
-            "id": u.id,
-            "full_name": _get_full_name(u),
-            "email": getattr(u, "email", "") or "",
-            "username": getattr(u, "username", "") or "",
-        } for u in qs]
+        # ── 1) Users con rol docente (fuente principal) ──
+        for u in list_teacher_users_qs():
+            if u.id in seen_ids:
+                continue
+            seen_ids.add(u.id)
+            teachers.append({
+                "id": u.id,
+                "full_name": _get_full_name(u),
+                "email": getattr(u, "email", "") or "",
+                "username": getattr(u, "username", "") or "",
+            })
+
+        # ── 2) catalogs.Teacher con user (cubre docentes sin rol asignado) ──
+        for ct in CatalogTeacher.objects.select_related("user").filter(user__isnull=False):
+            uid = ct.user_id
+            if uid in seen_ids:
+                continue
+            seen_ids.add(uid)
+            teachers.append({
+                "id": uid,
+                "full_name": _get_full_name(ct.user) if ct.user else ct.full_name or f"Docente #{ct.id}",
+                "email": getattr(ct.user, "email", "") if ct.user else ct.email or "",
+                "username": getattr(ct.user, "username", "") if ct.user else "",
+            })
+
+        # ── 3) academic.Teacher con user (último fallback) ──
+        for at in Teacher.objects.select_related("user").filter(user__isnull=False):
+            uid = at.user_id
+            if uid in seen_ids:
+                continue
+            seen_ids.add(uid)
+            teachers.append({
+                "id": uid,
+                "full_name": _get_full_name(at.user) if at.user else f"Teacher #{at.id}",
+                "email": getattr(at.user, "email", "") if at.user else "",
+                "username": getattr(at.user, "username", "") if at.user else "",
+            })
+
+        teachers.sort(key=lambda t: t["full_name"].lower())
         return ok(teachers=teachers)
 
 

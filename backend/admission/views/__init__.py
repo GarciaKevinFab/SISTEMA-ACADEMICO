@@ -17,6 +17,7 @@ from .calls import (
 # Postulaciones y Applicants
 from .applications import (
     applications_collection,
+    application_detail,
     applications_me,
     applicant_me,
     applicant_create,
@@ -95,6 +96,7 @@ __all__ = [
     'call_schedule_detail',
     # Applications
     'applications_collection',
+    'application_detail',
     'applications_me',
     'applicant_me',
     'applicant_create',

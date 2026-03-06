@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { StudentDashboardSvc as StudentSvc } from "../../services/dashboard.service";
+import { EnrollmentPayment } from "../../services/academic.service";
 import {
     DashboardShell, KpiGrid, StatCard, EmptyBox, toNumber, pickArray,
 } from "./DashboardWidgets";
@@ -266,6 +267,16 @@ export default function StudentDashboard({ user }) {
 
     useEffect(() => { load(); }, []);
 
+    /* ── Payment status ── */
+    const [enrollmentPaymentInfo, setEnrollmentPaymentInfo] = useState(null);
+    useEffect(() => {
+        const now = new Date();
+        const period = now.getMonth() < 6 ? `${now.getFullYear()}-I` : `${now.getFullYear()}-II`;
+        EnrollmentPayment.status({ period })
+            .then(info => setEnrollmentPaymentInfo(info))
+            .catch(() => {});
+    }, []);
+
     /* ── Derived data ── */
     const kpis = useMemo(() => {
         const d = data.dashboard || {};
@@ -359,6 +370,35 @@ export default function StudentDashboard({ user }) {
             subtitle={kpis.career !== "—" ? `${kpis.career} — Ciclo ${kpis.currentSemester}` : "Tu resumen académico y personal"}
             loading={loading} error={err} onRefresh={load}
         >
+            {/* ── Alerta de pago de matrícula ── */}
+            {!L && enrollmentPaymentInfo && enrollmentPaymentInfo.status !== "APPROVED" && (
+                <div className="flex flex-col sm:flex-row gap-3">
+                    {enrollmentPaymentInfo.status === "NOT_STARTED" && (
+                        <StudentAlert
+                            icon={AlertTriangle} variant="amber"
+                            message="Pago de matrícula pendiente"
+                            sub={`Debes realizar el pago de S/. ${Number(enrollmentPaymentInfo.total || enrollmentPaymentInfo.amount || 180).toFixed(2)} para matricularte`}
+                            action="Ir a Matrícula" onAction={() => navigate("/dashboard/academic/enrollment")}
+                        />
+                    )}
+                    {enrollmentPaymentInfo.status === "PENDING" && (
+                        <StudentAlert
+                            icon={Clock} variant="blue"
+                            message="Voucher de pago en revisión"
+                            sub="Tu voucher está siendo verificado por el área de finanzas"
+                        />
+                    )}
+                    {enrollmentPaymentInfo.status === "REJECTED" && (
+                        <StudentAlert
+                            icon={XCircle} variant="amber"
+                            message="Voucher de pago rechazado"
+                            sub={enrollmentPaymentInfo.rejection_note || "Revisa el motivo y vuelve a enviar tu voucher"}
+                            action="Reenviar" onAction={() => navigate("/dashboard/academic/enrollment")}
+                        />
+                    )}
+                </div>
+            )}
+
             {/* ── Alertas ── */}
             {!L && (kpis.pendingDebt > 0 || kpis.activeProcedures > 0 || kpis.hasPriorEnrollment) && (
                 <div className="flex flex-col sm:flex-row gap-3">

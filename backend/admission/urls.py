@@ -50,6 +50,7 @@ urlpatterns = [
     # Postulaciones
     # ══════════════════════════════════════════════════════════
     path("applications/me", v.applications_me),
+    path("applications/<int:application_id>", v.application_detail),
     path("applications", v.applications_collection),
 
     # ══════════════════════════════════════════════════════════

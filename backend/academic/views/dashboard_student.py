@@ -7,6 +7,7 @@ Usa modelos reales:
   academic.SectionScheduleSlot, academic.Section
 """
 
+from collections import defaultdict
 from datetime import date
 from django.db.models import Avg, Sum, FloatField
 from django.db.models.functions import Coalesce
@@ -21,6 +22,8 @@ from academic.models import (
     AcademicGradeRecord, AttendanceSession, AttendanceRow,
     SectionScheduleSlot,
 )
+from .kardex import _detect_active_stint_periods
+from .utils import _term_sort_key
 
 PASSING_GRADE = 11
 WEEKDAY_NAMES = {1: "Lunes", 2: "Martes", 3: "Miércoles", 4: "Jueves", 5: "Viernes", 6: "Sábado", 7: "Domingo"}
@@ -79,11 +82,30 @@ def student_dashboard(request):
 
     period = _current_period()
 
-    # Créditos aprobados
-    approved = AcademicGradeRecord.objects.filter(
-        student=student, final_grade__gte=PASSING_GRADE
+    # ── Detección de stint activo (reingreso) ──
+    all_terms = set(
+        AcademicGradeRecord.objects.filter(student=student)
+        .values_list("term", flat=True).distinct()
+    )
+    active_periods = _detect_active_stint_periods(all_terms)
+    has_prior_enrollment = len(all_terms - active_periods) > 0
+    active_sorted = sorted(active_periods, key=_term_sort_key) if active_periods else []
+    active_since = active_sorted[0] if active_sorted else None
+
+    # ── Registros académicos del stint activo ──
+    all_records = AcademicGradeRecord.objects.filter(
+        student=student
     ).select_related("plan_course")
-    credits_approved = sum(getattr(gr.plan_course, "credits", 0) or 0 for gr in approved if gr.plan_course)
+
+    # Filtrar solo períodos del stint activo
+    active_records = all_records.filter(term__in=active_periods) if active_periods else all_records
+
+    # Créditos aprobados (solo stint activo)
+    credits_approved = sum(
+        getattr(gr.plan_course, "credits", 0) or 0
+        for gr in active_records.filter(final_grade__gte=PASSING_GRADE)
+        if gr.plan_course
+    )
 
     # Créditos totales del plan
     plan = getattr(student, "plan", None)
@@ -91,10 +113,17 @@ def student_dashboard(request):
         total=Coalesce(Sum("credits"), 0)
     )["total"] if plan else 0
 
-    # Promedio
-    avg = AcademicGradeRecord.objects.filter(student=student).aggregate(
-        avg=Coalesce(Avg("final_grade"), 0.0, output_field=FloatField())
-    )["avg"]
+    # ── PPA ponderado (solo stint activo) ──
+    # PPA = sum(nota * créditos) / sum(créditos)
+    sum_w = 0.0
+    sum_c = 0
+    for gr in active_records:
+        g = gr.final_grade
+        cr = int(getattr(gr.plan_course, "credits", 0) or 0) if gr.plan_course else 0
+        if g is not None and cr > 0:
+            sum_w += float(g) * cr
+            sum_c += cr
+    avg = round(sum_w / sum_c, 2) if sum_c > 0 else 0.0
 
     # Cursos matriculados
     section_ids = _enrolled_section_ids(student, period)
@@ -113,20 +142,51 @@ def student_dashboard(request):
         if total_att > 0:
             attendance_rate = round((present_att / total_att) * 100, 1)
 
-    # Mérito por programa
+    # ── Mérito por programa (PPA ponderado con stint, bulk) ──
     programa = getattr(student, "programa_carrera", "") or ""
     merit = None
     total_in_career = 0
     if programa:
-        total_in_career = Student.objects.filter(programa_carrera=programa).count()
-        better = (
-            AcademicGradeRecord.objects.filter(student__programa_carrera=programa)
-            .values("student").annotate(a=Avg("final_grade")).filter(a__gt=avg).count()
+        career_students = list(
+            Student.objects.filter(programa_carrera=programa).values_list("id", flat=True)
         )
-        merit = better + 1
+        total_in_career = len(career_students)
+
+        # Traer TODOS los registros de la carrera en una sola query
+        career_records = (
+            AcademicGradeRecord.objects
+            .filter(student_id__in=career_students)
+            .select_related("plan_course")
+            .values_list("student_id", "term", "final_grade", "plan_course__credits")
+        )
+
+        # Agrupar por estudiante: {student_id: {terms: set, records: [(grade, credits)]}}
+        by_student = defaultdict(lambda: {"terms": set(), "recs": []})
+        for sid, term, grade, credits in career_records:
+            by_student[sid]["terms"].add(term)
+            by_student[sid]["recs"].append((term, grade, int(credits or 0)))
+
+        # Calcular PPA ponderado con stint para cada estudiante
+        better_count = 0
+        for sid in career_students:
+            if sid == student.id:
+                continue
+            info = by_student.get(sid)
+            if not info or not info["terms"]:
+                continue
+            peer_active = _detect_active_stint_periods(info["terms"])
+            pw, pc_ = 0.0, 0
+            for term, g, cr in info["recs"]:
+                if term in peer_active and g is not None and cr > 0:
+                    pw += float(g) * cr
+                    pc_ += cr
+            peer_avg = round(pw / pc_, 2) if pc_ > 0 else 0.0
+            if peer_avg > avg:
+                better_count += 1
+        merit = better_count + 1
 
     return Response({
-        "avg_grade": round(avg, 2),
+        "avg_grade": avg,
         "credits_approved": credits_approved,
         "credits_total": credits_total,
         "current_semester": getattr(student, "ciclo", None),
@@ -136,6 +196,9 @@ def student_dashboard(request):
         "attendance_rate": attendance_rate,
         "merit": merit,
         "total_in_career": total_in_career,
+        # ── Reingreso ──
+        "has_prior_enrollment": has_prior_enrollment,
+        "active_since": active_since,
     })
 
 
