@@ -146,7 +146,7 @@ def cert_inscripcion_html(app_data: dict, inst: dict) -> str:
     call_name   = (app_data.get("call_name", "") or "").upper()
 
     # ── Institución ──
-    inst_nombre   = inst.get("institution_name", '"GUSTAVO ALLENDE LLAVERÍA"')
+    inst_nombre   = (inst.get("institution_name", "") or "GUSTAVO ALLENDE LLAVERÍA").strip('"').strip("'")
     city          = inst.get("city", "Tarma")
     director_name = inst.get("director_name", "")
     director_title= (inst.get("director_title", "DIRECTOR GENERAL") or "").upper()
@@ -619,7 +619,7 @@ def cert_vacante_html(app_data: dict, inst: dict) -> str:
     periodo        = app_data.get("periodo", "") or app_data.get("call_period", "")
     inst_origen    = app_data.get("institucion_origen", "") or ""
 
-    inst_nombre    = inst.get("institution_name", '"GUSTAVO ALLENDE LLAVERÍA"')
+    inst_nombre    = (inst.get("institution_name", "") or "GUSTAVO ALLENDE LLAVERÍA").strip('"').strip("'")
     city           = inst.get("city", "Tarma")
     director_name  = inst.get("director_name", "")
     director_title = (inst.get("director_title", "DIRECTORA GENERAL") or "").upper()

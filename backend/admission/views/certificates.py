@@ -17,7 +17,8 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from admission.models import Application, ApplicationDocument, InstitutionSetting
+from admission.models import Application, ApplicationDocument
+from admission.models import InstitutionSetting as AdmissionSetting
 
 from .admission_certificates_generator import (
     generate_inscripcion_pdf,
@@ -31,20 +32,52 @@ from .admission_certificates_generator import (
 # HELPERS DE AJUSTES INSTITUCIONALES
 # ══════════════════════════════════════════════════════════════
 
-def _get_setting(key, default=""):
+def _get_catalog_data() -> dict:
+    """Lee el JSON data de catalogs.InstitutionSetting (pk=1)."""
     try:
-        return InstitutionSetting.objects.get(key=key).value or default
-    except InstitutionSetting.DoesNotExist:
+        from catalogs.models import InstitutionSetting as CatSetting
+        obj = CatSetting.objects.filter(pk=1).first()
+        return (obj.data or {}) if obj else {}
+    except Exception:
+        return {}
+
+
+def _get_setting(key, default=""):
+    """Fallback: lee de admission.InstitutionSetting (key/value)."""
+    try:
+        return AdmissionSetting.objects.get(key=key).value or default
+    except AdmissionSetting.DoesNotExist:
         return default
 
 
 def _get_setting_file_path(key) -> str:
     """Retorna la ruta absoluta del archivo del setting, o ''."""
     try:
-        obj = InstitutionSetting.objects.get(key=key)
+        obj = AdmissionSetting.objects.get(key=key)
         return obj.file.path if obj.file else ""
-    except (InstitutionSetting.DoesNotExist, ValueError, Exception):
+    except (AdmissionSetting.DoesNotExist, ValueError, Exception):
         return ""
+
+
+def _url_to_filepath(url_str) -> str:
+    """Convierte URL relativa (/media/...) a ruta absoluta en disco."""
+    import os
+    if not url_str:
+        return ""
+    u = str(url_str)
+    # Quitar host si es URL absoluta
+    if "://" in u:
+        from urllib.parse import urlparse
+        u = urlparse(u).path
+    mr = str(_get_media_root())
+    if "/media/" in u:
+        rel = u.split("/media/")[-1]
+        p = os.path.join(mr, rel)
+        return p if os.path.exists(p) else ""
+    if u.startswith("/"):
+        p = os.path.join(mr, u.lstrip("/"))
+        return p if os.path.exists(p) else ""
+    return ""
 
 
 def _get_photo_path(application) -> str:
@@ -61,23 +94,52 @@ def _get_photo_path(application) -> str:
 
 
 def _build_inst_dict() -> dict:
-    """Construye el dict de institución para los generadores."""
+    """
+    Construye el dict de institución para los generadores de PDF.
+    Fuente principal: catalogs.InstitutionSetting (JSON data, pk=1).
+    Fallback: admission.InstitutionSetting (key/value legacy).
+    """
+    cat = _get_catalog_data()
+
+    # Nombre de la institución (sin comillas — las agrega el template)
+    inst_name = (
+        cat.get("name", "")
+        or _get_setting("institution_name", "")
+        or "GUSTAVO ALLENDE LLAVERÍA"
+    )
+    # Limpiar comillas si el valor ya las tiene
+    inst_name = inst_name.strip('"').strip("'")
+
+    # Logo: catalogs MediaAsset (logo_url) → admission fallback
+    logo_path = (
+        _url_to_filepath(cat.get("logo_url", ""))
+        or _get_setting_file_path("logo")
+    )
+
+    # Firma del director: catalogs (signature_url) → admission fallback
+    firma_path = (
+        _url_to_filepath(cat.get("signature_url", ""))
+        or _url_to_filepath(cat.get("responsible_signature_url", ""))
+        or _get_setting_file_path("firma_director")
+    )
+
+    # Sello: solo admission (no existe en catalogs aún)
+    sello_path = _get_setting_file_path("sello")
+
+    # Campos de texto: catalogs data keys → admission fallback
     return {
-        "institution_name": _get_setting(
-            "institution_name",
-            '"GUSTAVO ALLENDE LLAVERÍA"'
-        ),
-        "city":            _get_setting("institution_city", "Tarma"),
-        "region":          _get_setting("institution_region", "Junín"),
-        "director_name":   _get_setting("director_name", ""),
-        "director_title":  _get_setting("director_title", "DIRECTOR GENERAL"),
-        "lema_anio":       _get_setting("lema_anio", ""),
-        "year_motto":      _get_setting("year_motto", ""),
-        "rvm":             _get_setting("rvm", ""),
+        "institution_name": inst_name,
+        "city":            cat.get("city", "") or _get_setting("institution_city", "Tarma"),
+        "region":          cat.get("region", "") or _get_setting("institution_region", "Junín"),
+        "director_name":   cat.get("director_name", "") or _get_setting("director_name", ""),
+        "director_title":  cat.get("director_title", "") or _get_setting("director_title", "DIRECTOR GENERAL"),
+        "lema_anio":       cat.get("lema_anio", "") or _get_setting("lema_anio", ""),
+        "year_motto":      cat.get("year_motto", "") or cat.get("lema_anio", "") or _get_setting("year_motto", ""),
+        "rvm":             cat.get("rvm", "") or _get_setting("rvm", ""),
         # Rutas absolutas de imágenes
-        "logo_path":              _get_setting_file_path("logo"),
-        "firma_director_path":    _get_setting_file_path("firma_director"),
-        "sello_path":             _get_setting_file_path("sello"),
+        "logo_path":           logo_path,
+        "firma_director_path": firma_path,
+        "sello_path":          sello_path,
     }
 
 
@@ -364,7 +426,7 @@ def _fallback_inscripcion_reportlab(app, app_data: dict, inst: dict) -> bytes:
     fecha_nac = app_data.get("fecha_nacimiento", "") or ""
     full_name = f"{nombres} {ap_paterno} {ap_materno}".strip()
 
-    inst_name = inst.get("institution_name", '"GUSTAVO ALLENDE LLAVERÍA"')
+    inst_name = (inst.get("institution_name", "") or "GUSTAVO ALLENDE LLAVERÍA").strip('"').strip("'")
     city = inst.get("city", "Tarma")
     director_name = inst.get("director_name", "")
     director_title = (inst.get("director_title", "DIRECTOR GENERAL") or "").upper()
@@ -597,7 +659,7 @@ def _fallback_vacante_reportlab(app, app_data: dict, inst: dict) -> bytes:
     ciclo = app_data.get("ciclo", "") or ""
     periodo = app_data.get("periodo", "") or app_data.get("call_period", "")
 
-    inst_name = inst.get("institution_name", '"GUSTAVO ALLENDE LLAVERÍA"')
+    inst_name = (inst.get("institution_name", "") or "GUSTAVO ALLENDE LLAVERÍA").strip('"').strip("'")
     city = inst.get("city", "Tarma")
     director_name = inst.get("director_name", "")
     director_title = (inst.get("director_title", "DIRECTOR GENERAL") or "").upper()
