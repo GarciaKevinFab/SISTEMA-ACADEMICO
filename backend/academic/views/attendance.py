@@ -236,6 +236,70 @@ def syllabus_download(request, section_id):
 
 
 # ══════════════════════════════════════════════════════════════
+# SÍLABOS DEL ALUMNO (mis cursos matriculados)
+# ══════════════════════════════════════════════════════════════
+
+class StudentSyllabusesView(APIView):
+    """GET: lista de sílabos de las secciones del alumno matriculado."""
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from students.models import Student
+        from academic.models import Enrollment, EnrollmentItem
+
+        student = Student.objects.filter(user=request.user).first()
+        if not student:
+            return ok(syllabuses=[])
+
+        # Obtener secciones matriculadas del alumno
+        items = (
+            EnrollmentItem.objects
+            .select_related("section__plan_course__course", "section__teacher__user")
+            .filter(
+                enrollment__student=student,
+                enrollment__status="CONFIRMED",
+                section__isnull=False,
+            )
+            .order_by("-enrollment__period", "section__plan_course__course__name")
+        )
+
+        result = []
+        for item in items:
+            sec = item.section
+            if not sec:
+                continue
+            course_name = ""
+            if sec.plan_course and sec.plan_course.course:
+                course_name = sec.plan_course.course.name or ""
+
+            teacher_name = ""
+            if sec.teacher and sec.teacher.user:
+                u = sec.teacher.user
+                teacher_name = f"{getattr(u, 'first_name', '')} {getattr(u, 'last_name', '')}".strip()
+
+            syl = Syllabus.objects.filter(section=sec).first()
+            syl_data = None
+            if syl and syl.file:
+                syl_data = {
+                    "filename": syl.file.name.split("/")[-1],
+                    "url": f"/api/academic/sections/{sec.id}/syllabus/download",
+                    "size": getattr(syl.file, "size", 0),
+                }
+
+            result.append({
+                "section_id": sec.id,
+                "course_name": course_name.upper(),
+                "section_code": getattr(sec, "label", "") or getattr(sec, "code", ""),
+                "period": item.enrollment.period or "",
+                "teacher_name": teacher_name,
+                "syllabus": syl_data,
+            })
+
+        return ok(syllabuses=result)
+
+
+# ══════════════════════════════════════════════════════════════
 # CONFIGURACIÓN DE EVALUACIÓN
 # ══════════════════════════════════════════════════════════════
 

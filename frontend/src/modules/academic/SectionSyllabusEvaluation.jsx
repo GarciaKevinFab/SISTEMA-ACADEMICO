@@ -3,11 +3,81 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "../..
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
+import { Badge } from "../../components/ui/badge";
 import { toast } from "sonner";
 import { Syllabus, Evaluation, Sections } from "../../services/academic.service";
-import { Upload, Trash2, Save } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { Upload, Trash2, Save, FileText, ExternalLink } from "lucide-react";
 
-export default function SectionSyllabusEvaluation() {
+/* ──────────────────────────────────────────────────────────────
+   Vista ALUMNO: lista sílabos de sus cursos matriculados
+   ────────────────────────────────────────────────────────────── */
+function StudentSyllabusView() {
+    const [syllabuses, setSyllabuses] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        Syllabus.mine()
+            .then(d => setSyllabuses(d?.syllabuses || []))
+            .catch(() => toast.error("No se pudo cargar los sílabos"))
+            .finally(() => setLoading(false));
+    }, []);
+
+    if (loading) return <div className="text-center py-8 text-muted-foreground">Cargando sílabos...</div>;
+
+    return (
+        <div className="space-y-6 pb-24 sm:pb-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5" /> Sílabos de mis Cursos
+                    </CardTitle>
+                    <CardDescription>Sílabos de los cursos en los que estás matriculado</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {syllabuses.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No se encontraron sílabos para tus cursos matriculados.</p>
+                    ) : (
+                        <div className="divide-y">
+                            {syllabuses.map((s, i) => (
+                                <div key={s.section_id || i} className="py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-medium text-sm truncate">{s.course_name}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {s.teacher_name && <span>{s.teacher_name} &middot; </span>}
+                                            {s.section_code && <span>Sec. {s.section_code} &middot; </span>}
+                                            {s.period}
+                                        </div>
+                                    </div>
+                                    <div className="shrink-0">
+                                        {s.syllabus ? (
+                                            <a
+                                                href={s.syllabus.url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                                            >
+                                                <ExternalLink className="h-3.5 w-3.5" />
+                                                Ver sílabo
+                                            </a>
+                                        ) : (
+                                            <Badge variant="secondary" className="text-xs">Sin sílabo</Badge>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Vista DOCENTE / ADMIN: gestión de sílabos y evaluación
+   ────────────────────────────────────────────────────────────── */
+function TeacherSyllabusView() {
     const [sections, setSections] = useState([]);
     const [section, setSection] = useState(null);
     const [syllabusInfo, setSyllabusInfo] = useState(null);
@@ -70,8 +140,7 @@ export default function SectionSyllabusEvaluation() {
     };
 
     return (
-       <div className="space-y-6 pb-24 sm:pb-6">
-
+        <div className="space-y-6 pb-24 sm:pb-6">
             <Card>
                 <CardHeader>
                     <CardTitle>Configuración por Sección</CardTitle>
@@ -140,4 +209,15 @@ export default function SectionSyllabusEvaluation() {
             </Card>
         </div>
     );
+}
+
+/* ──────────────────────────────────────────────────────────────
+   EXPORT: detecta rol y muestra la vista correspondiente
+   ────────────────────────────────────────────────────────────── */
+export default function SectionSyllabusEvaluation() {
+    const { hasPerm } = useAuth();
+    const isTeacher = hasPerm("academic.syllabus.upload") || hasPerm("academic.evaluation.config");
+
+    if (isTeacher) return <TeacherSyllabusView />;
+    return <StudentSyllabusView />;
 }

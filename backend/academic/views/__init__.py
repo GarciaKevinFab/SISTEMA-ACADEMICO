@@ -86,6 +86,7 @@ from .attendance import (
     AttendanceImportPreviewView,
     AttendanceImportSaveView,
     SyllabusView, syllabus_download,
+    StudentSyllabusesView,
     EvaluationConfigView,
 )
 
@@ -186,7 +187,7 @@ __all__ = [
     "AttendanceSessionSetView",
     "AttendanceImportPreviewView",
     "AttendanceImportSaveView",
-    "SyllabusView", "syllabus_download",
+    "SyllabusView", "syllabus_download", "StudentSyllabusesView",
     "EvaluationConfigView",
     # Simple
     "ClassroomsViewSet",

@@ -301,6 +301,10 @@ export const Syllabus = {
 
     delete: async (sectionId) =>
         requestJsonSmart("DELETE", `/academic/sections/${sectionId}/syllabus`, null),
+
+    /** GET /academic/students/me/syllabuses — sílabos de cursos matriculados del alumno */
+    mine: async () =>
+        requestJsonSmart("GET", `/academic/students/me/syllabuses`, null),
 };
 
 export const Evaluation = {

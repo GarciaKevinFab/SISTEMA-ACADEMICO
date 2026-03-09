@@ -30,6 +30,7 @@ export const PERMS = {
     "academic.grades.reopen": "academic.grades.reopen",
     "academic.syllabus.upload": "academic.syllabus.upload",
     "academic.syllabus.delete": "academic.syllabus.delete",
+    "academic.syllabus.view": "academic.syllabus.view",
     "academic.evaluation.config": "academic.evaluation.config",
     "academic.kardex.view": "academic.kardex.view",
     "academic.reports.view": "academic.reports.view",
@@ -254,6 +255,7 @@ export const ROLE_POLICIES = {
         "academic.enrollment.view",
         "academic.enrollment.commit",
         "academic.kardex.view",
+        "academic.syllabus.view",
 
         // Pago de matrícula
         "enrollment.payment.view",

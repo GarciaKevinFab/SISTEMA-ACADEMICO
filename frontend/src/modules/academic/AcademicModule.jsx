@@ -195,7 +195,7 @@ const REQS = {
     load: [PERMS["academic.sections.view"], PERMS["academic.sections.create"], PERMS["academic.sections.conflicts"]],
     enroll: [PERMS["academic.enrollment.view"], PERMS["academic.enrollment.commit"]],
     grades: [PERMS["academic.grades.edit"], PERMS["academic.grades.submit"]],
-    syllabus: [PERMS["academic.syllabus.upload"], PERMS["academic.syllabus.delete"], PERMS["academic.evaluation.config"]],
+    syllabus: [PERMS["academic.syllabus.upload"], PERMS["academic.syllabus.delete"], PERMS["academic.evaluation.config"], PERMS["academic.syllabus.view"]],
     kardex: [PERMS["academic.kardex.view"]],
     reports: [PERMS["academic.reports.view"]],
     processes: [PERMS["academic.reports.view"], PERMS["academic.enrollment.view"], PERMS["student.self.enrollment.view"]],
