@@ -20,7 +20,7 @@ from .views import (
     AttendanceSessionsView, AttendanceSessionCloseView, AttendanceSessionSetView,
     AttendanceImportPreviewView, AttendanceImportSaveView,
 
-    SyllabusView, EvaluationConfigView,
+    SyllabusView, syllabus_download, EvaluationConfigView,
 
     AcademicReportsSummaryView, AcademicReportPerformanceXlsxView, AcademicReportOccupancyXlsxView,
 
@@ -130,7 +130,8 @@ urlpatterns = [
     path("attendance/import/save",    AttendanceImportSaveView.as_view()),
 
     # ── Sílabos / Evaluación ─────────────────────────────────────
-    path("sections/<int:section_id>/syllabus",   SyllabusView.as_view()),
+    path("sections/<int:section_id>/syllabus",            SyllabusView.as_view()),
+    path("sections/<int:section_id>/syllabus/download",   syllabus_download),
     path("sections/<int:section_id>/evaluation", EvaluationConfigView.as_view()),
 
     # ══════════════════════════════════════════════════════════════

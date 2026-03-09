@@ -156,7 +156,8 @@ def search_by_dni(request):
     photo_url = None
     if photo_doc and photo_doc.file:
         try:
-            photo_url = photo_doc.file.url
+            api_url = f"/api/applications/{app.id}/documents/{photo_doc.id}/download"
+            photo_url = request.build_absolute_uri(api_url)
         except Exception:
             pass
 

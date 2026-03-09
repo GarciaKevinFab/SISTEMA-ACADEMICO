@@ -2,13 +2,17 @@
 Vistas para Asistencia, Sílabos y Configuración de Evaluación
 """
 import csv
+import mimetypes
 from datetime import datetime
 from django.db import transaction
-from rest_framework.response import Response 
+from django.http import FileResponse
+from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework import permissions, status
+from rest_framework.decorators import api_view, permission_classes as perm_classes
+from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from academic.models import (
@@ -190,26 +194,48 @@ class AttendanceImportSaveView(APIView):
 class SyllabusView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
-    
+
+    def _syllabus_data(self, s, request):
+        url = request.build_absolute_uri(
+            f"/api/academic/sections/{s.section_id}/syllabus/download"
+        )
+        return {
+            "filename": s.file.name.split("/")[-1],
+            "url": url,
+            "size": getattr(s.file, "size", 0),
+        }
+
     def get(self, request, section_id):
         s = Syllabus.objects.filter(section_id=section_id).first()
         if not s:
             return ok(syllabus=None)
-        return ok(syllabus={"filename": s.file.name, "size": getattr(s.file, "size", 0)})
-    
+        return ok(syllabus=self._syllabus_data(s, request))
+
     def post(self, request, section_id):
         f = request.FILES.get("file")
         if not f:
             return Response({"detail": "Archivo requerido"}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         obj, _ = Syllabus.objects.get_or_create(section_id=section_id)
         obj.file = f
         obj.save()
-        return ok(syllabus={"filename": obj.file.name, "size": getattr(obj.file, "size", 0)})
-    
+        return ok(syllabus=self._syllabus_data(obj, request))
+
     def delete(self, request, section_id):
         Syllabus.objects.filter(section_id=section_id).delete()
         return ok(success=True)
+
+
+@api_view(["GET"])
+@perm_classes([AllowAny])
+def syllabus_download(request, section_id):
+    """Descarga directa del sílabo — AllowAny porque se abre en nueva pestaña."""
+    s = get_object_or_404(Syllabus, section_id=section_id)
+    filename = s.file.name.split("/")[-1]
+    content_type, _ = mimetypes.guess_type(filename)
+    resp = FileResponse(s.file.open("rb"), content_type=content_type or "application/pdf")
+    resp["Content-Disposition"] = f'inline; filename="{filename}"'
+    return resp
 
 
 # ══════════════════════════════════════════════════════════════
