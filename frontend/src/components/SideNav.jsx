@@ -149,7 +149,7 @@ const SideNav = () => {
           show: canAny(PERMS["research.calls.view"], PERMS["research.calls.manage"], PERMS["research.projects.view"], PERMS["research.projects.edit"], PERMS["research.tabs.reports"]),
         },
         {
-          id: "graduates", title: "Egresados", path: "/dashboard/graduates", icon: Award,
+          id: "graduates", title: "Titulados", path: "/dashboard/graduates", icon: Award,
           show: canAny(PERMS["admin.access.manage"], PERMS["admin.catalogs.manage"], PERMS["admin.catalogs.view"]),
         },
       ],

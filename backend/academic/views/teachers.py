@@ -254,24 +254,22 @@ class TeacherSectionsMeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # ✅ CAMBIO: usa resolver centralizado
-        teacher = resolve_teacher(request.user.id)
+        # Buscar academic.Teacher directamente por user (más fiable que resolver)
+        teacher = Teacher.objects.filter(user=request.user).first()
         if not teacher:
-            return ok(sections=[])
+            # Intentar crear desde catálogo
+            cat = CatalogTeacher.objects.filter(user=request.user).first()
+            if cat:
+                teacher, _ = Teacher.objects.get_or_create(user=request.user)
+            else:
+                return ok(sections=[])
 
-        cat = CatalogTeacher.objects.filter(user=request.user).prefetch_related("courses").first()
-        if not cat:
-            return ok(sections=[])
-
-        course_ids = list(cat.courses.values_list("id", flat=True))
-        if not course_ids:
-            return ok(sections=[])
-
+        # Mostrar TODAS las secciones asignadas al profesor
         qs = (
             Section.objects
             .select_related("plan_course__course", "teacher__user", "classroom")
             .prefetch_related("schedule_slots")
-            .filter(teacher=teacher, plan_course__course_id__in=course_ids)
+            .filter(teacher=teacher)
             .order_by("-id")
         )
 

@@ -80,7 +80,7 @@ function InjectStyles() {
 const TABS = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "list", label: "Listado", icon: List },
-    { id: "create", label: "Nuevo Egresado", icon: UserPlus },
+    { id: "create", label: "Nuevo Titulado", icon: UserPlus },
 ];
 
 const ESPECIALIDADES = [
@@ -329,7 +329,7 @@ export default function GraduatesModule() {
             setTotalCount(res.count || res.results?.length || 0);
             setPage(p);
         } catch (e) {
-            setToast({ message: e.message || "Error al cargar egresados", type: "error" });
+            setToast({ message: e.message || "Error al cargar titulados", type: "error" });
         } finally {
             setLoading(false);
         }
@@ -383,10 +383,10 @@ export default function GraduatesModule() {
 
             if (editingId) {
                 await GraduatesAdmin.update(editingId, payload);
-                setToast({ message: "Egresado actualizado correctamente", type: "success" });
+                setToast({ message: "Titulado actualizado correctamente", type: "success" });
             } else {
                 await GraduatesAdmin.create(payload);
-                setToast({ message: "Egresado creado correctamente", type: "success" });
+                setToast({ message: "Titulado registrado correctamente", type: "success" });
             }
             setForm({ ...EMPTY_FORM });
             setEditingId(null);
@@ -429,7 +429,7 @@ export default function GraduatesModule() {
         if (!deleteTarget) return;
         try {
             await GraduatesAdmin.remove(deleteTarget.id);
-            setToast({ message: "Egresado eliminado", type: "success" });
+            setToast({ message: "Titulado eliminado", type: "success" });
             setDeleteTarget(null);
             loadList(page);
             loadStats();
@@ -445,7 +445,7 @@ export default function GraduatesModule() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = "egresados.xlsx";
+            a.download = "titulados.xlsx";
             a.click();
             URL.revokeObjectURL(url);
             setToast({ message: "Archivo descargado", type: "success" });
@@ -487,7 +487,7 @@ export default function GraduatesModule() {
                 </div>
                 <div>
                     <h1 style={{ fontSize: 22, fontWeight: 900, color: "#FFFFFF", letterSpacing: "-.02em" }}>
-                        Gestión de Egresados
+                        Gestión de Titulados
                     </h1>
                     <p style={{ fontSize: 13, color: "#94A3B8", marginTop: 2 }}>
                         Administración de registros de grados y títulos
@@ -505,7 +505,7 @@ export default function GraduatesModule() {
             {TABS.map((tab) => {
                 const Icon = tab.icon;
                 const active = activeTab === tab.id || (tab.id === "create" && activeTab === "create" && editingId);
-                const label = tab.id === "create" && editingId ? "Editar Egresado" : tab.label;
+                const label = tab.id === "create" && editingId ? "Editar Titulado" : tab.label;
                 return (
                     <button
                         key={tab.id}
@@ -539,7 +539,7 @@ export default function GraduatesModule() {
                         ACCESO RÁPIDO
                     </p>
                     <div className="flex flex-wrap gap-3">
-                        <QuickAction icon={UserPlus} label="Nuevo Egresado" onClick={handleNewClick} color="#4F46E5" />
+                        <QuickAction icon={UserPlus} label="Nuevo Titulado" onClick={handleNewClick} color="#4F46E5" />
                         <QuickAction icon={List} label="Ver Listado" onClick={() => setActiveTab("list")} color="#10B981" />
                         <QuickAction icon={Download} label="Exportar Excel" onClick={handleExport} color="#8B5CF6" />
                         <QuickAction icon={Search} label="Buscar" onClick={() => setActiveTab("list")} color="#F59E0B" />
@@ -549,7 +549,7 @@ export default function GraduatesModule() {
                 {/* Stats */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <StatCard
-                        label="Total Egresados"
+                        label="Total Titulados"
                         value={statsLoading ? "..." : (s.total ?? s.total_graduates ?? totalCount)}
                         subtitle="Registrados"
                         icon={Users}
@@ -581,7 +581,7 @@ export default function GraduatesModule() {
                 {/* Recent graduates mini-table */}
                 <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                     <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                        <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--gm-text)" }}>Últimos Egresados Registrados</h3>
+                        <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--gm-text)" }}>Últimos Titulados Registrados</h3>
                         <button
                             onClick={() => setActiveTab("list")}
                             className="text-xs font-700 text-indigo-600 hover:text-indigo-700 transition-colors"
@@ -626,7 +626,7 @@ export default function GraduatesModule() {
                                 {!graduates.length && !loading && (
                                     <tr>
                                         <td colSpan={5} className="px-4 py-10 text-center">
-                                            <p style={{ fontSize: 13, color: "var(--gm-muted)" }}>No hay egresados registrados</p>
+                                            <p style={{ fontSize: 13, color: "var(--gm-muted)" }}>No hay titulados registrados</p>
                                         </td>
                                     </tr>
                                 )}
@@ -747,7 +747,7 @@ export default function GraduatesModule() {
             {/* Results count */}
             <div className="flex items-center justify-between px-1">
                 <p style={{ fontSize: 12, fontWeight: 600, color: "var(--gm-muted)" }}>
-                    {totalCount} egresado{totalCount !== 1 ? "s" : ""} encontrado{totalCount !== 1 ? "s" : ""}
+                    {totalCount} titulado{totalCount !== 1 ? "s" : ""} encontrado{totalCount !== 1 ? "s" : ""}
                 </p>
             </div>
 
@@ -769,7 +769,7 @@ export default function GraduatesModule() {
                                 <tr>
                                     <td colSpan={8} className="text-center py-16">
                                         <Loader2 size={28} className="animate-spin text-indigo-400 mx-auto mb-3" />
-                                        <p style={{ fontSize: 13, color: "var(--gm-muted)" }}>Cargando egresados...</p>
+                                        <p style={{ fontSize: 13, color: "var(--gm-muted)" }}>Cargando titulados...</p>
                                     </td>
                                 </tr>
                             ) : graduates.length === 0 ? (
@@ -777,7 +777,7 @@ export default function GraduatesModule() {
                                     <td colSpan={8} className="text-center py-16">
                                         <GraduationCap size={40} className="text-slate-300 mx-auto mb-3" />
                                         <p style={{ fontSize: 14, fontWeight: 700, color: "var(--gm-text)" }}>Sin resultados</p>
-                                        <p style={{ fontSize: 12, color: "var(--gm-muted)", marginTop: 4 }}>No se encontraron egresados con los filtros actuales</p>
+                                        <p style={{ fontSize: 12, color: "var(--gm-muted)", marginTop: 4 }}>No se encontraron titulados con los filtros actuales</p>
                                     </td>
                                 </tr>
                             ) : (
@@ -907,10 +907,10 @@ export default function GraduatesModule() {
                     </div>
                     <div>
                         <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--gm-text)" }}>
-                            {editingId ? "Editar Egresado" : "Registrar Nuevo Egresado"}
+                            {editingId ? "Editar Titulado" : "Registrar Nuevo Titulado"}
                         </h3>
                         <p style={{ fontSize: 12, color: "var(--gm-muted)" }}>
-                            {editingId ? "Modifica los datos del egresado" : "Completa los campos para registrar un nuevo egresado"}
+                            {editingId ? "Modifica los datos del titulado" : "Completa los campos para registrar un nuevo titulado"}
                         </p>
                     </div>
                 </div>
@@ -1106,7 +1106,7 @@ export default function GraduatesModule() {
                         ) : (
                             <>
                                 <Check size={16} />
-                                {editingId ? "Actualizar Egresado" : "Registrar Egresado"}
+                                {editingId ? "Actualizar Titulado" : "Registrar Titulado"}
                             </>
                         )}
                     </button>
@@ -1150,7 +1150,7 @@ export default function GraduatesModule() {
                                 <Eye size={18} className="text-indigo-600" />
                             </div>
                             <div>
-                                <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--gm-text)" }}>Detalle del Egresado</h3>
+                                <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--gm-text)" }}>Detalle del Titulado</h3>
                                 <p style={{ fontSize: 12, color: "var(--gm-muted)" }}>ID: {g.id}</p>
                             </div>
                         </div>
@@ -1223,7 +1223,7 @@ export default function GraduatesModule() {
 
             <ConfirmModal
                 open={!!deleteTarget}
-                title="Eliminar Egresado"
+                title="Eliminar Titulado"
                 message={`¿Estás seguro de eliminar a "${deleteTarget?.apellidos_nombres}"? Esta acción no se puede deshacer.`}
                 onConfirm={handleDelete}
                 onCancel={() => setDeleteTarget(null)}

@@ -432,9 +432,9 @@ export default function ApplicationWizard() {
   // ═══════════════════════════════════════════════════
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-24 sm:pb-12">
+    <div className="max-w-4xl mx-auto space-y-6 pb-24 sm:pb-12 print:max-w-none print:p-0 print:m-0 print:pb-0">
       {/* HEADER */}
-      <div className="pb-4">
+      <div className="pb-4 no-print">
         <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
           Postulación al Proceso de Admisión
         </h2>
@@ -474,8 +474,8 @@ export default function ApplicationWizard() {
         </div>
       )}
 
-      <Card className="border shadow-lg rounded-2xl overflow-hidden bg-white">
-        <CardContent className="p-6 sm:p-10">
+      <Card className="border shadow-lg rounded-2xl overflow-hidden bg-white print:border-none print:shadow-none print:rounded-none">
+        <CardContent className="p-6 sm:p-10 print:p-0">
           {/* ════════════════════════════════════════ */}
           {/* STEP 1: SELECCIONAR CONVOCATORIA        */}
           {/* ════════════════════════════════════════ */}
@@ -858,7 +858,7 @@ export default function ApplicationWizard() {
           {/* STEP 6: CONFIRMACIÓN (post-submit)      */}
           {/* ════════════════════════════════════════ */}
           {step === 6 && result && (
-            <div id="print-confirmation" className="space-y-8 animate-in fade-in duration-300 text-center">
+            <div id="print-confirmation" className="space-y-8 print:space-y-2 animate-in fade-in duration-300 text-center">
 
               {/* ── Encabezado solo visible al imprimir ── */}
               <div className="print-only" style={{ display: "none" }}>
@@ -877,7 +877,7 @@ export default function ApplicationWizard() {
                 </div>
               </div>
 
-              <div className="py-8 space-y-4">
+              <div className="py-8 print:py-2 space-y-4 print:space-y-2">
                 <div className="bg-green-100 text-green-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto print-hide-icon">
                   <CheckCircle2 size={40} />
                 </div>
@@ -887,7 +887,7 @@ export default function ApplicationWizard() {
                 </p>
               </div>
 
-              <div className="bg-gray-50 p-6 rounded-2xl border max-w-md mx-auto space-y-3 text-left print-data-box">
+              <div className="bg-gray-50 p-6 rounded-2xl border max-w-md print:max-w-full mx-auto space-y-3 text-left print-data-box">
                 <SummaryRow
                   label="N° Postulación"
                   value={<span className="text-blue-600 font-bold text-lg">#{result.application_number || result.application_id}</span>}

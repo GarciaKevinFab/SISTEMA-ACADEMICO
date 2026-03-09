@@ -71,7 +71,7 @@ const Layout = ({ children }) => {
         <div className="flex-1 flex flex-col min-w-0 min-h-0">
 
           {/* ── HEADER ── */}
-          <header className="sticky top-0 z-40 w-full shrink-0">
+          <header className="sticky top-0 z-40 w-full shrink-0 no-print">
             {/* gradient bar */}
             <div className="bg-gradient-to-r from-blue-700 via-indigo-600 to-blue-600 shadow-[0_4px_24px_rgba(79,70,229,0.25)] border-b border-white/10">
               <div className="px-5 sm:px-7 py-0 flex items-center justify-between h-[60px] sm:h-[64px]">

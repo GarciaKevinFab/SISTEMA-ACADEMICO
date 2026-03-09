@@ -470,7 +470,7 @@ textarea:focus {
   }
 
   /* ── Quitar contenedores decorativos del módulo ── */
-  .rounded-2xl.p-\\[1px\\],
+  .rounded-2xl.p-\[1px\],
   .rounded-2xl[class*="bg-slate-200"],
   .rounded-2xl[class*="bg-gradient"] {
     background: transparent !important;
@@ -479,6 +479,33 @@ textarea:focus {
     padding: 0 !important;
     margin: 0 !important;
     border-radius: 0 !important;
+  }
+
+  /* ── Contenedor flex del módulo: quitar restrict ── */
+  .p-4.sm\:p-6.box-border.flex.justify-center,
+  .p-4.box-border.flex.justify-center {
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  /* ── Quitar overflow y max-height de cualquier contenedor ── */
+  .md\:overflow-hidden,
+  .md\:overflow-y-auto,
+  .overflow-hidden {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  .md\:max-h-\[calc\(100vh-3rem\)\] {
+    max-height: none !important;
+  }
+
+  /* ── Backdrop-blur containers → clean for print ── */
+  .backdrop-blur-md {
+    backdrop-filter: none !important;
+    background: white !important;
+    border: none !important;
+    box-shadow: none !important;
   }
 
   /* ── Ocultar botones de acción en la confirmación ── */
@@ -502,14 +529,21 @@ textarea:focus {
   }
 
   #print-confirmation h3 {
-    font-size: 18pt !important;
+    font-size: 15pt !important;
     text-align: center !important;
-    margin-bottom: 8px !important;
+    margin-bottom: 4px !important;
   }
 
-  #print-confirmation > .py-8 {
-    padding-top: 8px !important;
-    padding-bottom: 8px !important;
+  #print-confirmation > .py-8,
+  #print-confirmation > div[class*="py-8"] {
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+  }
+
+  /* ── Reducir espaciado vertical general ── */
+  #print-confirmation > .space-y-8 > * + *,
+  #print-confirmation.space-y-8 > * + * {
+    margin-top: 8px !important;
   }
 
   #print-confirmation > .py-8 > p {
@@ -524,8 +558,8 @@ textarea:focus {
     background: #fafbfc !important;
     border: 1px solid #d1d5db !important;
     border-radius: 8px !important;
-    padding: 16px 20px !important;
-    margin: 12px auto !important;
+    padding: 12px 16px !important;
+    margin: 8px auto !important;
     page-break-inside: avoid !important;
   }
 
@@ -533,8 +567,8 @@ textarea:focus {
   #print-confirmation .print-data-box .flex {
     display: flex !important;
     justify-content: space-between !important;
-    padding: 6px 8px !important;
-    font-size: 11pt !important;
+    padding: 4px 8px !important;
+    font-size: 10pt !important;
     border-bottom: 1px solid #f1f5f9 !important;
   }
 

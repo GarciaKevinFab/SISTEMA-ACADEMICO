@@ -28,7 +28,6 @@ import {
 import AdmissionDashboard from "./AdmissionDashboard";
 import AdmissionReportsModule from "./AdmissionReports";
 import AdmissionParamsModule from "./AdmissionParams";
-import ApplicantDocuments from "./ApplicantDocuments";
 import ApplicationWizard from "./ApplicationWizard";
 import EvaluationBoard from "./EvaluationBoard";
 import ResultsPublication from "./ResultsPublication";
@@ -501,7 +500,6 @@ const TABS = [
   { val: "calls", label: "Convocatorias" },
   { val: "applicants", label: "Postulantes" },
   { val: "apply", label: "Postulación" },
-  { val: "docs", label: "Documentos" },
   { val: "doc-review", label: "Revisión Docs" },
   { val: "eval", label: "Evaluación" },
   { val: "results", label: "Resultados" },
@@ -528,12 +526,12 @@ export default function CompleteAdmissionModule() {
   if (!user) return <div>Acceso no autorizado</div>;
 
   return (
-    <div className="p-4 sm:p-6 box-border flex justify-center">
-      <div className="w-full rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10 flex flex-col md:max-h-[calc(100vh-3rem)]">
-        <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)] flex flex-col md:overflow-hidden">
+    <div className="p-4 sm:p-6 box-border flex justify-center print:p-0 print:block">
+      <div className="w-full rounded-2xl p-[1px] bg-gradient-to-b from-slate-500/30 to-slate-900/10 flex flex-col md:max-h-[calc(100vh-3rem)] print:p-0 print:bg-none print:max-h-none print:block print:rounded-none">
+        <div className="rounded-2xl bg-slate-200/70 backdrop-blur-md border border-white/30 shadow-[0_10px_35px_rgba(0,0,0,0.18)] flex flex-col md:overflow-hidden print:rounded-none print:bg-white print:border-none print:shadow-none print:block print:overflow-visible">
 
           {/* Module header */}
-          <div className="px-6 pt-5 pb-0 flex-none">
+          <div className="px-6 pt-5 pb-0 flex-none no-print">
             <div className="flex items-center gap-3 mb-1">
               <div className="h-9 w-9 rounded-xl bg-blue-600/10 border border-blue-200/60 grid place-items-center shrink-0">
                 <GraduationCap size={18} className="text-blue-700" />
@@ -547,8 +545,8 @@ export default function CompleteAdmissionModule() {
           </div>
 
           {/* Tabs */}
-          <Tabs value={active} onValueChange={onTabChange} className="px-4 sm:px-6 pt-4 flex flex-col overflow-hidden h-full">
-            <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2 flex-none mb-4">
+          <Tabs value={active} onValueChange={onTabChange} className="px-4 sm:px-6 pt-4 flex flex-col overflow-hidden h-full print:px-0 print:pt-0 print:overflow-visible">
+            <div className="rounded-xl bg-slate-100/80 border border-white/60 px-2 py-2 flex-none mb-4 no-print">
               <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-1.5 h-auto">
                 {TABS.map(item => (
                   <TabsTrigger key={item.val} value={item.val}
@@ -562,14 +560,13 @@ export default function CompleteAdmissionModule() {
             </div>
 
             {/* Content */}
-            <div className="pb-6 pr-1 custom-scrollbar flex-1 md:overflow-y-auto">
+            <div className="pb-6 pr-1 custom-scrollbar flex-1 md:overflow-y-auto print:pb-0 print:pr-0 print:overflow-visible">
               <TabsContent value="dashboard" className="mt-0"><AdmissionDashboard /></TabsContent>
               <TabsContent value="careers" className="mt-0"><CareersManagement /></TabsContent>
               <TabsContent value="calls" className="mt-0"><AdmissionCallsManagement /></TabsContent>
               <TabsContent value="applicants" className="mt-0"><ApplicantsManagement /></TabsContent>
               <TabsContent value="doc-review" className="mt-0"><DocumentReview /></TabsContent>
               <TabsContent value="apply" className="mt-0"><ApplicationWizard /></TabsContent>
-              <TabsContent value="docs" className="mt-0"><ApplicantDocuments /></TabsContent>
               <TabsContent value="eval" className="mt-0"><EvaluationBoard /></TabsContent>
               <TabsContent value="results" className="mt-0"><ResultsPublication /></TabsContent>
               <TabsContent value="schedule" className="mt-0"><AdmissionScheduleModule /></TabsContent>
