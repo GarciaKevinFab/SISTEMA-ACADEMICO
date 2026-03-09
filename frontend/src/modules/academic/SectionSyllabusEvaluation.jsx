@@ -87,7 +87,7 @@ export default function SectionSyllabusEvaluation() {
                         >
                             <option value="">Seleccionar</option>
                             {(Array.isArray(sections) ? sections : []).map(s => (
-                                <option key={s.id} value={s.id}>{s.course_name} - {s.section_code}</option>
+                                <option key={s.id} value={s.id}>{(s.course_name || "").toUpperCase()} - {s.section_code}</option>
                             ))}
                         </select>
                     </div>

@@ -40,7 +40,7 @@ const normalizeCall = (c) => {
         max_applications_per_career: c.max_applications_per_career ?? c.max_choices ?? 1,
         minimum_age: c.minimum_age ?? null,
         maximum_age: c.maximum_age ?? null,
-        required_documents: c.required_documents ?? [],
+        required_documents: migrateDocs(c.required_documents ?? []),
         careers,
         total_applications: c.total_applications ?? c.applications_count ?? 0,
         status: c.status ?? c.state ?? "OPEN",
@@ -59,6 +59,17 @@ const REQUIRED_DOCS = [
     { value: "CARNET_CONADIS", label: "Carné CONADIS" },
 ];
 
+/* Mapeo de códigos viejos → nuevos */
+const LEGACY_CODE_MAP = {
+    PHOTO: "FOTO_CARNET", DNI_COPY: "COPIA_DNI",
+    BIRTH_CERTIFICATE: "PARTIDA_NACIMIENTO", STUDY_CERTIFICATE: "CERTIFICADO_ESTUDIOS",
+    CONADIS_COPY: "CARNET_CONADIS",
+};
+const migrateDocs = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    return [...new Set(arr.map((c) => LEGACY_CODE_MAP[c] || c))];
+};
+
 const BASE_FORM = {
     name: "", description: "",
     academic_year: new Date().getFullYear(), academic_period: "I",
@@ -76,7 +87,9 @@ const buildForm = (defs) => ({
     maximum_age: defs?.default_max_age ?? BASE_FORM.maximum_age,
     application_fee: defs?.default_fee ?? BASE_FORM.application_fee,
     max_applications_per_career: defs?.default_max_applications ?? BASE_FORM.max_applications_per_career,
-    required_documents: Array.isArray(defs?.default_required_documents) ? defs.default_required_documents : BASE_FORM.required_documents,
+    required_documents: migrateDocs(
+        Array.isArray(defs?.default_required_documents) ? defs.default_required_documents : BASE_FORM.required_documents
+    ),
 });
 
 /* ─── Status config ──────────────────────────────────────── */

@@ -15,12 +15,27 @@ import { toast } from "sonner";
 import { Settings, Save, RotateCcw, GraduationCap, Globe, KeyRound } from "lucide-react";
 
 const ALL_DOCS = [
-    { value: "BIRTH_CERTIFICATE", label: "Partida de Nacimiento" },
-    { value: "STUDY_CERTIFICATE", label: "Certificado de Estudios" },
-    { value: "PHOTO", label: "Fotografía tamaño carné" },
-    { value: "DNI_COPY", label: "Copia de DNI" },
-    { value: "CONADIS_COPY", label: "Carné CONADIS (si aplica)" },
+    { value: "FOTO_CARNET", label: "Fotografía tamaño carné" },
+    { value: "COPIA_DNI", label: "Copia de DNI" },
+    { value: "PARTIDA_NACIMIENTO", label: "Partida de Nacimiento" },
+    { value: "CERTIFICADO_ESTUDIOS", label: "Certificado de Estudios" },
+    { value: "CARNET_CONADIS", label: "Carné CONADIS (si aplica)" },
 ];
+
+/* Mapeo de códigos viejos → nuevos para migración automática */
+const LEGACY_CODE_MAP = {
+    PHOTO: "FOTO_CARNET",
+    DNI_COPY: "COPIA_DNI",
+    BIRTH_CERTIFICATE: "PARTIDA_NACIMIENTO",
+    STUDY_CERTIFICATE: "CERTIFICADO_ESTUDIOS",
+    CONADIS_COPY: "CARNET_CONADIS",
+};
+
+const migrateCodes = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    const migrated = arr.map((code) => LEGACY_CODE_MAP[code] || code);
+    return [...new Set(migrated)]; // eliminar duplicados
+};
 
 const DEFAULT_PARAMS = {
     // Plantilla convocatorias
@@ -28,7 +43,7 @@ const DEFAULT_PARAMS = {
     default_max_age: 35,
     default_fee: 0,
     default_max_applications: 1,
-    default_required_documents: ["BIRTH_CERTIFICATE", "STUDY_CERTIFICATE", "PHOTO", "DNI_COPY"],
+    default_required_documents: ["FOTO_CARNET", "COPIA_DNI", "PARTIDA_NACIMIENTO", "CERTIFICADO_ESTUDIOS"],
     // Institucional
     institution_name: "",
     institution_code: "",
@@ -41,9 +56,11 @@ const DEFAULT_PARAMS = {
 const normalize = (raw) => ({
     ...DEFAULT_PARAMS,
     ...(raw || {}),
-    default_required_documents: Array.isArray(raw?.default_required_documents)
-        ? raw.default_required_documents
-        : DEFAULT_PARAMS.default_required_documents,
+    default_required_documents: migrateCodes(
+        Array.isArray(raw?.default_required_documents)
+            ? raw.default_required_documents
+            : DEFAULT_PARAMS.default_required_documents
+    ),
 });
 
 export default function AdmissionParamsModule() {

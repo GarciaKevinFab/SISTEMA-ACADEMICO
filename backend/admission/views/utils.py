@@ -127,6 +127,30 @@ def _parse_dt(v):
     return None
 
 
+# Mapeo de códigos viejos → nuevos para documentos requeridos
+_LEGACY_DOC_MAP = {
+    "PHOTO": "FOTO_CARNET",
+    "DNI_COPY": "COPIA_DNI",
+    "BIRTH_CERTIFICATE": "PARTIDA_NACIMIENTO",
+    "STUDY_CERTIFICATE": "CERTIFICADO_ESTUDIOS",
+    "CONADIS_COPY": "CARNET_CONADIS",
+}
+
+
+def _migrate_doc_codes(codes):
+    """Convierte códigos viejos a nuevos y elimina duplicados."""
+    if not codes or not isinstance(codes, list):
+        return []
+    seen = set()
+    result = []
+    for c in codes:
+        migrated = _LEGACY_DOC_MAP.get(c, c)
+        if migrated not in seen:
+            seen.add(migrated)
+            result.append(migrated)
+    return result
+
+
 def _is_active_call(call) -> bool:
     """
     Verifica si una convocatoria está activa.
@@ -297,7 +321,7 @@ def _call_to_fe(obj, career_name_map=None) -> dict:
         "max_applications_per_career": m.get("max_applications_per_career", 1),
         "minimum_age": m.get("minimum_age"),
         "maximum_age": m.get("maximum_age"),
-        "required_documents": m.get("required_documents", []),
+        "required_documents": _migrate_doc_codes(m.get("required_documents", [])),
         "careers": norm_careers,
         "total_applications": apps_count,
         "status": status,

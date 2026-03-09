@@ -33,6 +33,14 @@ export const getAdmissionDashboardStats = async () => (await api.get("/admission
 /* ------------------------------------------
    Convocatorias
 -------------------------------------------*/
+/* Mapeo de códigos viejos → nuevos para documentos requeridos */
+const _LEGACY_DOC = {
+    PHOTO: "FOTO_CARNET", DNI_COPY: "COPIA_DNI",
+    BIRTH_CERTIFICATE: "PARTIDA_NACIMIENTO", STUDY_CERTIFICATE: "CERTIFICADO_ESTUDIOS",
+    CONADIS_COPY: "CARNET_CONADIS",
+};
+const _migDocs = (a) => a ? [...new Set((Array.isArray(a) ? a : []).map(c => _LEGACY_DOC[c] || c))] : [];
+
 const normalizeCall = (c) => {
     const careers = (c?.careers ?? []).map((x) => ({
         id: x.id ?? x.career_id,
@@ -55,7 +63,7 @@ const normalizeCall = (c) => {
         max_applications_per_career: c.max_applications_per_career ?? c.max_choices ?? 1,
         minimum_age: c.minimum_age ?? null,
         maximum_age: c.maximum_age ?? null,
-        required_documents: c.required_documents ?? [],
+        required_documents: _migDocs(c.required_documents),
         careers,
 
         regulation_url: c.regulation_url ?? c.reglamento_url ?? c.rules_url ?? c.regulation_pdf ?? c.reglamento_pdf ?? null,
