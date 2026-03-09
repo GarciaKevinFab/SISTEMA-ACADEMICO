@@ -376,20 +376,8 @@ class SectionStudentsView(APIView):
             students.sort(key=lambda x: (x.get("last_name", ""), x.get("first_name", "")))
             return ok(students=students)
 
-        # Fallback legacy: todos los students con rol
-        qs = list_student_users_qs().order_by("id")[:200]
-        students = []
-        for u in qs:
-            full = _get_full_name(u)
-            parts = full.split()
-            first = parts[0] if parts else ""
-            last = " ".join(parts[1:]) if len(parts) > 1 else ""
-            students.append({
-                "id": u.id,
-                "first_name": first,
-                "last_name": last,
-            })
-        return ok(students=students)
+        # Sin matrículas registradas → lista vacía
+        return ok(students=[])
 
 
 # ══════════════════════════════════════════════════════════════

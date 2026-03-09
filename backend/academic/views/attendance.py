@@ -196,12 +196,9 @@ class SyllabusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def _syllabus_data(self, s, request):
-        url = request.build_absolute_uri(
-            f"/api/academic/sections/{s.section_id}/syllabus/download"
-        )
         return {
             "filename": s.file.name.split("/")[-1],
-            "url": url,
+            "url": f"/api/academic/sections/{s.section_id}/syllabus/download",
             "size": getattr(s.file, "size", 0),
         }
 
