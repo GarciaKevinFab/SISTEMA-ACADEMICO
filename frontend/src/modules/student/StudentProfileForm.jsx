@@ -8,6 +8,10 @@ import {
 import Cropper from "react-easy-crop";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
+import {
+    AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+    AlertDialogTitle, AlertDialogDescription, AlertDialogCancel,
+} from "../../components/ui/alert-dialog";
 
 /* ─── inject font & styles ─── */
 function InjectProfileStyles() {
@@ -174,6 +178,7 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
     const [form, setForm] = useState(empty);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const [photoFile, setPhotoFile] = useState(null);
     const [photoPreview, setPhotoPreview] = useState("");
@@ -218,9 +223,8 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
         } catch (e) { console.error(e); toast.error("Error al recortar la imagen"); }
     };
 
-    const handleDeletePhoto = async () => {
+    const confirmDeletePhoto = async () => {
         if (!onDeletePhoto) return;
-        if (!window.confirm("¿Seguro que deseas eliminar la foto de perfil?")) return;
         try {
             setDeleting(true);
             await onDeletePhoto();
@@ -232,7 +236,10 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
         } catch (e) {
             console.error(e);
             toast.error("No se pudo eliminar la foto");
-        } finally { setDeleting(false); }
+        } finally {
+            setDeleting(false);
+            setShowDeleteConfirm(false);
+        }
     };
 
     const submit = async (e) => {
@@ -341,7 +348,7 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
                                     {form.photoUrl && !photoFile && !isCropping && onDeletePhoto && (
                                         <Button type="button" variant="ghost"
                                             className="h-9 px-4 rounded-xl text-red-500 hover:text-red-700 hover:bg-red-50 text-sm gap-1.5"
-                                            onClick={handleDeletePhoto} disabled={busy || deleting}>
+                                            onClick={() => setShowDeleteConfirm(true)} disabled={busy || deleting}>
                                             {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                                             Eliminar foto
                                         </Button>
@@ -474,6 +481,34 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
                     </div>
                 )}
             </div>
+
+            {/* ── modal confirmación eliminar foto ── */}
+            <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                <AlertDialogContent className="rounded-2xl max-w-sm">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2 text-red-700">
+                            <Trash2 className="w-5 h-5" /> Eliminar foto de perfil
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-500 text-sm">
+                            Se eliminará la foto del servidor de forma permanente. Esta acción no se puede deshacer.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="gap-2 sm:gap-2">
+                        <AlertDialogCancel disabled={deleting} className="rounded-xl">
+                            Cancelar
+                        </AlertDialogCancel>
+                        <Button
+                            onClick={confirmDeletePhoto}
+                            disabled={deleting}
+                            className="rounded-xl bg-red-600 hover:bg-red-700 text-white gap-1.5"
+                        >
+                            {deleting
+                                ? <><Loader2 className="w-4 h-4 animate-spin" /> Eliminando…</>
+                                : <><Trash2 className="w-4 h-4" /> Sí, eliminar</>}
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     );
 }
