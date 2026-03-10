@@ -4,7 +4,7 @@
  * Bloquea la matrícula hasta que el estudiante suba un voucher
  * y finanzas lo apruebe.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
     Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -35,6 +35,20 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
     const [channel, setChannel]           = useState("");
     const [operationCode, setOperationCode] = useState("");
     const [voucherFile, setVoucherFile]   = useState(null);
+
+    // ── Preview del archivo seleccionado ──
+    const voucherPreview = useMemo(() => {
+        if (!voucherFile) return null;
+        const isImage = voucherFile.type.startsWith("image/");
+        const isPdf   = voucherFile.type === "application/pdf";
+        const url     = URL.createObjectURL(voucherFile);
+        return { url, isImage, isPdf, name: voucherFile.name, size: voucherFile.size };
+    }, [voucherFile]);
+
+    // Limpiar objectURL al desmontar o cambiar archivo
+    useEffect(() => {
+        return () => { if (voucherPreview?.url) URL.revokeObjectURL(voucherPreview.url); };
+    }, [voucherPreview?.url]);
 
     // ── Fetch status ──
     const fetchStatus = useCallback(async () => {
@@ -347,6 +361,30 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                         <p className="text-xs text-slate-400 mt-1">
                             Formatos: JPG, PNG, WebP, PDF. Máximo 5 MB.
                         </p>
+
+                        {/* Preview del archivo seleccionado */}
+                        {voucherPreview && (
+                            <div className="mt-2 rounded-lg border border-slate-200 overflow-hidden bg-white">
+                                {voucherPreview.isImage && (
+                                    <img
+                                        src={voucherPreview.url}
+                                        alt="Preview del voucher"
+                                        className="w-full max-h-64 object-contain bg-slate-50"
+                                    />
+                                )}
+                                {voucherPreview.isPdf && (
+                                    <iframe
+                                        src={voucherPreview.url}
+                                        title="Preview del voucher PDF"
+                                        className="w-full h-64 border-0"
+                                    />
+                                )}
+                                <div className="px-3 py-2 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+                                    <span className="truncate mr-2">{voucherPreview.name}</span>
+                                    <span className="shrink-0">{(voucherPreview.size / 1024 / 1024).toFixed(2)} MB</span>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Submit */}
