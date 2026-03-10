@@ -1354,16 +1354,17 @@ class EnrollmentFichaPDFView(APIView):
     """
     GET /academic/enrollments/<enrollment_id>/ficha/pdf
     Genera y descarga la Ficha de Matrícula en PDF para un alumno.
+    Intenta WeasyPrint primero; si no está instalado o falla, usa ReportLab.
     """
     authentication_classes = [JWTAuthentication]
     permission_classes     = [permissions.IsAuthenticated]
 
     def get(self, request, enrollment_id: int):
-        from .process_document_gen import _get_institution, _get_student, _get_enrolled_courses
-        from .ficha_matricula_generator import generate_ficha_matricula_weasyprint, HAS_WEASYPRINT
-
-        if not HAS_WEASYPRINT:
-            return Response({"detail": "WeasyPrint no instalado."}, status=500)
+        import traceback as _tb
+        from .process_document_gen import (
+            _get_institution, _get_student, _get_enrolled_courses,
+            _get_styles, DOCUMENT_GENERATORS,
+        )
 
         try:
             enrollment = Enrollment.objects.select_related("student").get(id=enrollment_id)
@@ -1371,7 +1372,12 @@ class EnrollmentFichaPDFView(APIView):
             return Response({"detail": "Matrícula no encontrada."}, status=404)
 
         st = enrollment.student
-        student_data = _get_student(st.id)
+        try:
+            student_data = _get_student(st.id)
+        except Exception as exc:
+            logger.error(f"Ficha PDF: _get_student({st.id}) falló: {exc}\n{_tb.format_exc()}")
+            return Response({"detail": f"Error obteniendo datos del alumno: {exc}"}, status=500)
+
         student_data["periodo"] = enrollment.period
 
         ciclo = None
@@ -1389,12 +1395,59 @@ class EnrollmentFichaPDFView(APIView):
         }
 
         class _FakeProcess:
-            def __init__(self, eid):
+            def __init__(self, eid, sid=None):
                 self.id = eid
+                self.student_id = sid
 
-        pdf_buf, pdf_filename = generate_ficha_matricula_weasyprint(
-            _FakeProcess(enrollment.id), student_data, extra, inst, courses,
-        )
+        fake_proc = _FakeProcess(enrollment.id, st.id)
+
+        # ── Intentar WeasyPrint ──
+        pdf_buf = None
+        try:
+            from .ficha_matricula_generator import (
+                generate_ficha_matricula_weasyprint, HAS_WEASYPRINT,
+            )
+            if HAS_WEASYPRINT:
+                pdf_buf, _ = generate_ficha_matricula_weasyprint(
+                    fake_proc, student_data, extra, inst, courses,
+                )
+                logger.info(f"Ficha matrícula {enrollment_id}: generada con WeasyPrint")
+        except Exception as exc:
+            logger.warning(f"Ficha matrícula {enrollment_id}: WeasyPrint falló: {exc}")
+            pdf_buf = None
+
+        # ── Fallback: ReportLab ──
+        if pdf_buf is None:
+            try:
+                import io as _io
+                from reportlab.lib.pagesizes import A4
+                from reportlab.lib.units import cm
+                from reportlab.platypus import SimpleDocTemplate
+
+                gen = DOCUMENT_GENERATORS.get("FICHA_MATRICULA")
+                if not gen:
+                    return Response(
+                        {"detail": "No hay generador de Ficha de Matrícula disponible."},
+                        status=500,
+                    )
+
+                styles = _get_styles()
+                story = gen(fake_proc, student_data, extra, styles, inst)
+                pdf_buf = _io.BytesIO()
+                doc = SimpleDocTemplate(
+                    pdf_buf, pagesize=A4,
+                    leftMargin=2.5 * cm, rightMargin=2.5 * cm,
+                    topMargin=2 * cm, bottomMargin=2 * cm,
+                )
+                doc.build(story)
+                pdf_buf.seek(0)
+                logger.info(f"Ficha matrícula {enrollment_id}: generada con ReportLab (fallback)")
+            except Exception as exc:
+                logger.error(f"Ficha matrícula {enrollment_id}: ReportLab falló: {exc}\n{_tb.format_exc()}")
+                return Response(
+                    {"detail": f"Error generando PDF: {exc}"},
+                    status=500,
+                )
 
         ap_pat  = getattr(st, "apellido_paterno", "") or ""
         ap_mat  = getattr(st, "apellido_materno", "") or ""
@@ -1404,7 +1457,7 @@ class EnrollmentFichaPDFView(APIView):
         filename = f"FICHA-MATRICULA_{safe}_{dni}.pdf"
 
         return HttpResponse(
-            pdf_buf.getvalue(),
+            pdf_buf.getvalue() if hasattr(pdf_buf, 'getvalue') else pdf_buf.read(),
             content_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
@@ -1814,18 +1867,26 @@ class EnrollmentBulkFichasView(APIView):
             return Response({"detail": "No hay matrículas confirmadas en este período."}, status=404)
 
         # ── Importar helpers de generación ──
-        from .process_document_gen import _get_institution, _get_student, _get_enrolled_courses
-        from .ficha_matricula_generator import generate_ficha_matricula_weasyprint, HAS_WEASYPRINT
+        from .process_document_gen import (
+            _get_institution, _get_student, _get_enrolled_courses,
+            _get_styles, DOCUMENT_GENERATORS,
+        )
 
-        if not HAS_WEASYPRINT:
-            return Response({"detail": "WeasyPrint no está instalado en el servidor."}, status=500)
+        # Intentar WeasyPrint; si no está → ReportLab
+        use_weasyprint = False
+        try:
+            from .ficha_matricula_generator import generate_ficha_matricula_weasyprint, HAS_WEASYPRINT
+            use_weasyprint = HAS_WEASYPRINT
+        except Exception:
+            pass
 
         inst = _get_institution()
 
         # ── Objeto "fake process" para el footer del PDF ──
         class _FakeProcess:
-            def __init__(self, enrollment_id):
+            def __init__(self, enrollment_id, sid=None):
                 self.id = enrollment_id
+                self.student_id = sid
 
         # ── Generar PDFs y empaquetar en ZIP ──
         zip_buf = ZipBuf()
@@ -1839,7 +1900,6 @@ class EnrollmentBulkFichasView(APIView):
                     student_data = _get_student(st.id)
                     student_data["periodo"] = academic_period
 
-                    # Obtener cursos del ciclo actual del alumno
                     ciclo = None
                     try:
                         ciclo = int(student_data.get("ciclo", 0) or 0)
@@ -1854,10 +1914,40 @@ class EnrollmentBulkFichasView(APIView):
                         "section": student_data.get("seccion", "A"),
                     }
 
-                    fake_process = _FakeProcess(enr.id)
-                    pdf_buf, pdf_filename = generate_ficha_matricula_weasyprint(
-                        fake_process, student_data, extra, inst, courses
-                    )
+                    fake_process = _FakeProcess(enr.id, st.id)
+                    pdf_buf = None
+
+                    # Intentar WeasyPrint
+                    if use_weasyprint:
+                        try:
+                            pdf_buf, _ = generate_ficha_matricula_weasyprint(
+                                fake_process, student_data, extra, inst, courses
+                            )
+                        except Exception:
+                            pdf_buf = None
+
+                    # Fallback ReportLab
+                    if pdf_buf is None:
+                        import io as _io
+                        from reportlab.lib.pagesizes import A4
+                        from reportlab.lib.units import cm
+                        from reportlab.platypus import SimpleDocTemplate
+
+                        gen = DOCUMENT_GENERATORS.get("FICHA_MATRICULA")
+                        if gen:
+                            styles = _get_styles()
+                            story = gen(fake_process, student_data, extra, styles, inst)
+                            pdf_buf = _io.BytesIO()
+                            doc = SimpleDocTemplate(
+                                pdf_buf, pagesize=A4,
+                                leftMargin=2.5 * cm, rightMargin=2.5 * cm,
+                                topMargin=2 * cm, bottomMargin=2 * cm,
+                            )
+                            doc.build(story)
+                            pdf_buf.seek(0)
+
+                    if pdf_buf is None:
+                        raise RuntimeError("No se pudo generar el PDF (ni WeasyPrint ni ReportLab)")
 
                     # Nombre descriptivo del PDF
                     ap_pat = getattr(st, "apellido_paterno", "") or ""
@@ -1865,7 +1955,8 @@ class EnrollmentBulkFichasView(APIView):
                     nombres = getattr(st, "nombres", "") or ""
                     dni = getattr(st, "num_documento", "") or ""
                     safe_name = f"{ap_pat}_{ap_mat}_{nombres}".strip("_").replace(" ", "_") or dni
-                    zf.writestr(f"FICHA_{safe_name}_{dni}.pdf", pdf_buf.read())
+                    pdf_content = pdf_buf.getvalue() if hasattr(pdf_buf, 'getvalue') else pdf_buf.read()
+                    zf.writestr(f"FICHA_{safe_name}_{dni}.pdf", pdf_content)
                     generated += 1
 
                 except Exception as e:
