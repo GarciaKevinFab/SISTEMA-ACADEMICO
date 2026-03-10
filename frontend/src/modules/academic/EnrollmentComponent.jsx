@@ -488,6 +488,7 @@ const EnrollmentComponent = () => {
   const [courses, setCourses] = useState([]);
   const [isEgresado, setIsEgresado] = useState(false);
   const [isAlreadyEnrolled, setIsAlreadyEnrolled] = useState(false);
+  const [existingEnrollmentId, setExistingEnrollmentId] = useState(null);
   const [selectedCourses, setSelectedCourses] = useState([]);
   const [selectedSections, setSelectedSections] = useState({});
   const [validation, setValidation] = useState({ status: null, errors: [], warnings: [], suggestions: [] });
@@ -523,6 +524,7 @@ const EnrollmentComponent = () => {
       setCourses(Array.isArray(list) ? list : []);
       setIsEgresado(!!data?.is_egresado);
       setIsAlreadyEnrolled(!!data?.is_enrolled);
+      setExistingEnrollmentId(data?.enrollment_id || null);
       setWindowInfo(win);
       setPaymentStatus(payInfo);
       setSelectedCourses([]);
@@ -958,16 +960,29 @@ const EnrollmentComponent = () => {
           {/* ── Ya matriculado banner ── */}
           {isAlreadyEnrolled && resolvedStudent && !isEgresado && (
             <Card className="border-blue-300 bg-blue-50">
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className="p-3 bg-blue-100 rounded-full">
-                  <CheckCircle className="h-6 w-6 text-blue-600" />
-                </div>
-                <div>
-                  <div className="text-lg font-bold text-blue-800">Ya matriculado</div>
-                  <div className="text-sm text-blue-700">
-                    Este alumno ya completó su matrícula para el período {academicPeriod}.
+              <CardContent className="p-5 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-100 rounded-full">
+                    <CheckCircle className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold text-blue-800">Ya matriculado</div>
+                    <div className="text-sm text-blue-700">
+                      Este alumno ya completó su matrícula para el período {academicPeriod}.
+                    </div>
                   </div>
                 </div>
+                {existingEnrollmentId && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-blue-300 text-blue-700 hover:bg-blue-100 gap-2"
+                    onClick={() => generateFichaMatricula(existingEnrollmentId)}
+                  >
+                    <Download className="h-4 w-4" />
+                    Descargar Ficha de Matrícula
+                  </Button>
+                )}
               </CardContent>
             </Card>
           )}

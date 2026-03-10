@@ -23,6 +23,7 @@ from rest_framework import permissions
 from students.models import Student
 from academic.models import (
     EnrollmentPayment, AcademicPeriod, AcademicGradeRecord,
+    Enrollment,
 )
 from academic.serializers_payment import (
     EnrollmentPaymentSerializer,
@@ -212,6 +213,11 @@ class EnrollmentPaymentStatusView(APIView):
 
         amount, discount_tag, surcharge = _compute_enrollment_amount(student, period)
 
+        # Verificar si ya tiene matrícula confirmada
+        is_enrolled = Enrollment.objects.filter(
+            student=student, period=period, status=Enrollment.STATUS_CONFIRMED,
+        ).exists()
+
         try:
             payment = EnrollmentPayment.objects.get(student=student, period=period)
             data = EnrollmentPaymentSerializer(payment, context={"request": request}).data
@@ -220,6 +226,7 @@ class EnrollmentPaymentStatusView(APIView):
             data["computed_discount_tag"] = discount_tag
             data["computed_surcharge"] = float(surcharge)
             data["computed_total"] = float(amount + surcharge)
+            data["is_enrolled"] = is_enrolled
             return Response(data)
         except EnrollmentPayment.DoesNotExist:
             return Response({
@@ -229,6 +236,7 @@ class EnrollmentPaymentStatusView(APIView):
                 "surcharge": float(surcharge),
                 "total": float(amount + surcharge),
                 "period": period,
+                "is_enrolled": is_enrolled,
             })
 
 

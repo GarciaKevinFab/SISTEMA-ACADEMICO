@@ -371,7 +371,7 @@ export default function StudentDashboard({ user }) {
             loading={loading} error={err} onRefresh={load}
         >
             {/* ── Alerta de pago de matrícula ── */}
-            {!L && enrollmentPaymentInfo && enrollmentPaymentInfo.status !== "APPROVED" && (
+            {!L && enrollmentPaymentInfo && enrollmentPaymentInfo.status !== "APPROVED" && !enrollmentPaymentInfo.is_enrolled && (
                 <div className="flex flex-col sm:flex-row gap-3">
                     {enrollmentPaymentInfo.status === "NOT_STARTED" && (
                         <StudentAlert
