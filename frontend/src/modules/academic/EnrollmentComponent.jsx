@@ -650,7 +650,10 @@ const EnrollmentComponent = () => {
       setScheduleConflicts([]);
       setSuggestions([]);
 
-      if (data?.enrollment_id) await generateEnrollmentCertificate(data.enrollment_id);
+      if (data?.enrollment_id) {
+        await generateEnrollmentCertificate(data.enrollment_id);
+        await generateFichaMatricula(data.enrollment_id);
+      }
 
       if (adminMode) {
         setTimeout(() => {
@@ -677,6 +680,19 @@ const EnrollmentComponent = () => {
       if (result.success) {
         await downloadFile(result.downloadUrl, `matricula-${enrollmentId}.pdf`);
         toast.success("Constancia de matrícula generada");
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const generateFichaMatricula = async (enrollmentId) => {
+    try {
+      const result = await generatePDFWithPolling(
+        `/academic/enrollments/${enrollmentId}/ficha`, {},
+        { testId: "enrollment-ficha" }
+      );
+      if (result.success) {
+        await downloadFile(result.downloadUrl, `ficha-matricula-${enrollmentId}.pdf`);
+        toast.success("Ficha de matrícula descargada");
       }
     } catch (e) { console.error(e); }
   };

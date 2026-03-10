@@ -1305,6 +1305,85 @@ class EnrollmentCertificatePDFView(APIView):
         return _dummy_pdf_response(f"matricula-{enrollment_id}.pdf")
 
 
+class EnrollmentFichaView(APIView):
+    """
+    GET /academic/enrollments/<enrollment_id>/ficha
+    Retorna URL de descarga de la ficha de matrícula individual.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes     = [permissions.IsAuthenticated]
+
+    def get(self, request, enrollment_id: int):
+        return ok(
+            success=True,
+            downloadUrl=f"/api/academic/enrollments/{enrollment_id}/ficha/pdf",
+            download_url=f"/api/academic/enrollments/{enrollment_id}/ficha/pdf",
+        )
+
+    def post(self, request, enrollment_id: int):
+        return self.get(request, enrollment_id)
+
+
+class EnrollmentFichaPDFView(APIView):
+    """
+    GET /academic/enrollments/<enrollment_id>/ficha/pdf
+    Genera y descarga la Ficha de Matrícula en PDF para un alumno.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes     = [permissions.IsAuthenticated]
+
+    def get(self, request, enrollment_id: int):
+        from .process_document_gen import _get_institution, _get_student, _get_enrolled_courses
+        from .ficha_matricula_generator import generate_ficha_matricula_weasyprint, HAS_WEASYPRINT
+
+        if not HAS_WEASYPRINT:
+            return Response({"detail": "WeasyPrint no instalado."}, status=500)
+
+        try:
+            enrollment = Enrollment.objects.select_related("student").get(id=enrollment_id)
+        except Enrollment.DoesNotExist:
+            return Response({"detail": "Matrícula no encontrada."}, status=404)
+
+        st = enrollment.student
+        student_data = _get_student(st.id)
+        student_data["periodo"] = enrollment.period
+
+        ciclo = None
+        try:
+            ciclo = int(student_data.get("ciclo", 0) or 0)
+        except (ValueError, TypeError):
+            ciclo = None
+
+        courses = _get_enrolled_courses(student_data.get("plan_id"), ciclo)
+        inst = _get_institution()
+        extra = {
+            "period":  enrollment.period,
+            "cycle":   student_data.get("ciclo", ""),
+            "section": student_data.get("seccion", "A"),
+        }
+
+        class _FakeProcess:
+            def __init__(self, eid):
+                self.id = eid
+
+        pdf_buf, pdf_filename = generate_ficha_matricula_weasyprint(
+            _FakeProcess(enrollment.id), student_data, extra, inst, courses,
+        )
+
+        ap_pat  = getattr(st, "apellido_paterno", "") or ""
+        ap_mat  = getattr(st, "apellido_materno", "") or ""
+        nombres = getattr(st, "nombres", "") or ""
+        dni     = getattr(st, "num_documento", "") or ""
+        safe    = f"{ap_pat}_{ap_mat}_{nombres}".strip("_").replace(" ", "_") or dni
+        filename = f"FICHA-MATRICULA_{safe}_{dni}.pdf"
+
+        return HttpResponse(
+            pdf_buf.getvalue(),
+            content_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+
 class ScheduleExportView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes     = [permissions.IsAuthenticated]

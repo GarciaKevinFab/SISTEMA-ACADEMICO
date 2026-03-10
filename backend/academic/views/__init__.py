@@ -23,6 +23,8 @@ from .enrollment import (
     AcademicPeriodEnrollmentWindowView,   # GET/PUT /periods/{code}/enrollment-window
     EnrollmentCertificateView,
     EnrollmentCertificatePDFView,
+    EnrollmentFichaView,
+    EnrollmentFichaPDFView,
     ScheduleExportView,
     ScheduleExportPDFView,
     StudentsOverviewView,
@@ -143,6 +145,8 @@ __all__ = [
     "AcademicPeriodEnrollmentWindowView",
     "EnrollmentCertificateView",
     "EnrollmentCertificatePDFView",
+    "EnrollmentFichaView",
+    "EnrollmentFichaPDFView",
     "ScheduleExportView",
     "ScheduleExportPDFView",
     "EnrollmentBulkFichasView",
