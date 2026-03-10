@@ -28,9 +28,13 @@ class AdmissionCallSerializer(serializers.ModelSerializer):
 
 
 class AdmissionScheduleItemSerializer(serializers.ModelSerializer):
+    # El frontend usa "type" y "title"; el modelo usa "kind" y "label".
+    type = serializers.CharField(source="kind", required=False, default="")
+    title = serializers.CharField(source="label")
+
     class Meta:
         model = AdmissionScheduleItem
-        fields = "__all__"
+        fields = ["id", "call", "type", "title", "start", "end", "notes"]
 
 
 class ApplicantSerializer(serializers.ModelSerializer):

@@ -13,8 +13,8 @@ export const StudentsService = {
             headers: { "Content-Type": "multipart/form-data" },
         }).then(r => r.data);
     },
+    deletePhoto: (id) => api.delete(`/students/${id}/delete-photo`).then(r => r.data),
 
-    // ✅ NUEVO
     linkUser: (id, userId) =>
         api.post(`/students/${id}/link-user`, { user_id: userId }).then(r => r.data),
 
@@ -27,4 +27,5 @@ export const StudentsService = {
             headers: { "Content-Type": "multipart/form-data" },
         }).then(r => r.data);
     },
+    deleteMyPhoto: () => api.delete("/students/me/delete-photo").then(r => r.data),
 };

@@ -244,6 +244,49 @@ def students_photo(request, pk: int):
     return Response(StudentSerializer(st, context={"request": request}).data)
 
 
+@api_view(["DELETE"])
+@permission_classes([permissions.IsAuthenticated])
+def students_delete_photo(request, pk: int):
+    """Elimina la foto de perfil de un estudiante (admin)."""
+    not_ok = _require_staff(request)
+    if not_ok:
+        return not_ok
+
+    try:
+        st = Student.objects.get(pk=pk)
+    except Student.DoesNotExist:
+        return Response({"detail": "No existe."}, status=404)
+
+    if st.photo:
+        try:
+            st.photo.delete(save=False)
+        except Exception:
+            pass
+        st.photo = None
+        st.save(update_fields=["photo", "updated_at"])
+
+    return Response(StudentSerializer(st, context={"request": request}).data)
+
+
+@api_view(["DELETE"])
+@permission_classes([permissions.IsAuthenticated])
+def students_me_delete_photo(request):
+    """Elimina la foto de perfil del estudiante logueado."""
+    st = _get_my_student(request)
+    if not st:
+        return Response({"detail": "Tu usuario no tiene estudiante vinculado."}, status=404)
+
+    if st.photo:
+        try:
+            st.photo.delete(save=False)
+        except Exception:
+            pass
+        st.photo = None
+        st.save(update_fields=["photo", "updated_at"])
+
+    return Response(StudentSerializer(st, context={"request": request}).data)
+
+
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def students_link_user(request, pk: int):

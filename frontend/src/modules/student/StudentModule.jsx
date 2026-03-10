@@ -531,6 +531,22 @@ export default function StudentModule() {
         } catch (e) { toast.error(e?.response?.data?.detail || "No se pudo subir la foto"); }
     };
 
+    const onDeletePhoto = async () => {
+        try {
+            let res;
+            if (mode === "admin") {
+                if (!selectedId) return toast.error("Selecciona un estudiante primero.");
+                res = await StudentsService.deletePhoto(selectedId);
+            } else {
+                res = await StudentsService.deleteMyPhoto();
+            }
+            setStudent((s) => ({ ...(s || {}), ...(res || {}), photoUrl: "" }));
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || "No se pudo eliminar la foto");
+            throw e;
+        }
+    };
+
     const onChangeTempPassword = async (e) => {
         e.preventDefault();
         if (pwdSaving) return;
@@ -676,13 +692,15 @@ export default function StudentModule() {
                             ) : mode === "student" ? (
                                 <StudentProfileForm
                                     mode={mode} student={student}
-                                    loading={loading} onSave={onSave} onUploadPhoto={onUploadPhoto}
+                                    loading={loading} onSave={onSave}
+                                    onUploadPhoto={onUploadPhoto} onDeletePhoto={onDeletePhoto}
                                 />
                             ) : selectedId ? (
                                 <StudentProfileForm
                                     mode={mode} student={student}
                                     loading={loading || studentLoading}
                                     onSave={onSave} onUploadPhoto={onUploadPhoto}
+                                    onDeletePhoto={onDeletePhoto}
                                 />
                             ) : (
                                 <div className="empty-state p-10 text-center">

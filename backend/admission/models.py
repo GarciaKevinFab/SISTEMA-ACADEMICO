@@ -28,6 +28,7 @@ class AdmissionScheduleItem(models.Model):
     start = models.DateTimeField()
     end = models.DateTimeField()
     kind = models.CharField(max_length=40, blank=True, default="")
+    notes = models.TextField(blank=True, default="")
 
 
 class Applicant(models.Model):

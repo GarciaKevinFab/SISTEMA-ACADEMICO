@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { toast } from "sonner";
 import {
     Upload, Image as ImageIcon, Save, Lock, Crop, X, Check,
-    UserCircle, Phone, MapPin, Building2, BookOpen, Loader2,
+    UserCircle, Phone, MapPin, Building2, BookOpen, Loader2, Trash2,
 } from "lucide-react";
 import Cropper from "react-easy-crop";
 import { Button } from "../../components/ui/button";
@@ -170,9 +170,10 @@ async function getCroppedImg(imageSrc, pixelCrop) {
 }
 
 /* ─── main component ─── */
-export default function StudentProfileForm({ mode, student, loading, onSave, onUploadPhoto }) {
+export default function StudentProfileForm({ mode, student, loading, onSave, onUploadPhoto, onDeletePhoto }) {
     const [form, setForm] = useState(empty);
     const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
     const [photoFile, setPhotoFile] = useState(null);
     const [photoPreview, setPhotoPreview] = useState("");
@@ -215,6 +216,23 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
             setIsCropping(false);
             toast.success("Foto lista para guardar");
         } catch (e) { console.error(e); toast.error("Error al recortar la imagen"); }
+    };
+
+    const handleDeletePhoto = async () => {
+        if (!onDeletePhoto) return;
+        if (!confirm("¿Seguro que deseas eliminar la foto de perfil?")) return;
+        try {
+            setDeleting(true);
+            await onDeletePhoto();
+            setPhotoPreview("");
+            setPhotoFile(null);
+            setForm((f) => ({ ...f, photoUrl: "" }));
+            if (fileInputRef.current) fileInputRef.current.value = "";
+            toast.success("Foto eliminada");
+        } catch (e) {
+            console.error(e);
+            toast.error("No se pudo eliminar la foto");
+        } finally { setDeleting(false); }
     };
 
     const submit = async (e) => {
@@ -317,6 +335,15 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
                                         <Button type="button" variant="ghost" className="h-9 px-4 rounded-xl text-red-500 hover:text-red-700 hover:bg-red-50 text-sm"
                                             onClick={() => { setPhotoFile(null); setPhotoPreview(form.photoUrl || ""); if (fileInputRef.current) fileInputRef.current.value = ""; }} disabled={busy}>
                                             Revertir
+                                        </Button>
+                                    )}
+                                    {/* Eliminar foto (solo si hay foto guardada en el servidor y no hay cambio pendiente) */}
+                                    {form.photoUrl && !photoFile && !isCropping && onDeletePhoto && (
+                                        <Button type="button" variant="ghost"
+                                            className="h-9 px-4 rounded-xl text-red-500 hover:text-red-700 hover:bg-red-50 text-sm gap-1.5"
+                                            onClick={handleDeletePhoto} disabled={busy || deleting}>
+                                            {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                            Eliminar foto
                                         </Button>
                                     )}
                                 </div>
