@@ -694,15 +694,32 @@ const EnrollmentComponent = () => {
 
   const generateFichaMatricula = async (enrollmentId) => {
     try {
-      const result = await generatePDFWithPolling(
-        `/academic/enrollments/${enrollmentId}/ficha`, {},
-        { testId: "enrollment-ficha" }
+      const token = localStorage.getItem("access") || localStorage.getItem("token") || "";
+      const base = window.__APP_CONFIG__?.BACKEND_URL || process.env.REACT_APP_BACKEND_URL || "https://sis.iesppallende.edu.pe";
+      const res = await fetch(
+        `${base.replace(/\/+$/, "")}/api/academic/enrollments/${enrollmentId}/ficha/pdf`,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (result.success) {
-        await downloadFile(result.downloadUrl, `ficha-matricula-${enrollmentId}.pdf`);
-        toast.success("Ficha de matrícula descargada");
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        console.error("Ficha PDF error:", res.status, errText);
+        toast.error(`Error descargando ficha: ${res.status}`);
+        return;
       }
-    } catch (e) { console.error(e); }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ficha-matricula-${enrollmentId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(url);
+      a.remove();
+      toast.success("Ficha de matrícula descargada");
+    } catch (e) {
+      console.error("Ficha matrícula error:", e);
+      toast.error("Error descargando ficha de matrícula");
+    }
   };
 
   const generateSchedulePDF = async () => {

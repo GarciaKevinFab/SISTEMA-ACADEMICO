@@ -1360,31 +1360,33 @@ class EnrollmentFichaPDFView(APIView):
     permission_classes     = [permissions.IsAuthenticated]
 
     def get(self, request, enrollment_id: int):
-        import traceback as _tb
+        try:
+            return self._generate(request, enrollment_id)
+        except Exception as exc:
+            import traceback
+            tb = traceback.format_exc()
+            logger.error(f"Ficha PDF enrollment={enrollment_id}: {exc}\n{tb}")
+            return HttpResponse(
+                f"Error generando ficha de matrícula:\n\n{exc}\n\n{tb}",
+                content_type="text/plain; charset=utf-8",
+                status=500,
+            )
+
+    def _generate(self, request, enrollment_id: int):
         from .process_document_gen import (
             _get_institution, _get_student, _get_enrolled_courses,
-            _get_styles, DOCUMENT_GENERATORS,
         )
 
-        try:
-            enrollment = Enrollment.objects.select_related("student").get(id=enrollment_id)
-        except Enrollment.DoesNotExist:
-            return Response({"detail": "Matrícula no encontrada."}, status=404)
-
+        enrollment = Enrollment.objects.select_related("student").get(id=enrollment_id)
         st = enrollment.student
-        try:
-            student_data = _get_student(st.id)
-        except Exception as exc:
-            logger.error(f"Ficha PDF: _get_student({st.id}) falló: {exc}\n{_tb.format_exc()}")
-            return Response({"detail": f"Error obteniendo datos del alumno: {exc}"}, status=500)
-
+        student_data = _get_student(st.id)
         student_data["periodo"] = enrollment.period
 
         ciclo = None
         try:
             ciclo = int(student_data.get("ciclo", 0) or 0)
         except (ValueError, TypeError):
-            ciclo = None
+            pass
 
         courses = _get_enrolled_courses(student_data.get("plan_id"), ciclo)
         inst = _get_institution()
@@ -1411,44 +1413,34 @@ class EnrollmentFichaPDFView(APIView):
                 pdf_buf, _ = generate_ficha_matricula_weasyprint(
                     fake_proc, student_data, extra, inst, courses,
                 )
-                logger.info(f"Ficha matrícula {enrollment_id}: generada con WeasyPrint")
         except Exception as exc:
-            logger.warning(f"Ficha matrícula {enrollment_id}: WeasyPrint falló: {exc}")
+            logger.warning(f"Ficha {enrollment_id}: WeasyPrint falló: {exc}")
             pdf_buf = None
 
         # ── Fallback: ReportLab ──
         if pdf_buf is None:
-            try:
-                import io as _io
-                from reportlab.lib.pagesizes import A4
-                from reportlab.lib.units import cm
-                from reportlab.platypus import SimpleDocTemplate
+            from .process_document_gen import _get_styles, DOCUMENT_GENERATORS
+            import io as _io
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib.units import cm
+            from reportlab.platypus import SimpleDocTemplate
 
-                gen = DOCUMENT_GENERATORS.get("FICHA_MATRICULA")
-                if not gen:
-                    return Response(
-                        {"detail": "No hay generador de Ficha de Matrícula disponible."},
-                        status=500,
-                    )
+            gen = DOCUMENT_GENERATORS.get("FICHA_MATRICULA")
+            if not gen:
+                raise RuntimeError("No hay generador FICHA_MATRICULA registrado")
 
-                styles = _get_styles()
-                story = gen(fake_proc, student_data, extra, styles, inst)
-                pdf_buf = _io.BytesIO()
-                doc = SimpleDocTemplate(
-                    pdf_buf, pagesize=A4,
-                    leftMargin=2.5 * cm, rightMargin=2.5 * cm,
-                    topMargin=2 * cm, bottomMargin=2 * cm,
-                )
-                doc.build(story)
-                pdf_buf.seek(0)
-                logger.info(f"Ficha matrícula {enrollment_id}: generada con ReportLab (fallback)")
-            except Exception as exc:
-                logger.error(f"Ficha matrícula {enrollment_id}: ReportLab falló: {exc}\n{_tb.format_exc()}")
-                return Response(
-                    {"detail": f"Error generando PDF: {exc}"},
-                    status=500,
-                )
+            styles = _get_styles()
+            story = gen(fake_proc, student_data, extra, styles, inst)
+            pdf_buf = _io.BytesIO()
+            doc = SimpleDocTemplate(
+                pdf_buf, pagesize=A4,
+                leftMargin=2.5 * cm, rightMargin=2.5 * cm,
+                topMargin=2 * cm, bottomMargin=2 * cm,
+            )
+            doc.build(story)
+            pdf_buf.seek(0)
 
+        # ── Nombre del archivo ──
         ap_pat  = getattr(st, "apellido_paterno", "") or ""
         ap_mat  = getattr(st, "apellido_materno", "") or ""
         nombres = getattr(st, "nombres", "") or ""
@@ -1456,8 +1448,9 @@ class EnrollmentFichaPDFView(APIView):
         safe    = f"{ap_pat}_{ap_mat}_{nombres}".strip("_").replace(" ", "_") or dni
         filename = f"FICHA-MATRICULA_{safe}_{dni}.pdf"
 
+        content = pdf_buf.getvalue() if hasattr(pdf_buf, 'getvalue') else pdf_buf.read()
         return HttpResponse(
-            pdf_buf.getvalue() if hasattr(pdf_buf, 'getvalue') else pdf_buf.read(),
+            content,
             content_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
