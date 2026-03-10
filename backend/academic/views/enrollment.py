@@ -1064,6 +1064,8 @@ class EnrollmentAvailableView(APIView):
             payment_status=_pay_info,
             current_semester=current_sem,
             is_egresado=is_egresado,
+            is_enrolled=(existing is not None and existing.status == Enrollment.STATUS_CONFIRMED),
+            enrollment_id=existing.id if existing else None,
             total_plan_courses=total_plan_courses,
             approved_plan_courses=approved_plan_courses,
             courses=out_courses,

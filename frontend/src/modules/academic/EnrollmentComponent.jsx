@@ -487,6 +487,7 @@ const EnrollmentComponent = () => {
   const [windowInfo, setWindowInfo] = useState(null);
   const [courses, setCourses] = useState([]);
   const [isEgresado, setIsEgresado] = useState(false);
+  const [isAlreadyEnrolled, setIsAlreadyEnrolled] = useState(false);
   const [selectedCourses, setSelectedCourses] = useState([]);
   const [selectedSections, setSelectedSections] = useState({});
   const [validation, setValidation] = useState({ status: null, errors: [], warnings: [], suggestions: [] });
@@ -521,6 +522,7 @@ const EnrollmentComponent = () => {
       setResolvedStudent(student);
       setCourses(Array.isArray(list) ? list : []);
       setIsEgresado(!!data?.is_egresado);
+      setIsAlreadyEnrolled(!!data?.is_enrolled);
       setWindowInfo(win);
       setPaymentStatus(payInfo);
       setSelectedCourses([]);
@@ -945,12 +947,29 @@ const EnrollmentComponent = () => {
             </Card>
           )}
 
-          {/* ── Payment Gate (solo para estudiantes no-admin) ── */}
-          {!adminMode && resolvedStudent && paymentStatus?.status !== "APPROVED" && (
+          {/* ── Payment Gate (solo si NO está matriculado y NO es admin) ── */}
+          {!adminMode && resolvedStudent && !isAlreadyEnrolled && paymentStatus?.status !== "APPROVED" && (
             <EnrollmentPaymentGate
               period={academicPeriod}
               onPaymentApproved={() => fetchAvailable()}
             />
+          )}
+
+          {/* ── Ya matriculado banner ── */}
+          {isAlreadyEnrolled && resolvedStudent && !isEgresado && (
+            <Card className="border-blue-300 bg-blue-50">
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className="p-3 bg-blue-100 rounded-full">
+                  <CheckCircle className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-blue-800">Ya matriculado</div>
+                  <div className="text-sm text-blue-700">
+                    Este alumno ya completó su matrícula para el período {academicPeriod}.
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* ── Egresado banner ── */}
@@ -971,7 +990,7 @@ const EnrollmentComponent = () => {
           )}
 
           {/* ── Course Selection (solo visible si pago aprobado o es admin) ── */}
-          <Card className={`border-slate-200 shadow-sm overflow-hidden ${!adminMode && paymentStatus && paymentStatus.status !== "APPROVED" ? "hidden" : ""} ${isEgresado ? "hidden" : ""}`}>
+          <Card className={`border-slate-200 shadow-sm overflow-hidden ${!adminMode && paymentStatus && paymentStatus.status !== "APPROVED" ? "hidden" : ""} ${isEgresado || isAlreadyEnrolled ? "hidden" : ""}`}>
             <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-blue-100 rounded-lg">
@@ -1291,7 +1310,7 @@ const EnrollmentComponent = () => {
           )}
 
           {/* ── Action Buttons ── */}
-          {!isEgresado && (
+          {!isEgresado && !isAlreadyEnrolled && (
             <div className="flex justify-end gap-3">
               {adminMode && (
                 <Button variant="ghost" onClick={() => setAdminView("roster")} className="text-slate-500">
@@ -1322,7 +1341,7 @@ const EnrollmentComponent = () => {
               </Button>
             </div>
           )}
-          {isEgresado && adminMode && (
+          {(isEgresado || isAlreadyEnrolled) && adminMode && (
             <div className="flex justify-end">
               <Button variant="ghost" onClick={() => setAdminView("roster")} className="text-slate-500">
                 <ChevronLeft className="h-4 w-4 mr-1" /> Volver al padrón
