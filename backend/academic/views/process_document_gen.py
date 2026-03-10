@@ -1045,30 +1045,57 @@ def _gen_ficha_matricula(process, student, extra, styles, inst):
 
     short      = inst.get("short_name", _DEFAULT_INST["short_name"])
     nombre_inst= inst.get("institution_name", _DEFAULT_INST["institution_name"])
+    full_name  = inst.get("name", _DEFAULT_INST["name"])
     region     = inst.get("region", "Junín")
+    province   = inst.get("province", "Tarma")
     modular    = inst.get("modular_code", _DEFAULT_INST["modular_code"])
     gestion    = inst.get("management", _DEFAULT_INST["management"])
     address    = inst.get("address", "")
     city       = inst.get("city", "Tarma")
+    ds_creation = inst.get("ds_creation", _DEFAULT_INST["ds_creation"])
+    director   = inst.get("director_name", "")
 
-    elems.append(Paragraph(
-        "FICHA DE MATRÍCULA",
-        ParagraphStyle("FT", parent=styles["DocTitle"], fontSize=16, spaceBefore=4, spaceAfter=8),
-    ))
+    # ── Logo ──
+    logo = _load_image(inst, "logo_url", 2.5 * cm, 2.5 * cm)
+
+    # ── Título con logo ──
+    title_style = ParagraphStyle("FT", parent=styles["DocTitle"], fontSize=16, spaceBefore=4, spaceAfter=4)
+    if logo:
+        title_row = Table(
+            [[logo, Paragraph("FICHA DE MATRÍCULA", title_style)]],
+            colWidths=[3 * cm, 13 * cm],
+        )
+        title_row.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN",  (0, 0), (0, 0), "CENTER"),
+            ("ALIGN",  (1, 0), (1, 0), "CENTER"),
+        ]))
+        elems.append(title_row)
+    else:
+        elems.append(Paragraph("FICHA DE MATRÍCULA", title_style))
+    elems.append(Spacer(1, 6))
+
+    # ── Bloque institución (con todos los datos de InstitutionSetting) ──
+    lbl = ParagraphStyle("Lbl", parent=styles["Normal"], fontSize=7.5, textColor=colors.HexColor("#1a237e"), leading=10)
+    val = styles["Normal"]
 
     b1 = [
-        [Paragraph("<b>Institución</b>", styles["Normal"]),
-         Paragraph(f"{short} {nombre_inst}", styles["Normal"]),
-         Paragraph("<b>DREJ</b>", styles["Normal"]),
-         Paragraph(region, styles["Normal"])],
-        [Paragraph("<b>Código Modular</b>", styles["Normal"]),
-         Paragraph(modular, styles["Normal"]),
-         Paragraph("<b>Gestión</b>", styles["Normal"]),
-         Paragraph(gestion, styles["Normal"])],
-        [Paragraph("<b>Dirección</b>", styles["Normal"]),
-         Paragraph(address, styles["Normal"]),
-         Paragraph("<b>Provincia</b>", styles["Normal"]),
-         Paragraph(f"{city} / {region}", styles["Normal"])],
+        [Paragraph("<b>Institución</b>", lbl),
+         Paragraph(f"<b>{full_name}<br/>{nombre_inst}</b>", val),
+         Paragraph("<b>DREJ</b>", lbl),
+         Paragraph(region, val)],
+        [Paragraph("<b>Código Modular</b>", lbl),
+         Paragraph(f"<b>{modular}</b>", val),
+         Paragraph("<b>Gestión</b>", lbl),
+         Paragraph(gestion, val)],
+        [Paragraph("<b>Dirección</b>", lbl),
+         Paragraph(address, val),
+         Paragraph("<b>Provincia</b>", lbl),
+         Paragraph(f"{province} / {region}", val)],
+        [Paragraph("<b>Creación</b>", lbl),
+         Paragraph(ds_creation, val),
+         Paragraph("<b>Director</b>", lbl),
+         Paragraph(director, val)],
     ]
     t1 = Table(b1, colWidths=[3.5 * cm, 5.5 * cm, 3 * cm, 4 * cm])
     t1.setStyle(TableStyle([
