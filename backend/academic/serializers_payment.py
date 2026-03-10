@@ -51,7 +51,11 @@ class EnrollmentPaymentSerializer(serializers.ModelSerializer):
     def get_voucher_url(self, obj):
         if obj.voucher:
             try:
-                return obj.voucher.url
+                url = obj.voucher.url
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(url)
+                return url
             except Exception:
                 return ""
         return ""

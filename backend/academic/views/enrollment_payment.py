@@ -214,7 +214,7 @@ class EnrollmentPaymentStatusView(APIView):
 
         try:
             payment = EnrollmentPayment.objects.get(student=student, period=period)
-            data = EnrollmentPaymentSerializer(payment).data
+            data = EnrollmentPaymentSerializer(payment, context={"request": request}).data
             # Recalcular montos (por si cambió el mérito)
             data["computed_amount"] = float(amount)
             data["computed_discount_tag"] = discount_tag
@@ -289,7 +289,7 @@ class EnrollmentPaymentUploadView(APIView):
         )
 
         return Response(
-            EnrollmentPaymentSerializer(payment).data,
+            EnrollmentPaymentSerializer(payment, context={"request": request}).data,
             status=201,
         )
 
@@ -358,7 +358,7 @@ class EnrollmentPaymentReUploadView(APIView):
         payment.reviewed_at = None
         payment.save()
 
-        return Response(EnrollmentPaymentSerializer(payment).data)
+        return Response(EnrollmentPaymentSerializer(payment, context={"request": request}).data)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -407,7 +407,7 @@ class EnrollmentPaymentPendingView(APIView):
             "rejected": base_qs.filter(status="REJECTED").count(),
         }
 
-        data = EnrollmentPaymentSerializer(qs[:200], many=True).data
+        data = EnrollmentPaymentSerializer(qs[:200], many=True, context={"request": request}).data
         return Response({"payments": data, "summary": summary})
 
 
@@ -426,7 +426,7 @@ class EnrollmentPaymentDetailView(APIView):
         except EnrollmentPayment.DoesNotExist:
             return Response({"detail": "Pago no encontrado."}, status=404)
 
-        return Response(EnrollmentPaymentSerializer(payment).data)
+        return Response(EnrollmentPaymentSerializer(payment, context={"request": request}).data)
 
 
 class EnrollmentPaymentApproveView(APIView):
@@ -460,7 +460,7 @@ class EnrollmentPaymentApproveView(APIView):
             # No bloquear la aprobación si falla el registro contable
             pass
 
-        return Response(EnrollmentPaymentSerializer(payment).data)
+        return Response(EnrollmentPaymentSerializer(payment, context={"request": request}).data)
 
 
 class EnrollmentPaymentRejectView(APIView):
@@ -491,7 +491,7 @@ class EnrollmentPaymentRejectView(APIView):
             "status", "reviewer", "reviewed_at", "rejection_note", "updated_at",
         ])
 
-        return Response(EnrollmentPaymentSerializer(payment).data)
+        return Response(EnrollmentPaymentSerializer(payment, context={"request": request}).data)
 
 
 class EnrollmentPaymentDeleteView(APIView):
