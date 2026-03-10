@@ -964,6 +964,21 @@ class EnrollmentAvailableView(APIView):
                 for sl in sec.schedule_slots.all().order_by("weekday", "start")
             ]
 
+        # ── Ciclo registrado del alumno (campo student.ciclo) ──
+        student_ciclo = 0
+        try:
+            student_ciclo = max(0, int(getattr(st, "ciclo", 0) or 0))
+        except (ValueError, TypeError):
+            student_ciclo = 0
+
+        # ── Detectar egresado: si TODOS los cursos del plan están aprobados ──
+        total_plan_courses = sum(1 for pc in pcs if int(pc.semester or 0) > 0)
+        approved_plan_courses = sum(
+            1 for pc in pcs
+            if int(pc.semester or 0) > 0 and _is_course_approved(pc, approved_ids, approved_names)
+        )
+        is_egresado = (total_plan_courses > 0 and approved_plan_courses >= total_plan_courses)
+
         out_courses = []
         for pc in pcs:
             sem = int(pc.semester or 0)
@@ -976,6 +991,14 @@ class EnrollmentAvailableView(APIView):
             if sem > current_sem:
                 continue
 
+            attempts  = _attempts_for_course(st, pc)
+            is_failed = attempts > 0
+
+            # ── Filtro: mostrar solo cursos del ciclo actual + jalados ──
+            # Cursos de ciclos anteriores solo se muestran si fueron intentados (jalados)
+            if student_ciclo > 0 and sem < student_ciclo and not is_failed:
+                continue
+
             enabled = True
             reason  = ""
 
@@ -983,9 +1006,6 @@ class EnrollmentAvailableView(APIView):
                 enabled, reason = False, "YA_MATRICULADO_EN_PERIODO"
             elif not _prereqs_met(pc.id, approved_ids, approved_names):
                 enabled, reason = False, "FALTA_PRERREQUISITOS"
-
-            attempts  = _attempts_for_course(st, pc)
-            is_failed = attempts > 0
 
             out_courses.append({
                 "id":             pc.id,
@@ -1037,11 +1057,15 @@ class EnrollmentAvailableView(APIView):
                 "num_documento": st.num_documento,
                 "plan_id":       st.plan_id,
                 "plan_name":     st.plan.name if st.plan else "",
+                "ciclo":         student_ciclo,
             },
             academic_period=academic_period,
             enrollment_window=_window_info_for_period(per),
             payment_status=_pay_info,
             current_semester=current_sem,
+            is_egresado=is_egresado,
+            total_plan_courses=total_plan_courses,
+            approved_plan_courses=approved_plan_courses,
             courses=out_courses,
         )
 

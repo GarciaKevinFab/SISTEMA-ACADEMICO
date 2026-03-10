@@ -486,6 +486,7 @@ const EnrollmentComponent = () => {
   const [resolvedStudent, setResolvedStudent] = useState(null);
   const [windowInfo, setWindowInfo] = useState(null);
   const [courses, setCourses] = useState([]);
+  const [isEgresado, setIsEgresado] = useState(false);
   const [selectedCourses, setSelectedCourses] = useState([]);
   const [selectedSections, setSelectedSections] = useState({});
   const [validation, setValidation] = useState({ status: null, errors: [], warnings: [], suggestions: [] });
@@ -519,6 +520,7 @@ const EnrollmentComponent = () => {
 
       setResolvedStudent(student);
       setCourses(Array.isArray(list) ? list : []);
+      setIsEgresado(!!data?.is_egresado);
       setWindowInfo(win);
       setPaymentStatus(payInfo);
       setSelectedCourses([]);
@@ -527,7 +529,9 @@ const EnrollmentComponent = () => {
       setScheduleConflicts([]);
       setSuggestions([]);
 
-      if (!Array.isArray(list) || !list.length) {
+      if (data?.is_egresado) {
+        toast.info("Este alumno ya es egresado — aprobó todos los cursos del plan");
+      } else if (!Array.isArray(list) || !list.length) {
         toast.info("No hay cursos disponibles para este período");
       }
     } catch (e) {
@@ -949,8 +953,25 @@ const EnrollmentComponent = () => {
             />
           )}
 
+          {/* ── Egresado banner ── */}
+          {isEgresado && resolvedStudent && (
+            <Card className="border-green-300 bg-green-50">
+              <CardContent className="p-6 flex items-center gap-4">
+                <div className="p-3 bg-green-100 rounded-full">
+                  <CheckCircle className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-green-800">Egresado</div>
+                  <div className="text-sm text-green-700">
+                    Este alumno ya aprobó todos los cursos del plan de estudios. No necesita matricularse.
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* ── Course Selection (solo visible si pago aprobado o es admin) ── */}
-          <Card className={`border-slate-200 shadow-sm overflow-hidden ${!adminMode && paymentStatus && paymentStatus.status !== "APPROVED" ? "hidden" : ""}`}>
+          <Card className={`border-slate-200 shadow-sm overflow-hidden ${!adminMode && paymentStatus && paymentStatus.status !== "APPROVED" ? "hidden" : ""} ${isEgresado ? "hidden" : ""}`}>
             <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-blue-100 rounded-lg">
@@ -985,9 +1006,13 @@ const EnrollmentComponent = () => {
                         key={course.id}
                         className={`relative transition-all duration-200 group ${isBlocked
                             ? "border-slate-200 bg-slate-50/50 opacity-60"
-                            : selected
-                              ? "border-blue-500 ring-1 ring-blue-500 bg-blue-50/10 shadow-sm cursor-pointer"
-                              : "border-slate-200 hover:border-blue-300 hover:shadow-md bg-white cursor-pointer"
+                            : course?.is_failed
+                              ? selected
+                                ? "border-red-500 ring-1 ring-red-500 bg-red-50/10 shadow-sm cursor-pointer"
+                                : "border-red-300 bg-red-50/20 hover:border-red-400 hover:shadow-md cursor-pointer"
+                              : selected
+                                ? "border-blue-500 ring-1 ring-blue-500 bg-blue-50/10 shadow-sm cursor-pointer"
+                                : "border-slate-200 hover:border-blue-300 hover:shadow-md bg-white cursor-pointer"
                           }`}
                       >
                         <CardContent className="p-5 flex flex-col h-full justify-between gap-4">
@@ -1017,8 +1042,8 @@ const EnrollmentComponent = () => {
                               {course.name}
                             </h4>
 
-                            {(course?.is_carry || course?.carry || course?.is_backlog) && (
-                              <Badge className="mt-2 bg-amber-500">Arrastre</Badge>
+                            {course?.is_failed && (
+                              <Badge className="mt-2 bg-red-500 text-white">Obligatorio</Badge>
                             )}
                             {course?.semester ? (
                               <div className="text-xs text-slate-500 mt-2">Semestre: {course.semester}</div>
@@ -1266,35 +1291,44 @@ const EnrollmentComponent = () => {
           )}
 
           {/* ── Action Buttons ── */}
-          <div className="flex justify-end gap-3">
-            {adminMode && (
+          {!isEgresado && (
+            <div className="flex justify-end gap-3">
+              {adminMode && (
+                <Button variant="ghost" onClick={() => setAdminView("roster")} className="text-slate-500">
+                  <ChevronLeft className="h-4 w-4 mr-1" /> Volver al padrón
+                </Button>
+              )}
+              <Button
+                data-testid="enroll-validate"
+                variant="outline"
+                onClick={validateEnrollment}
+                disabled={isValidating || selectedCourses.length === 0 || windowBlocked}
+              >
+                {isValidating
+                  ? <><Clock className="h-4 w-4 mr-2 animate-spin" /> Validando...</>
+                  : <><SearchIcon className="h-4 w-4 mr-2" /> Validar Matrícula</>
+                }
+              </Button>
+              <Button
+                data-testid="enroll-commit"
+                onClick={commitEnrollment}
+                disabled={loading || validation.status !== "success" || windowBlocked}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {loading
+                  ? <><Clock className="h-4 w-4 mr-2 animate-spin" /> Procesando...</>
+                  : <><CheckCircle className="h-4 w-4 mr-2" /> Confirmar Matrícula</>
+                }
+              </Button>
+            </div>
+          )}
+          {isEgresado && adminMode && (
+            <div className="flex justify-end">
               <Button variant="ghost" onClick={() => setAdminView("roster")} className="text-slate-500">
                 <ChevronLeft className="h-4 w-4 mr-1" /> Volver al padrón
               </Button>
-            )}
-            <Button
-              data-testid="enroll-validate"
-              variant="outline"
-              onClick={validateEnrollment}
-              disabled={isValidating || selectedCourses.length === 0 || windowBlocked}
-            >
-              {isValidating
-                ? <><Clock className="h-4 w-4 mr-2 animate-spin" /> Validando...</>
-                : <><SearchIcon className="h-4 w-4 mr-2" /> Validar Matrícula</>
-              }
-            </Button>
-            <Button
-              data-testid="enroll-commit"
-              onClick={commitEnrollment}
-              disabled={loading || validation.status !== "success" || windowBlocked}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {loading
-                ? <><Clock className="h-4 w-4 mr-2 animate-spin" /> Procesando...</>
-                : <><CheckCircle className="h-4 w-4 mr-2" /> Confirmar Matrícula</>
-              }
-            </Button>
-          </div>
+            </div>
+          )}
 
           <div style={{ display: "none" }}>
             <div data-testid="enrollment-certificate-status">IDLE</div>
