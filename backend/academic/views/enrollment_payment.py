@@ -497,8 +497,7 @@ class EnrollmentPaymentRejectView(APIView):
 class EnrollmentPaymentDeleteView(APIView):
     """
     DELETE /academic/enrollment-payment/<id>/delete
-    Finanzas elimina un pago de matrícula.
-    Solo se permite si el pago NO ha sido aprobado.
+    Finanzas elimina un pago de matrícula (cualquier estado).
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -507,12 +506,6 @@ class EnrollmentPaymentDeleteView(APIView):
             payment = EnrollmentPayment.objects.get(pk=pk)
         except EnrollmentPayment.DoesNotExist:
             return Response({"detail": "Pago no encontrado."}, status=404)
-
-        if payment.status == EnrollmentPayment.STATUS_APPROVED:
-            return Response(
-                {"detail": "No se puede eliminar un pago ya aprobado."},
-                status=409,
-            )
 
         # Eliminar archivo de voucher
         if payment.voucher:
