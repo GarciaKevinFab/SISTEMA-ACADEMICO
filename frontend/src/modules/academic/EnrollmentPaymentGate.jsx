@@ -208,34 +208,31 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
     const isEditing  = editingPending && status === "PENDING";
 
     return (
-        <Card className={`border-l-4 ${isRejected ? "border-l-red-500" : isEditing ? "border-l-amber-500" : "border-l-blue-500"}`}>
+        <Card className={`border-l-4 ${isEditing ? "border-l-amber-500" : "border-l-blue-500"}`}>
             <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
-                    {isRejected
-                        ? <XCircle className="h-5 w-5 text-red-600" />
-                        : isEditing
+                    {isEditing
                         ? <Pencil className="h-5 w-5 text-amber-600" />
                         : <AlertTriangle className="h-5 w-5 text-blue-600" />
                     }
                     <CardTitle className="text-lg">
-                        {isRejected ? "Voucher Rechazado" : isEditing ? "Modificar Voucher" : "Pago de Matrícula Requerido"}
+                        {isEditing ? "Modificar Voucher" : "Pago de Matrícula Requerido"}
                     </CardTitle>
                 </div>
                 <CardDescription>
-                    {isRejected
-                        ? "Tu voucher fue rechazado. Revisa el motivo y vuelve a enviar."
-                        : isEditing
+                    {isEditing
                         ? "Sube un nuevo voucher para reemplazar el actual."
                         : "Para continuar con tu matrícula, realiza el pago en el Banco de la Nación y sube tu voucher."
                     }
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                {/* Motivo de rechazo */}
+                {/* Nota sutil si fue rechazado antes */}
                 {isRejected && paymentInfo?.rejection_note && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                        <p className="text-sm font-medium text-red-800">Motivo del rechazo:</p>
-                        <p className="text-sm text-red-700 mt-1">{paymentInfo.rejection_note}</p>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm">
+                        <p className="text-amber-800">
+                            <span className="font-medium">Nota:</span> {paymentInfo.rejection_note}
+                        </p>
                     </div>
                 )}
 
@@ -372,7 +369,7 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                             {submitting ? (
                                 <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Enviando...</>
                             ) : (
-                                <><FileText className="h-4 w-4 mr-2" /> {isRejected ? "Reenviar Voucher" : isEditing ? "Reemplazar Voucher" : "Enviar Voucher"}</>
+                                <><FileText className="h-4 w-4 mr-2" /> {isEditing ? "Reemplazar Voucher" : "Enviar Voucher"}</>
                             )}
                         </Button>
                     </div>

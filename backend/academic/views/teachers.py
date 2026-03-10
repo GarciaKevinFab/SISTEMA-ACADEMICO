@@ -17,6 +17,7 @@ from academic.models import (
     Teacher, Section, SectionGrades
 )
 from catalogs.models import Teacher as CatalogTeacher
+from academic.serializers import smart_title
 
 # ✅ CAMBIO: importar desde resolvers en vez de sections
 from .resolvers import resolve_teacher
@@ -237,7 +238,7 @@ class TeacherSectionsView(APIView):
             crs = pc.course
             sections.append({
                 "id": s.id,
-                "course_name": pc.display_name or crs.name,
+                "course_name": smart_title(pc.display_name or crs.name),
                 "course_code": pc.display_code or crs.code,
                 "section_code": s.label,
                 "label": s.label,
@@ -279,7 +280,7 @@ class TeacherSectionsMeView(APIView):
             crs = pc.course
             sections.append({
                 "id": s.id,
-                "course_name": pc.display_name or crs.name,
+                "course_name": smart_title(pc.display_name or crs.name),
                 "course_code": pc.display_code or crs.code,
                 "section_code": s.label,
                 "label": s.label,

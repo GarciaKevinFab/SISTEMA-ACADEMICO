@@ -12,8 +12,49 @@ from .models import (
 )
 
 
+import re
+
 DAY_TO_INT = {"MON": 1, "TUE": 2, "WED": 3, "THU": 4, "FRI": 5, "SAT": 6, "SUN": 7}
 INT_TO_DAY = {v: k for k, v in DAY_TO_INT.items()}
+
+# Palabras que deben permanecer en minúsculas (preposiciones/artículos en español)
+_LOWERCASE_WORDS = {
+    "de", "del", "la", "las", "los", "el", "en", "y", "e", "o", "u",
+    "a", "con", "por", "para", "al", "su", "sus",
+}
+
+# Regex para detectar números romanos (I, II, III, IV, V, ... XXX)
+_ROMAN_RE = re.compile(
+    r'^(XXX|XX[IVX]?|X[IVX]{0,3}|V?I{0,3}|IV|IX|VI{0,3})$',
+    re.IGNORECASE,
+)
+
+
+def smart_title(name: str) -> str:
+    """
+    Capitaliza correctamente un nombre de curso en español.
+    - Primera palabra siempre capitalizada
+    - Preposiciones/artículos en minúsculas (excepto al inicio)
+    - Números romanos en MAYÚSCULAS (II, III, IV, XXI, etc.)
+    """
+    if not name:
+        return name
+    words = name.split()
+    result = []
+    for i, w in enumerate(words):
+        upper = w.upper()
+        # Números romanos → MAYÚSCULAS
+        if _ROMAN_RE.match(w) and len(w) <= 4:
+            result.append(upper)
+        # Primera palabra siempre capitalizada
+        elif i == 0:
+            result.append(w.capitalize())
+        # Preposiciones en minúsculas
+        elif w.lower() in _LOWERCASE_WORDS:
+            result.append(w.lower())
+        else:
+            result.append(w.capitalize())
+    return " ".join(result)
 
 
 # ───────────────────────── Helpers ─────────────────────────
@@ -259,7 +300,8 @@ class SectionOutSerializer(serializers.ModelSerializer):
         pc = getattr(obj, "plan_course", None)
         if not pc:
             return ""
-        return pc.display_name or (pc.course.name if pc.course_id else "")
+        raw = pc.display_name or (pc.course.name if pc.course_id else "")
+        return smart_title(raw)
 
     def get_teacher_id(self, obj):
         if not obj.teacher or not obj.teacher.user:
