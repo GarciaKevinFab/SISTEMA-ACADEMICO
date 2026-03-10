@@ -42,6 +42,8 @@ import GradesAttendanceComponent from "./GradesAttendanceComponent";
 import SectionSyllabusEvaluation from "./SectionSyllabusEvaluation";
 import AcademicReportsPage from "./AcademicReports";
 import AcademicProcesses from "./AcademicProcesses";
+import StudentHistoricalGrades from "./StudentHistoricalGrades";
+import TransferManagement from "./TransferManagement";
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle,
@@ -63,6 +65,7 @@ function generatePeriodOptions() {
     const opts = [];
     for (let yr = y + 1; yr >= y - 2; yr--) {
         opts.push(`${yr}-II`);
+        opts.push(`${yr}-VERANO`);
         opts.push(`${yr}-I`);
     }
     return opts;
@@ -199,6 +202,7 @@ const REQS = {
     kardex: [PERMS["academic.kardex.view"]],
     reports: [PERMS["academic.reports.view"]],
     processes: [PERMS["academic.reports.view"], PERMS["academic.enrollment.view"], PERMS["student.self.enrollment.view"]],
+    transfers: [PERMS["academic.enrollment.view"], PERMS["academic.enrollment.commit"]],
 };
 
 /* ─────────────────────────── ACCIONES RÁPIDAS ─────────────────────────── */
@@ -1122,6 +1126,7 @@ export default function AcademicModule() {
             { key: "kardex", label: "Kárdex", need: REQS.kardex },
             { key: "reports", label: "Reportes", need: REQS.reports },
             { key: "processes", label: "Procesos", need: REQS.processes },
+            { key: "transfers", label: "Traslados", need: REQS.transfers },
         ].filter((t) => t.need.length === 0 || hasAny(t.need)),
         [hasAny]
     );
@@ -1201,6 +1206,7 @@ export default function AcademicModule() {
                         <TabsContent value="kardex"><KardexAndCertificates /></TabsContent>
                         <TabsContent value="reports"><AcademicReportsPage /></TabsContent>
                         <TabsContent value="processes"><AcademicProcesses /></TabsContent>
+                        <TabsContent value="transfers"><TransferManagement /></TabsContent>
                     </Tabs>
                 </div>
             </div>
@@ -1222,6 +1228,7 @@ function tabIcon(key) {
     const map = {
         dashboard: LayoutGrid, plans: BookOpen, load: Calendar, enroll: GraduationCap,
         grades: CheckCircle, syllabus: FileText, kardex: Users, reports: BarChart3, processes: Clock,
+        transfers: Inbox,
     };
     return map[key] || LayoutGrid;
 }

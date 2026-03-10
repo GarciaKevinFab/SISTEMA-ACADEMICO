@@ -51,14 +51,20 @@ logger = logging.getLogger(__name__)
 def _period_to_num(p: str):
     """
     Convierte un período a número comparable.
-    2019-I → 4038,  2019-II → 4039,  2025-II → 4051
+    2019-I → 6057,  2019-II → 6058,  2025-II → 6076, 2025-VERANO → 6077
+    Usa base *3 para acomodar I, II, VERANO por año.
     """
-    m = re.match(r'^(\d{4})-(I{1,2}|[12])$', (p or "").strip().upper())
-    if not m:
-        return None
-    year = int(m.group(1))
-    sem = 0 if m.group(2) in ('I', '1') else 1
-    return year * 2 + sem
+    s = (p or "").strip().upper()
+    m = re.match(r'^(\d{4})-(I{1,2}|[12])$', s)
+    if m:
+        year = int(m.group(1))
+        sem = 0 if m.group(2) in ('I', '1') else 1
+        return year * 3 + sem
+    # VERANO: después de II del mismo año
+    m2 = re.match(r'^(\d{4})-VERANO$', s)
+    if m2:
+        return int(m2.group(1)) * 3 + 2
+    return None
 
 
 def _detect_active_stint_periods(all_periods: set) -> set:

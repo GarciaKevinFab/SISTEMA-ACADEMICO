@@ -56,6 +56,7 @@ from .teachers import (
     SectionActaPDFView,
     SectionActaQRView,
     SectionActaQRPngView,
+    HistoricalGradesView,
 )
 
 # ── Reportes ───────────────────────────────────────────────────────────────
@@ -171,6 +172,7 @@ __all__ = [
     "SectionActaPDFView",
     "SectionActaQRView",
     "SectionActaQRPngView",
+    "HistoricalGradesView",
     # Reports
     "AcademicReportsSummaryView",
     "AcademicCareersListView",

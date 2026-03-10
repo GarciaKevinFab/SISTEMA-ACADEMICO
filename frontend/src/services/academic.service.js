@@ -458,6 +458,14 @@ export const Grades = {
     save: async (sectionId, grades) => requestJsonSmart("POST", "/academic/grades/save", { section_id: sectionId, grades }),
     submit: async (sectionId, grades) => requestJsonSmart("POST", "/academic/grades/submit", { section_id: sectionId, grades }),
     reopen: async (sectionId) => requestJsonSmart("POST", "/academic/grades/reopen", { section_id: sectionId }),
+
+    // Notas históricas (admin)
+    listHistorical: async (studentId) =>
+        requestJsonSmart("GET", `/academic/grades/historical?student_id=${studentId}`, null),
+    saveHistorical: async (payload) =>
+        requestJsonSmart("POST", "/academic/grades/historical", payload),
+    deleteHistorical: async (recordId) =>
+        requestJsonSmart("DELETE", `/academic/grades/historical/${recordId}`, null),
 };
 
 

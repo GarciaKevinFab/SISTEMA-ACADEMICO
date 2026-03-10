@@ -25,6 +25,7 @@ def imports_template(request, type: str):
         "students": "students_template.xlsx",
         "grades": "grades_template.xlsx",
         "plans": "plan_estudios.xlsx",
+        "traslados": "traslados_template.xlsx",
     }
     
     filename = FILES.get(type)

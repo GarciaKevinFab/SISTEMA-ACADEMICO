@@ -14,8 +14,9 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from academic.models import (
-    Teacher, Section, SectionGrades
+    Teacher, Section, SectionGrades, AcademicGradeRecord, PlanCourse
 )
+from students.models import Student
 from catalogs.models import Teacher as CatalogTeacher
 from academic.serializers import smart_title
 
@@ -528,3 +529,232 @@ class SectionActaQRPngView(APIView):
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6X1fQAAAABJRU5ErkJggg=="
         )
         return HttpResponse(png_1x1, content_type="image/png")
+
+
+# ══════════════════════════════════════════════════════════════
+# NOTAS HISTÓRICAS (CRUD para admin)
+# ══════════════════════════════════════════════════════════════
+
+try:
+    from catalogs.helpers import match_plan_course_for_grade
+except ImportError:
+    def match_plan_course_for_grade(student, course, plan_id=None):
+        pid = plan_id or getattr(student, "plan_id", None)
+        if not pid:
+            return None
+        return PlanCourse.objects.filter(plan_id=pid, course=course).first()
+
+try:
+    from catalogs.models import Course
+except ImportError:
+    Course = None
+
+
+def _require_admin(request):
+    """Verifica que el usuario sea staff/admin."""
+    u = getattr(request, "user", None)
+    if not (u and u.is_authenticated):
+        return {"detail": "No autorizado."}, 403
+    if getattr(u, "is_staff", False) or getattr(u, "is_superuser", False):
+        return None, None
+    if user_has_any_role(u, ("ADMIN_ACADEMIC", "ADMIN_ACADEMICO", "ADMIN_SYSTEM", "REGISTRAR")):
+        return None, None
+    return {"detail": "No autorizado."}, 403
+
+
+def _build_components(raw_components: dict) -> dict:
+    """
+    Normaliza y auto-calcula componentes de notas.
+    Acepta C1_LEVEL/C2_LEVEL/C3_LEVEL y/o C1/C2/C3.
+    Auto-calcula ESCALA_0_5, PROMEDIO_FINAL, ESTADO.
+    """
+    if not raw_components or not isinstance(raw_components, dict):
+        return {}
+
+    out = dict(raw_components)
+
+    # Auto-derivar C1/C2/C3 desde niveles si no están presentes
+    for i in (1, 2, 3):
+        c_key = f"C{i}"
+        lv_key = f"C{i}_LEVEL"
+
+        lv = _to_str(out.get(lv_key, "")).upper()
+        if lv and lv in ACTA_LEVELS:
+            out[lv_key] = lv
+            if out.get(c_key) is None or out.get(c_key) == "":
+                out[c_key] = LEVEL_TO_NUM.get(lv)
+        else:
+            c_val = _to_int(out.get(c_key))
+            if c_val is not None and 1 <= c_val <= 5:
+                out[c_key] = c_val
+                # Auto-derivar nivel desde valor numérico
+                num_to_level = {v: k for k, v in LEVEL_TO_NUM.items()}
+                if c_val in num_to_level and not lv:
+                    out[lv_key] = num_to_level[c_val]
+
+    # Auto-calcular escala y promedio
+    c1 = _to_int(out.get("C1"))
+    c2 = _to_int(out.get("C2"))
+    c3 = _to_int(out.get("C3"))
+
+    if c1 is not None and c2 is not None and c3 is not None:
+        if all(1 <= x <= 5 for x in (c1, c2, c3)):
+            escala = _calc_escala_0_5(c1, c2, c3)
+            prom = _calc_promedio_final_0_20(escala)
+            estado = _calc_estado(prom)
+            out["ESCALA_0_5"] = escala
+            out["PROMEDIO_FINAL"] = prom
+            out["ESTADO"] = estado
+
+    return out
+
+
+class HistoricalGradesView(APIView):
+    """
+    CRUD de notas históricas para admin.
+    GET    /api/academic/grades/historical?student_id=123
+    POST   /api/academic/grades/historical
+    DELETE /api/academic/grades/historical/<record_id>
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, record_id=None):
+        err, code = _require_admin(request)
+        if err:
+            return ok(error=err["detail"]) if code == 403 else ok()
+
+        student_id = request.query_params.get("student_id")
+        if not student_id:
+            return ok(error="student_id es requerido", records=[])
+
+        records = (
+            AcademicGradeRecord.objects
+            .select_related("course", "plan_course", "plan_course__course")
+            .filter(student_id=int(student_id))
+            .order_by("-term", "course__name")
+        )
+
+        result = []
+        for rec in records:
+            pc_name = ""
+            if rec.plan_course:
+                pc_name = getattr(rec.plan_course, "display_name", "") or ""
+                if not pc_name and rec.plan_course.course:
+                    pc_name = rec.plan_course.course.name
+
+            result.append({
+                "id": rec.id,
+                "course_id": rec.course_id,
+                "course_name": pc_name or (rec.course.name if rec.course else ""),
+                "course_code": rec.course.code if rec.course else "",
+                "term": rec.term,
+                "final_grade": float(rec.final_grade) if rec.final_grade is not None else None,
+                "components": rec.components or {},
+                "plan_course_id": rec.plan_course_id,
+                "created_at": rec.created_at.isoformat() if rec.created_at else None,
+            })
+
+        return ok(records=result)
+
+    def post(self, request, record_id=None):
+        err, code = _require_admin(request)
+        if err:
+            return ok(error=err["detail"])
+
+        student_id = request.data.get("student_id")
+        records_data = request.data.get("records", [])
+
+        if not student_id:
+            return ok(error="student_id es requerido")
+
+        try:
+            student = Student.objects.get(pk=int(student_id))
+        except Student.DoesNotExist:
+            return ok(error=f"Estudiante {student_id} no existe")
+
+        if not records_data:
+            return ok(error="records es requerido (lista de notas)")
+
+        created_count = 0
+        updated_count = 0
+        errors = []
+
+        for idx, rec_data in enumerate(records_data):
+            course_id = rec_data.get("course_id")
+            term = (rec_data.get("term") or "").strip()
+            final_grade = rec_data.get("final_grade")
+            raw_components = rec_data.get("components", {})
+
+            if not course_id:
+                errors.append(f"Registro {idx + 1}: course_id es requerido")
+                continue
+            if not term:
+                errors.append(f"Registro {idx + 1}: term es requerido")
+                continue
+            if final_grade is None:
+                errors.append(f"Registro {idx + 1}: final_grade es requerido")
+                continue
+
+            try:
+                fg = float(final_grade)
+                if fg < 0 or fg > 20:
+                    errors.append(f"Registro {idx + 1}: final_grade debe ser 0-20")
+                    continue
+            except (ValueError, TypeError):
+                errors.append(f"Registro {idx + 1}: final_grade inválido")
+                continue
+
+            if Course is None:
+                errors.append(f"Registro {idx + 1}: modelo Course no disponible")
+                continue
+
+            try:
+                course = Course.objects.get(pk=int(course_id))
+            except Course.DoesNotExist:
+                errors.append(f"Registro {idx + 1}: curso {course_id} no existe")
+                continue
+
+            # Auto-resolver plan_course
+            pc = match_plan_course_for_grade(student, course)
+
+            # Normalizar componentes
+            components = _build_components(raw_components)
+
+            rec, created = AcademicGradeRecord.objects.update_or_create(
+                student=student,
+                course=course,
+                term=term,
+                defaults={
+                    "final_grade": fg,
+                    "components": components,
+                    "plan_course": pc,
+                },
+            )
+
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+
+        return ok(
+            created=created_count,
+            updated=updated_count,
+            errors=errors,
+        )
+
+    def delete(self, request, record_id=None):
+        err, code = _require_admin(request)
+        if err:
+            return ok(error=err["detail"])
+
+        if not record_id:
+            return ok(error="record_id es requerido en la URL")
+
+        try:
+            rec = AcademicGradeRecord.objects.get(pk=int(record_id))
+        except AcademicGradeRecord.DoesNotExist:
+            return ok(error=f"Registro {record_id} no existe")
+
+        rec.delete()
+        return ok(deleted=True)

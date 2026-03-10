@@ -348,6 +348,141 @@ def _read_calificaciones_xlsx(file):
 
 
 # ═══════════════════════════════════════════════════════════════
+# LECTOR XLSX PARA TRASLADOS (alumno + notas en un solo Excel)
+# ═══════════════════════════════════════════════════════════════
+
+LEVEL_TO_NUM_IMPORT = {"PI": 1, "I": 2, "P": 3, "L": 4, "D": 5}
+
+def _calc_escala_import(c1, c2, c3):
+    if c1 is None or c2 is None or c3 is None:
+        return None
+    return round(((c1 + c2 + c3) / 3.0), 1)
+
+def _calc_promedio_from_escala(escala):
+    if escala is None:
+        return None
+    return int(round(((escala - 1.0) / 4.0) * 20.0))
+
+
+def _read_traslados_xlsx(file):
+    """
+    Lee un Excel de traslados: cada fila = 1 nota de 1 alumno.
+    Un alumno puede tener múltiples filas (una por curso/período).
+
+    Columnas esperadas:
+      NUM_DOCUMENTO, NOMBRES, APELLIDO_PATERNO, APELLIDO_MATERNO, SEXO,
+      PROGRAMA_CARRERA, CICLO, EMAIL, CELULAR,
+      PERIODO, CURSO, C1_LEVEL, C2_LEVEL, C3_LEVEL, PROMEDIO_FINAL
+    """
+    wb = load_workbook(file, data_only=True, read_only=True, keep_links=False)
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+
+    if not rows:
+        return []
+
+    headers = [(_norm(h) if h is not None else "") for h in rows[0]]
+
+    def idx_match(*names):
+        wanted = {_norm(x) for x in names}
+        for i, h in enumerate(headers):
+            if h in wanted:
+                return i
+        return None
+
+    # Datos del alumno
+    i_doc = idx_match("NUMERO_DOCUMENTO", "NUM DOCUMENTO", "NUM_DOCUMENTO", "DNI")
+    i_nombres = idx_match("NOMBRES")
+    i_ap_pat = idx_match("APELLIDO_PATERNO", "AP_PATERNO")
+    i_ap_mat = idx_match("APELLIDO_MATERNO", "AP_MATERNO")
+    i_sexo = idx_match("SEXO")
+    i_programa = idx_match("PROGRAMA", "PROGRAMA_CARRERA", "PROGRAMA / CARRERA")
+    i_ciclo = idx_match("CICLO")
+    i_email = idx_match("EMAIL", "CORREO")
+    i_celular = idx_match("CELULAR", "TELEFONO")
+
+    # Datos de la nota
+    i_periodo = idx_match("PERIODO", "PERIOD")
+    i_curso = idx_match("CURSO", "ASIGNATURA")
+    i_c1_level = idx_match("C1_LEVEL", "C1_NIVEL", "NIVEL_C1")
+    i_c2_level = idx_match("C2_LEVEL", "C2_NIVEL", "NIVEL_C2")
+    i_c3_level = idx_match("C3_LEVEL", "C3_NIVEL", "NIVEL_C3")
+    i_promedio = idx_match("PROMEDIO_FINAL", "PROMEDIO_VIGESIMAL", "PROMEDIO", "NOTA", "FINAL")
+
+    out = []
+    for ridx, r in enumerate(rows[1:], start=2):
+        def get(i):
+            return r[i] if i is not None and i < len(r) else None
+
+        doc = "" if get(i_doc) is None else str(get(i_doc)).strip()
+        doc = re.sub(r"\.0$", "", doc)
+        if doc.isdigit() and len(doc) < 8:
+            doc = doc.zfill(8)
+
+        nombres = "" if get(i_nombres) is None else str(get(i_nombres)).strip()
+        ap_pat = "" if get(i_ap_pat) is None else str(get(i_ap_pat)).strip()
+        ap_mat = "" if get(i_ap_mat) is None else str(get(i_ap_mat)).strip()
+        sexo = "" if get(i_sexo) is None else str(get(i_sexo)).strip()
+        programa = "" if get(i_programa) is None else str(get(i_programa)).strip()
+        ciclo = _to_int(get(i_ciclo), None)
+        email = "" if get(i_email) is None else str(get(i_email)).strip().lower()
+        celular = "" if get(i_celular) is None else str(get(i_celular)).strip()
+
+        periodo = "" if get(i_periodo) is None else str(get(i_periodo)).strip()
+        curso = "" if get(i_curso) is None else str(get(i_curso)).strip()
+
+        c1_lv = "" if get(i_c1_level) is None else str(get(i_c1_level)).strip().upper()
+        c2_lv = "" if get(i_c2_level) is None else str(get(i_c2_level)).strip().upper()
+        c3_lv = "" if get(i_c3_level) is None else str(get(i_c3_level)).strip().upper()
+        promedio = _to_float(get(i_promedio), None)
+
+        if not doc or not periodo or not curso:
+            continue
+
+        # Auto-calcular promedio desde componentes si no viene
+        components = {}
+        if c1_lv and c2_lv and c3_lv:
+            c1 = LEVEL_TO_NUM_IMPORT.get(c1_lv)
+            c2 = LEVEL_TO_NUM_IMPORT.get(c2_lv)
+            c3 = LEVEL_TO_NUM_IMPORT.get(c3_lv)
+            if c1 and c2 and c3:
+                escala = _calc_escala_import(c1, c2, c3)
+                prom_calc = _calc_promedio_from_escala(escala)
+                estado = "Logrado" if prom_calc >= 11 else "En proceso"
+                components = {
+                    "C1": c1, "C2": c2, "C3": c3,
+                    "C1_LEVEL": c1_lv, "C2_LEVEL": c2_lv, "C3_LEVEL": c3_lv,
+                    "ESCALA_0_5": escala,
+                    "PROMEDIO_FINAL": prom_calc,
+                    "ESTADO": estado,
+                }
+                if promedio is None:
+                    promedio = prom_calc
+
+        if promedio is None:
+            continue
+
+        out.append({
+            "__row__": ridx,
+            "doc": doc,
+            "nombres": nombres,
+            "ap_pat": ap_pat,
+            "ap_mat": ap_mat,
+            "sexo": sexo,
+            "programa": programa,
+            "ciclo": ciclo,
+            "email": email,
+            "celular": celular,
+            "periodo": periodo,
+            "curso": curso,
+            "promedio": promedio,
+            "components": components,
+        })
+
+    return out
+
+
+# ═══════════════════════════════════════════════════════════════
 # HELPERS PARA GRADO/TÍTULO
 # ═══════════════════════════════════════════════════════════════
 
@@ -1353,6 +1488,270 @@ def _run_import_job(job_id: int, raw: bytes, safe_name: str, type: str, mapping:
                         ),
                     },
                 }
+
+            # ───────────────────────────────────────────────
+            # TRASLADOS (alumno + notas históricas en 1 Excel)
+            # ───────────────────────────────────────────────
+            elif type == "traslados":
+                if AcademicGradeRecord is None:
+                    job.status = "FAILED"
+                    job.result = {
+                        **(job.result or {}),
+                        "progress": 100,
+                        "errors": [{"row": None, "field": "model", "message": "AcademicGradeRecord no existe"}],
+                    }
+                    job.save(update_fields=["status", "result"])
+                    return
+
+                traslado_rows = _read_traslados_xlsx(io.BytesIO(raw))
+                total_t = len(traslado_rows)
+                set_job_state(0, total_t, "Leyendo traslados...")
+
+                if total_t == 0:
+                    add_error(None, "file", "No se encontraron filas válidas en el Excel")
+
+                # Agrupar filas por num_documento
+                from collections import OrderedDict
+                students_map = OrderedDict()
+                for row in traslado_rows:
+                    doc = row["doc"]
+                    if doc not in students_map:
+                        students_map[doc] = {
+                            "info": row,
+                            "grades": [],
+                        }
+                    students_map[doc]["grades"].append(row)
+
+                # Setup para crear usuarios
+                student_role, _ = Role.objects.get_or_create(name="STUDENT")
+                user_fields = {f.name for f in User._meta.fields}
+
+                def _email_exists():
+                    try:
+                        f = User._meta.get_field("email")
+                        return {
+                            "exists": True,
+                            "unique": bool(getattr(f, "unique", False)),
+                            "null": bool(getattr(f, "null", False)),
+                        }
+                    except Exception:
+                        return {"exists": False, "unique": False, "null": False}
+
+                email_info = _email_exists()
+
+                # Índice de cursos
+                course_idx = _build_norm_index(Course, "name")
+
+                done_t = 0
+                students_created = 0
+                students_updated = 0
+                grades_created = 0
+                grades_updated = 0
+
+                for doc, data in students_map.items():
+                    done_t += 1
+                    if done_t % 10 == 0:
+                        set_job_state(done_t, len(students_map), "Procesando traslados...")
+
+                    info = data["info"]
+                    r_ref = info.get("__row__", "?")
+                    nombres = info.get("nombres", "")
+                    ap_pat = info.get("ap_pat", "")
+                    ap_mat = info.get("ap_mat", "")
+                    programa = info.get("programa", "")
+                    ciclo = info.get("ciclo")
+                    email = info.get("email", "")
+                    celular = info.get("celular", "")
+
+                    if not nombres:
+                        add_error(r_ref, "nombres", f"Nombres vacío para {doc}")
+                        continue
+
+                    # 1) Crear o actualizar alumno
+                    st, st_created = Student.objects.get_or_create(
+                        num_documento=doc,
+                        defaults={
+                            "nombres": nombres,
+                            "apellido_paterno": ap_pat,
+                            "apellido_materno": ap_mat,
+                        },
+                    )
+
+                    st.nombres = nombres
+                    st.apellido_paterno = ap_pat
+                    st.apellido_materno = ap_mat
+                    if info.get("sexo"):
+                        st.sexo = info["sexo"]
+                    if programa:
+                        st.programa_carrera = programa
+                    if ciclo:
+                        st.ciclo = ciclo
+                    if email:
+                        st.email = email
+                    if celular:
+                        st.celular = celular
+
+                    # Asignar plan
+                    plan_obj = None
+                    if programa:
+                        car = match_career_robust(programa)
+                        if car:
+                            periodo_ref = data["grades"][0].get("periodo", "") if data["grades"] else ""
+                            plan_obj = pick_plan_for_student(car, periodo_ref)
+                            if plan_obj:
+                                st.plan = plan_obj
+
+                    # Crear usuario
+                    username = doc
+                    full_name = f"{nombres} {ap_pat} {ap_mat}".strip()
+
+                    if not getattr(st, "user_id", None):
+                        user = User.objects.filter(username=username).first()
+                        if not user and email:
+                            user = User.objects.filter(email__iexact=email).first()
+
+                        if user and Student.objects.filter(user_id=user.id).exists():
+                            add_error(r_ref, "user", f"user '{getattr(user, 'username', '')}' ya enlazado a otro alumno")
+                        else:
+                            temp_password = None
+                            if not user:
+                                uname = username
+                                k = 1
+                                while User.objects.filter(username=uname).exists():
+                                    k += 1
+                                    uname = f"{username}-{k}"
+
+                                user = User(username=uname, is_active=True, is_staff=False)
+                                if "email" in user_fields:
+                                    em = (email or "").strip().lower()
+                                    if em and not User.objects.filter(email__iexact=em).exists():
+                                        user.email = em
+                                    elif email_info["null"]:
+                                        user.email = None
+                                    elif email_info["unique"]:
+                                        user.email = f"{uname}@no-email.local"
+                                    else:
+                                        user.email = ""
+                                if "full_name" in user_fields:
+                                    user.full_name = full_name
+                                elif "name" in user_fields:
+                                    user.name = full_name
+
+                                temp_password = get_random_string(10) + "!"
+                                user.set_password(temp_password)
+                                try:
+                                    user.save()
+                                except IntegrityError:
+                                    user.email = f"{uname}-x@no-email.local"
+                                    user.save()
+
+                                UserRole.objects.get_or_create(user_id=user.id, role_id=student_role.id)
+
+                                if temp_password:
+                                    credentials.append({
+                                        "row": r_ref,
+                                        "num_documento": doc,
+                                        "username": getattr(user, "username", username),
+                                        "password": temp_password,
+                                    })
+                            else:
+                                UserRole.objects.get_or_create(user_id=user.id, role_id=student_role.id)
+
+                            if user:
+                                st.user = user
+
+                    st.save()
+
+                    if st_created:
+                        students_created += 1
+                    else:
+                        students_updated += 1
+
+                    # 2) Crear notas para este alumno
+                    for grade_row in data["grades"]:
+                        gr = grade_row.get("__row__", "?")
+                        periodo = grade_row.get("periodo", "")
+                        curso_name = grade_row.get("curso", "")
+                        promedio = grade_row.get("promedio")
+                        components = grade_row.get("components", {})
+
+                        if not periodo or not curso_name or promedio is None:
+                            add_error(gr, "grade", "Periodo/curso/promedio vacío")
+                            continue
+
+                        pobj = _ensure_period(periodo)
+                        term_code = pobj.code if pobj else periodo
+
+                        # Resolver curso
+                        course = None
+                        pc_match = None
+                        is_electivo_target = _is_electivos_name(curso_name)
+
+                        if st.plan_id:
+                            pcs = list(
+                                PlanCourse.objects
+                                .select_related("course")
+                                .filter(plan_id=st.plan_id)
+                            )
+                            target = _norm_key(curso_name)
+
+                            for pcx in pcs:
+                                dn = _norm_key((getattr(pcx, "display_name", "") or "").strip())
+                                cn = _norm_key((getattr(pcx.course, "name", "") or "").strip())
+                                if target in (dn, cn):
+                                    pc_match = pcx
+                                    course = pcx.course
+                                    break
+
+                            if not course:
+                                t2 = _norm_key(_clean_text(_normalize_course_name(curso_name)))
+                                for pcx in pcs:
+                                    dn2 = _norm_key(_clean_text(getattr(pcx, "display_name", "") or ""))
+                                    cn2 = _norm_key(_clean_text(getattr(pcx.course, "name", "") or ""))
+                                    if t2 in (dn2, cn2):
+                                        pc_match = pcx
+                                        course = pcx.course
+                                        break
+
+                        if not course:
+                            course = _find_by_norm_cached(course_idx, curso_name)
+
+                        if not course:
+                            add_error(gr, "course", f"Curso '{curso_name}' no encontrado")
+                            continue
+
+                        if not pc_match and st.plan_id and course:
+                            pc_match = match_plan_course_for_grade(st, course)
+
+                        rec, g_created = AcademicGradeRecord.objects.get_or_create(
+                            student=st,
+                            course=course,
+                            term=str(term_code),
+                            defaults={
+                                "final_grade": float(promedio),
+                                "components": components,
+                                "plan_course": pc_match,
+                            },
+                        )
+
+                        if not g_created:
+                            rec.final_grade = float(promedio)
+                            rec.components = components
+                            rec.plan_course = pc_match
+                            rec.save(update_fields=["final_grade", "components", "plan_course"])
+                            grades_updated += 1
+                        else:
+                            grades_created += 1
+
+                    imported += grades_created
+                    updated += grades_updated
+
+                set_job_state(
+                    len(students_map), len(students_map),
+                    f"Traslados finalizados: {students_created} alumnos creados, "
+                    f"{students_updated} actualizados, {grades_created} notas creadas, "
+                    f"{grades_updated} notas actualizadas.",
+                )
 
             else:
                 job.status = "FAILED"

@@ -31,6 +31,9 @@ from .views import (
 
     SectionActaView, SectionActaPDFView, SectionActaQRView, SectionActaQRPngView,
 
+    # ── Notas históricas ──
+    HistoricalGradesView,
+
     # ── Procesos (EXPANDIDO) ──
     ProcessTypesView,
     ProcessesCreateView, ProcessesListView, ProcessesMineView, ProcessDetailView,
@@ -208,6 +211,10 @@ urlpatterns = [
     path("grades/save",                                GradesSaveView.as_view()),
     path("grades/submit",                              GradesSubmitView.as_view()),
     path("grades/reopen",                              GradesReopenView.as_view()),
+
+    # ── Notas Históricas ────────────────────────────────────────
+    path("grades/historical",                          HistoricalGradesView.as_view()),
+    path("grades/historical/<int:record_id>",          HistoricalGradesView.as_view()),
 
     # ── Actas ────────────────────────────────────────────────────
     path("sections/<int:section_id>/acta",         SectionActaView.as_view()),

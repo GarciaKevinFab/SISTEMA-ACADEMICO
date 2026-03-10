@@ -18,6 +18,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
     photoUrl = serializers.SerializerMethodField()
     userId = serializers.SerializerMethodField()
+    planId = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
@@ -29,7 +30,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "programaCarrera", "ciclo", "turno", "seccion", "periodo", "lengua",
             "discapacidad", "tipoDiscapacidad",
             "email", "celular",
-            "photoUrl", "userId",
+            "photoUrl", "userId", "planId",
         ]
 
     def get_photoUrl(self, obj):
@@ -40,6 +41,9 @@ class StudentSerializer(serializers.ModelSerializer):
 
     def get_userId(self, obj):
         return obj.user_id or ""
+
+    def get_planId(self, obj):
+        return obj.plan_id or ""
 
 
 
@@ -55,6 +59,7 @@ class StudentUpdateSerializer(serializers.ModelSerializer):
     tipoDiscapacidad = serializers.CharField(source="tipo_discapacidad", required=False, allow_blank=True)
 
     userId = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    planId = serializers.IntegerField(source="plan_id", required=False, allow_null=True)
 
     class Meta:
         model = Student
@@ -65,7 +70,7 @@ class StudentUpdateSerializer(serializers.ModelSerializer):
             "programaCarrera", "ciclo", "turno", "seccion", "periodo", "lengua",
             "discapacidad", "tipoDiscapacidad",
             "email", "celular",
-            "userId",
+            "userId", "planId",
         ]
 
     def validate_num_documento(self, v):

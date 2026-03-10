@@ -104,15 +104,20 @@ def _norm_term(s: str) -> str:
 def _term_sort_key(term: str) -> Tuple:
     """
     Clave de ordenamiento para períodos académicos.
-    Soporta: 2018-I, 2018-II, 2018-1, 2018-2.
+    Soporta: 2018-I, 2018-II, 2018-1, 2018-2, 2025-VERANO.
+    VERANO se ordena después de II del mismo año.
     """
     t = _norm_term(term)
     m = re.match(r"^(\d{4})-(I|II|1|2)$", t)
-    if not m:
-        return (9999, 9, t)
-    year = int(m.group(1))
-    sem  = 1 if m.group(2) in ("I", "1") else 2
-    return (year, sem, t)
+    if m:
+        year = int(m.group(1))
+        sem  = 1 if m.group(2) in ("I", "1") else 2
+        return (year, sem, t)
+    # Verano u otros formatos: después de II del mismo año
+    m2 = re.match(r"^(\d{4})-(.+)$", t)
+    if m2:
+        return (int(m2.group(1)), 3, t)
+    return (9999, 9, t)
 
 
 def current_period(dt: Optional[date] = None) -> str:
@@ -133,40 +138,54 @@ def parse_period(period: str) -> Tuple[int, int]:
     Descompone un período en (año, semestre_num).
     '2026-I' → (2026, 1)
     '2026-II' → (2026, 2)
+    '2025-VERANO' → (2025, 3)
     Lanza ValueError si el formato es inválido.
     """
     t = _norm_term(period)
     m = re.match(r"^(\d{4})-(I|II|1|2)$", t)
-    if not m:
-        raise ValueError(f"Formato de período inválido: {period!r}")
-    year = int(m.group(1))
-    sem  = 1 if m.group(2) in ("I", "1") else 2
-    return (year, sem)
+    if m:
+        year = int(m.group(1))
+        sem  = 1 if m.group(2) in ("I", "1") else 2
+        return (year, sem)
+    # Verano
+    m2 = re.match(r"^(\d{4})-(VERANO)$", t)
+    if m2:
+        return (int(m2.group(1)), 3)
+    raise ValueError(f"Formato de período inválido: {period!r}")
 
 
 def period_label(period: str) -> str:
     """
     Versión legible de un período.
     '2026-I' → 'Semestre I – 2026'
+    '2025-VERANO' → 'Verano – 2025'
     """
     try:
         year, sem = parse_period(period)
+        if sem == 3:
+            return f"Verano – {year}"
         return f"Semestre {'I' if sem == 1 else 'II'} – {year}"
     except ValueError:
         return period
 
 
 def next_period(period: str) -> str:
-    """Retorna el período siguiente: '2026-I' → '2026-II', '2026-II' → '2027-I'."""
+    """Retorna el período siguiente: '2026-I' → '2026-II', '2026-II' → '2027-I', '2025-VERANO' → '2026-I'."""
     year, sem = parse_period(period)
     if sem == 1:
         return f"{year}-II"
+    if sem == 3:
+        # Después de verano viene el I del año siguiente
+        return f"{year + 1}-I"
     return f"{year + 1}-I"
 
 
 def prev_period(period: str) -> str:
-    """Retorna el período anterior: '2026-II' → '2026-I', '2026-I' → '2025-II'."""
+    """Retorna el período anterior: '2026-II' → '2026-I', '2026-I' → '2025-II', '2025-VERANO' → '2025-II'."""
     year, sem = parse_period(period)
+    if sem == 3:
+        # Antes de verano está el II del mismo año
+        return f"{year}-II"
     if sem == 2:
         return f"{year}-I"
     return f"{year - 1}-II"
