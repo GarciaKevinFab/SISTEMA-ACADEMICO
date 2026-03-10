@@ -21,6 +21,47 @@ import {
 /* ─── Helpers ────────────────────────────────────────────────── */
 const onlyDigits = (v) => String(v ?? "").replace(/\D/g, "");
 
+/* ─── File Preview List ──────────────────────────────────────── */
+function FilePreviewList({ files }) {
+    const previews = useMemo(() =>
+        files.map((f) => ({
+            name: f.name,
+            size: f.size,
+            isImage: f.type.startsWith("image/"),
+            isPdf: f.type === "application/pdf",
+            url: URL.createObjectURL(f),
+        })),
+        [files]
+    );
+
+    useEffect(() => {
+        return () => previews.forEach((p) => URL.revokeObjectURL(p.url));
+    }, [previews]);
+
+    if (!files.length) return null;
+
+    return (
+        <div className="grid gap-2 mt-2">
+            {previews.map((p, i) => (
+                <div key={i} className="rounded-lg border border-slate-200 overflow-hidden bg-white">
+                    {p.isImage && (
+                        <img src={p.url} alt={p.name}
+                            className="w-full max-h-48 object-contain bg-slate-50" />
+                    )}
+                    {p.isPdf && (
+                        <iframe src={p.url} title={p.name}
+                            className="w-full h-48 border-0" />
+                    )}
+                    <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+                        <span className="truncate mr-2">{p.name}</span>
+                        <span className="shrink-0">{(p.size / 1024 / 1024).toFixed(2)} MB</span>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 /* ─── Shared Header ──────────────────────────────────────────── */
 const PageHeader = () => (
     <header className="sticky top-0 z-40 bg-blue-950/90 backdrop-blur-md border-b border-white/10">
@@ -126,6 +167,7 @@ const SuccessScreen = ({ created, files, setFiles, uploading, uploadAll, onReset
                                     {files.length} archivo{files.length > 1 ? "s" : ""} seleccionado{files.length > 1 ? "s" : ""}
                                 </p>
                             )}
+                            <FilePreviewList files={files} />
                         </div>
                         <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                             <Button
@@ -406,6 +448,7 @@ export default function PublicProcedureIntake() {
                                         {pendingFiles.length} archivo{pendingFiles.length > 1 ? "s" : ""} seleccionado{pendingFiles.length > 1 ? "s" : ""}
                                     </p>
                                 )}
+                                <FilePreviewList files={pendingFiles} />
                             </Field>
 
                             {/* Summary of errors */}
