@@ -10,8 +10,10 @@ import {
     Users, Award, FileText, Calendar, Filter, RefreshCw,
     Eye, LayoutDashboard, List, UserPlus, ChevronDown,
     Building2, BookOpen, ShieldCheck, Hash, Loader2,
+    Star, Edit3, AlertCircle, UploadCloud, FileSpreadsheet,
 } from "lucide-react";
 import { GraduatesAdmin, GradoTituloTypes } from "../../services/graduates.service";
+import { Imports } from "../../services/catalogs.service";
 
 /* ═══════════════════════════════════════════════════════════════════
    STYLES — inject once
@@ -81,6 +83,8 @@ const TABS = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "list", label: "Listado", icon: List },
     { id: "create", label: "Nuevo Titulado", icon: UserPlus },
+    { id: "grados", label: "Grados y Títulos", icon: GraduationCap },
+    { id: "importar", label: "Importar", icon: FileSpreadsheet },
 ];
 
 const ESPECIALIDADES = [
@@ -265,6 +269,380 @@ const Toast = ({ message, type, onClose }) => {
         </div>
     );
 };
+
+/* ═══════════════════════════════════════════════════════════════════
+   GRADOS Y TÍTULOS TAB (moved from ConfigCatalogsModule)
+   ═══════════════════════════════════════════════════════════════════ */
+const INITIAL_GT_FORM = { code: "", name: "", template: "", diploma_label: "TÍTULO", is_default: false, is_active: true, order: 0 };
+
+function GradosTitulosTab() {
+    const [rows, setRows] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [open, setOpen] = useState(false);
+    const [editing, setEditing] = useState(null);
+    const [form, setForm] = useState(INITIAL_GT_FORM);
+
+    const resetForm = () => { setForm(INITIAL_GT_FORM); setEditing(null); };
+
+    const load = useCallback(async () => {
+        try { setLoading(true); const data = await GradoTituloTypes.list(); setRows(data?.items ?? data ?? []); }
+        catch { } finally { setLoading(false); }
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    const save = async () => {
+        if (!form.code?.trim() || !form.name?.trim() || !form.template?.trim()) return;
+        try {
+            const payload = { ...form, order: parseInt(form.order || "0", 10) };
+            if (editing) await GradoTituloTypes.update(editing.id, payload);
+            else await GradoTituloTypes.create(payload);
+            setOpen(false); resetForm(); load();
+        } catch { }
+    };
+
+    const remove = async (id) => { try { await GradoTituloTypes.remove(id); load(); } catch { } };
+    const toggleDefault = async (r) => { try { await GradoTituloTypes.update(r.id, { ...r, is_default: !r.is_default }); load(); } catch { } };
+    const previewTpl = (tpl) => tpl ? tpl.replace("{especialidad}", "EDUCACIÓN INICIAL") : "—";
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--gm-text)" }}>Grados y Títulos</h3>
+                    <p style={{ fontSize: 12, color: "var(--gm-muted)" }}>Tipos de grado/título que otorga la institución</p>
+                </div>
+                <button onClick={() => { resetForm(); setOpen(true); }}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white"
+                    style={{ background: "var(--gm-primary)" }}>
+                    <Plus size={15} /> Nuevo tipo
+                </button>
+            </div>
+
+            <div style={{ background: "#EEF2FF", border: "1px solid #C7D2FE", borderRadius: 12, padding: "12px 16px" }}>
+                <p style={{ fontSize: 12, color: "#4338CA", fontWeight: 600 }}>
+                    Cada tipo define una <strong>plantilla</strong> que se aplica según la especialidad del egresado.
+                    Usa <code style={{ background: "#E0E7FF", padding: "1px 4px", borderRadius: 4, fontSize: 11 }}>{"{especialidad}"}</code> como variable.
+                </p>
+            </div>
+
+            {loading ? (
+                <div className="flex items-center justify-center py-12">
+                    <Loader2 size={24} className="animate-spin" style={{ color: "var(--gm-primary)" }} />
+                </div>
+            ) : (
+                <div style={{ borderRadius: 12, border: "1px solid var(--gm-border)", overflow: "hidden" }}>
+                    <table className="gm-table" style={{ width: "100%" }}>
+                        <thead>
+                            <tr style={{ background: "#F8FAFC" }}>
+                                {["Código", "Nombre", "Plantilla → Resultado", "Etiqueta", "Estado", "Acciones"].map((h) => (
+                                    <th key={h} style={{ padding: "10px 14px", fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: ".04em", textAlign: "left", borderBottom: "1px solid var(--gm-border)" }}>{h}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((r) => (
+                                <tr key={r.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                                    <td style={{ padding: "10px 14px" }}>
+                                        <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#475569", background: "#F1F5F9", padding: "2px 8px", borderRadius: 4 }}>{r.code}</span>
+                                    </td>
+                                    <td style={{ padding: "10px 14px" }}>
+                                        <span style={{ fontWeight: 700, color: "var(--gm-text)", fontSize: 13 }}>{r.name}</span>
+                                        {r.is_default && (
+                                            <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, color: "#D97706", background: "#FEF3C7", padding: "2px 8px", borderRadius: 20 }}>
+                                                ★ DEFAULT
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td style={{ padding: "10px 14px" }}>
+                                        <p style={{ fontSize: 11, color: "#94A3B8", fontFamily: "monospace" }}>{r.template}</p>
+                                        <p style={{ fontSize: 12, color: "#4338CA", fontWeight: 600, marginTop: 2 }}>→ {previewTpl(r.template)}</p>
+                                    </td>
+                                    <td style={{ padding: "10px 14px", fontSize: 12, fontWeight: 600, color: "#475569" }}>{r.diploma_label}</td>
+                                    <td style={{ padding: "10px 14px", textAlign: "center" }}>
+                                        <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: r.is_active ? "#D1FAE5" : "#F1F5F9", color: r.is_active ? "#059669" : "#94A3B8" }}>
+                                            {r.is_active ? "Activo" : "Inactivo"}
+                                        </span>
+                                    </td>
+                                    <td style={{ padding: "10px 14px" }}>
+                                        <div className="flex items-center gap-1 justify-end">
+                                            {!r.is_default && (
+                                                <button onClick={() => toggleDefault(r)} style={{ fontSize: 11, fontWeight: 700, color: "#D97706", padding: "4px 8px", borderRadius: 6, background: "transparent" }}
+                                                    onMouseOver={(e) => e.currentTarget.style.background = "#FEF3C7"}
+                                                    onMouseOut={(e) => e.currentTarget.style.background = "transparent"}>
+                                                    <Star size={13} />
+                                                </button>
+                                            )}
+                                            <button onClick={() => { setEditing(r); setForm({ code: r.code || "", name: r.name || "", template: r.template || "", diploma_label: r.diploma_label || "TÍTULO", is_default: !!r.is_default, is_active: r.is_active !== false, order: r.order ?? 0 }); setOpen(true); }}
+                                                style={{ padding: "4px 8px", borderRadius: 6, color: "#64748B", background: "transparent" }}
+                                                onMouseOver={(e) => e.currentTarget.style.background = "#EEF2FF"}
+                                                onMouseOut={(e) => e.currentTarget.style.background = "transparent"}>
+                                                <Edit3 size={14} />
+                                            </button>
+                                            <button onClick={() => { if (window.confirm(`¿Eliminar "${r.name}"?`)) remove(r.id); }}
+                                                style={{ padding: "4px 8px", borderRadius: 6, color: "#64748B", background: "transparent" }}
+                                                onMouseOver={(e) => e.currentTarget.style.background = "#FEE2E2"}
+                                                onMouseOut={(e) => e.currentTarget.style.background = "transparent"}>
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                            {rows.length === 0 && (
+                                <tr><td colSpan={6} style={{ textAlign: "center", padding: 40, color: "var(--gm-muted)", fontSize: 13 }}>
+                                    Sin tipos registrados. Crea uno como "TÍTULO DE PROFESOR(A)".
+                                </td></tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {/* Modal crear/editar */}
+            {open && (
+                <div className="gm-overlay fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setOpen(false); resetForm(); }}>
+                    <div className="gm-scale bg-white rounded-2xl shadow-2xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+                        <div style={{ height: 3, background: "linear-gradient(90deg,#4F46E5,#7C3AED)" }} />
+                        <div style={{ padding: 24 }}>
+                            <div className="flex items-center justify-between mb-5">
+                                <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--gm-text)" }}>
+                                    {editing ? "Editar tipo" : "Nuevo tipo de grado/título"}
+                                </h3>
+                                <button onClick={() => { setOpen(false); resetForm(); }}><X size={18} style={{ color: "var(--gm-muted)" }} /></button>
+                            </div>
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label style={{ fontSize: 12, fontWeight: 700, color: "var(--gm-label)" }}>Código *</label>
+                                        <input className="gm-input" style={{ width: "100%", height: 36, borderRadius: 10, border: "1px solid var(--gm-border)", padding: "0 12px", fontSize: 13, fontFamily: "monospace" }}
+                                            placeholder="TITULO_PROFESOR" value={form.code}
+                                            onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase().replace(/\s+/g, "_") })} />
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: 12, fontWeight: 700, color: "var(--gm-label)" }}>Orden</label>
+                                        <input type="number" className="gm-input" style={{ width: "100%", height: 36, borderRadius: 10, border: "1px solid var(--gm-border)", padding: "0 12px", fontSize: 13 }}
+                                            value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: 12, fontWeight: 700, color: "var(--gm-label)" }}>Nombre *</label>
+                                    <input className="gm-input" style={{ width: "100%", height: 36, borderRadius: 10, border: "1px solid var(--gm-border)", padding: "0 12px", fontSize: 13 }}
+                                        placeholder='TÍTULO DE PROFESOR(A)' value={form.name}
+                                        onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: 12, fontWeight: 700, color: "var(--gm-label)" }}>Plantilla * <span style={{ fontWeight: 400, color: "#94A3B8" }}>(usa {"{especialidad}"})</span></label>
+                                    <input className="gm-input" style={{ width: "100%", height: 36, borderRadius: 10, border: "1px solid var(--gm-border)", padding: "0 12px", fontSize: 13 }}
+                                        placeholder='PROFESOR(A) EN {especialidad}' value={form.template}
+                                        onChange={(e) => setForm({ ...form, template: e.target.value })} />
+                                </div>
+                                {form.template && (
+                                    <div style={{ background: "#EEF2FF", border: "1px solid #C7D2FE", borderRadius: 10, padding: "10px 14px" }}>
+                                        <p style={{ fontSize: 10, fontWeight: 800, color: "#4338CA", textTransform: "uppercase", letterSpacing: ".05em" }}>Vista previa</p>
+                                        <p style={{ fontSize: 13, fontWeight: 700, color: "#312E81", marginTop: 4 }}>{previewTpl(form.template)}</p>
+                                    </div>
+                                )}
+                                <div>
+                                    <label style={{ fontSize: 12, fontWeight: 700, color: "var(--gm-label)" }}>Etiqueta en constancia</label>
+                                    <input className="gm-input" style={{ width: "100%", height: 36, borderRadius: 10, border: "1px solid var(--gm-border)", padding: "0 12px", fontSize: 13 }}
+                                        placeholder="TÍTULO" value={form.diploma_label}
+                                        onChange={(e) => setForm({ ...form, diploma_label: e.target.value })} />
+                                </div>
+                                <div className="flex gap-3">
+                                    <label className="flex items-center gap-2 flex-1 p-3 rounded-xl cursor-pointer" style={{ border: "1px solid var(--gm-border)" }}
+                                        onClick={() => setForm({ ...form, is_default: !form.is_default })}>
+                                        <input type="checkbox" checked={!!form.is_default} readOnly style={{ width: 16, height: 16 }} />
+                                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--gm-text)" }}>Por defecto</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 flex-1 p-3 rounded-xl cursor-pointer" style={{ border: "1px solid var(--gm-border)" }}
+                                        onClick={() => setForm({ ...form, is_active: !form.is_active })}>
+                                        <input type="checkbox" checked={!!form.is_active} readOnly style={{ width: 16, height: 16 }} />
+                                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--gm-text)" }}>Activo</span>
+                                    </label>
+                                </div>
+                                <div className="flex justify-end gap-2 pt-3" style={{ borderTop: "1px solid #F1F5F9" }}>
+                                    <button onClick={() => { setOpen(false); resetForm(); }}
+                                        className="px-4 py-2 rounded-xl text-sm font-bold" style={{ border: "1px solid var(--gm-border)", color: "var(--gm-muted)" }}>
+                                        Cancelar
+                                    </button>
+                                    <button onClick={save}
+                                        className="px-6 py-2 rounded-xl text-sm font-bold text-white" style={{ background: "var(--gm-primary)" }}>
+                                        Guardar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   IMPORTAR EGRESADOS TAB
+   ═══════════════════════════════════════════════════════════════════ */
+function ImportarEgresadosTab() {
+    const [file, setFile] = useState(null);
+    const [job, setJob] = useState(null);
+    const [status, setStatus] = useState(null);
+    const [isImporting, setIsImporting] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const pollRef = useRef(null);
+
+    const clearPolling = useCallback(() => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } }, []);
+
+    useEffect(() => () => clearPolling(), [clearPolling]);
+
+    const start = async () => {
+        if (!file) return;
+        setIsImporting(true); setStatus(null); setJob(null); setProgress(0);
+        try {
+            const res = await Imports.start("egresados", file);
+            const jobId = res?.job_id;
+            if (!jobId) throw new Error("Sin job_id");
+            setJob(jobId);
+            pollRef.current = setInterval(async () => {
+                try {
+                    const st = await Imports.status(jobId);
+                    setStatus(st); setProgress(Number(st?.progress ?? 0));
+                    const state = String(st?.state || "").toUpperCase();
+                    if (["COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED", "ERROR"].includes(state)) {
+                        clearPolling(); setIsImporting(false); setProgress(100);
+                    }
+                } catch { }
+            }, 2000);
+        } catch { setIsImporting(false); }
+    };
+
+    const downloadTemplate = async () => {
+        try {
+            const res = await Imports.downloadTemplate("egresados");
+            const cd = res.headers?.["content-disposition"] || "";
+            const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(cd);
+            const filename = match?.[1]?.replace(/['"]/g, "").trim() || "egresados_template.xlsx";
+            const blob = new Blob([res.data], { type: res.headers?.["content-type"] || "application/octet-stream" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a"); a.href = url; a.download = filename;
+            document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        } catch { }
+    };
+
+    const errors = useMemo(() => {
+        const raw = status?.errors;
+        if (!raw) return [];
+        if (Array.isArray(raw)) return raw.map((e) => typeof e === "string" ? { row: "—", field: "—", message: e } : e);
+        return [];
+    }, [status?.errors]);
+
+    const stateLabel = String(status?.state || "").toUpperCase();
+    const isDone = ["COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED", "ERROR"].includes(stateLabel);
+
+    return (
+        <div className="space-y-4">
+            <div>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--gm-text)" }}>Importar Egresados</h3>
+                <p style={{ fontSize: 12, color: "var(--gm-muted)" }}>Carga masiva desde archivo Excel (.xlsx)</p>
+            </div>
+
+            <div style={{ background: "#EEF2FF", border: "1px solid #C7D2FE", borderRadius: 12, padding: "12px 16px" }}>
+                <p style={{ fontSize: 12, color: "#4338CA" }}>
+                    <strong>Instrucciones:</strong> Sube archivos EGRESO_XXXX.xlsx con el formato estándar.
+                    Se usará el tipo de grado/título marcado como <strong>DEFAULT</strong> en la pestaña "Grados y Títulos".
+                </p>
+                <p style={{ fontSize: 11, color: "#6366F1", marginTop: 4 }}>Consejo: descarga la plantilla y no cambies nombres de columnas.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: "var(--gm-label)", marginBottom: 4, display: "block" }}>Descargar plantilla</label>
+                    <button onClick={downloadTemplate} disabled={isImporting}
+                        className="flex items-center justify-center gap-2 w-full px-4 py-2 rounded-xl text-sm font-bold"
+                        style={{ border: "1px solid var(--gm-border)", color: "var(--gm-text)", opacity: isImporting ? 0.5 : 1 }}>
+                        <Download size={15} /> Descargar plantilla
+                    </button>
+                </div>
+                <div className="md:col-span-2">
+                    <label style={{ fontSize: 12, fontWeight: 700, color: "var(--gm-label)", marginBottom: 4, display: "block" }}>Archivo a importar</label>
+                    <input type="file" accept=".xlsx" disabled={isImporting}
+                        style={{ fontSize: 13, width: "100%" }}
+                        onChange={(e) => {
+                            const f = e.target.files?.[0] || null;
+                            if (f && !f.name.toLowerCase().endsWith(".xlsx")) { setFile(null); return; }
+                            setFile(f);
+                        }} />
+                    {file && <p style={{ fontSize: 11, color: "var(--gm-muted)", marginTop: 4 }}>{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</p>}
+                </div>
+            </div>
+
+            <div className="flex justify-end">
+                <button onClick={start} disabled={isImporting || !file}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold text-white"
+                    style={{ background: isImporting ? "#94A3B8" : "var(--gm-primary)", cursor: isImporting || !file ? "not-allowed" : "pointer" }}>
+                    {isImporting ? <><Loader2 size={15} className="animate-spin" /> Procesando…</> : <><UploadCloud size={15} /> Iniciar importación</>}
+                </button>
+            </div>
+
+            {/* Progress */}
+            {(isImporting || status) && (
+                <div style={{ borderRadius: 16, border: "1px solid var(--gm-border)", overflow: "hidden" }}>
+                    <div style={{ padding: "12px 20px", background: "#F8FAFC", borderBottom: "1px solid var(--gm-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: "var(--gm-text)" }}>Progreso</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+                            background: stateLabel === "COMPLETED" ? "#D1FAE5" : stateLabel.includes("ERROR") || stateLabel === "FAILED" ? "#FEE2E2" : "#DBEAFE",
+                            color: stateLabel === "COMPLETED" ? "#059669" : stateLabel.includes("ERROR") || stateLabel === "FAILED" ? "#DC2626" : "#2563EB" }}>
+                            {stateLabel || "PROCESANDO"}
+                        </span>
+                    </div>
+                    <div style={{ padding: 20 }}>
+                        <div style={{ background: "#E2E8F0", borderRadius: 8, height: 8, overflow: "hidden" }}>
+                            <div style={{ width: `${Math.min(100, progress)}%`, height: "100%", background: "linear-gradient(90deg,#4F46E5,#7C3AED)", borderRadius: 8, transition: "width .3s" }} />
+                        </div>
+                        <div className="flex justify-between" style={{ fontSize: 11, color: "var(--gm-muted)", marginTop: 6 }}>
+                            <span>Job: {job || "—"}</span>
+                            <span>{Math.round(progress)}%</span>
+                        </div>
+                        {isDone && (
+                            <div className="grid grid-cols-3 gap-3 mt-4">
+                                {[{ l: "Importados", v: status?.imported ?? 0, c: "#D1FAE5" }, { l: "Actualizados", v: status?.updated ?? 0, c: "#DBEAFE" }, { l: "Errores", v: errors.length, c: "#FEE2E2" }].map(({ l, v, c }) => (
+                                    <div key={l} style={{ background: c, borderRadius: 12, padding: "12px 14px" }}>
+                                        <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", opacity: 0.7 }}>{l}</p>
+                                        <p style={{ fontSize: 22, fontWeight: 900, marginTop: 2 }}>{v}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {errors.length > 0 && (
+                            <div style={{ marginTop: 16, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, padding: 16 }}>
+                                <p style={{ fontSize: 12, fontWeight: 800, color: "#DC2626", marginBottom: 8 }}>
+                                    <AlertCircle size={14} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
+                                    Errores ({errors.length})
+                                </p>
+                                <div style={{ maxHeight: 200, overflow: "auto" }}>
+                                    <table style={{ width: "100%", fontSize: 11 }}>
+                                        <thead><tr style={{ color: "#991B1B" }}>
+                                            <th style={{ textAlign: "left", padding: "4px 8px", fontWeight: 700 }}>Fila</th>
+                                            <th style={{ textAlign: "left", padding: "4px 8px", fontWeight: 700 }}>Campo</th>
+                                            <th style={{ textAlign: "left", padding: "4px 8px", fontWeight: 700 }}>Detalle</th>
+                                        </tr></thead>
+                                        <tbody>{errors.slice(0, 100).map((e, i) => (
+                                            <tr key={i} style={{ borderTop: "1px solid #FECACA" }}>
+                                                <td style={{ padding: "4px 8px", fontFamily: "monospace" }}>{e.row}</td>
+                                                <td style={{ padding: "4px 8px" }}>{e.field}</td>
+                                                <td style={{ padding: "4px 8px" }}>{e.message}</td>
+                                            </tr>
+                                        ))}</tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    MAIN MODULE
@@ -1216,6 +1594,8 @@ export default function GraduatesModule() {
                 {activeTab === "dashboard" && renderDashboard()}
                 {activeTab === "list" && renderList()}
                 {activeTab === "create" && renderForm()}
+                {activeTab === "grados" && <GradosTitulosTab />}
+                {activeTab === "importar" && <ImportarEgresadosTab />}
             </div>
 
             {/* Modals */}
