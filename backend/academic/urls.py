@@ -16,6 +16,7 @@ from .views import (
     EnrollmentCertificateView, EnrollmentCertificatePDFView,
     EnrollmentFichaView, EnrollmentFichaPDFView,
     EnrollmentBulkFichasView,
+    EnrollmentResetStudentView,
 
     ScheduleExportView, ScheduleExportPDFView,
 
