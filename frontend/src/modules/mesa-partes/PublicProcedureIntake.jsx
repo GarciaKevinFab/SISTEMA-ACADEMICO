@@ -171,6 +171,7 @@ export default function PublicProcedureIntake() {
     const [types, setTypes] = useState([]);
     const [created, setCreated] = useState(null);
     const [files, setFiles] = useState([]);
+    const [pendingFiles, setPendingFiles] = useState([]);
     const [uploading, setUploading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [errors, setErrors] = useState({});
@@ -226,8 +227,21 @@ export default function PublicProcedureIntake() {
             };
             delete payload.procedure_type_id;
             const res = await PublicIntake.create(payload);
-            setCreated(res?.procedure || res);
+            const proc = res?.procedure || res;
             toast.success("Trámite registrado correctamente");
+
+            // Auto-upload pending files
+            if (pendingFiles.length > 0 && proc?.tracking_code) {
+                try {
+                    for (const f of pendingFiles) await PublicIntake.uploadFile(proc.tracking_code, f);
+                    toast.success(`${pendingFiles.length} archivo(s) adjuntado(s)`);
+                    setPendingFiles([]);
+                } catch {
+                    toast.error("El trámite fue creado, pero hubo un error al subir algunos archivos. Puede intentarlo en la pantalla siguiente.");
+                }
+            }
+
+            setCreated(proc);
         } catch (err) {
             toast.error(err?.message || "No se pudo registrar el trámite");
         } finally {
@@ -254,6 +268,7 @@ export default function PublicProcedureIntake() {
         setCreated(null);
         setForm({ procedure_type_id: "", applicant_name: "", applicant_document: "", applicant_email: "", applicant_phone: "", description: "" });
         setErrors({});
+        setPendingFiles([]);
     };
 
     const typeLabel = useMemo(() =>
@@ -377,6 +392,20 @@ export default function PublicProcedureIntake() {
                                     className="rounded-xl resize-none"
                                     placeholder="Explique brevemente su solicitud o el motivo del trámite…"
                                 />
+                            </Field>
+
+                            {/* Adjuntar documentos */}
+                            <Field label="Adjuntar documentos (opcional)" icon={Paperclip}>
+                                <Input
+                                    type="file" multiple accept="application/pdf,image/*"
+                                    onChange={(e) => setPendingFiles(Array.from(e.target.files || []))}
+                                    className="file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:font-semibold file:text-xs file:px-3 file:py-1.5 cursor-pointer rounded-xl"
+                                />
+                                {pendingFiles.length > 0 && (
+                                    <p className="text-xs text-slate-500 font-medium">
+                                        {pendingFiles.length} archivo{pendingFiles.length > 1 ? "s" : ""} seleccionado{pendingFiles.length > 1 ? "s" : ""}
+                                    </p>
+                                )}
                             </Field>
 
                             {/* Summary of errors */}

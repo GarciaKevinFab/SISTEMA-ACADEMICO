@@ -111,8 +111,8 @@ export const MesaPartesDashboard = {
    Catálogos (PRIVADO)
 ------------------------------------------------------- */
 export const Catalog = {
-    offices: async () => {
-        const data = await asJson(api, "GET", "/offices");
+    offices: async (params = {}) => {
+        const data = await asJson(api, "GET", "/offices", null, { params });
         return { offices: pickFirstArray(data, ["offices", "items", "results"]) };
     },
     users: async (params = {}) => {
@@ -159,6 +159,7 @@ export const Procedures = {
     timeline: async (id) => asJson(api, "GET", `/procedures/${id}/timeline`),
     addNote: async (id, payload) => asJson(api, "POST", `/procedures/${id}/notes`, payload),
     notify: async (id, payload) => asJson(api, "POST", `/procedures/${id}/notify`, payload),
+    remove: async (id) => asJson(api, "DELETE", `/procedures/${id}`),
 
     /**
      * Descarga la CARÁTULA (uso interno, requiere auth).

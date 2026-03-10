@@ -679,7 +679,7 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
       const [p, t, o, u] = await Promise.all([
         ProcSvc.get(procedureId),
         ProcSvc.timeline(procedureId),
-        Catalog.offices(),
+        Catalog.offices({ active_only: "1" }),
         Catalog.users({ role: "STAFF" }),
       ]);
       const proc = p?.procedure || p;
@@ -689,6 +689,11 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
       setUsers(Array.isArray(u?.users) ? u.users : Array.isArray(u) ? u : []);
       // Pre-fill status form with current status
       if (proc?.status) setStatusForm(s => ({ ...s, status: proc.status }));
+      // Pre-fill route form with current values
+      if (proc?.current_office) setRouteForm(f => ({ ...f, to_office_id: String(proc.current_office) }));
+      if (proc?.assignee) setRouteForm(f => ({ ...f, assignee_id: String(proc.assignee) }));
+      // Pre-fill notify subject
+      if (proc?.tracking_code) setNotifyForm(f => ({ ...f, subject: f.subject || `Actualización de su trámite ${proc.tracking_code}` }));
     } catch (e) { toast.error(formatApiError(e, "No se pudo cargar el detalle")); }
     finally { setLoading(false); }
   }, [procedureId, canReview]);
@@ -714,8 +719,15 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
   };
 
   const doNotify = async () => {
-    try { await ProcSvc.notify(proc.id, notifyForm); toast.success("Notificación enviada"); }
-    catch (e) { toast.error(formatApiError(e, "No se pudo notificar")); }
+    try {
+      const res = await ProcSvc.notify(proc.id, notifyForm);
+      const r = res?.results || {};
+      if (r.email === "sent") toast.success("Email enviado al solicitante");
+      else if (r.email === "sin_correo") toast.warning("El solicitante no tiene correo registrado");
+      else if (typeof r.email === "string" && r.email.startsWith("error")) toast.error(`Error email: ${r.email}`);
+      else toast.success("Notificación registrada");
+      if (r.sms === "no_provider") toast.info("SMS requiere configurar un proveedor");
+    } catch (e) { toast.error(formatApiError(e, "No se pudo notificar")); }
   };
 
   const genDoc = async (type, label) => {
@@ -952,6 +964,10 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                   {/* Notify */}
                   <DetailCard title="Notificar al solicitante" icon={Send} iconColor="violet">
                     <div className="space-y-3">
+                      <p className="text-xs text-slate-400">
+                        Destinatario: <span className="font-semibold text-slate-600">{proc?.applicant_email || "Sin correo"}</span>
+                        {proc?.applicant_phone && <span className="ml-2">· Tel: {proc.applicant_phone}</span>}
+                      </p>
                       <div className="flex gap-2">
                         {["EMAIL", "SMS"].map(ch => (
                           <label key={ch}
@@ -964,7 +980,7 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                                 ...f,
                                 channels: e.target.checked ? [...f.channels, ch] : f.channels.filter(x => x !== ch),
                               }))} disabled={!canResolve} />
-                            {ch}
+                            {ch}{ch === "SMS" && <span className="text-[9px] text-amber-500 font-medium">(pendiente)</span>}
                           </label>
                         ))}
                       </div>
@@ -1119,6 +1135,14 @@ const ProceduresManagement = forwardRef(({ initialFilter }, ref) => {
       await ProcSvc.downloadCover(proc.id, proc.tracking_code || proc.id);
       toast.success("Carátula descargada");
     } catch (e) { toast.error(formatApiError(e, "Error al generar carátula")); }
+  };
+
+  const handleDeleteProcedure = async (proc) => {
+    try {
+      await ProcSvc.remove(proc.id);
+      toast.success("Trámite eliminado");
+      fetchProcedures();
+    } catch (e) { toast.error(formatApiError(e, "No se pudo eliminar el trámite")); }
   };
 
   const openDetail = async p => {
@@ -1311,6 +1335,31 @@ const ProceduresManagement = forwardRef(({ initialFilter }, ref) => {
                             title="Descargar carátula" onClick={() => handleDownloadPDF(p)}>
                             <Download size={13} />
                           </Button>
+                          <IfPerm any={[PERMS["mpv.processes.resolve"]]}>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="sm"
+                                  className="h-7 w-7 p-0 rounded-xl hover:bg-red-50 hover:text-red-600 text-slate-400"
+                                  title="Eliminar trámite">
+                                  <Trash2 size={13} />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="max-w-sm rounded-2xl">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Eliminar trámite</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Se eliminará permanentemente el trámite <strong>{p.tracking_code}</strong> de {p.applicant_name}. Esta acción no se puede deshacer.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter className="gap-2 mt-2">
+                                  <AlertDialogCancel className="rounded-xl border-slate-200">Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction className="bg-red-600 hover:bg-red-700 rounded-xl" onClick={() => handleDeleteProcedure(p)}>
+                                    Sí, eliminar
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </IfPerm>
                         </div>
                       </Td>
                     </tr>

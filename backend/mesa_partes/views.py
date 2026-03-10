@@ -519,6 +519,12 @@ class OfficeView(
     queryset           = Office.objects.all().order_by("name")
     serializer_class   = OfficeSer
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.query_params.get("active_only") == "1":
+            qs = qs.filter(is_active=True)
+        return qs
+
 
 class UsersCatalogView(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
@@ -654,12 +660,65 @@ class ProcedureViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="notify")
     def notify(self, request, pk=None):
-        p = self.get_object()
+        from django.core.mail import send_mail as django_send_mail
+
+        p        = self.get_object()
+        channels = request.data.get("channels", ["EMAIL"])
+        subject  = (request.data.get("subject") or "").strip()
+        message  = (request.data.get("message") or "").strip()
+
+        if not subject:
+            subject = f"Notificación sobre su trámite {p.tracking_code}"
+        if not message:
+            message = (
+                f"Estimado(a) {p.applicant_name},\n\n"
+                f"Le informamos sobre el estado de su trámite {p.tracking_code}."
+            )
+
+        results = {}
+
+        # ── EMAIL ──
+        if "EMAIL" in channels:
+            to_email = (p.applicant_email or "").strip()
+            if not to_email:
+                results["email"] = "sin_correo"
+            else:
+                try:
+                    django_send_mail(
+                        subject=subject,
+                        message=message,
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[to_email],
+                        fail_silently=False,
+                    )
+                    results["email"] = "sent"
+                except Exception as exc:
+                    results["email"] = f"error: {exc}"
+            # Log
+            try:
+                from notifications.models import NotificationLog
+                NotificationLog.objects.create(
+                    event_key="MP.NOTIFY", channel="EMAIL",
+                    to=to_email,
+                    subject=subject,
+                    payload={"tracking_code": p.tracking_code, "message": message},
+                    rendered={"subject": subject, "html": message},
+                    status="SENT" if results.get("email") == "sent" else "ERROR",
+                    error="" if results.get("email") == "sent" else str(results.get("email", "")),
+                )
+            except Exception:
+                pass
+
+        # ── SMS (requiere proveedor externo) ──
+        if "SMS" in channels:
+            results["sms"] = "no_provider"
+
         ProcedureEvent.objects.create(
             procedure=p, type="NOTIFIED",
-            description="Notificación enviada", actor=request.user
+            description=f"Canales: {', '.join(channels)}. Asunto: {subject}",
+            actor=request.user,
         )
-        return Response({"ok": True})
+        return Response({"ok": True, "results": results})
 
     # ── Archivos ────────────────────────────────────────────────────
     @action(detail=True, methods=["get", "post"], url_path="files")
