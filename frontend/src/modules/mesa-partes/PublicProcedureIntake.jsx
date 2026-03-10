@@ -101,7 +101,7 @@ const Field = ({ label, icon: Icon, error, required, children }) => (
 );
 
 /* ─── Success Screen ─────────────────────────────────────────── */
-const SuccessScreen = ({ created, files, setFiles, uploading, uploadAll, onReset }) => {
+const SuccessScreen = ({ created, onReset }) => {
     const code = created?.tracking_code;
     return (
         <div className="min-h-[100dvh] bg-slate-50">
@@ -137,52 +137,6 @@ const SuccessScreen = ({ created, files, setFiles, uploading, uploadAll, onReset
                                 <Button className="w-full rounded-xl font-extrabold gap-2">
                                     Ver seguimiento <ArrowRight size={16} />
                                 </Button>
-                            </Link>
-                        </div>
-                    </div>
-                </div>
-
-                {/* File upload */}
-                <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                    <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-slate-50/60">
-                        <div className="h-8 w-8 rounded-lg bg-indigo-50 border border-indigo-100 grid place-items-center">
-                            <Paperclip size={15} className="text-indigo-600" />
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-slate-800 text-sm leading-none">Adjuntar documentos</h3>
-                            <p className="text-[11px] text-slate-400 mt-0.5">PDF o imagen — puedes enviar varios</p>
-                        </div>
-                    </div>
-                    <div className="p-5 space-y-4">
-                        <div className="space-y-2">
-                            <Label className="text-sm font-semibold text-slate-600">Seleccionar archivos</Label>
-                            <Input
-                                type="file" multiple accept="application/pdf,image/*"
-                                onChange={(e) => setFiles(Array.from(e.target.files || []))}
-                                disabled={uploading}
-                                className="file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:font-semibold file:text-xs file:px-3 file:py-1.5 cursor-pointer"
-                            />
-                            {files.length > 0 && (
-                                <p className="text-xs text-slate-500 font-medium">
-                                    {files.length} archivo{files.length > 1 ? "s" : ""} seleccionado{files.length > 1 ? "s" : ""}
-                                </p>
-                            )}
-                            <FilePreviewList files={files} />
-                        </div>
-                        <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                            <Button
-                                onClick={uploadAll}
-                                disabled={!files.length || uploading}
-                                className="rounded-xl font-extrabold gap-2 w-full sm:w-auto"
-                            >
-                                {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-                                {uploading ? "Enviando…" : "Enviar archivos"}
-                            </Button>
-                            <Link
-                                to="/public/procedures/track"
-                                className="text-blue-700 hover:text-blue-900 font-semibold text-sm flex items-center gap-1.5 transition-colors"
-                            >
-                                Ir a Consulta pública <ExternalLink size={13} />
                             </Link>
                         </div>
                     </div>
@@ -322,8 +276,6 @@ export default function PublicProcedureIntake() {
         return (
             <SuccessScreen
                 created={created}
-                files={files} setFiles={setFiles}
-                uploading={uploading} uploadAll={uploadAll}
                 onReset={resetForm}
             />
         );
