@@ -428,13 +428,12 @@ def _validate_enrollment_payload(request, st, academic_period, plan_course_ids, 
             errors.append(f"FALTA_PRERREQUISITOS:{pc.display_code or pc.course.code}")
 
     chosen      = _pick_sections_for_pcs(plan_course_ids, academic_period, sections_map)
-    missing_sec = [pcid for pcid in plan_course_ids if pcid not in chosen]
-    if missing_sec:
-        errors.append(f"SIN_SECCIONES:{missing_sec}")
+    conflicts   = []
 
-    conflicts = _detect_schedule_conflicts(list(chosen.values()))
-    if conflicts:
-        errors.append("CHOQUE_HORARIO")
+    if chosen:
+        conflicts = _detect_schedule_conflicts(list(chosen.values()))
+        if conflicts:
+            errors.append("CHOQUE_HORARIO")
 
     if errors:
         return Response(
@@ -984,8 +983,6 @@ class EnrollmentAvailableView(APIView):
                 enabled, reason = False, "YA_MATRICULADO_EN_PERIODO"
             elif not _prereqs_met(pc.id, approved_ids, approved_names):
                 enabled, reason = False, "FALTA_PRERREQUISITOS"
-            elif pc.id not in secs_by_pc:
-                enabled, reason = False, "SIN_SECCIONES_EN_PERIODO"
 
             attempts  = _attempts_for_course(st, pc)
             is_failed = attempts > 0
@@ -1239,19 +1236,14 @@ class EnrollmentCommitView(APIView):
             .filter(id__in=plan_course_ids, plan_id=st.plan_id)
         )
         chosen  = _pick_sections_for_pcs(plan_course_ids, academic_period, sections_map)
-        missing = [pcid for pcid in plan_course_ids if pcid not in chosen]
-        if missing:
-            return Response(
-                {"detail": "Hay cursos sin secciones en este período", "missing": missing},
-                status=409,
-            )
 
-        conflicts = _detect_schedule_conflicts(list(chosen.values()))
-        if conflicts:
-            return Response(
-                {"detail": "Choque de horario", "schedule_conflicts": conflicts},
-                status=409,
-            )
+        if chosen:
+            conflicts = _detect_schedule_conflicts(list(chosen.values()))
+            if conflicts:
+                return Response(
+                    {"detail": "Choque de horario", "schedule_conflicts": conflicts},
+                    status=409,
+                )
 
         with transaction.atomic():
             enrollment, _ = Enrollment.objects.get_or_create(student=st, period=academic_period)
@@ -1673,3 +1665,118 @@ class ScheduleExportPDFView(APIView):
             content_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+
+
+# ══════════════════════════════════════════════════════════════
+#  FICHAS DE MATRÍCULA EN LOTE
+# ══════════════════════════════════════════════════════════════
+
+class EnrollmentBulkFichasView(APIView):
+    """
+    POST /academic/enrollments/generate-fichas
+    Body: { "academic_period": "2026-I" }
+
+    Genera fichas de matrícula PDF para TODOS los alumnos matriculados
+    (CONFIRMED) en el período indicado.  Retorna un ZIP con todos los PDFs.
+
+    Solo accesible por admin/secretaria.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes     = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        import zipfile
+        from io import BytesIO as ZipBuf
+
+        if not _can_admin_enroll(request.user):
+            return Response({"detail": "No tiene permisos."}, status=403)
+
+        body = request.data or {}
+        academic_period = (
+            body.get("academic_period") or ""
+        ).strip() or _guess_default_period_code()
+
+        if not academic_period:
+            return Response({"detail": "academic_period requerido."}, status=400)
+
+        enrollments = list(
+            Enrollment.objects
+            .select_related("student", "student__plan", "student__plan__career")
+            .filter(period=academic_period, status=Enrollment.STATUS_CONFIRMED)
+            .order_by("student__apellido_paterno", "student__apellido_materno", "student__nombres")
+        )
+        if not enrollments:
+            return Response({"detail": "No hay matrículas confirmadas en este período."}, status=404)
+
+        # ── Importar helpers de generación ──
+        from .process_document_gen import _get_institution, _get_student, _get_enrolled_courses
+        from .ficha_matricula_generator import generate_ficha_matricula_weasyprint, HAS_WEASYPRINT
+
+        if not HAS_WEASYPRINT:
+            return Response({"detail": "WeasyPrint no está instalado en el servidor."}, status=500)
+
+        inst = _get_institution()
+
+        # ── Objeto "fake process" para el footer del PDF ──
+        class _FakeProcess:
+            def __init__(self, enrollment_id):
+                self.id = enrollment_id
+
+        # ── Generar PDFs y empaquetar en ZIP ──
+        zip_buf = ZipBuf()
+        generated = 0
+        errors_list = []
+
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for enr in enrollments:
+                try:
+                    st = enr.student
+                    student_data = _get_student(st.id)
+                    student_data["periodo"] = academic_period
+
+                    # Obtener cursos del ciclo actual del alumno
+                    ciclo = None
+                    try:
+                        ciclo = int(student_data.get("ciclo", 0) or 0)
+                    except (ValueError, TypeError):
+                        ciclo = None
+
+                    courses = _get_enrolled_courses(student_data.get("plan_id"), ciclo)
+
+                    extra = {
+                        "period": academic_period,
+                        "cycle":  student_data.get("ciclo", ""),
+                        "section": student_data.get("seccion", "A"),
+                    }
+
+                    fake_process = _FakeProcess(enr.id)
+                    pdf_buf, pdf_filename = generate_ficha_matricula_weasyprint(
+                        fake_process, student_data, extra, inst, courses
+                    )
+
+                    # Nombre descriptivo del PDF
+                    ap_pat = getattr(st, "apellido_paterno", "") or ""
+                    ap_mat = getattr(st, "apellido_materno", "") or ""
+                    nombres = getattr(st, "nombres", "") or ""
+                    dni = getattr(st, "num_documento", "") or ""
+                    safe_name = f"{ap_pat}_{ap_mat}_{nombres}".strip("_").replace(" ", "_") or dni
+                    zf.writestr(f"FICHA_{safe_name}_{dni}.pdf", pdf_buf.read())
+                    generated += 1
+
+                except Exception as e:
+                    dni_err = getattr(enr.student, "num_documento", "?")
+                    errors_list.append(f"{dni_err}: {str(e)}")
+
+        zip_buf.seek(0)
+
+        if generated == 0:
+            return Response(
+                {"detail": "No se pudo generar ninguna ficha.", "errors": errors_list},
+                status=500,
+            )
+
+        response = HttpResponse(zip_buf.getvalue(), content_type="application/zip")
+        response["Content-Disposition"] = (
+            f'attachment; filename="fichas-matricula-{academic_period}.zip"'
+        )
+        return response

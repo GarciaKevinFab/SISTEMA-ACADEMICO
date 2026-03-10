@@ -14,6 +14,7 @@ from .views import (
 
     EnrollmentValidateView, EnrollmentSuggestionsView, EnrollmentCommitView,
     EnrollmentCertificateView, EnrollmentCertificatePDFView,
+    EnrollmentBulkFichasView,
 
     ScheduleExportView, ScheduleExportPDFView,
 
@@ -97,6 +98,7 @@ urlpatterns = [
     path("enrollments/commit",                               EnrollmentCommitView.as_view()),
     path("enrollments/<int:enrollment_id>/certificate",      EnrollmentCertificateView.as_view()),
     path("enrollments/<int:enrollment_id>/certificate/pdf",  EnrollmentCertificatePDFView.as_view()),
+    path("enrollments/generate-fichas",                      EnrollmentBulkFichasView.as_view()),
 
     # ── Períodos académicos ──────────────────────────────────────
     path("periods",                                      AcademicPeriodsListView.as_view()),

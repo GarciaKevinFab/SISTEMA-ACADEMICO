@@ -25,7 +25,7 @@ import {
   Clock, Plus, Search as SearchIcon, FileText, Hash, User, Shield,
   ChevronDown, Lock, Unlock, AlertCircle, DollarSign, Calendar,
   Users, UserCheck, UserX, RefreshCw, ChevronLeft, ChevronRight,
-  BookOpenCheck,
+  BookOpenCheck, Download,
 } from "lucide-react";
 import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
 import EnrollmentPaymentGate from "./EnrollmentPaymentGate";
@@ -77,7 +77,6 @@ const BLOCKED_LABELS = {
   YA_MATRICULADO_EN_PERIODO: "Ya matriculado",
   YA_APROBADO: "Ya aprobado",
   FALTA_PRERREQUISITOS: "Sin prerrequisitos",
-  SIN_SECCIONES_EN_PERIODO: "Sin secciones",
 };
 
 const WINDOW_STATUS_CONFIG = {
@@ -218,6 +217,44 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
+  /* ── Generar fichas de matrícula en lote ── */
+  const [generatingFichas, setGeneratingFichas] = useState(false);
+  const handleGenerateFichas = async () => {
+    setGeneratingFichas(true);
+    try {
+      const res = await api.post(
+        "/academic/enrollments/generate-fichas",
+        { academic_period: academicPeriod },
+        { responseType: "blob" },
+      );
+      const blob = new Blob([res.data], { type: "application/zip" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `fichas-matricula-${academicPeriod}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Fichas de matrícula descargadas");
+    } catch (e) {
+      // Si el blob es JSON con error, intentar leerlo
+      if (e?.response?.data instanceof Blob) {
+        try {
+          const text = await e.response.data.text();
+          const json = JSON.parse(text);
+          toast.error(json.detail || "Error generando fichas");
+        } catch {
+          toast.error("Error generando fichas de matrícula");
+        }
+      } else {
+        toast.error(formatApiError(e, "Error generando fichas de matrícula"));
+      }
+    } finally {
+      setGeneratingFichas(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* ── Stats cards ── */}
@@ -256,6 +293,22 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Botón Generar Fichas ── */}
+      {displayEnrolled > 0 && (
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={generatingFichas}
+            onClick={handleGenerateFichas}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            {generatingFichas ? "Generando fichas…" : "Generar Fichas de Matrícula"}
+          </Button>
+        </div>
+      )}
 
       {/* ── Filters ── */}
       <Card className="border-slate-200">
@@ -1014,6 +1067,13 @@ const EnrollmentComponent = () => {
                                     · {courseSections[0].teacher_name.split(" ").slice(-2).join(" ")}
                                   </span>
                                 )}
+                              </div>
+                            )}
+
+                            {!isBlocked && courseSections.length === 0 && selected && (
+                              <div className="text-xs text-slate-400 px-2 mt-1 flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                <span>Sección por asignar</span>
                               </div>
                             )}
                           </div>

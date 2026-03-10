@@ -230,6 +230,10 @@ export const Enrollment = {
      */
     studentsOverview: async (params = {}) =>
         requestJsonSmart("GET", "/academic/enrollments/students-overview", null, { params }),
+
+    /** Genera fichas de matrícula en lote (ZIP). Solo admin. */
+    generateFichas: async (payload) =>
+        api.post("/academic/enrollments/generate-fichas", payload, { responseType: "blob" }),
 };
 
 

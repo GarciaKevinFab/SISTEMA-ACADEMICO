@@ -25,7 +25,8 @@ from .enrollment import (
     EnrollmentCertificatePDFView,
     ScheduleExportView,
     ScheduleExportPDFView,
-    StudentsOverviewView
+    StudentsOverviewView,
+    EnrollmentBulkFichasView,
 )
 
 # ── Kardex ─────────────────────────────────────────────────────────────────
@@ -144,6 +145,7 @@ __all__ = [
     "EnrollmentCertificatePDFView",
     "ScheduleExportView",
     "ScheduleExportPDFView",
+    "EnrollmentBulkFichasView",
     # Kardex
     "KardexView",
     "KardexExportXlsxView",
