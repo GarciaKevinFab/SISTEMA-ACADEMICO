@@ -234,6 +234,14 @@ export const Enrollment = {
     /** Genera fichas de matrícula en lote (ZIP). Solo admin. */
     generateFichas: async (payload) =>
         api.post("/academic/enrollments/generate-fichas", payload, { responseType: "blob" }),
+
+    /**
+     * Reinicia la matrícula de un alumno: elimina enrollment, payment y registros financieros.
+     * Solo admin.
+     * @param {{ student_id: number, period: string }} payload
+     */
+    resetStudent: async (payload) =>
+        requestJsonSmart("POST", "/academic/enrollments/reset-student", payload),
 };
 
 

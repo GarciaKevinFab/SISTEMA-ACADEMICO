@@ -25,7 +25,7 @@ import {
   Clock, Plus, Search as SearchIcon, FileText, Hash, User, Shield,
   ChevronDown, Lock, Unlock, AlertCircle, DollarSign, Calendar,
   Users, UserCheck, UserX, RefreshCw, ChevronLeft, ChevronRight,
-  BookOpenCheck, Download,
+  BookOpenCheck, Download, RotateCcw,
 } from "lucide-react";
 import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
 import EnrollmentPaymentGate from "./EnrollmentPaymentGate";
@@ -146,6 +146,9 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
   const [search, setSearch] = useState("");
   const [careerFilter, setCareerFilter] = useState("");
   const [careers, setCareers] = useState([]);
+  // ── Reset de matrícula ──
+  const [resetTarget, setResetTarget] = useState(null); // student obj to reset
+  const [resetting, setResetting] = useState(false);
   const [tab, setTab] = useState("all"); // all | enrolled | pending
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
@@ -252,6 +255,25 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
       }
     } finally {
       setGeneratingFichas(false);
+    }
+  };
+
+  /* ── Reiniciar matrícula de un alumno ── */
+  const handleResetStudent = async () => {
+    if (!resetTarget) return;
+    setResetting(true);
+    try {
+      await api.post("/academic/enrollments/reset-student", {
+        student_id: resetTarget.id,
+        period: academicPeriod,
+      });
+      toast.success(`Matrícula de ${resetTarget.full_name || "alumno"} reiniciada`);
+      setResetTarget(null);
+      fetchStudents(); // refrescar tabla
+    } catch (e) {
+      toast.error(formatApiError(e, "No se pudo reiniciar la matrícula"));
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -427,18 +449,31 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Button
-                        size="sm"
-                        variant={st.is_enrolled ? "outline" : "default"}
-                        className={`text-xs ${st.is_enrolled
-                            ? "border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600"
-                            : "bg-blue-600 hover:bg-blue-700"
-                          }`}
-                        onClick={() => onEnrollStudent(st.dni || st.num_documento, st)}
-                      >
-                        <BookOpenCheck className="h-3.5 w-3.5 mr-1" />
-                        {st.is_enrolled ? "Ver / editar" : "Matricular"}
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant={st.is_enrolled ? "outline" : "default"}
+                          className={`text-xs ${st.is_enrolled
+                              ? "border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600"
+                              : "bg-blue-600 hover:bg-blue-700"
+                            }`}
+                          onClick={() => onEnrollStudent(st.dni || st.num_documento, st)}
+                        >
+                          <BookOpenCheck className="h-3.5 w-3.5 mr-1" />
+                          {st.is_enrolled ? "Ver / editar" : "Matricular"}
+                        </Button>
+                        {st.is_enrolled && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                            onClick={() => setResetTarget(st)}
+                            title="Reiniciar matrícula"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -466,6 +501,70 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
           </div>
         )}
       </Card>
+
+      {/* ── Diálogo de confirmación para reiniciar matrícula ── */}
+      {resetTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-100 rounded-full">
+                <RotateCcw className="h-5 w-5 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-800">
+                Reiniciar matrícula
+              </h3>
+            </div>
+            <p className="text-sm text-slate-600">
+              ¿Estás seguro de reiniciar la matrícula de{" "}
+              <span className="font-semibold text-slate-800">
+                {resetTarget.full_name}
+              </span>{" "}
+              en el período <span className="font-semibold">{academicPeriod}</span>?
+            </p>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 space-y-1">
+              <p className="font-medium flex items-center gap-1">
+                <AlertTriangle className="h-3.5 w-3.5" /> Esta acción eliminará:
+              </p>
+              <ul className="list-disc list-inside ml-1 space-y-0.5">
+                <li>La matrícula y cursos inscritos del período</li>
+                <li>El comprobante de pago de matrícula</li>
+                <li>Los registros financieros asociados</li>
+              </ul>
+              <p className="mt-1 text-amber-700">
+                El alumno podrá volver a realizar todo el proceso desde cero.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setResetTarget(null)}
+                disabled={resetting}
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white"
+                onClick={handleResetStudent}
+                disabled={resetting}
+              >
+                {resetting ? (
+                  <>
+                    <Clock className="h-3.5 w-3.5 mr-1 animate-spin" />
+                    Reiniciando…
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                    Sí, reiniciar
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

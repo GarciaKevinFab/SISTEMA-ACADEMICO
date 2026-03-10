@@ -1969,3 +1969,136 @@ class EnrollmentBulkFichasView(APIView):
             f'attachment; filename="fichas-matricula-{academic_period}.zip"'
         )
         return response
+
+
+# ══════════════════════════════════════════════════════════════
+#  REINICIO DE MATRÍCULA DE UN ESTUDIANTE
+# ══════════════════════════════════════════════════════════════
+
+class EnrollmentResetStudentView(APIView):
+    """
+    POST /academic/enrollments/reset-student
+    Body: { "student_id": <int>, "period": "2026-I" }
+
+    Devuelve al alumno al estado previo a matrícula:
+      1. Elimina Enrollment + EnrollmentItems del período
+      2. Elimina EnrollmentPayment + voucher del período
+      3. Revierte registros financieros creados por la aprobación
+         (IncomeEntry, CashMovement, StudentAccountPayment, StudentAccountCharge)
+
+    Solo admins.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        if not _can_admin_enroll(request.user):
+            return Response({"detail": "Sin permisos."}, status=403)
+
+        student_id = request.data.get("student_id")
+        period = (request.data.get("period") or "").strip()
+
+        if not student_id or not period:
+            return Response(
+                {"detail": "Se requiere student_id y period."},
+                status=400,
+            )
+
+        try:
+            student = StudentProfile.objects.get(pk=student_id)
+        except StudentProfile.DoesNotExist:
+            return Response({"detail": "Estudiante no encontrado."}, status=404)
+
+        dni = getattr(student, "num_documento", "") or str(student.id)
+        deleted = {"enrollment": False, "items": 0, "payment": False, "finance": 0}
+
+        with transaction.atomic():
+            # ── 1. Eliminar Enrollment + Items ──────────────────────
+            enrollments = Enrollment.objects.filter(student=student, period=period)
+            for enr in enrollments:
+                items_count = enr.items.count()
+                deleted["items"] += items_count
+                enr.items.all().delete()
+                enr.delete()
+                deleted["enrollment"] = True
+
+            # ── 2. Eliminar EnrollmentPayment + voucher ─────────────
+            from academic.models import EnrollmentPayment
+            payments = EnrollmentPayment.objects.filter(student=student, period=period)
+            payment_ids = list(payments.values_list("id", flat=True))
+
+            for pay in payments:
+                # Borrar archivo voucher
+                if pay.voucher:
+                    try:
+                        pay.voucher.delete(save=False)
+                    except Exception:
+                        pass
+                pay.delete()
+                deleted["payment"] = True
+
+            # ── 3. Revertir registros financieros ───────────────────
+            try:
+                from finance.models import (
+                    IncomeEntry, CashMovement,
+                    StudentAccountPayment, StudentAccountCharge, Concept,
+                )
+
+                # IncomeEntry: subject_id=dni, concept_name contiene el período
+                inc_del, _ = IncomeEntry.objects.filter(
+                    subject_id=dni,
+                    concept_name__icontains=period,
+                ).delete()
+                deleted["finance"] += inc_del
+
+                # CashMovement: concept contiene período Y DNI
+                cm_del, _ = CashMovement.objects.filter(
+                    Q(concept__icontains=period) & Q(concept__icontains=dni),
+                ).delete()
+                deleted["finance"] += cm_del
+
+                # StudentAccountPayment: subject_id=dni, ref contiene VOUCHER-<id>
+                for pid in payment_ids:
+                    sp_del, _ = StudentAccountPayment.objects.filter(
+                        subject_id=dni,
+                        ref__icontains=f"VOUCHER-{pid}",
+                    ).delete()
+                    deleted["finance"] += sp_del
+
+                # StudentAccountCharge: desmarcar paid → False
+                concept = Concept.objects.filter(type="MATRICULA").first()
+                charges = StudentAccountCharge.objects.filter(
+                    subject_id=dni,
+                    subject_type="STUDENT",
+                    paid=True,
+                )
+                if concept:
+                    charges = charges.filter(
+                        Q(concept=concept) | Q(concept_name__icontains="matrícula")
+                    )
+                else:
+                    charges = charges.filter(concept_name__icontains="matrícula")
+
+                # Solo revertir cargos del período si concept_name lo contiene,
+                # sino el último pagado
+                period_charges = charges.filter(concept_name__icontains=period)
+                if period_charges.exists():
+                    count = period_charges.update(paid=False)
+                    deleted["finance"] += count
+                else:
+                    charge = charges.order_by("-created_at").first()
+                    if charge:
+                        charge.paid = False
+                        charge.save(update_fields=["paid"])
+                        deleted["finance"] += 1
+
+            except ImportError:
+                pass  # finance app no instalada
+            except Exception:
+                pass  # no bloquear el reset si falla la limpieza financiera
+
+        return Response({
+            "ok": True,
+            "student_id": student.id,
+            "period": period,
+            "deleted": deleted,
+        })

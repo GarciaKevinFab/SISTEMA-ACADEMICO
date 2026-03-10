@@ -105,6 +105,7 @@ urlpatterns = [
     path("enrollments/<int:enrollment_id>/ficha",            EnrollmentFichaView.as_view()),
     path("enrollments/<int:enrollment_id>/ficha/pdf",        EnrollmentFichaPDFView.as_view()),
     path("enrollments/generate-fichas",                      EnrollmentBulkFichasView.as_view()),
+    path("enrollments/reset-student",                        EnrollmentResetStudentView.as_view()),
 
     # ── Períodos académicos ──────────────────────────────────────
     path("periods",                                      AcademicPeriodsListView.as_view()),

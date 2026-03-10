@@ -29,6 +29,7 @@ from .enrollment import (
     ScheduleExportPDFView,
     StudentsOverviewView,
     EnrollmentBulkFichasView,
+    EnrollmentResetStudentView,
 )
 
 # ── Kardex ─────────────────────────────────────────────────────────────────
