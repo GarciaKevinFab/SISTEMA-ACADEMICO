@@ -391,18 +391,16 @@ export default function EnrollmentPaymentsReview() {
                                                             </Button>
                                                         </>
                                                     )}
-                                                    {payment.status !== "APPROVED" && (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="text-red-500 border-red-200 hover:bg-red-50 h-7 px-2 text-xs"
-                                                            onClick={() => setDeletingPayment(payment)}
-                                                            disabled={actionLoading}
-                                                            title="Eliminar pago"
-                                                        >
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                    )}
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="text-red-500 border-red-200 hover:bg-red-50 h-7 px-2 text-xs"
+                                                        onClick={() => setDeletingPayment(payment)}
+                                                        disabled={actionLoading}
+                                                        title="Eliminar pago"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </Button>
                                                 </div>
                                             </td>
                                         </tr>
