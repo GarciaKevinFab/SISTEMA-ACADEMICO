@@ -220,7 +220,7 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
 
     const handleDeletePhoto = async () => {
         if (!onDeletePhoto) return;
-        if (!confirm("¿Seguro que deseas eliminar la foto de perfil?")) return;
+        if (!window.confirm("¿Seguro que deseas eliminar la foto de perfil?")) return;
         try {
             setDeleting(true);
             await onDeletePhoto();
