@@ -1126,7 +1126,7 @@ export default function AcademicModule() {
             { key: "kardex", label: "Kárdex", need: REQS.kardex },
             { key: "reports", label: "Reportes", need: REQS.reports },
             { key: "processes", label: "Procesos", need: REQS.processes },
-            { key: "transfers", label: "Traslados", need: REQS.transfers },
+            { key: "transfers", label: "Alumnos / Traslados", need: REQS.transfers },
         ].filter((t) => t.need.length === 0 || hasAny(t.need)),
         [hasAny]
     );

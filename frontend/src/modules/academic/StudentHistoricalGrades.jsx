@@ -67,18 +67,25 @@ export default function StudentHistoricalGrades({ studentId, studentName, planId
             setPlanCourses([]);
             return;
         }
-        Plans.get(planId)
+        Plans.listAllCourses(planId)
             .then((data) => {
-                const courses = data?.courses || data?.plan_courses || [];
+                // La respuesta puede ser un array directo o {courses: [...]} o {items: [...]}
+                const raw = Array.isArray(data)
+                    ? data
+                    : (data?.courses || data?.plan_courses || data?.items || []);
+                const courses = Array.isArray(raw) ? raw : [];
                 setPlanCourses(
                     courses.map((pc) => ({
-                        id: pc.course_id || pc.courseId || pc.id,
+                        id: pc.course_id || pc.courseId || pc.course || pc.id,
                         name: pc.display_name || pc.displayName || pc.course_name || pc.courseName || pc.name || "",
                         semester: pc.semester,
                     }))
                 );
             })
-            .catch(() => setPlanCourses([]));
+            .catch((err) => {
+                console.warn("No se pudieron cargar cursos del plan:", err);
+                setPlanCourses([]);
+            });
     }, [planId]);
 
     useEffect(() => {

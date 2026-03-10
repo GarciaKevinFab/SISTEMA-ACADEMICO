@@ -265,6 +265,97 @@ function ConfirmDialog({ open, onOpenChange, title, description, confirmText = "
   );
 }
 
+/* ── Dialog asignación masiva de roles ── */
+function BulkRoleDialog({ open, onClose, rolesOptions, selectedCount, onApply, loading }) {
+  const [selectedRoles, setSelectedRoles] = React.useState([]);
+  const [mode, setMode] = React.useState("add"); // add | replace
+
+  React.useEffect(() => {
+    if (open) { setSelectedRoles([]); setMode("add"); }
+  }, [open]);
+
+  const toggleRole = (r) => {
+    setSelectedRoles((prev) => prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md rounded-2xl bg-white border border-slate-100 shadow-xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base font-700">
+            <Shield size={17} className="text-blue-600 shrink-0" /> Asignar roles
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Asigna roles a {selectedCount} usuario(s) seleccionado(s)
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Modo */}
+          <div className="flex gap-2">
+            <button
+              className={`flex-1 text-xs font-600 px-3 py-2 rounded-lg border transition-all ${
+                mode === "add" ? "bg-blue-50 border-blue-200 text-blue-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"
+              }`}
+              onClick={() => setMode("add")}
+            >
+              Agregar rol(es)
+              <p className="text-[10px] font-400 mt-0.5">Mantiene los roles actuales y agrega los seleccionados</p>
+            </button>
+            <button
+              className={`flex-1 text-xs font-600 px-3 py-2 rounded-lg border transition-all ${
+                mode === "replace" ? "bg-amber-50 border-amber-200 text-amber-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"
+              }`}
+              onClick={() => setMode("replace")}
+            >
+              Reemplazar roles
+              <p className="text-[10px] font-400 mt-0.5">Quita los roles actuales y asigna solo los seleccionados</p>
+            </button>
+          </div>
+
+          {/* Roles */}
+          <div className="grid grid-cols-2 gap-1.5 max-h-[200px] overflow-y-auto">
+            {rolesOptions.map((r) => {
+              const checked = selectedRoles.includes(r);
+              return (
+                <label
+                  key={r}
+                  className={`flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-all text-xs
+                    ${checked ? "bg-blue-50 border-blue-200" : "border-slate-100 hover:border-slate-200 hover:bg-slate-50"}`}
+                >
+                  <input type="checkbox" checked={checked} onChange={() => toggleRole(r)} className="mt-0.5 accent-blue-600" />
+                  <div>
+                    <p className="font-600 text-slate-700 leading-tight">{t(r)}</p>
+                    <p className="font-mono text-[10px] text-slate-400 mt-0.5">{r}</p>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+
+          {selectedRoles.length === 0 && (
+            <p className="text-xs text-slate-400 text-center">Selecciona al menos un rol</p>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="outline" size="sm" className="rounded-lg h-8 text-xs" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            size="sm" className="rounded-lg h-8 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+            disabled={selectedRoles.length === 0 || loading}
+            onClick={() => onApply(selectedRoles, mode)}
+          >
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+            Aplicar a {selectedCount} usuario(s)
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ─────────────────────────── ROOT ─────────────────────────── */
 const AccessControlModule = () => {
   const { hasPerm } = useAuth();
@@ -380,6 +471,40 @@ const UsersTab = () => {
   const [purgeLoading, setPurgeLoading] = useState(false);
   const [purgeDryRun, setPurgeDryRun] = useState(null);
   const [purgeText, setPurgeText] = useState("");
+
+  // Bulk role assignment
+  const [bulkRoleOpen, setBulkRoleOpen] = useState(false);
+  const [bulkRoleLoading, setBulkRoleLoading] = useState(false);
+
+  const handleBulkRoleAssign = async (roles, mode) => {
+    if (selectedIds.size === 0 || roles.length === 0) return;
+    setBulkRoleLoading(true);
+    let success = 0;
+    let errors = 0;
+    for (const userId of selectedIds) {
+      try {
+        if (mode === "replace") {
+          // Reemplazar: asignar exactamente estos roles
+          await UsersService.assignRoles(userId, roles);
+        } else {
+          // Agregar: obtener roles actuales + agregar nuevos
+          const user = list.find((u) => u.id === userId);
+          const currentRoles = Array.isArray(user?.roles) ? user.roles : [];
+          const merged = Array.from(new Set([...currentRoles, ...roles]));
+          await UsersService.assignRoles(userId, merged);
+        }
+        success++;
+      } catch {
+        errors++;
+      }
+    }
+    setBulkRoleLoading(false);
+    setBulkRoleOpen(false);
+    if (success > 0) toast.success(`Roles asignados a ${success} usuario(s)`);
+    if (errors > 0) toast.error(`Error en ${errors} usuario(s)`);
+    clearSelection();
+    fetchUsers();
+  };
 
   const normalizeUsers = (data) => {
     if (Array.isArray(data)) return { items: data, count: data.length };
@@ -683,6 +808,13 @@ const UsersTab = () => {
                 Limpiar
               </Button>
               <Button
+                size="sm"
+                className="h-7 text-[11px] rounded-md gap-1 bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={() => setBulkRoleOpen(true)}
+              >
+                <Shield size={11} /> Asignar rol
+              </Button>
+              <Button
                 variant="destructive" size="sm"
                 className="h-7 text-[11px] rounded-md gap-1"
                 onClick={() => { setPurgeMode("ids"); setPurgeDryRun(null); setPurgeText(""); setPurgeOpen(true); }}
@@ -862,6 +994,15 @@ const UsersTab = () => {
           title={confirm.title} description={confirm.description}
           confirmText={confirm.confirmText} confirmVariant={confirm.confirmVariant}
           onConfirm={onConfirmAction}
+        />
+
+        <BulkRoleDialog
+          open={bulkRoleOpen}
+          onClose={() => setBulkRoleOpen(false)}
+          rolesOptions={rolesOptions}
+          selectedCount={selectedIds.size}
+          onApply={handleBulkRoleAssign}
+          loading={bulkRoleLoading}
         />
       </CardContent>
     </Card>

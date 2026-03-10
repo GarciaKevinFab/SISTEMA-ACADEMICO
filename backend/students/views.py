@@ -1,5 +1,6 @@
 # backend/students/views.py
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError
 from django.db.models import Q
 from django.utils.crypto import get_random_string
 
@@ -15,6 +16,89 @@ from .upload import validate_photo_upload
 from students.models import Student
 from acl.models import UserRole
 User = get_user_model()
+
+_user_fields = None
+
+def _get_user_fields():
+    global _user_fields
+    if _user_fields is None:
+        _user_fields = {f.name for f in User._meta.get_fields()}
+    return _user_fields
+
+
+def _create_user_for_student(st):
+    """
+    Crea un User + asigna rol STUDENT para un estudiante recién creado.
+    Retorna (user, temp_password) o (None, None) si ya tenía usuario.
+    """
+    if getattr(st, "user_id", None):
+        # Ya tiene usuario, solo asegurar rol
+        student_role = Role.objects.filter(name__iexact="STUDENT").first()
+        if student_role:
+            UserRole.objects.get_or_create(user_id=st.user_id, role_id=student_role.id)
+        return st.user, None
+
+    user_fields = _get_user_fields()
+    student_role = Role.objects.filter(name__iexact="STUDENT").first()
+
+    # Username = num_documento
+    username = (st.num_documento or "").strip() or f"tmp-{st.id}"
+    uname = username
+    k = 1
+    while User.objects.filter(username=uname).exists():
+        k += 1
+        uname = f"{username}-{k}"
+
+    full_name = f"{st.nombres or ''} {st.apellido_paterno or ''} {st.apellido_materno or ''}".strip()
+    email_raw = (st.email or "").strip().lower()
+
+    # Verificar email único
+    email = ""
+    if email_raw and "email" in user_fields:
+        if not User.objects.filter(email__iexact=email_raw).exists():
+            email = email_raw
+        else:
+            email = f"{uname}@no-email.local"
+    elif "email" in user_fields:
+        # Campo email existe pero no se proporcionó
+        try:
+            email_field = User._meta.get_field("email")
+            if not getattr(email_field, "blank", True):
+                email = f"{uname}@no-email.local"
+        except Exception:
+            pass
+
+    user = User(username=uname, is_active=True, is_staff=False)
+
+    if "email" in user_fields:
+        user.email = email
+    if "full_name" in user_fields:
+        user.full_name = full_name
+    elif "name" in user_fields:
+        user.name = full_name
+
+    temp_password = get_random_string(10) + "!"
+    user.set_password(temp_password)
+
+    try:
+        user.save()
+    except IntegrityError:
+        # Reintento con email sintético
+        if "email" in user_fields:
+            user.email = f"{uname}@no-email.local"
+            user.save()
+        else:
+            raise
+
+    # Asignar rol STUDENT
+    if student_role:
+        UserRole.objects.get_or_create(user_id=user.id, role_id=student_role.id)
+
+    # Enlazar usuario al estudiante
+    st.user = user
+    st.save(update_fields=["user"])
+
+    return user, temp_password
 
 
 def _require_staff(request):
@@ -98,7 +182,18 @@ def students_collection(request):
     ser = StudentUpdateSerializer(data=request.data)
     ser.is_valid(raise_exception=True)
     st = ser.save()
-    return Response(StudentSerializer(st, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+    # Auto-crear usuario con contraseña temporal
+    user, temp_password = _create_user_for_student(st)
+
+    data = StudentSerializer(st, context={"request": request}).data
+    if temp_password and user:
+        data["_credentials"] = {
+            "username": user.username,
+            "tempPassword": temp_password,
+        }
+
+    return Response(data, status=status.HTTP_201_CREATED)
 
 
 @api_view(["GET", "PATCH", "PUT", "DELETE"])
