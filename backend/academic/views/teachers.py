@@ -298,8 +298,8 @@ class SectionStudentsView(APIView):
 
     def get(self, request, section_id: int):
         """
-        ✅ ACTUALIZADO: ahora filtra por estudiantes MATRICULADOS en la sección.
-        Fallback: si no hay matrículas, devuelve todos los students (legacy).
+        Solo devuelve estudiantes MATRICULADOS (Enrollment CONFIRMED) en la sección.
+        Si no hay matrículas, retorna lista vacía.
         """
         from academic.models import Enrollment, EnrollmentItem
 

@@ -1,3 +1,6 @@
+"""
+WSGI config for sistema_academico project.
+"""
 import os
 from django.core.wsgi import get_wsgi_application
 
