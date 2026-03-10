@@ -1335,12 +1335,13 @@ const ProceduresManagement = forwardRef(({ initialFilter }, ref) => {
                             title="Descargar carátula" onClick={() => handleDownloadPDF(p)}>
                             <Download size={13} />
                           </Button>
+                          {p.created_at && (Date.now() - new Date(p.created_at).getTime()) < 86400000 && (
                           <IfPerm any={[PERMS["mpv.processes.resolve"]]}>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button variant="ghost" size="sm"
                                   className="h-7 w-7 p-0 rounded-xl hover:bg-red-50 hover:text-red-600 text-slate-400"
-                                  title="Eliminar trámite">
+                                  title="Eliminar trámite (solo 24h)">
                                   <Trash2 size={13} />
                                 </Button>
                               </AlertDialogTrigger>
@@ -1360,6 +1361,7 @@ const ProceduresManagement = forwardRef(({ initialFilter }, ref) => {
                               </AlertDialogContent>
                             </AlertDialog>
                           </IfPerm>
+                          )}
                         </div>
                       </Td>
                     </tr>

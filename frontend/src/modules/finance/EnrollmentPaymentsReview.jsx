@@ -13,7 +13,8 @@ import { Input } from "../../components/ui/input";
 import {
     CheckCircle, XCircle, Clock, Eye, Search,
     RefreshCw, ChevronDown, FileText, Users,
-    DollarSign, AlertTriangle, Image,
+    DollarSign, AlertTriangle, Image, Trash2, X,
+    ZoomIn, ZoomOut, Download,
 } from "lucide-react";
 import { toast } from "../../utils/safeToast";
 import { EnrollmentPayment } from "../../services/academic.service";
@@ -66,6 +67,13 @@ export default function EnrollmentPaymentsReview() {
     const [reviewingPayment, setReviewingPayment] = useState(null);
     const [rejectionNote, setRejectionNote] = useState("");
     const [actionLoading, setActionLoading] = useState(false);
+
+    // Modal de voucher preview
+    const [previewPayment, setPreviewPayment] = useState(null);
+    const [previewZoom, setPreviewZoom] = useState(1);
+
+    // Modal de confirmar eliminación
+    const [deletingPayment, setDeletingPayment] = useState(null);
 
     // ── Fetch ──
     const fetchPayments = useCallback(async () => {
@@ -122,6 +130,33 @@ export default function EnrollmentPaymentsReview() {
         } finally {
             setActionLoading(false);
         }
+    };
+
+    // ── Eliminar ──
+    const handleDelete = async (payment) => {
+        try {
+            setActionLoading(true);
+            await EnrollmentPayment.remove(payment.id);
+            toast.success(`Pago de ${payment.student_name || "estudiante"} eliminado`);
+            setDeletingPayment(null);
+            await fetchPayments();
+        } catch (err) {
+            showApiError(err, "Error al eliminar pago");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // ── Preview helpers ──
+    const isImageVoucher = (url) => {
+        if (!url) return false;
+        const lower = url.toLowerCase();
+        return /\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i.test(lower);
+    };
+
+    const isPdfVoucher = (url) => {
+        if (!url) return false;
+        return /\.pdf(\?|$)/i.test(url.toLowerCase());
     };
 
     const StatusBadge = ({ status }) => {
@@ -319,16 +354,16 @@ export default function EnrollmentPaymentsReview() {
                                             <td className="px-4 py-3 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">
                                                     {payment.voucher_url && (
-                                                        <a
-                                                            href={payment.voucher_url}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="text-blue-600 border-blue-200 hover:bg-blue-50 h-7 px-2 text-xs"
+                                                            onClick={() => { setPreviewPayment(payment); setPreviewZoom(1); }}
                                                             title="Ver voucher"
                                                         >
-                                                            <Image className="h-3.5 w-3.5" />
+                                                            <Eye className="h-3.5 w-3.5 mr-1" />
                                                             <span className="hidden lg:inline">Voucher</span>
-                                                        </a>
+                                                        </Button>
                                                     )}
                                                     {payment.status === "PENDING" && (
                                                         <>
@@ -355,6 +390,18 @@ export default function EnrollmentPaymentsReview() {
                                                                 <span className="hidden sm:inline">Rechazar</span>
                                                             </Button>
                                                         </>
+                                                    )}
+                                                    {payment.status !== "APPROVED" && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="text-red-500 border-red-200 hover:bg-red-50 h-7 px-2 text-xs"
+                                                            onClick={() => setDeletingPayment(payment)}
+                                                            disabled={actionLoading}
+                                                            title="Eliminar pago"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </Button>
                                                     )}
                                                 </div>
                                             </td>
@@ -429,6 +476,167 @@ export default function EnrollmentPaymentsReview() {
                                     {actionLoading
                                         ? <><RefreshCw className="h-4 w-4 mr-1 animate-spin" /> Procesando...</>
                                         : <><XCircle className="h-4 w-4 mr-1" /> Confirmar Rechazo</>
+                                    }
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* ── Modal de Vista Previa de Voucher ── */}
+            {previewPayment && (
+                <div
+                    className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+                    onClick={() => setPreviewPayment(null)}
+                >
+                    <div
+                        className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-5 py-3 border-b bg-slate-50">
+                            <div className="min-w-0">
+                                <h3 className="font-semibold text-slate-800 truncate">
+                                    Voucher — {previewPayment.student_name || "Estudiante"}
+                                </h3>
+                                <p className="text-xs text-slate-500">
+                                    {CHANNEL_LABELS[previewPayment.channel] || previewPayment.channel}
+                                    {previewPayment.operation_code && ` · Op: ${previewPayment.operation_code}`}
+                                    {" · S/. "}
+                                    {Number(previewPayment.total || previewPayment.amount || 0).toFixed(2)}
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-1 ml-3 shrink-0">
+                                {isImageVoucher(previewPayment.voucher_url) && (
+                                    <>
+                                        <Button
+                                            variant="ghost" size="sm"
+                                            onClick={() => setPreviewZoom(z => Math.max(0.5, z - 0.25))}
+                                            className="h-8 w-8 p-0"
+                                            title="Alejar"
+                                        >
+                                            <ZoomOut className="h-4 w-4" />
+                                        </Button>
+                                        <span className="text-xs text-slate-500 w-10 text-center">{Math.round(previewZoom * 100)}%</span>
+                                        <Button
+                                            variant="ghost" size="sm"
+                                            onClick={() => setPreviewZoom(z => Math.min(3, z + 0.25))}
+                                            className="h-8 w-8 p-0"
+                                            title="Acercar"
+                                        >
+                                            <ZoomIn className="h-4 w-4" />
+                                        </Button>
+                                    </>
+                                )}
+                                <a
+                                    href={previewPayment.voucher_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-slate-100 text-slate-600"
+                                    title="Abrir en nueva pestaña"
+                                >
+                                    <Download className="h-4 w-4" />
+                                </a>
+                                <Button
+                                    variant="ghost" size="sm"
+                                    onClick={() => setPreviewPayment(null)}
+                                    className="h-8 w-8 p-0 text-slate-500 hover:text-slate-800"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-auto bg-slate-100 flex items-center justify-center p-4">
+                            {isPdfVoucher(previewPayment.voucher_url) ? (
+                                <iframe
+                                    src={previewPayment.voucher_url}
+                                    className="w-full h-[70vh] rounded border bg-white"
+                                    title="Vista previa del voucher PDF"
+                                />
+                            ) : (
+                                <img
+                                    src={previewPayment.voucher_url}
+                                    alt="Voucher de pago"
+                                    className="rounded shadow-lg transition-transform duration-200"
+                                    style={{ transform: `scale(${previewZoom})`, transformOrigin: "center center" }}
+                                    onError={e => {
+                                        e.target.style.display = "none";
+                                        e.target.parentNode.innerHTML =
+                                            '<div class="text-center text-slate-500 py-8"><p class="font-medium">No se pudo cargar la imagen</p><p class="text-sm mt-1">Intenta abrirla en una nueva pestaña.</p></div>';
+                                    }}
+                                />
+                            )}
+                        </div>
+
+                        {/* Footer con acciones rápidas */}
+                        {previewPayment.status === "PENDING" && (
+                            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t bg-slate-50">
+                                <Button
+                                    size="sm"
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                    onClick={() => { handleApprove(previewPayment); setPreviewPayment(null); }}
+                                    disabled={actionLoading}
+                                >
+                                    <CheckCircle className="h-4 w-4 mr-1" /> Aprobar
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-red-600 border-red-200 hover:bg-red-50"
+                                    onClick={() => {
+                                        setReviewingPayment(previewPayment);
+                                        setPreviewPayment(null);
+                                        setRejectionNote("");
+                                    }}
+                                    disabled={actionLoading}
+                                >
+                                    <XCircle className="h-4 w-4 mr-1" /> Rechazar
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ── Modal de Confirmar Eliminación ── */}
+            {deletingPayment && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+                    <Card className="w-full max-w-sm">
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <Trash2 className="h-5 w-5 text-red-600" />
+                                Eliminar Pago
+                            </CardTitle>
+                            <CardDescription>
+                                {deletingPayment.student_name || "Estudiante"}
+                                {deletingPayment.student_dni ? ` (${deletingPayment.student_dni})` : ""}
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <p className="text-sm text-slate-600">
+                                Se eliminará permanentemente este registro de pago
+                                (S/. {Number(deletingPayment.total || deletingPayment.amount || 0).toFixed(2)}).
+                                El estudiante podrá subir un nuevo voucher.
+                            </p>
+                            <div className="flex justify-end gap-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setDeletingPayment(null)}
+                                    disabled={actionLoading}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    className="bg-red-600 hover:bg-red-700 text-white"
+                                    onClick={() => handleDelete(deletingPayment)}
+                                    disabled={actionLoading}
+                                >
+                                    {actionLoading
+                                        ? <><RefreshCw className="h-4 w-4 mr-1 animate-spin" /> Eliminando...</>
+                                        : <><Trash2 className="h-4 w-4 mr-1" /> Eliminar</>
                                     }
                                 </Button>
                             </div>

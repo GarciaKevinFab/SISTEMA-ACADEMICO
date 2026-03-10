@@ -316,9 +316,9 @@ class EnrollmentPaymentReUploadView(APIView):
         except EnrollmentPayment.DoesNotExist:
             return Response({"detail": "No existe pago para este período."}, status=404)
 
-        if payment.status != EnrollmentPayment.STATUS_REJECTED:
+        if payment.status not in (EnrollmentPayment.STATUS_REJECTED, EnrollmentPayment.STATUS_PENDING):
             return Response(
-                {"detail": "Solo puedes reenviar voucher si el pago fue rechazado."},
+                {"detail": "Solo puedes modificar el voucher si el pago está pendiente o fue rechazado."},
                 status=409,
             )
 
@@ -492,3 +492,34 @@ class EnrollmentPaymentRejectView(APIView):
         ])
 
         return Response(EnrollmentPaymentSerializer(payment).data)
+
+
+class EnrollmentPaymentDeleteView(APIView):
+    """
+    DELETE /academic/enrollment-payment/<id>/delete
+    Finanzas elimina un pago de matrícula.
+    Solo se permite si el pago NO ha sido aprobado.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, pk):
+        try:
+            payment = EnrollmentPayment.objects.get(pk=pk)
+        except EnrollmentPayment.DoesNotExist:
+            return Response({"detail": "Pago no encontrado."}, status=404)
+
+        if payment.status == EnrollmentPayment.STATUS_APPROVED:
+            return Response(
+                {"detail": "No se puede eliminar un pago ya aprobado."},
+                status=409,
+            )
+
+        # Eliminar archivo de voucher
+        if payment.voucher:
+            try:
+                payment.voucher.delete(save=False)
+            except Exception:
+                pass
+
+        payment.delete()
+        return Response(status=204)

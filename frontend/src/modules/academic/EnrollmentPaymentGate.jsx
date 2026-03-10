@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
     AlertTriangle, CheckCircle, Clock, Upload, Eye,
-    DollarSign, CreditCard, FileText, RefreshCw, XCircle,
+    DollarSign, CreditCard, FileText, RefreshCw, XCircle, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EnrollmentPayment } from "@/services/academic.service";
@@ -29,6 +29,7 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
     const [loading, setLoading]           = useState(true);
     const [submitting, setSubmitting]     = useState(false);
     const [paymentInfo, setPaymentInfo]   = useState(null);
+    const [editingPending, setEditingPending] = useState(false);
 
     // form
     const [channel, setChannel]           = useState("");
@@ -70,7 +71,7 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
             fd.append("operation_code", operationCode);
             fd.append("voucher", voucherFile);
 
-            const isReUpload = paymentInfo?.status === "REJECTED";
+            const isReUpload = paymentInfo?.status === "REJECTED" || paymentInfo?.status === "PENDING";
             if (isReUpload) {
                 await EnrollmentPayment.reUpload(fd);
             } else {
@@ -78,6 +79,7 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
             }
             toast.success("Voucher enviado correctamente");
             setChannel(""); setOperationCode(""); setVoucherFile(null);
+            setEditingPending(false);
             await fetchStatus();
         } catch (err) {
             toast.error(err.message || "Error al subir voucher");
@@ -121,7 +123,7 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
     }
 
     // ── PENDING → esperando revisión ──
-    if (status === "PENDING") {
+    if (status === "PENDING" && !editingPending) {
         return (
             <Card className="border-l-4 border-l-amber-500">
                 <CardHeader className="pb-3">
@@ -182,7 +184,15 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                         )}
                     </div>
 
-                    <div className="mt-4 flex justify-end">
+                    <div className="mt-4 flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => {
+                            setEditingPending(true);
+                            setChannel(paymentInfo?.channel || "");
+                            setOperationCode(paymentInfo?.operation_code || "");
+                        }}>
+                            <Pencil className="h-4 w-4 mr-1" />
+                            Modificar voucher
+                        </Button>
                         <Button variant="outline" size="sm" onClick={fetchStatus} disabled={loading}>
                             <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} />
                             Actualizar estado
@@ -193,25 +203,29 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
         );
     }
 
-    // ── REJECTED → mostrar motivo + formulario de re-envío ──
-    // ── NOT_STARTED → formulario inicial ──
+    // ── REJECTED / NOT_STARTED / editingPending → formulario ──
     const isRejected = status === "REJECTED";
+    const isEditing  = editingPending && status === "PENDING";
 
     return (
-        <Card className={`border-l-4 ${isRejected ? "border-l-red-500" : "border-l-blue-500"}`}>
+        <Card className={`border-l-4 ${isRejected ? "border-l-red-500" : isEditing ? "border-l-amber-500" : "border-l-blue-500"}`}>
             <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
                     {isRejected
                         ? <XCircle className="h-5 w-5 text-red-600" />
+                        : isEditing
+                        ? <Pencil className="h-5 w-5 text-amber-600" />
                         : <AlertTriangle className="h-5 w-5 text-blue-600" />
                     }
                     <CardTitle className="text-lg">
-                        {isRejected ? "Voucher Rechazado" : "Pago de Matrícula Requerido"}
+                        {isRejected ? "Voucher Rechazado" : isEditing ? "Modificar Voucher" : "Pago de Matrícula Requerido"}
                     </CardTitle>
                 </div>
                 <CardDescription>
                     {isRejected
                         ? "Tu voucher fue rechazado. Revisa el motivo y vuelve a enviar."
+                        : isEditing
+                        ? "Sube un nuevo voucher para reemplazar el actual."
                         : "Para continuar con tu matrícula, realiza el pago en el Banco de la Nación y sube tu voucher."
                     }
                 </CardDescription>
@@ -339,17 +353,29 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                     </div>
 
                     {/* Submit */}
-                    <Button
-                        type="submit"
-                        className="w-full"
-                        disabled={submitting || !channel || !voucherFile}
-                    >
-                        {submitting ? (
-                            <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Enviando...</>
-                        ) : (
-                            <><FileText className="h-4 w-4 mr-2" /> {isRejected ? "Reenviar Voucher" : "Enviar Voucher"}</>
+                    <div className="flex gap-2">
+                        {isEditing && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => { setEditingPending(false); setVoucherFile(null); }}
+                            >
+                                Cancelar
+                            </Button>
                         )}
-                    </Button>
+                        <Button
+                            type="submit"
+                            className="flex-1"
+                            disabled={submitting || !channel || !voucherFile}
+                        >
+                            {submitting ? (
+                                <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Enviando...</>
+                            ) : (
+                                <><FileText className="h-4 w-4 mr-2" /> {isRejected ? "Reenviar Voucher" : isEditing ? "Reemplazar Voucher" : "Enviar Voucher"}</>
+                            )}
+                        </Button>
+                    </div>
                 </form>
             </CardContent>
         </Card>

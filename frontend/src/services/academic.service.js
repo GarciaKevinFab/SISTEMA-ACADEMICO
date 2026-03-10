@@ -492,4 +492,8 @@ export const EnrollmentPayment = {
     /** Finanzas: rechazar un pago */
     reject: async (id, note) =>
         requestJsonSmart("POST", `/academic/enrollment-payment/${id}/reject`, { note }),
+
+    /** Finanzas: eliminar un pago (solo si no está aprobado) */
+    remove: async (id) =>
+        requestJsonSmart("DELETE", `/academic/enrollment-payment/${id}/delete`, null),
 };

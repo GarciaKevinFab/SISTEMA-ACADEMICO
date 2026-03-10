@@ -103,6 +103,7 @@ from .enrollment_payment import (
     EnrollmentPaymentDetailView,
     EnrollmentPaymentApproveView,
     EnrollmentPaymentRejectView,
+    EnrollmentPaymentDeleteView,
 )
 
 # ── Dashboards ─────────────────────────────────────────────────────────────
@@ -209,4 +210,5 @@ __all__ = [
     "EnrollmentPaymentDetailView",
     "EnrollmentPaymentApproveView",
     "EnrollmentPaymentRejectView",
+    "EnrollmentPaymentDeleteView",
 ]

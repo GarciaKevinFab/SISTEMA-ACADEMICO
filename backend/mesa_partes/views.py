@@ -598,6 +598,23 @@ class ProcedureViewSet(viewsets.ModelViewSet):
         )
         return Response({"procedure": self.get_serializer(obj).data}, status=status.HTTP_201_CREATED)
 
+    def destroy(self, request, *args, **kwargs):
+        """Solo permite eliminar trámites creados hace menos de 24 horas."""
+        p = self.get_object()
+        if p.created_at and (timezone.now() - p.created_at).total_seconds() > 86400:
+            return Response(
+                {"detail": "Solo se puede eliminar un trámite dentro de las primeras 24 horas."},
+                status=403,
+            )
+        # Eliminar archivos físicos
+        for pf in p.files.all():
+            try:
+                pf.file.delete(save=False)
+            except Exception:
+                pass
+        p.delete()
+        return Response(status=204)
+
     @action(detail=False, methods=["get"])
     def code(self, request):
         code = request.query_params.get("code")

@@ -53,6 +53,7 @@ from .views import (
     EnrollmentPaymentDetailView,
     EnrollmentPaymentApproveView,
     EnrollmentPaymentRejectView,
+    EnrollmentPaymentDeleteView,
 
     # ── Dashboards ──
     student_dashboard, student_grades_summary, student_schedule,
@@ -187,6 +188,7 @@ urlpatterns = [
     path("enrollment-payment/<int:pk>",        EnrollmentPaymentDetailView.as_view()),
     path("enrollment-payment/<int:pk>/approve", EnrollmentPaymentApproveView.as_view()),
     path("enrollment-payment/<int:pk>/reject",  EnrollmentPaymentRejectView.as_view()),
+    path("enrollment-payment/<int:pk>/delete",  EnrollmentPaymentDeleteView.as_view()),
 
     # ── Reportes ─────────────────────────────────────────────────
     path("reports/summary",            AcademicReportsSummaryView.as_view()),
