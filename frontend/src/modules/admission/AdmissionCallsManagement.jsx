@@ -4,18 +4,18 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import {
-    Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
+    Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "../../components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
 import {
     Plus, Eye, Download, Calendar, FileText, BookOpenCheck,
     Trash2, CheckCircle2, Clock3, AlertCircle, Users, CreditCard,
-    Loader2, GraduationCap, ChevronRight,
+    Loader2, GraduationCap, ChevronRight, Edit3,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-    listAdmissionCalls, createAdmissionCall, listCareers,
+    listAdmissionCalls, createAdmissionCall, updateAdmissionCall, listCareers,
     Results, deleteAdmissionCall, AdmissionParams,
 } from "../../services/admission.service";
 
@@ -154,6 +154,7 @@ export default function AdmissionCallsManagement() {
     const [defaults, setDefaults] = useState(null);
 
     const [openCreate, setOpenCreate] = useState(false);
+    const [editing, setEditing] = useState(null); // null = create, object = edit
     const [openView, setOpenView] = useState(false);
     const [viewCall, setViewCall] = useState(null);
     const [openDelete, setOpenDelete] = useState(false);
@@ -214,16 +215,56 @@ export default function AdmissionCallsManagement() {
             return { ...f, required_documents: Array.from(s) };
         });
 
-    const resetForm = () => setForm(buildForm(defaults));
+    const resetForm = () => { setForm(buildForm(defaults)); setEditing(null); };
+
+    /* ── Edit helpers ── */
+    const toLocalDT = (v) => {
+        if (!v) return "";
+        const d = new Date(v);
+        if (isNaN(d.getTime())) return "";
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+
+    const startEdit = (call) => {
+        const careerIds = (call.careers || []).map(c => c.id);
+        const vacMap = {};
+        (call.careers || []).forEach(c => { vacMap[c.id] = c.vacancies ?? 0; });
+        setForm({
+            name: call.name || "",
+            description: call.description || "",
+            academic_year: call.academic_year || new Date().getFullYear(),
+            academic_period: call.academic_period || "I",
+            registration_start: toLocalDT(call.registration_start),
+            registration_end: toLocalDT(call.registration_end),
+            exam_date: toLocalDT(call.exam_date),
+            results_date: toLocalDT(call.results_date),
+            application_fee: call.application_fee ?? 0,
+            max_applications_per_career: call.max_applications_per_career ?? 1,
+            available_careers: careerIds,
+            career_vacancies: vacMap,
+            minimum_age: call.minimum_age ?? 16,
+            maximum_age: call.maximum_age ?? 35,
+            required_documents: call.required_documents || [],
+        });
+        setEditing(call);
+        setOpenCreate(true);
+    };
 
     /* ── Actions ── */
     const submit = async (e) => {
         e.preventDefault();
         try {
-            await createAdmissionCall(form);
-            toast.success("Convocatoria creada"); setOpenCreate(false); resetForm(); load();
+            if (editing) {
+                await updateAdmissionCall(editing.id, form);
+                toast.success("Convocatoria actualizada");
+            } else {
+                await createAdmissionCall(form);
+                toast.success("Convocatoria creada");
+            }
+            setOpenCreate(false); resetForm(); load();
         } catch (e) {
-            console.error(e); toast.error(e?.response?.data?.detail || "Error al crear convocatoria");
+            console.error(e); toast.error(e?.response?.data?.detail || (editing ? "Error al actualizar" : "Error al crear convocatoria"));
         }
     };
 
@@ -291,27 +332,28 @@ export default function AdmissionCallsManagement() {
                     </p>
                 </div>
 
-                <Dialog open={openCreate} onOpenChange={setOpenCreate}>
-                    <DialogTrigger asChild>
-                        <Button className="rounded-xl font-extrabold gap-2 bg-blue-600 hover:bg-blue-700 shadow-sm">
-                            <Plus size={16} /> Nueva Convocatoria
-                        </Button>
-                    </DialogTrigger>
+                <Button className="rounded-xl font-extrabold gap-2 bg-blue-600 hover:bg-blue-700 shadow-sm"
+                    onClick={() => { resetForm(); setOpenCreate(true); }}>
+                    <Plus size={16} /> Nueva Convocatoria
+                </Button>
 
-                    {/* ════ CREATE DIALOG ════ */}
+                <Dialog open={openCreate} onOpenChange={(v) => { setOpenCreate(v); if (!v) resetForm(); }}>
+                    {/* ════ CREATE / EDIT DIALOG ════ */}
                     <DialogContent className="max-w-4xl max-h-[88vh] overflow-y-auto p-0 gap-0 rounded-2xl border-0 shadow-2xl">
                         {/* Header */}
                         <div className="bg-gradient-to-r from-[#0f1a3a] via-[#171a55] to-[#251c6c] px-6 py-5 sticky top-0 z-10">
                             <div className="flex items-center gap-3">
                                 <div className="h-10 w-10 rounded-xl bg-white/10 border border-white/20 grid place-items-center shrink-0">
-                                    <Plus size={18} className="text-white" />
+                                    {editing ? <Edit3 size={18} className="text-white" /> : <Plus size={18} className="text-white" />}
                                 </div>
                                 <div>
                                     <DialogTitle className="text-base font-extrabold text-white leading-tight">
-                                        Crear Nueva Convocatoria
+                                        {editing ? "Editar Convocatoria" : "Crear Nueva Convocatoria"}
                                     </DialogTitle>
                                     <DialogDescription className="text-blue-300 text-xs mt-0.5">
-                                        Pre-llenado con la configuración por defecto. Ajusta en Configuración de Admisión.
+                                        {editing
+                                            ? `Editando: ${editing.name}`
+                                            : "Pre-llenado con la configuración por defecto. Ajusta en Configuración de Admisión."}
                                     </DialogDescription>
                                 </div>
                             </div>
@@ -399,7 +441,7 @@ export default function AdmissionCallsManagement() {
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50/60 p-4 rounded-xl border border-slate-100">
                                     {[
                                         { label: "Costo (S/.)", field: "application_fee", type: "number", step: "0.01", min: 0, max: undefined },
-                                        { label: "Máx. Postulac.", field: "max_applications_per_career", type: "number", step: "1", min: 1, max: 3 },
+                                        { label: "Máx. Postulac.", field: "max_applications_per_career", type: "number", step: "1", min: 1, max: 999 },
                                         { label: "Edad Mín.", field: "minimum_age", type: "number", step: "1", min: 15, max: 30 },
                                         { label: "Edad Máx.", field: "maximum_age", type: "number", step: "1", min: 20, max: 60 },
                                     ].map(({ label, field, type, step, min, max }) => (
@@ -488,9 +530,9 @@ export default function AdmissionCallsManagement() {
                             {/* Actions */}
                             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                                 <Button type="button" variant="outline" className="rounded-xl font-semibold"
-                                    onClick={() => setOpenCreate(false)}>Cancelar</Button>
+                                    onClick={() => { setOpenCreate(false); resetForm(); }}>Cancelar</Button>
                                 <Button type="submit" className="rounded-xl font-extrabold gap-2 bg-blue-600 hover:bg-blue-700 px-8">
-                                    <Plus size={15} /> Guardar Convocatoria
+                                    {editing ? <><Edit3 size={15} /> Actualizar Convocatoria</> : <><Plus size={15} /> Guardar Convocatoria</>}
                                 </Button>
                             </div>
                         </form>
@@ -594,12 +636,19 @@ export default function AdmissionCallsManagement() {
 
                                         {/* Actions */}
                                         <div className="flex flex-col gap-2 justify-end">
-                                            <Button variant="outline"
-                                                className="w-full rounded-xl font-semibold gap-2 h-10 justify-start hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700"
-                                                onClick={() => { setViewCall(call); setOpenView(true); }}>
-                                                <Eye size={15} className="text-slate-400" /> Ver Detalles
-                                                <ChevronRight size={13} className="ml-auto text-slate-300" />
-                                            </Button>
+                                            <div className="flex gap-2">
+                                                <Button variant="outline"
+                                                    className="flex-1 rounded-xl font-semibold gap-2 h-10 justify-start hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700"
+                                                    onClick={() => { setViewCall(call); setOpenView(true); }}>
+                                                    <Eye size={15} className="text-slate-400" /> Ver Detalles
+                                                    <ChevronRight size={13} className="ml-auto text-slate-300" />
+                                                </Button>
+                                                <Button variant="outline" size="icon"
+                                                    className="h-10 w-10 rounded-xl hover:bg-amber-50 hover:border-amber-200 hover:text-amber-600 text-slate-400"
+                                                    onClick={() => startEdit(call)} title="Editar">
+                                                    <Edit3 size={15} />
+                                                </Button>
+                                            </div>
                                             <div className="flex gap-2">
                                                 <Button variant="outline"
                                                     className="flex-1 rounded-xl font-semibold gap-2 h-10 text-xs hover:bg-slate-50"

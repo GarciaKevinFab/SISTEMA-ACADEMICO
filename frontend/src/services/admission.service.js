@@ -115,6 +115,40 @@ export const createAdmissionCall = async (form) => {
     return (await api.post("/admission-calls", payload)).data;
 };
 
+export const updateAdmissionCall = async (callId, form) => {
+    const careersArray = (form.available_careers || []).map((id) => ({
+        id,
+        career_id: id,
+        vacancies: form.career_vacancies?.[id] ?? 0,
+    }));
+
+    const payload = {
+        name: form.name,
+        description: form.description || "",
+        academic_year: form.academic_year,
+        academic_period: form.academic_period,
+        registration_start: toISO(form.registration_start),
+        registration_end: toISO(form.registration_end),
+        exam_date: toISO(form.exam_date),
+        results_date: toISO(form.results_date),
+        application_fee: Number(form.application_fee || 0),
+        max_applications_per_career: Number(form.max_applications_per_career || 1),
+        careers: careersArray,
+        minimum_age: Number(form.minimum_age || 0),
+        maximum_age: Number(form.maximum_age || 0),
+        required_documents: form.required_documents || [],
+
+        year: form.academic_year,
+        period: form.academic_period,
+        start_date: toISO(form.registration_start),
+        end_date: toISO(form.registration_end),
+        fee: Number(form.application_fee || 0),
+        max_choices: Number(form.max_applications_per_career || 1),
+    };
+
+    return (await api.put(`/admission-calls/${callId}`, payload)).data;
+};
+
 export const AdmissionCalls = {
     listPublic: async () => {
         const endpoints = [
