@@ -30,7 +30,7 @@ urlpatterns = [
     # rutas con nombre fijo ANTES de <int:pk>
     path("users/search", users_search, name="users_search"),
     path("users/purge", users_purge, name="users_purge"),
-    path("users/bulk-credentials", users_bulk_credentials, name="users_bulk_credentials"),
+    path("users/download-credentials", users_bulk_credentials, name="users_bulk_credentials"),
 
     path("users/<int:pk>", users_detail, name="users_detail"),
     path("users/<int:pk>/activate", users_activate, name="users_activate"),

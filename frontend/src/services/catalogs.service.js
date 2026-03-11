@@ -133,7 +133,7 @@ export const Backup = {
 export const Credentials = {
     downloadBulk: (role) =>
         getResponse(
-            api.post("/users/bulk-credentials", { role }, { responseType: "blob" })
+            api.post("/users/download-credentials", { role }, { responseType: "blob" })
         ),
 };
 
