@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { AdmissionCalls } from "../../services/admission.service";
 
 import PublicAdmissionCallDetails from "./PublicAdmissionCallDetails";
-import PublicApplicationWizard from "./PublicApplicationWizard";
+import ApplicationWizard from "./ApplicationWizard";
 
 import {
   Calendar, Clock, FileText, Search, Award, MapPin, Phone, Mail,
@@ -627,7 +627,7 @@ const PublicAdmissionCalls = () => {
             <DialogTitle className="text-lg font-extrabold">Postulación</DialogTitle>
           </DialogHeader>
           {selectedCallForApply && (
-            <PublicApplicationWizard
+            <ApplicationWizard
               callId={selectedCallForApply.id}
               onClose={() => {
                 handleOpenApplyChange(false);

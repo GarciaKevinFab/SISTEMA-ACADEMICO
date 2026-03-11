@@ -359,17 +359,23 @@ def results_acta_pdf(request):
         else:
             raise ImportError("WeasyPrint no disponible")
     except ImportError:
-        # Fallback: stub PDF
-        tmpdir = _ensure_media_tmp()
-        filename = f"acta-call-{call_id}.pdf"
-        abs_path = tmpdir + "/" + filename
-        _write_stub_pdf(
-            abs_path,
-            title="Acta de Resultados",
-            subtitle=f"Convocatoria: {call.title}" + (f" | Carrera: {career_name}" if career_name else ""),
-        )
-        with open(abs_path, "rb") as f:
-            pdf_bytes = f.read()
+        # Fallback: usar reportlab
+        try:
+            from .admission_acta_reportlab import generate_acta_pdf_reportlab
+            pdf_bytes = generate_acta_pdf_reportlab(results, call_data, inst)
+        except Exception as e2:
+            logger.error(f"Error generando acta con reportlab: {e2}")
+            # Último fallback: stub PDF
+            tmpdir = _ensure_media_tmp()
+            fname = f"acta-call-{call_id}.pdf"
+            abs_path = tmpdir + "/" + fname
+            _write_stub_pdf(
+                abs_path,
+                title="Acta de Resultados",
+                subtitle=f"Convocatoria: {call.title}" + (f" | Carrera: {career_name}" if career_name else ""),
+            )
+            with open(abs_path, "rb") as f:
+                pdf_bytes = f.read()
 
     filename = f"acta_{call_id}"
     if career_id:

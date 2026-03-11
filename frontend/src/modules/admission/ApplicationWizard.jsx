@@ -189,8 +189,8 @@ const fmtFileSize = (bytes) => {
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════════════════
 
-export default function ApplicationWizard() {
-  const [step, setStep] = useState(1);
+export default function ApplicationWizard({ callId: propCallId, onClose, onApplied }) {
+  const [step, setStep] = useState(propCallId ? 2 : 1);
   const [loadingCalls, setLoadingCalls] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -219,13 +219,18 @@ export default function ApplicationWizard() {
         const data = await AdmissionCalls.listPublic();
         const list = Array.isArray(data) ? data : data?.calls || data || [];
         setCalls(list);
+        // Auto-seleccionar si se pasó callId como prop
+        if (propCallId) {
+          const found = list.find((c) => String(c.id) === String(propCallId));
+          if (found) setSelectedCall(found);
+        }
       } catch {
         toast.error("No se pudieron cargar las convocatorias");
       } finally {
         setLoadingCalls(false);
       }
     })();
-  }, []);
+  }, [propCallId]);
 
   // ── Helpers de form ──
   const setField = (key, val) => setForm((p) => ({ ...p, [key]: val }));
@@ -301,7 +306,8 @@ export default function ApplicationWizard() {
     if (step < 5 && canNext) setStep((s) => s + 1);
   };
   const goBack = () => {
-    if (step > 1) setStep((s) => s - 1);
+    const minStep = propCallId ? 2 : 1;
+    if (step > minStep) setStep((s) => s - 1);
   };
 
   // ── Preferencias (reordenar) ──
@@ -448,8 +454,8 @@ export default function ApplicationWizard() {
 
       {/* STEPPER */}
       {step <= 5 && (
-        <div className="grid grid-cols-5 bg-white border rounded-xl overflow-hidden shadow-sm">
-          {STEPS.map((s) => {
+        <div className={`grid ${propCallId ? "grid-cols-4" : "grid-cols-5"} bg-white border rounded-xl overflow-hidden shadow-sm`}>
+          {STEPS.filter((s) => propCallId ? s.id !== 1 : true).map((s) => {
             const Icon = s.icon;
             const active = step === s.id;
             const done = step > s.id;
@@ -981,19 +987,31 @@ export default function ApplicationWizard() {
                 <Button variant="outline" onClick={() => window.print()} className="h-12 rounded-xl px-8">
                   <Printer className="mr-2 h-4 w-4" /> Imprimir
                 </Button>
-                <Button
-                  onClick={() => {
-                    setStep(1);
-                    setSelectedCall(null);
-                    setForm({ ...EMPTY_FORM });
-                    setPreferences([]);
-                    setAttachments({});
-                    setResult(null);
-                  }}
-                  className="h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-8"
-                >
-                  Nueva Postulación
-                </Button>
+                {onClose ? (
+                  <Button
+                    onClick={() => {
+                      if (onApplied && selectedCall) onApplied(selectedCall);
+                      onClose();
+                    }}
+                    className="h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-8"
+                  >
+                    Cerrar
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      setStep(1);
+                      setSelectedCall(null);
+                      setForm({ ...EMPTY_FORM });
+                      setPreferences([]);
+                      setAttachments({});
+                      setResult(null);
+                    }}
+                    className="h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-8"
+                  >
+                    Nueva Postulación
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -1003,7 +1021,7 @@ export default function ApplicationWizard() {
           {/* ════════════════════════════════════════ */}
           {step <= 5 && (
             <div className="flex justify-between pt-8 border-t mt-8">
-              <Button variant="outline" onClick={goBack} disabled={step === 1} className="h-12 rounded-xl px-6">
+              <Button variant="outline" onClick={goBack} disabled={step <= (propCallId ? 2 : 1)} className="h-12 rounded-xl px-6">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Anterior
               </Button>
 
