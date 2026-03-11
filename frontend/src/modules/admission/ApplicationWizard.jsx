@@ -14,6 +14,7 @@ import { API_BASE } from "../../utils/config";
 import {
   AdmissionCalls,
   AdmissionPublic,
+  AdmissionParams as AdmissionParamsService,
 } from "../../services/admission.service";
 
 import { Card, CardContent } from "../../components/ui/card";
@@ -65,7 +66,8 @@ const STEPS = [
   { id: 2, key: "DATA", label: "Datos Personales", icon: User },
   { id: 3, key: "CAREERS", label: "Carreras", icon: GraduationCap },
   { id: 4, key: "DOCUMENTS", label: "Documentos", icon: Paperclip },
-  { id: 5, key: "REVIEW", label: "Confirmar", icon: CheckCircle2 },
+  { id: 5, key: "PAYMENT", label: "Pago", icon: CreditCard },
+  { id: 6, key: "REVIEW", label: "Confirmar", icon: CheckCircle2 },
 ];
 
 const SEX_OPTIONS = [
@@ -208,8 +210,31 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
   // { FOTO_CARNET: { file: File, preview: string|null }, COPIA_DNI: { file: File }, ... }
   const [attachments, setAttachments] = useState({});
 
-  // Step 6 (resultado)
+  // Step 5 - Pago
+  const [paymentForm, setPaymentForm] = useState({
+    channel: "AGENCIA_BN",
+    nro_secuencia: "",
+    codigo_caja: "",
+    fecha_movimiento: "",
+  });
+  const [voucherFile, setVoucherFile] = useState(null);
+  const [admissionParams, setAdmissionParams] = useState(null);
+
+  // Step 7 (resultado)
   const [result, setResult] = useState(null);
+
+  // Fee de la convocatoria
+  const applicationFee = parseFloat(selectedCall?.application_fee || selectedCall?.meta?.application_fee || 0);
+  const hasFee = applicationFee > 0;
+
+  // Pasos filtrados (sin paso Pago si no hay fee, sin paso 1 si propCallId)
+  const visibleSteps = useMemo(() => {
+    return STEPS.filter((s) => {
+      if (propCallId && s.id === 1) return false;
+      if (!hasFee && s.key === "PAYMENT") return false;
+      return true;
+    });
+  }, [propCallId, hasFee]);
 
   // ── Carga inicial ──
   useEffect(() => {
@@ -224,6 +249,11 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
           const found = list.find((c) => String(c.id) === String(propCallId));
           if (found) setSelectedCall(found);
         }
+        // Cargar parámetros (cuenta bancaria)
+        try {
+          const params = await AdmissionParamsService.get();
+          setAdmissionParams(params);
+        } catch {}
       } catch {
         toast.error("No se pudieron cargar las convocatorias");
       } finally {
@@ -280,6 +310,11 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
   const docsRequired = requiredDocs.filter((d) => d.required);
   const docsUploaded = docsRequired.filter((d) => attachments[d.type]?.file);
 
+  // El paso de revisión (donde se hace submit) ahora es 6 (o 5 si no hay fee)
+  const reviewStep = hasFee ? 6 : 5;
+  const confirmStep = hasFee ? 7 : 6;
+  const maxNavStep = reviewStep; // máximo paso navegable
+
   // ── Validaciones por paso ──
   const canNext = useMemo(() => {
     if (step === 1) return !!selectedCall;
@@ -295,19 +330,36 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
     }
     if (step === 3) return preferences.length > 0;
     if (step === 4) {
-      // Todos los obligatorios deben tener archivo
       return docsRequired.every((d) => attachments[d.type]?.file);
     }
+    if (step === 5 && hasFee) {
+      // Pago: nro_secuencia y codigo_caja obligatorios, fecha obligatoria
+      return (
+        paymentForm.nro_secuencia.trim().length > 0 &&
+        paymentForm.codigo_caja.trim().length > 0 &&
+        paymentForm.fecha_movimiento.trim().length > 0
+      );
+    }
     return true;
-  }, [step, selectedCall, form, preferences, attachments, docsRequired]);
+  }, [step, selectedCall, form, preferences, attachments, docsRequired, paymentForm, hasFee]);
 
   // ── Navegar ──
   const goNext = () => {
-    if (step < 5 && canNext) setStep((s) => s + 1);
+    if (step < maxNavStep && canNext) {
+      let next = step + 1;
+      // Saltar paso pago si no hay fee
+      if (!hasFee && next === 5) next = 6;
+      setStep(next);
+    }
   };
   const goBack = () => {
     const minStep = propCallId ? 2 : 1;
-    if (step > minStep) setStep((s) => s - 1);
+    if (step > minStep) {
+      let prev = step - 1;
+      // Saltar paso pago si no hay fee
+      if (!hasFee && prev === 5) prev = 4;
+      setStep(prev);
+    }
   };
 
   // ── Preferencias (reordenar) ──
@@ -406,14 +458,27 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
         },
       };
 
+      // Agregar datos de pago si hay fee
+      if (hasFee) {
+        payload.nro_secuencia = paymentForm.nro_secuencia.trim();
+        payload.codigo_caja = paymentForm.codigo_caja.trim();
+        payload.fecha_movimiento = paymentForm.fecha_movimiento;
+        payload.channel = paymentForm.channel;
+      }
+
       formData.append("data", JSON.stringify(payload));
 
-      // Adjuntar archivos
+      // Adjuntar archivos de documentos
       Object.entries(attachments).forEach(([docType, { file }]) => {
         if (file) {
           formData.append(`doc_${docType}`, file, file.name);
         }
       });
+
+      // Adjuntar voucher de pago
+      if (hasFee && voucherFile) {
+        formData.append("voucher", voucherFile, voucherFile.name);
+      }
 
       const resp = await AdmissionPublic.apply(formData);
 
@@ -422,8 +487,9 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
         application_number: resp.application_number,
         status: resp.status,
         call: selectedCall,
+        payment: resp.payment,
       });
-      setStep(6);
+      setStep(confirmStep);
       toast.success("¡Postulación registrada exitosamente!");
     } catch (e) {
       const detail =
@@ -453,9 +519,9 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
       </div>
 
       {/* STEPPER */}
-      {step <= 5 && (
-        <div className={`grid ${propCallId ? "grid-cols-4" : "grid-cols-5"} bg-white border rounded-xl overflow-hidden shadow-sm`}>
-          {STEPS.filter((s) => propCallId ? s.id !== 1 : true).map((s) => {
+      {step <= maxNavStep && (
+        <div className={`grid grid-cols-${visibleSteps.length} bg-white border rounded-xl overflow-hidden shadow-sm`} style={{ gridTemplateColumns: `repeat(${visibleSteps.length}, 1fr)` }}>
+          {visibleSteps.map((s) => {
             const Icon = s.icon;
             const active = step === s.id;
             const done = step > s.id;
@@ -800,9 +866,145 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
           )}
 
           {/* ════════════════════════════════════════ */}
-          {/* STEP 5: REVISIÓN Y ENVÍO                */}
+          {/* STEP 5: PAGO (solo si hay fee)           */}
           {/* ════════════════════════════════════════ */}
-          {step === 5 && (
+          {step === 5 && hasFee && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <div>
+                <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+                  Pago de Derecho de Admisión
+                </Label>
+                <p className="text-xs text-gray-500 mt-1">
+                  Realice el depósito en el Banco de la Nación e ingrese los datos del comprobante.
+                </p>
+              </div>
+
+              {/* Info bancaria */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 space-y-3">
+                <div className="flex items-center gap-2 text-blue-800 font-bold text-base">
+                  <CreditCard className="h-5 w-5" />
+                  Datos para el Depósito
+                </div>
+                <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-gray-500">Banco:</span>{" "}
+                    <strong>{admissionParams?.bank_name || "Banco de la Nación"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">N° Cuenta:</span>{" "}
+                    <strong className="text-blue-700 text-base">{admissionParams?.bank_account || "(no configurado)"}</strong>
+                  </div>
+                  {admissionParams?.bank_holder && (
+                    <div>
+                      <span className="text-gray-500">Titular:</span>{" "}
+                      <strong>{admissionParams.bank_holder}</strong>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-gray-500">Monto:</span>{" "}
+                    <strong className="text-green-700 text-lg">S/. {applicationFee.toFixed(2)}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Canal de pago */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Canal de Pago</Label>
+                <Select
+                  value={paymentForm.channel}
+                  onValueChange={(val) => setPaymentForm((p) => ({ ...p, channel: val }))}
+                >
+                  <SelectTrigger className="h-11 rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AGENCIA_BN">Agencia Banco de la Nación</SelectItem>
+                    <SelectItem value="CAJERO_MULTIRED">Cajero Multired</SelectItem>
+                    <SelectItem value="PAGALO">Págalo.pe</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Datos del comprobante */}
+              <div className="grid sm:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-700">
+                    Nro. Secuencia <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    placeholder="Ej: 12345678"
+                    value={paymentForm.nro_secuencia}
+                    onChange={(e) => setPaymentForm((p) => ({ ...p, nro_secuencia: e.target.value }))}
+                    className="h-11 rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-700">
+                    Código de Caja <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    placeholder="Ej: 0041"
+                    value={paymentForm.codigo_caja}
+                    onChange={(e) => setPaymentForm((p) => ({ ...p, codigo_caja: e.target.value }))}
+                    className="h-11 rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-700">
+                    Fecha de Movimiento <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    type="date"
+                    value={paymentForm.fecha_movimiento}
+                    onChange={(e) => setPaymentForm((p) => ({ ...p, fecha_movimiento: e.target.value }))}
+                    className="h-11 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              {/* Voucher opcional */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">
+                  Voucher / Comprobante (opcional)
+                </Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="file"
+                    accept="image/jpeg,image/png,application/pdf"
+                    onChange={(e) => setVoucherFile(e.target.files?.[0] || null)}
+                    className="rounded-xl"
+                  />
+                  {voucherFile && (
+                    <button
+                      type="button"
+                      onClick={() => setVoucherFile(null)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-gray-400">
+                  Puede adjuntar una foto o escaneo de su voucher de pago (JPG, PNG o PDF).
+                </p>
+              </div>
+
+              {/* Nota */}
+              <div className="flex gap-3 p-4 bg-amber-50/70 rounded-xl border border-amber-200">
+                <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-700 space-y-1">
+                  <p className="font-semibold text-amber-800">Importante:</p>
+                  <p>• Los datos del comprobante serán verificados por la oficina de finanzas.</p>
+                  <p>• Si los datos son incorrectos, su postulación quedará pendiente hasta la verificación.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ════════════════════════════════════════ */}
+          {/* STEP 6 (o 5 sin fee): REVISIÓN Y ENVÍO  */}
+          {/* ════════════════════════════════════════ */}
+          {step === reviewStep && (
             <div className="space-y-6 animate-in fade-in duration-300">
               <div className="flex items-center gap-2 text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-4">
                 <AlertCircle className="h-5 w-5 shrink-0" />
@@ -859,14 +1061,35 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
                     );
                   })}
                 </SummarySection>
+
+                {hasFee && (
+                  <SummarySection title="Datos de Pago">
+                    <SummaryRow label="Monto" value={`S/. ${applicationFee.toFixed(2)}`} />
+                    <SummaryRow label="Canal" value={
+                      paymentForm.channel === "AGENCIA_BN" ? "Agencia Banco de la Nación" :
+                      paymentForm.channel === "CAJERO_MULTIRED" ? "Cajero Multired" : "Págalo.pe"
+                    } />
+                    <SummaryRow label="Nro. Secuencia" value={paymentForm.nro_secuencia} />
+                    <SummaryRow label="Código de Caja" value={paymentForm.codigo_caja} />
+                    <SummaryRow label="Fecha Movimiento" value={paymentForm.fecha_movimiento} />
+                    {voucherFile && (
+                      <SummaryRow label="Voucher" value={
+                        <span className="flex items-center gap-1.5 text-green-700">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          {voucherFile.name}
+                        </span>
+                      } />
+                    )}
+                  </SummarySection>
+                )}
               </div>
             </div>
           )}
 
           {/* ════════════════════════════════════════ */}
-          {/* STEP 6: CONFIRMACIÓN (post-submit)      */}
+          {/* STEP 7 (o 6 sin fee): CONFIRMACIÓN       */}
           {/* ════════════════════════════════════════ */}
-          {step === 6 && result && (
+          {step === confirmStep && result && (
             <div id="print-confirmation" className="space-y-8 print:space-y-2 animate-in fade-in duration-300 text-center">
 
               {/* ── Encabezado solo visible al imprimir ── */}
@@ -921,15 +1144,15 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
                 />
               </div>
 
-              {(selectedCall?.application_fee ?? 0) > 0 && (
+              {hasFee && (
                 <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 max-w-md mx-auto text-left space-y-2 print-data-box">
                   <div className="flex items-center gap-2 text-blue-800 font-bold">
                     <CreditCard className="h-5 w-5" />
-                    Pago pendiente: S/. {selectedCall.application_fee}
+                    Pago registrado: S/. {applicationFee.toFixed(2)}
                   </div>
                   <p className="text-sm text-blue-700">
-                    Acérquese a la caja de la institución con su N° de postulación y su DNI
-                    para realizar el pago del derecho de inscripción.
+                    Su comprobante de pago ha sido registrado y será verificado por la oficina de finanzas.
+                    Recibirá confirmación una vez validado.
                   </p>
                 </div>
               )}
@@ -1005,6 +1228,8 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
                       setForm({ ...EMPTY_FORM });
                       setPreferences([]);
                       setAttachments({});
+                      setPaymentForm({ channel: "AGENCIA_BN", nro_secuencia: "", codigo_caja: "", fecha_movimiento: "" });
+                      setVoucherFile(null);
                       setResult(null);
                     }}
                     className="h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-8"
@@ -1019,13 +1244,13 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
           {/* ════════════════════════════════════════ */}
           {/* NAVEGACIÓN (pasos 1-5)                  */}
           {/* ════════════════════════════════════════ */}
-          {step <= 5 && (
+          {step <= maxNavStep && (
             <div className="flex justify-between pt-8 border-t mt-8">
               <Button variant="outline" onClick={goBack} disabled={step <= (propCallId ? 2 : 1)} className="h-12 rounded-xl px-6">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Anterior
               </Button>
 
-              {step < 5 ? (
+              {step < reviewStep ? (
                 <Button
                   onClick={goNext}
                   disabled={!canNext}

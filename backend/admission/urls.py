@@ -113,5 +113,6 @@ urlpatterns = [
     path("admission-payments", v.payments_list),
     path("admission-payments/<int:payment_id>/confirm", v.payment_confirm),
     path("admission-payments/<int:payment_id>/void", v.payment_void),
+    path("admission-payments/<int:payment_id>", v.payment_delete),
     path("admission-payments/<int:payment_id>/receipt.pdf", v.payment_receipt_pdf),
 ]

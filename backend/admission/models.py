@@ -82,12 +82,26 @@ class ApplicationDocument(models.Model):
 
 
 class Payment(models.Model):
+    CHANNEL_CHOICES = [
+        ("AGENCIA_BN", "Agencia Banco de la Nación"),
+        ("CAJERO_MULTIRED", "Cajero Multired"),
+        ("PAGALO", "Págalo.pe"),
+    ]
     application = models.OneToOneField(
         Application, on_delete=models.CASCADE, related_name="payment"
     )
     method = models.CharField(max_length=20)
     status = models.CharField(max_length=20, default="STARTED")
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    channel = models.CharField(
+        max_length=20, choices=CHANNEL_CHOICES, default="AGENCIA_BN"
+    )
+    nro_secuencia = models.CharField(max_length=30, blank=True, default="")
+    codigo_caja = models.CharField(max_length=20, blank=True, default="")
+    fecha_movimiento = models.DateField(null=True, blank=True)
+    voucher = models.FileField(
+        upload_to="admission/vouchers/", null=True, blank=True
+    )
     meta = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
 

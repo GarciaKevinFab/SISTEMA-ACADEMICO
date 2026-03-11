@@ -364,6 +364,7 @@ export const Payments = {
     list: async (params) => (await api.get(`/admission-payments`, { params })).data,
     confirm: async (payment_id) => (await api.post(`/admission-payments/${payment_id}/confirm`)).data,
     void: async (payment_id) => (await api.post(`/admission-payments/${payment_id}/void`)).data,
+    remove: async (payment_id) => (await api.delete(`/admission-payments/${payment_id}`)).data,
     receiptPdf: async (payment_id) =>
         await api.get(`/admission-payments/${payment_id}/receipt.pdf`, { responseType: "blob" }),
 };

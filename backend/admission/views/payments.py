@@ -2,21 +2,24 @@
 Vistas para Pagos de Admisión (Admin)
 
 Flujo:
-  1. Postulante se inscribe → se crea Payment con status=STARTED
-  2. Admin ve la lista de pagos en PaymentsManagement
-  3. Admin verifica el pago → payment_confirm:
+  1. Postulante se inscribe → se crea Payment con status=PENDING_REVIEW
+  2. Finanzas ve la lista de pagos en AdmissionPaymentsReview
+  3. Finanzas verifica el pago → payment_confirm:
      a. Cambia status a PAID
      b. Cambia Application.status a ADMITTED
-     c. Crea User con username=DNI y password temporal
-     d. Vincula User al Applicant
+     c. Registra ingreso en caja (IncomeEntry + CashMovement)
+     d. Crea User con username=DNI y password temporal
      e. Retorna credenciales { username, password }
   4. Postulante consulta resultado público y ve sus credenciales
 """
+import logging
 import secrets
 import string
+from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.http import HttpResponse
+from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -26,6 +29,7 @@ from admission.serializers import PaymentSerializer
 from .utils import _ensure_media_tmp, _write_stub_pdf
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 def _load_admission_params():
@@ -55,17 +59,35 @@ def _payment_to_dict(payment):
     app = payment.application
     applicant = app.applicant if app else None
 
+    voucher_url = None
+    if payment.voucher:
+        try:
+            voucher_url = payment.voucher.url
+        except Exception:
+            pass
+
     data = {
         "id": payment.id,
         "application_id": app.id if app else None,
         "method": payment.method,
         "status": payment.status,
         "amount": float(payment.amount),
+        "channel": payment.channel,
+        "nro_secuencia": payment.nro_secuencia,
+        "codigo_caja": payment.codigo_caja,
+        "fecha_movimiento": (
+            payment.fecha_movimiento.isoformat()
+            if payment.fecha_movimiento
+            else None
+        ),
+        "voucher_url": voucher_url,
         "created_at": payment.created_at.isoformat() if payment.created_at else None,
         "order_id": (payment.meta or {}).get("order_id"),
         "applicant_name": applicant.names if applicant else "—",
         "applicant_dni": applicant.dni if applicant else "—",
         "career_name": app.career_name if app else "—",
+        "call_id": app.call_id if app else None,
+        "call_title": app.call.title if app and app.call else "—",
         "credentials_generated": False,
         "username": None,
     }
@@ -83,14 +105,19 @@ def _payment_to_dict(payment):
 def payments_list(request):
     """
     Lista pagos con datos enriquecidos del postulante.
-    Filtros: call_id, career_id
+    Filtros: call_id, career_id, status, search
     """
     call_id = request.query_params.get("call_id")
     career_id = request.query_params.get("career_id")
+    status = request.query_params.get("status")
+    search = request.query_params.get("search", "").strip()
 
     qs = (
         Payment.objects.all()
-        .select_related("application", "application__applicant", "application__applicant__user")
+        .select_related(
+            "application", "application__applicant",
+            "application__applicant__user", "application__call",
+        )
         .order_by("-created_at")
     )
 
@@ -102,8 +129,145 @@ def payments_list(request):
             application__preferences__career_id=career_id
         ).distinct()
 
+    if status:
+        qs = qs.filter(status=status)
+
+    if search:
+        from django.db.models import Q
+        qs = qs.filter(
+            Q(application__applicant__dni__icontains=search)
+            | Q(application__applicant__names__icontains=search)
+            | Q(nro_secuencia__icontains=search)
+        )
+
     payments = [_payment_to_dict(p) for p in qs]
-    return Response({"payments": payments})
+
+    # Resumen de totales por estado
+    from django.db.models import Count
+    summary_qs = Payment.objects.all()
+    if call_id:
+        summary_qs = summary_qs.filter(application__call_id=call_id)
+    summary_raw = summary_qs.values("status").annotate(count=Count("id"))
+    summary = {r["status"]: r["count"] for r in summary_raw}
+
+    return Response({"payments": payments, "summary": summary})
+
+
+# ══════════════════════════════════════════════════════════
+# INTEGRACIÓN CAJA / FINANZAS
+# ══════════════════════════════════════════════════════════
+
+
+def _register_admission_income(payment, reviewer):
+    """
+    Al aprobar un pago de admisión, registra ingreso en finanzas:
+      1. IncomeEntry (reporte de ingresos)
+      2. CashMovement IN en sesión abierta del reviewer (si existe)
+    """
+    try:
+        from finance.models import IncomeEntry, CashSession, CashMovement, Concept
+    except ImportError:
+        logger.warning("finance app not available — skipping income registration")
+        return
+
+    app = payment.application
+    applicant = app.applicant if app else None
+    dni = applicant.dni if applicant else str(payment.id)
+    today = timezone.now().date()
+    total = payment.amount
+
+    # Buscar o crear concepto ADMISION
+    concept = Concept.objects.filter(type="ADMISION").first()
+    if not concept:
+        concept = Concept.objects.create(
+            code="ADMISION",
+            name="Derecho de Admisión",
+            type="ADMISION",
+            default_amount=total,
+        )
+    concept_name = concept.name if concept else "Derecho de Admisión"
+
+    career_name = app.career_name if app else ""
+
+    # 1. IncomeEntry
+    IncomeEntry.objects.create(
+        date=today,
+        subject_id=dni,
+        concept=concept,
+        concept_name=f"{concept_name} - {app.call.title if app.call else ''}",
+        career_name=career_name,
+        amount=total,
+    )
+
+    # 2. CashMovement (si el reviewer tiene sesión abierta)
+    open_session = CashSession.objects.filter(
+        user=reviewer, status="OPEN"
+    ).order_by("-opened_at").first()
+
+    if open_session:
+        CashMovement.objects.create(
+            session=open_session,
+            type="IN",
+            amount=total,
+            concept=f"Pago admisión - {dni} - {applicant.names if applicant else ''}",
+        )
+
+    # Guardar referencia en meta
+    meta = payment.meta or {}
+    meta["income_registered"] = True
+    meta["income_date"] = today.isoformat()
+    payment.meta = meta
+    payment.save(update_fields=["meta"])
+
+
+def _reverse_admission_income(payment):
+    """
+    Reversa el ingreso registrado para un pago de admisión aprobado:
+      1. Elimina el IncomeEntry asociado
+      2. Si existe CashMovement asociado, crea movimiento OUT compensatorio
+    """
+    try:
+        from finance.models import IncomeEntry, CashSession, CashMovement, Concept
+    except ImportError:
+        logger.warning("finance app not available — skipping income reversal")
+        return
+
+    app = payment.application
+    applicant = app.applicant if app else None
+    dni = applicant.dni if applicant else str(payment.id)
+    total = payment.amount
+
+    concept = Concept.objects.filter(type="ADMISION").first()
+
+    # Eliminar IncomeEntry
+    entries = IncomeEntry.objects.filter(
+        subject_id=dni,
+        concept=concept,
+        amount=total,
+    )
+    if entries.exists():
+        entries.delete()
+
+    # Crear movimiento OUT compensatorio si hay sesión abierta
+    # (buscar cualquier sesión abierta del sistema)
+    from django.contrib.auth import get_user_model
+    open_session = CashSession.objects.filter(
+        status="OPEN"
+    ).order_by("-opened_at").first()
+
+    if open_session:
+        CashMovement.objects.create(
+            session=open_session,
+            type="OUT",
+            amount=total,
+            concept=f"Reversión pago admisión - {dni}",
+        )
+
+    meta = payment.meta or {}
+    meta["income_reversed"] = True
+    meta["income_reversed_at"] = timezone.now().isoformat()
+    payment.meta = meta
+    payment.save(update_fields=["meta"])
 
 
 @api_view(["POST"])
@@ -150,9 +314,15 @@ def payment_confirm(request, payment_id):
         payment.status = "PAID"
         meta = payment.meta or {}
         meta["confirmed_by"] = request.user.id
-        meta["confirmed_at"] = __import__("django").utils.timezone.now().isoformat()
+        meta["confirmed_at"] = timezone.now().isoformat()
         payment.meta = meta
         payment.save(update_fields=["status", "meta"])
+
+        # 1b. Registrar ingreso en caja
+        try:
+            _register_admission_income(payment, request.user)
+        except Exception as exc:
+            logger.error(f"Error registrando ingreso admisión: {exc}")
 
         # 2. Marcar postulación como ADMITTED
         app = payment.application
@@ -239,13 +409,22 @@ def payment_void(request, payment_id):
     except Payment.DoesNotExist:
         return Response({"detail": "Pago no encontrado"}, status=404)
 
+    was_paid = payment.status == "PAID"
+
     with transaction.atomic():
         payment.status = "VOIDED"
         meta = payment.meta or {}
         meta["voided_by"] = request.user.id
-        meta["voided_at"] = __import__("django").utils.timezone.now().isoformat()
+        meta["voided_at"] = timezone.now().isoformat()
         payment.meta = meta
         payment.save(update_fields=["status", "meta"])
+
+        # Si estaba aprobado, reversar ingreso
+        if was_paid:
+            try:
+                _reverse_admission_income(payment)
+            except Exception as exc:
+                logger.error(f"Error reversando ingreso admisión: {exc}")
 
         # Revertir estado de postulación
         app = payment.application
@@ -260,6 +439,46 @@ def payment_void(request, payment_id):
             applicant.user.save(update_fields=["is_active"])
 
     return Response({"ok": True, "status": "VOIDED"})
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def payment_delete(request, payment_id):
+    """
+    Eliminar pago. Si estaba aprobado, reversa el ingreso primero.
+    """
+    try:
+        payment = Payment.objects.select_related(
+            "application",
+            "application__applicant",
+            "application__applicant__user",
+            "application__call",
+        ).get(pk=payment_id)
+    except Payment.DoesNotExist:
+        return Response({"detail": "Pago no encontrado"}, status=404)
+
+    with transaction.atomic():
+        if payment.status == "PAID":
+            try:
+                _reverse_admission_income(payment)
+            except Exception as exc:
+                logger.error(f"Error reversando ingreso al eliminar: {exc}")
+
+            # Revertir estado de postulación
+            app = payment.application
+            if app and app.status == "ADMITTED":
+                app.status = "EVALUATED"
+                app.save(update_fields=["status"])
+
+            # Desactivar usuario
+            applicant = app.applicant if app else None
+            if applicant and applicant.user:
+                applicant.user.is_active = False
+                applicant.user.save(update_fields=["is_active"])
+
+        payment.delete()
+
+    return Response({"ok": True}, status=204)
 
 
 @api_view(["GET"])

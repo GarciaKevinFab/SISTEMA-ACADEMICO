@@ -24,6 +24,7 @@ from admission.models import (
     Application,
     ApplicationDocument,
     ApplicationPreference,
+    Payment,
 )
 from admission.serializers import (
     ApplicantSerializer,
@@ -472,20 +473,73 @@ def public_apply(request):
                             status="UPLOADED",
                         )
 
+            # ── Crear Payment con datos de comprobante si hay fee ──
+            fee = 0
+            try:
+                fee = float(meta.get("application_fee") or 0)
+            except (ValueError, TypeError):
+                fee = 0
+
+            payment_data = None
+            if fee > 0:
+                nro_sec = (
+                    payload.get("nro_secuencia") or ""
+                ).strip()
+                cod_caja = (
+                    payload.get("codigo_caja") or ""
+                ).strip()
+                fecha_mov_str = (
+                    payload.get("fecha_movimiento") or ""
+                ).strip()
+                channel = (
+                    payload.get("channel") or "AGENCIA_BN"
+                ).strip()
+
+                from datetime import date as date_cls
+
+                fecha_mov = None
+                if fecha_mov_str:
+                    try:
+                        fecha_mov = date_cls.fromisoformat(fecha_mov_str)
+                    except ValueError:
+                        pass
+
+                voucher_file = None
+                if "multipart" in content_type:
+                    voucher_file = request.FILES.get("voucher")
+
+                pmt = Payment.objects.create(
+                    application=app,
+                    method=channel,
+                    status="PENDING_REVIEW",
+                    amount=fee,
+                    channel=channel,
+                    nro_secuencia=nro_sec,
+                    codigo_caja=cod_caja,
+                    fecha_movimiento=fecha_mov,
+                    voucher=voucher_file,
+                )
+                payment_data = {
+                    "id": pmt.id,
+                    "status": pmt.status,
+                    "amount": str(pmt.amount),
+                }
+
             # Refetch para UI con conteo
             call_ui = AdmissionCall.objects.annotate(
                 applications_count=models.Count("applications")
             ).get(pk=call.id)
 
-            return Response(
-                {
-                    "ok": True,
-                    "application_id": app.id,
-                    "status": app.status,
-                    "updated_call": _call_to_fe(call_ui),
-                },
-                status=201,
-            )
+            resp = {
+                "ok": True,
+                "application_id": app.id,
+                "status": app.status,
+                "updated_call": _call_to_fe(call_ui),
+            }
+            if payment_data:
+                resp["payment"] = payment_data
+
+            return Response(resp, status=201)
 
     except AdmissionCall.DoesNotExist:
         return Response({"detail": "Convocatoria no encontrada"}, status=404)

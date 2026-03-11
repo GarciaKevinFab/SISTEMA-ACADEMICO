@@ -38,6 +38,7 @@ from .payments import (
     application_payment_status,
     payment_confirm,
     payment_void,
+    payment_delete,
     payment_receipt_pdf,
 )
 
@@ -112,6 +113,7 @@ __all__ = [
     'application_payment_status',
     'payment_confirm',
     'payment_void',
+    'payment_delete',
     'payment_receipt_pdf',
     # Evaluations
     'eval_list_for_scoring',
