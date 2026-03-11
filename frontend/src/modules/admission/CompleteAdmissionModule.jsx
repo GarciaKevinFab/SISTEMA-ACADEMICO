@@ -34,7 +34,6 @@ import ResultsPublication from "./ResultsPublication";
 import AdmissionCallsManagement from "./AdmissionCallsManagement";
 import DocumentReview from "./DocumentReview";
 import AdmissionScheduleModule from "./AdmissionSchedule";
-import PaymentsManagement from "./PaymentsManagement";
 import AdmissionCertificates from "./AdmissionCertificates";
 import ApplicantsManagement from "./ApplicantsManagement"; // ← FIX: ahora viene de archivo separado
 
@@ -506,7 +505,6 @@ const TABS = [
   { val: "schedule", label: "Cronograma" },
   { val: "certificates", label: "Constancias" },
   { val: "reports", label: "Reportes" },
-  { val: "payments", label: "Pagos" },
   { val: "params", label: "Configuración" },
 ];
 
@@ -570,7 +568,6 @@ export default function CompleteAdmissionModule() {
               <TabsContent value="eval" className="mt-0"><EvaluationBoard /></TabsContent>
               <TabsContent value="results" className="mt-0"><ResultsPublication /></TabsContent>
               <TabsContent value="schedule" className="mt-0"><AdmissionScheduleModule /></TabsContent>
-              <TabsContent value="payments" className="mt-0"><PaymentsManagement /></TabsContent>
               <TabsContent value="certificates" className="mt-0"><AdmissionCertificates /></TabsContent>
               <TabsContent value="reports" className="mt-0"><AdmissionReportsModule /></TabsContent>
               <TabsContent value="params" className="mt-0"><AdmissionParamsModule /></TabsContent>

@@ -345,20 +345,15 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
 
   // ── Navegar ──
   const goNext = () => {
+    // reviewStep = 5 (sin fee) o 6 (con fee)
     if (step < maxNavStep && canNext) {
-      let next = step + 1;
-      // Saltar paso pago si no hay fee
-      if (!hasFee && next === 5) next = 6;
-      setStep(next);
+      setStep(step + 1);
     }
   };
   const goBack = () => {
     const minStep = propCallId ? 2 : 1;
     if (step > minStep) {
-      let prev = step - 1;
-      // Saltar paso pago si no hay fee
-      if (!hasFee && prev === 5) prev = 4;
-      setStep(prev);
+      setStep(step - 1);
     }
   };
 
@@ -523,8 +518,10 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
         <div className={`grid grid-cols-${visibleSteps.length} bg-white border rounded-xl overflow-hidden shadow-sm`} style={{ gridTemplateColumns: `repeat(${visibleSteps.length}, 1fr)` }}>
           {visibleSteps.map((s) => {
             const Icon = s.icon;
-            const active = step === s.id;
-            const done = step > s.id;
+            // Cuando no hay fee, step 5 = review → mapear a id 6 (REVIEW)
+            const activeId = (!hasFee && step === reviewStep) ? 6 : step;
+            const active = activeId === s.id;
+            const done = activeId > s.id;
             return (
               <div
                 key={s.id}
