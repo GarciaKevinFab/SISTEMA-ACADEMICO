@@ -123,6 +123,7 @@ def _build_html(
 ) -> str:
     """
     Construye el HTML completo de la ficha de matrícula.
+    Formato fiel al XLS institucional (orientación portrait).
     """
     now     = datetime.now()
     period  = extra.get("period", student.get("periodo", f"{now.year}-I"))
@@ -136,7 +137,7 @@ def _build_html(
     apellidos  = student.get("apellidos", "")
     nombre_ficha = f"{apellidos.upper()} {nombres}".strip() if apellidos else student.get("nombre_completo", "")
     codigo     = student.get("codigo", "") or student.get("dni", "")
-    resolucion = extra.get("resolucion", "Resolución Viceministerial Nº 204-2019-MINEDU")
+    resolucion = extra.get("resolucion", "Resolución Viceministerial Nº 147-2020-MINEDU")
 
     # ── Institución ──
     short_name  = inst.get("short_name", "I.E.S.P.P.")
@@ -146,8 +147,12 @@ def _build_html(
     ds_creation = inst.get("ds_creation", "D.S. 059-1984-ED")
     address     = inst.get("address", "Carretera Central Km. 4 S/N Pomachaca")
     province    = inst.get("province", "Tarma")
-    district    = inst.get("province", "Tarma")
+    district    = inst.get("district", province)
     region      = inst.get("region", "Junín")
+
+    # ── Celdas individuales del código modular ──
+    cod_digits = list(cod_modular.ljust(7))
+    cod_cells = "".join(f'<td class="cod-cell">{d}</td>' for d in cod_digits)
 
     # ── Logo ──
     try:
@@ -160,8 +165,7 @@ def _build_html(
     logo_src  = _logo_base64(logo_path)
     logo_html = (
         f'<img src="{logo_src}" alt="Logo" class="logo">'
-        if logo_src else
-        f'<div class="logo-placeholder">{short_name}</div>'
+        if logo_src else ""
     )
 
     # ── Tabla de cursos ──
@@ -177,19 +181,16 @@ def _build_html(
             course_rows += f"""
             <tr>
                 <td class="center">{i}</td>
-                <td class="left">{nombre}</td>
+                <td class="course-name">{nombre}</td>
                 <td class="center">{horas}</td>
                 <td class="center">{creditos}</td>
             </tr>"""
     else:
-        # Filas vacías si no hay cursos
         for i in range(1, 8):
             course_rows += f"""
-            <tr class="empty-row">
+            <tr>
                 <td class="center">{i}</td>
-                <td></td>
-                <td class="center"></td>
-                <td class="center"></td>
+                <td></td><td></td><td></td>
             </tr>"""
 
     # ── Fila de subsanación ──
@@ -200,17 +201,15 @@ def _build_html(
             sub_rows += f"""
             <tr>
                 <td class="center">{i}</td>
-                <td class="left">{c.get("nombre", "")}</td>
+                <td class="course-name">{c.get("nombre", "")}</td>
                 <td class="center">{c.get("horas", "")}</td>
                 <td class="center">{c.get("creditos", "")}</td>
             </tr>"""
     else:
         sub_rows = """
-        <tr class="empty-row">
+        <tr>
             <td class="center">1</td>
-            <td></td>
-            <td class="center"></td>
-            <td class="center"></td>
+            <td></td><td></td><td></td>
         </tr>"""
 
     # ── HTML completo ──
@@ -219,307 +218,264 @@ def _build_html(
 <head>
 <meta charset="UTF-8">
 <style>
-  /* ══════════════════════════════════════════
-     ESTILOS FICHA DE MATRÍCULA
-     Fiel al diseño del XLS institucional
-     ══════════════════════════════════════════ */
-
   @page {{
-    size: A4 landscape;
-    margin: 1cm 1.2cm 1cm 1.2cm;
+    size: A4 portrait;
+    margin: 1.5cm 1.2cm 1.5cm 1.2cm;
   }}
 
-  * {{
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
 
   body {{
     font-family: Arial, sans-serif;
-    font-size: 8.5pt;
+    font-size: 9pt;
     color: #000;
     line-height: 1.3;
   }}
 
-  /* ── Título ── */
-  .titulo {{
-    text-align: center;
-    font-size: 13pt;
-    font-weight: bold;
-    letter-spacing: 2px;
-    padding: 4px 0 6px 0;
-    border-bottom: 2px solid #1a237e;
-    margin-bottom: 6px;
-    color: #1a237e;
-  }}
-
-  /* ── Tabla principal ── */
-  table.main {{
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 5px;
-  }}
-
-  table.main td, table.main th {{
-    border: 1px solid #555;
-    padding: 3px 5px;
-    vertical-align: middle;
-  }}
-
-  /* ── Bloque institución (fila 1) ── */
-  .inst-header {{
+  /* ── Header: logo + título ── */
+  .header {{
     display: flex;
     align-items: center;
-    gap: 8px;
+    margin-bottom: 8px;
   }}
-
-  .logo {{
-    height: 48px;
-    width: auto;
+  .header .logo {{
+    width: 70px;
+    height: auto;
     object-fit: contain;
   }}
-
-  .logo-placeholder {{
-    width: 48px;
-    height: 48px;
-    border: 1px solid #ccc;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 6pt;
+  .header .titulo {{
+    flex: 1;
     text-align: center;
-    color: #666;
-  }}
-
-  .inst-name {{
-    font-size: 9pt;
+    font-size: 16pt;
     font-weight: bold;
-    line-height: 1.4;
+    letter-spacing: 3px;
   }}
 
-  .inst-sub {{
-    font-size: 7.5pt;
-    color: #333;
+  /* ── Tablas ── */
+  table {{
+    width: 100%;
+    border-collapse: collapse;
+  }}
+  td, th {{
+    border: 1px solid #000;
+    padding: 3px 5px;
+    vertical-align: middle;
+    font-size: 8.5pt;
   }}
 
-  /* ── Labels de celda ── */
-  .label {{
+  .lbl {{
     font-weight: bold;
-    color: #1a237e;
     font-size: 7.5pt;
+    background-color: #f5f5f5;
     white-space: nowrap;
   }}
 
   .val {{
-    font-size: 8pt;
+    font-size: 8.5pt;
   }}
 
-  /* ── Colores de encabezados de tabla ── */
-  .thead-cursos {{
-    background-color: #1565c0;
-    color: white;
+  .val-bold {{
+    font-size: 8.5pt;
     font-weight: bold;
-    font-size: 8pt;
+  }}
+
+  /* Celdas individuales del código modular */
+  .cod-cell {{
     text-align: center;
-  }}
-
-  .thead-sub {{
-    background-color: #e65100;
-    color: white;
     font-weight: bold;
-    font-size: 8pt;
-    text-align: center;
-  }}
-
-  .thead-inst {{
-    background-color: #e8eaf6;
-    font-weight: bold;
-    color: #1a237e;
-    font-size: 8pt;
-  }}
-
-  /* ── Fila de totales ── */
-  .row-total {{
-    background-color: #e3f2fd;
-    font-weight: bold;
-  }}
-
-  /* ── Alumno ── */
-  .alumno-nombre {{
-    font-size: 10pt;
-    font-weight: bold;
-    border-bottom: 1px solid #000;
-    display: inline-block;
-    min-width: 200px;
-    padding-bottom: 1px;
-  }}
-
-  .alumno-codigo {{
-    font-size: 10pt;
-    font-weight: bold;
-    border-bottom: 1px solid #000;
-    display: inline-block;
-    min-width: 100px;
-    padding-bottom: 1px;
+    font-size: 9pt;
+    width: 20px;
+    padding: 2px 4px;
   }}
 
   .center {{ text-align: center; }}
-  .left   {{ text-align: left; }}
-  .right  {{ text-align: right; }}
-  .bold   {{ font-weight: bold; }}
 
-  .empty-row td {{ height: 16px; }}
+  .course-name {{
+    text-align: left;
+    padding-left: 6px;
+  }}
 
-  /* ── Separador entre tablas ── */
-  .sep {{ height: 4px; }}
+  /* ── Encabezados de tabla de cursos ── */
+  .thead-cursos th {{
+    font-weight: bold;
+    font-size: 8.5pt;
+    text-align: center;
+    padding: 5px 4px;
+  }}
 
-  /* ── Footer de generación ── */
+  .row-total td {{
+    font-weight: bold;
+    padding: 4px 5px;
+  }}
+
+  /* ── Separador ── */
+  .sep {{
+    height: 6px;
+    border: none;
+  }}
+  .sep td {{ border: none; }}
+
+  /* ── Firmas ── */
+  .firmas {{
+    width: 100%;
+    margin-top: 40px;
+    border: none;
+  }}
+  .firmas td {{
+    border: none;
+    text-align: center;
+    vertical-align: bottom;
+    padding: 0 10px;
+    font-size: 8pt;
+  }}
+  .firma-linea {{
+    border-top: 1px solid #000;
+    padding-top: 4px;
+    font-weight: bold;
+    font-size: 8pt;
+  }}
+  .firma-sub {{
+    font-size: 7pt;
+    font-style: italic;
+    color: #333;
+  }}
+
+  /* ── Footer ── */
   .footer {{
     text-align: center;
     font-size: 6pt;
-    color: #aaa;
-    margin-top: 4px;
-    border-top: 1px solid #eee;
-    padding-top: 2px;
+    color: #bbb;
+    margin-top: 10px;
   }}
 </style>
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════
-     TÍTULO
-     ══════════════════════════════════════════ -->
-<div class="titulo">FICHA DE MATRÍCULA</div>
+<!-- ═══ HEADER: Logo + Título ═══ -->
+<div class="header">
+  {f'<div>{logo_html}</div>' if logo_html else ''}
+  <div class="titulo">FICHA DE MATRICULA</div>
+</div>
 
-<!-- ══════════════════════════════════════════
-     BLOQUE 1: INSTITUCIÓN
-     ══════════════════════════════════════════ -->
-<table class="main">
-  <colgroup>
-    <col style="width:4%">
-    <col style="width:11%">
-    <col style="width:18%">
-    <col style="width:5%">
-    <col style="width:8%">
-    <col style="width:5%">
-    <col style="width:8%">
-    <col style="width:10%">
-    <col style="width:10%">
-    <col style="width:5%">
-    <col style="width:8%">
-    <col style="width:8%">
-  </colgroup>
+<!-- ═══ BLOQUE 1: INSTITUCIÓN ═══ -->
+<table>
   <tr>
-    <!-- Logo + nombre institución -->
-    <td rowspan="2" colspan="2" style="text-align:center; padding:4px;">
-      {logo_html}
-    </td>
-    <td colspan="8" style="text-align:center; padding:4px;">
-      <div class="inst-name">INSTITUTO DE EDUCACIÓN SUPERIOR PEDAGÓGICO PÚBLICO</div>
-      <div class="inst-name">{inst_nombre}</div>
-      <div class="inst-sub">{inst.get("city", "Tarma")} - {region} - PERÚ &nbsp;|&nbsp; {ds_creation}</div>
-    </td>
-    <td class="thead-inst center bold">DREJ</td>
-    <td class="val center">{region}</td>
+    <td class="lbl" style="width:18%">Nombre de la Institución</td>
+    <td class="val-bold" colspan="10">{inst_nombre}</td>
+    <td class="lbl" style="width:5%">DREJ</td>
+    <td class="val center" style="width:8%">{region}</td>
   </tr>
   <tr>
-    <td colspan="8" style="text-align:center; font-size:7.5pt; color:#555; padding:2px;">
+    <td class="lbl" rowspan="2">Código Modular</td>
+    <td class="lbl" rowspan="2">Denominación</td>
+    <td class="lbl" rowspan="2">Gestión</td>
+    <td class="lbl" colspan="2" style="text-align:center; font-size:7pt">D.S./R.M. de Creación Y RD de Revalidación</td>
+    <td class="lbl" rowspan="2" colspan="5">Dirección</td>
+    <td class="lbl" colspan="3" style="text-align:center">
       {address}
     </td>
-    <td class="thead-inst center bold">UGEL</td>
-    <td class="val center">{province}</td>
   </tr>
   <tr>
-    <td colspan="2" class="thead-inst bold center">Código Modular</td>
-    <td class="val center bold">{cod_modular}</td>
-    <td colspan="2" class="thead-inst bold center">Denominación</td>
-    <td colspan="2" class="val center">{short_name}</td>
-    <td class="thead-inst bold center">Gestión</td>
+    <td class="lbl" colspan="2" style="text-align:center; font-size:7pt">&nbsp;</td>
+    <td class="lbl">UGEL</td>
+    <td class="val center" colspan="2">&nbsp;</td>
+  </tr>
+  <tr>
+    {cod_cells}
+    <td class="val center">{short_name}</td>
     <td class="val center">{gestion}</td>
-    <td class="thead-inst bold center">Provincia</td>
+    <td class="val center" colspan="2">{ds_creation}</td>
+    <td class="lbl center">Provincia</td>
     <td class="val center">{province}</td>
+    <td class="lbl center">Distrito</td>
+    <td class="val center">{district}</td>
   </tr>
 </table>
 
-<!-- ══════════════════════════════════════════
-     BLOQUE 2: PROGRAMA Y ALUMNO
-     ══════════════════════════════════════════ -->
-<table class="main">
-  <colgroup>
-    <col style="width:15%">
-    <col style="width:35%">
-    <col style="width:15%">
-    <col style="width:35%">
-  </colgroup>
+<!-- ═══ BLOQUE 2: PROGRAMA, RESOLUCIÓN, ALUMNO ═══ -->
+<table style="margin-top:4px;">
   <tr>
-    <td class="thead-inst bold">Programa de Estudios</td>
-    <td class="val bold">{carrera.upper() if carrera else ""}</td>
-    <td class="thead-inst bold center">Período Académico</td>
-    <td class="val bold center">{period}</td>
+    <td class="lbl" style="width:22%">Programa de Estudios</td>
+    <td class="val-bold" style="width:32%">{carrera.upper() if carrera else ""}</td>
+    <td class="lbl center" style="width:18%">Periodo Académico</td>
+    <td class="val-bold center" style="width:28%">{period}</td>
   </tr>
   <tr>
-    <td class="thead-inst bold">Resolución de Autorización</td>
+    <td class="lbl">Resolución de Autorización</td>
     <td class="val">{resolucion}</td>
-    <td class="thead-inst bold center">Ciclo - Sección</td>
-    <td class="val bold center">{ciclo_seccion}</td>
+    <td class="lbl center">Ciclo - Sección</td>
+    <td class="val-bold center">{ciclo_seccion}</td>
   </tr>
   <tr>
-    <td class="thead-inst bold">Nombres y Apellidos</td>
-    <td class="val bold">{nombre_ficha}</td>
-    <td class="thead-inst bold center">CÓDIGO</td>
-    <td class="val bold center">{codigo}</td>
+    <td class="lbl">Nombres y Apellidos</td>
+    <td class="val-bold">{nombre_ficha}</td>
+    <td class="lbl center">CODIGO</td>
+    <td class="val-bold center">{codigo}</td>
   </tr>
 </table>
 
-<!-- ══════════════════════════════════════════
-     BLOQUE 3: TABLA DE CURSOS
-     ══════════════════════════════════════════ -->
-<table class="main">
+<!-- ═══ BLOQUE 3: TABLA DE CURSOS ═══ -->
+<table style="margin-top:6px;">
   <colgroup>
-    <col style="width:4%">
-    <col style="width:72%">
-    <col style="width:12%">
-    <col style="width:12%">
+    <col style="width:5%">
+    <col style="width:67%">
+    <col style="width:14%">
+    <col style="width:14%">
   </colgroup>
-  <tr>
-    <th class="thead-cursos" style="width:4%">N°</th>
-    <th class="thead-cursos" style="text-align:left; padding-left:6px;">ASIGNATURA</th>
-    <th class="thead-cursos">HORAS</th>
-    <th class="thead-cursos">CRÉDITOS</th>
+  <tr class="thead-cursos">
+    <th>N°</th>
+    <th style="text-align:center">APELLIDOS Y NOMBRES</th>
+    <th>HORAS</th>
+    <th>CRÉDITOS</th>
   </tr>
   {course_rows}
   <tr class="row-total">
-    <td class="center"></td>
-    <td class="bold" style="padding-left:6px;">TOTAL</td>
-    <td class="center bold">{total_horas if courses else ""}</td>
-    <td class="center bold">{total_creditos if courses else ""}</td>
+    <td></td>
+    <td class="center">TOTAL</td>
+    <td class="center">{total_horas if courses else ""}</td>
+    <td class="center">{total_creditos if courses else ""}</td>
   </tr>
 </table>
 
-<!-- ══════════════════════════════════════════
-     BLOQUE 4: SUBSANACIÓN
-     ══════════════════════════════════════════ -->
-<table class="main">
+<!-- ═══ BLOQUE 4: SUBSANACIÓN ═══ -->
+<table style="margin-top:6px;">
   <colgroup>
-    <col style="width:4%">
-    <col style="width:72%">
-    <col style="width:12%">
-    <col style="width:12%">
+    <col style="width:5%">
+    <col style="width:67%">
+    <col style="width:14%">
+    <col style="width:14%">
   </colgroup>
   <tr>
-    <th class="thead-sub" style="width:4%">N°</th>
-    <th class="thead-sub" style="text-align:left; padding-left:6px;">CURSOS DE SUBSANACIÓN</th>
-    <th class="thead-sub">HORAS</th>
-    <th class="thead-sub">CRÉDITOS</th>
+    <th style="font-weight:bold; font-size:8.5pt; text-align:center; padding:5px 4px;">N°</th>
+    <th style="font-weight:bold; font-size:8.5pt; text-align:center; padding:5px 4px;">CURSOS DE SUBSANACIÓN</th>
+    <th style="font-weight:bold; font-size:8.5pt; text-align:center; padding:5px 4px;">HORAS</th>
+    <th style="font-weight:bold; font-size:8.5pt; text-align:center; padding:5px 4px;">CRÉDITOS</th>
   </tr>
   {sub_rows}
 </table>
 
+<!-- ═══ BLOQUE 5: FIRMAS ═══ -->
+<table class="firmas">
+  <tr style="height:60px;">
+    <td></td><td></td><td></td>
+  </tr>
+  <tr>
+    <td>
+      <div class="firma-linea">DIRECTOR(A) GENERAL</div>
+      <div class="firma-sub">Firma, Post Firma y Sello</div>
+    </td>
+    <td>
+      <div class="firma-linea">SECRETARIO(A) &nbsp;ACADÉMICO</div>
+      <div class="firma-sub">Firma, Post Firma y Sello</div>
+    </td>
+    <td>
+      <div class="firma-linea">ESTUDIANTE</div>
+    </td>
+  </tr>
+</table>
+
 <div class="footer">
-  Sistema Académico IESPP "Gustavo Allende Llavería" &nbsp;·&nbsp;
-  Proceso #{process.id:05d} &nbsp;·&nbsp;
-  Generado el {now.strftime("%d/%m/%Y %H:%M")}
+  Documento generado por el Sistema Académico | Proceso #{process.id:05d} | {now.strftime("%d/%m/%Y %H:%M")}
 </div>
 
 </body>
