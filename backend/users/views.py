@@ -18,8 +18,6 @@ from django.db.models.deletion import ProtectedError
 from django.db import IntegrityError
 
 import io
-import openpyxl
-import openpyxl.styles
 
 from academic.models import (
     AcademicGradeRecord,
@@ -787,6 +785,9 @@ def users_bulk_credentials(request):
     y devuelve un Excel descargable con las credenciales.
     Body: { "role": "STUDENT" | "TEACHER" }
     """
+    import csv as _csv
+    import traceback as _tb
+
     not_ok = _require_staff(request)
     if not_ok:
         return not_ok
@@ -816,61 +817,86 @@ def users_bulk_credentials(request):
             status=status.HTTP_404_NOT_FOUND,
         )
 
-    rows = []
-    for u in users:
-        tmp = get_random_string(10)
-        u.set_password(tmp)
-        u.must_change_password = True
-        u.save(update_fields=["password", "must_change_password"])
+    try:
+        rows = []
+        for u in users:
+            tmp = get_random_string(10)
+            u.set_password(tmp)
+            u.must_change_password = True
+            u.save(update_fields=["password", "must_change_password"])
 
-        if role_name == "STUDENT":
-            st = getattr(u, "student_profile", None)
-            rows.append({
-                "documento": st.num_documento if st else u.username,
-                "nombre": u.full_name or (
-                    f"{st.nombres or ''} {st.apellido_paterno or ''} {st.apellido_materno or ''}".strip()
-                    if st else ""
-                ),
-                "usuario": u.username,
-                "contraseña": tmp,
-            })
-        else:
-            teacher = None
-            try:
-                from catalogs.models import Teacher
-                teacher = Teacher.objects.filter(user=u).first()
-            except Exception:
-                pass
-            rows.append({
-                "documento": teacher.document if teacher else u.username,
-                "nombre": u.full_name or (teacher.full_name if teacher else ""),
-                "usuario": u.username,
-                "contraseña": tmp,
-            })
+            if role_name == "STUDENT":
+                st = getattr(u, "student_profile", None)
+                rows.append({
+                    "documento": (st.num_documento if st else None) or u.username,
+                    "nombre": u.full_name or (
+                        f"{st.nombres or ''} {st.apellido_paterno or ''} {st.apellido_materno or ''}".strip()
+                        if st else ""
+                    ),
+                    "usuario": u.username,
+                    "contraseña": tmp,
+                })
+            else:
+                teacher = None
+                try:
+                    from catalogs.models import Teacher
+                    teacher = Teacher.objects.filter(user=u).first()
+                except Exception:
+                    pass
+                rows.append({
+                    "documento": (getattr(teacher, "document", None) if teacher else None) or u.username,
+                    "nombre": u.full_name or (getattr(teacher, "full_name", "") if teacher else ""),
+                    "usuario": u.username,
+                    "contraseña": tmp,
+                })
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = f"Credenciales {role_name}"
-    headers = ["DOCUMENTO", "NOMBRE", "USUARIO", "CONTRASEÑA"]
-    ws.append(headers)
-    for r in rows:
-        ws.append([r["documento"], r["nombre"], r["usuario"], r["contraseña"]])
+        # Intentar generar Excel; si openpyxl falla, generar CSV
+        try:
+            import openpyxl as _xl
+            import openpyxl.styles as _xl_styles
 
-    bold = openpyxl.styles.Font(bold=True)
-    for cell in ws[1]:
-        cell.font = bold
-    for col in ws.columns:
-        max_len = max(len(str(c.value or "")) for c in col)
-        ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+            wb = _xl.Workbook()
+            ws = wb.active
+            ws.title = f"Credenciales {role_name}"
+            col_headers = ["DOCUMENTO", "NOMBRE", "USUARIO", "CONTRASEÑA"]
+            ws.append(col_headers)
+            for r in rows:
+                ws.append([r["documento"], r["nombre"], r["usuario"], r["contraseña"]])
 
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
+            bold = _xl_styles.Font(bold=True)
+            for cell in ws[1]:
+                cell.font = bold
+            for col in ws.columns:
+                max_len = max(len(str(c.value or "")) for c in col)
+                ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
 
-    filename = f"credenciales_{role_name.lower()}.xlsx"
-    response = HttpResponse(
-        buf.getvalue(),
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return response
+            buf = io.BytesIO()
+            wb.save(buf)
+            buf.seek(0)
+
+            filename = f"credenciales_{role_name.lower()}.xlsx"
+            resp = HttpResponse(
+                buf.getvalue(),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+            return resp
+
+        except ImportError:
+            # Fallback a CSV si openpyxl no está instalado
+            buf = io.StringIO()
+            writer = _csv.writer(buf)
+            writer.writerow(["DOCUMENTO", "NOMBRE", "USUARIO", "CONTRASEÑA"])
+            for r in rows:
+                writer.writerow([r["documento"], r["nombre"], r["usuario"], r["contraseña"]])
+
+            filename = f"credenciales_{role_name.lower()}.csv"
+            resp = HttpResponse(buf.getvalue(), content_type="text/csv; charset=utf-8")
+            resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+            return resp
+
+    except Exception as exc:
+        return Response(
+            {"detail": f"Error generando credenciales: {exc}", "trace": _tb.format_exc()},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
