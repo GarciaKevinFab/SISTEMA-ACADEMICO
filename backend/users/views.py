@@ -779,7 +779,10 @@ def users_purge(request):
 
 def _get_institution_info():
     """Obtiene datos de la institución para encabezados de reportes."""
-    info = {"name": "", "ruc": "", "address": "", "phone": "", "email": ""}
+    import os as _os
+    from django.conf import settings as _settings
+
+    info = {"name": "", "ruc": "", "address": "", "phone": "", "email": "", "logo_path": ""}
     try:
         from catalogs.models import InstitutionSetting
         obj = InstitutionSetting.objects.filter(pk=1).first()
@@ -790,6 +793,13 @@ def _get_institution_info():
             info["address"] = d.get("address") or d.get("direccion") or ""
             info["phone"] = d.get("phone") or d.get("telefono") or ""
             info["email"] = d.get("email") or ""
+            # Resolver logo a ruta de archivo
+            logo_url = d.get("logo_url") or ""
+            if logo_url and "/media/" in logo_url:
+                rel = logo_url.split("/media/")[-1]
+                fpath = _os.path.join(_settings.MEDIA_ROOT, rel)
+                if _os.path.exists(fpath):
+                    info["logo_path"] = fpath
     except Exception:
         pass
     if not info["name"]:
@@ -804,6 +814,20 @@ def _get_institution_info():
                 info["email"] = getattr(inst, "email", "") or ""
         except Exception:
             pass
+    # Fallback: buscar logo en static
+    if not info["logo_path"]:
+        for lp in [
+            _os.path.join(_settings.BASE_DIR, "media", "institution"),
+            _os.path.join(_settings.BASE_DIR, "static", "img"),
+            _os.path.join(_settings.BASE_DIR, "staticfiles", "img"),
+        ]:
+            if _os.path.isdir(lp):
+                for f in _os.listdir(lp):
+                    if "logo" in f.lower() and f.lower().endswith((".png", ".jpg", ".jpeg")):
+                        info["logo_path"] = _os.path.join(lp, f)
+                        break
+            if info["logo_path"]:
+                break
     return info
 
 
@@ -843,19 +867,46 @@ def _build_credentials_excel(rows, role_name, inst):
     for col_letter, w in col_widths.items():
         ws.column_dimensions[col_letter].width = w
 
-    # --- Fila 1: Nombre de institución (merge A1:D1) ---
-    ws.merge_cells("A1:D1")
-    cell_title = ws["A1"]
+    # --- Logo (si existe) ---
+    logo_path = inst.get("logo_path") or ""
+    has_logo = False
+    if logo_path:
+        try:
+            from openpyxl.drawing.image import Image as XlImage
+            img = XlImage(logo_path)
+            img.width = 60
+            img.height = 60
+            img.anchor = "A1"
+            ws.add_image(img)
+            has_logo = True
+        except Exception:
+            pass
+
+    # --- Fila 1: Nombre de institución ---
+    if has_logo:
+        ws.merge_cells("B1:D1")
+        cell_title = ws["B1"]
+    else:
+        ws.merge_cells("A1:D1")
+        cell_title = ws["A1"]
     cell_title.value = inst.get("name") or "INSTITUCIÓN EDUCATIVA"
     cell_title.font = font_title
     cell_title.fill = fill_header
     cell_title.alignment = align_center
+    # Pintar fondo de A1 si tiene logo
+    if has_logo:
+        ws["A1"].fill = fill_header
     ws.row_dimensions[1].height = 32
 
-    # --- Fila 2: Subtítulo (merge A2:D2) ---
-    ws.merge_cells("A2:D2")
+    # --- Fila 2: Subtítulo ---
+    if has_logo:
+        ws.merge_cells("B2:D2")
+        cell_sub = ws["B2"]
+        ws["A2"].fill = fill_header
+    else:
+        ws.merge_cells("A2:D2")
+        cell_sub = ws["A2"]
     role_label = "DOCENTES" if role_name == "TEACHER" else "ESTUDIANTES"
-    cell_sub = ws["A2"]
     cell_sub.value = f"CREDENCIALES DE ACCESO - {role_label}"
     cell_sub.font = font_subtitle
     cell_sub.fill = fill_header
