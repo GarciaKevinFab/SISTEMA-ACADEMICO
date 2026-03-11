@@ -1,6 +1,7 @@
 """
 Vistas para Resultados y Publicación
 """
+import logging
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
@@ -17,6 +18,8 @@ from admission.models import (
 )
 from admission.serializers import ApplicationSerializer
 from .utils import _ensure_media_tmp, _write_stub_pdf
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(["GET"])
@@ -279,26 +282,100 @@ def results_close(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def results_acta_pdf(request):
-    """Generar acta de resultados en PDF"""
-    call_id = request.query_params.get("call_id") or "all"
+    """Generar acta de resultados en PDF con formato institucional."""
+    call_id = request.query_params.get("call_id")
     career_id = request.query_params.get("career_id") or ""
 
-    tmpdir = _ensure_media_tmp()
-    filename = f"acta-call-{call_id}.pdf"
+    if not call_id:
+        return Response({"detail": "call_id requerido"}, status=400)
+
+    try:
+        call = AdmissionCall.objects.get(pk=call_id)
+    except AdmissionCall.DoesNotExist:
+        return Response({"detail": "Convocatoria no encontrada"}, status=404)
+
+    # Obtener aplicaciones
+    qs = Application.objects.filter(call_id=call_id).select_related("applicant")
     if career_id:
-        filename = f"acta-call-{call_id}-career-{career_id}.pdf"
+        qs = qs.filter(preferences__career_id=career_id).distinct()
 
-    abs_path = tmpdir + "/" + filename
+    # Construir resultados con scores
+    results = []
+    for app in qs:
+        written = EvaluationScore.objects.filter(
+            application=app, phase="WRITTEN"
+        ).first()
+        interview = EvaluationScore.objects.filter(
+            application=app, phase="INTERVIEW"
+        ).first()
 
-    _write_stub_pdf(
-        abs_path,
-        title="Acta de Resultados",
-        subtitle=f"Convocatoria: {call_id}" + (f" | Carrera: {career_id}" if career_id else ""),
-    )
+        p1 = float(written.total) if written else 0
+        p2 = float(interview.total) if interview else 0
 
-    with open(abs_path, "rb") as f:
-        data = f.read()
+        results.append({
+            "applicant_name": app.applicant.names if app.applicant else "—",
+            "dni": app.applicant.dni if app.applicant else "—",
+            "phase1_total": p1,
+            "phase2_total": p2,
+            "final_score": p1 + p2,
+            "status": app.status,
+        })
 
-    resp = HttpResponse(data, content_type="application/pdf")
+    results.sort(key=lambda r: r["final_score"], reverse=True)
+
+    # Datos de la convocatoria
+    meta = call.meta or {}
+    career_name = ""
+    if career_id:
+        from catalogs.models import Career
+        c = Career.objects.filter(pk=career_id).first()
+        career_name = c.name if c else ""
+
+    call_data = {
+        "call_name": call.title,
+        "career_name": career_name,
+        "academic_year": meta.get("academic_year", ""),
+        "academic_period": meta.get("academic_period", ""),
+    }
+
+    # Datos institucionales
+    try:
+        from .certificates import _build_inst_dict
+        from .admission_certificates_generator import _img_b64, _get_media_root
+        inst = _build_inst_dict()
+        mr = _get_media_root()
+        inst["logo_b64"] = _img_b64(inst.get("logo_path", ""), mr)
+        inst["firma_b64"] = _img_b64(inst.get("firma_director_path", ""), mr)
+        inst["sello_b64"] = _img_b64(inst.get("sello_path", ""), mr)
+    except Exception as e:
+        logger.warning(f"Error cargando datos institucionales: {e}")
+        inst = {"institution_name": "GUSTAVO ALLENDE LLAVERÍA", "city": "Tarma"}
+
+    # Generar PDF
+    try:
+        from .admission_acta_generator import generate_acta_pdf, HAS_WEASYPRINT
+        if HAS_WEASYPRINT:
+            pdf_bytes = generate_acta_pdf(results, call_data, inst)
+        else:
+            raise ImportError("WeasyPrint no disponible")
+    except ImportError:
+        # Fallback: stub PDF
+        tmpdir = _ensure_media_tmp()
+        filename = f"acta-call-{call_id}.pdf"
+        abs_path = tmpdir + "/" + filename
+        _write_stub_pdf(
+            abs_path,
+            title="Acta de Resultados",
+            subtitle=f"Convocatoria: {call.title}" + (f" | Carrera: {career_name}" if career_name else ""),
+        )
+        with open(abs_path, "rb") as f:
+            pdf_bytes = f.read()
+
+    filename = f"acta_{call_id}"
+    if career_id:
+        filename += f"_{career_id}"
+    filename += ".pdf"
+
+    resp = HttpResponse(pdf_bytes, content_type="application/pdf")
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { AdmissionCalls, ApplicantDocs, Applications } from "../../services/admission.service";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Textarea } from "../../components/ui/textarea";
 import { Badge } from "../../components/ui/badge";
 import { toast } from "sonner";
-import { FileText, Eye, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { FileText, Eye, CheckCircle2, XCircle, AlertTriangle, Upload } from "lucide-react";
 
 /* ── Mapa de tipos de documento → etiqueta legible ── */
 const DOC_LABELS = {
@@ -30,13 +30,22 @@ const statusColor = (s) =>
     s === "APPROVED" ? "bg-green-100 text-green-700" :
         s === "REJECTED" ? "bg-red-100 text-red-700" :
             s === "OBSERVED" ? "bg-amber-100 text-amber-700" :
-                "bg-gray-100 text-gray-700";
+                s === "PENDING" ? "bg-gray-100 text-gray-500" :
+                    "bg-blue-50 text-blue-700";
+
+const statusLabel = (s) =>
+    s === "APPROVED" ? "APROBADO" :
+        s === "REJECTED" ? "RECHAZADO" :
+            s === "OBSERVED" ? "OBSERVADO" :
+                s === "PENDING" ? "NO SUBIDO" :
+                    s || "SUBIDO";
 
 const statusIcon = (s) =>
     s === "APPROVED" ? <CheckCircle2 className="h-3.5 w-3.5" /> :
         s === "REJECTED" ? <XCircle className="h-3.5 w-3.5" /> :
             s === "OBSERVED" ? <AlertTriangle className="h-3.5 w-3.5" /> :
-                null;
+                s === "PENDING" ? <Upload className="h-3.5 w-3.5" /> :
+                    null;
 
 export default function DocumentReview() {
     const [calls, setCalls] = useState([]);
@@ -72,6 +81,58 @@ export default function DocumentReview() {
     };
     useEffect(() => { loadDocs(); }, [current?.id]);
 
+    /* ── Documentos requeridos de la convocatoria ── */
+    const requiredDocTypes = useMemo(() => {
+        const rd = call?.required_documents;
+        if (Array.isArray(rd) && rd.length > 0) return rd;
+        return [];
+    }, [call]);
+
+    /* ── Merge: docs subidos + docs requeridos faltantes ── */
+    const mergedDocs = useMemo(() => {
+        const uploadedMap = {};
+        for (const d of docs) {
+            uploadedMap[d.document_type] = d;
+        }
+
+        const result = [];
+        const seen = new Set();
+
+        // Primero los requeridos (en orden de la convocatoria)
+        for (const docType of requiredDocTypes) {
+            seen.add(docType);
+            if (uploadedMap[docType]) {
+                result.push({ ...uploadedMap[docType], _required: true });
+            } else {
+                // Doc requerido pero no subido
+                result.push({
+                    id: `missing-${docType}`,
+                    document_type: docType,
+                    review_status: "PENDING",
+                    file_name: null,
+                    url: null,
+                    observations: "",
+                    _required: true,
+                    _missing: true,
+                });
+            }
+        }
+
+        // Luego los subidos que no están en required (extras)
+        for (const d of docs) {
+            if (!seen.has(d.document_type)) {
+                result.push({ ...d, _required: false });
+            }
+        }
+
+        return result;
+    }, [docs, requiredDocTypes]);
+
+    /* ── Conteos ── */
+    const approvedCount = mergedDocs.filter(d => d.review_status === "APPROVED").length;
+    const totalRequired = mergedDocs.filter(d => d._required).length;
+    const missingCount = mergedDocs.filter(d => d._missing).length;
+
     const setReview = async (docId, review_status, observations = "") => {
         setSaving(true);
         try {
@@ -86,6 +147,10 @@ export default function DocumentReview() {
     };
 
     const markComplete = async () => {
+        if (missingCount > 0) {
+            toast.error(`Faltan ${missingCount} documento(s) requerido(s) por subir.`);
+            return;
+        }
         const allApproved = docs.length > 0 && docs.every(d => d.review_status === "APPROVED");
         if (!allApproved) {
             toast.error("Aún hay documentos pendientes/observados/rechazados.");
@@ -165,18 +230,36 @@ export default function DocumentReview() {
                                     <Badge variant="outline">{current.status}</Badge>
                                 </div>
 
+                                {/* Progreso de documentos */}
+                                {totalRequired > 0 && (
+                                    <div className="flex items-center gap-3 text-xs">
+                                        <span className="font-medium text-gray-600">
+                                            Documentos: {approvedCount}/{totalRequired} aprobados
+                                        </span>
+                                        {missingCount > 0 && (
+                                            <Badge className="bg-red-50 text-red-600 border-red-200">
+                                                {missingCount} sin subir
+                                            </Badge>
+                                        )}
+                                    </div>
+                                )}
+
                                 <div className="space-y-2">
-                                    {docs.map(d => (
-                                        <DocRow
-                                            key={d.id}
-                                            doc={d}
-                                            onApprove={(obs) => setReview(d.id, "APPROVED", obs)}
-                                            onReject={(obs) => setReview(d.id, "REJECTED", obs)}
-                                            onObserve={(obs) => setReview(d.id, "OBSERVED", obs)}
-                                            saving={saving}
-                                        />
+                                    {mergedDocs.map(d => (
+                                        d._missing ? (
+                                            <MissingDocRow key={d.id} docType={d.document_type} />
+                                        ) : (
+                                            <DocRow
+                                                key={d.id}
+                                                doc={d}
+                                                onApprove={(obs) => setReview(d.id, "APPROVED", obs)}
+                                                onReject={(obs) => setReview(d.id, "REJECTED", obs)}
+                                                onObserve={(obs) => setReview(d.id, "OBSERVED", obs)}
+                                                saving={saving}
+                                            />
+                                        )
                                     ))}
-                                    {!docs.length && <div className="text-sm text-gray-500">Sin documentos subidos.</div>}
+                                    {!mergedDocs.length && <div className="text-sm text-gray-500">Sin documentos requeridos ni subidos.</div>}
                                 </div>
                             </div>
                         ) : (
@@ -189,10 +272,10 @@ export default function DocumentReview() {
     );
 }
 
+/* ── Fila de documento subido (con controles de revisión) ── */
 function DocRow({ doc, onApprove, onReject, onObserve, saving }) {
     const [obs, setObs] = useState(doc?.observations || "");
 
-    // Resolver la URL del archivo: preferir url (normalizado), luego file_url
     const fileUrl = doc.url || doc.file_url || null;
 
     return (
@@ -201,13 +284,14 @@ function DocRow({ doc, onApprove, onReject, onObserve, saving }) {
                 <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-gray-400" />
                     <div className="text-sm font-medium">{docLabel(doc.document_type)}</div>
+                    {doc._required && <span className="text-[10px] text-blue-500 font-medium">(requerido)</span>}
                     {doc.file_name && (
                         <span className="text-xs text-gray-400 truncate max-w-[200px]">({doc.file_name})</span>
                     )}
                 </div>
                 <Badge className={`${statusColor(doc.review_status)} gap-1`}>
                     {statusIcon(doc.review_status)}
-                    {doc.review_status || "UPLOADED"}
+                    {statusLabel(doc.review_status)}
                 </Badge>
             </div>
             <div className="mt-2 flex items-center justify-between gap-4">
@@ -237,6 +321,28 @@ function DocRow({ doc, onApprove, onReject, onObserve, saving }) {
                     <Button size="sm" variant="destructive" disabled={saving} onClick={() => onReject(obs)} data-testid="doc-reject">Rechazar</Button>
                     <Button size="sm" disabled={saving} onClick={() => onApprove(obs)} data-testid="doc-approve">Aprobar</Button>
                 </div>
+            </div>
+        </div>
+    );
+}
+
+/* ── Fila de documento faltante (requerido pero no subido) ── */
+function MissingDocRow({ docType }) {
+    return (
+        <div className="border border-dashed border-red-200 rounded p-3 bg-red-50/50">
+            <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                    <Upload className="h-4 w-4 text-red-400" />
+                    <div className="text-sm font-medium text-red-700">{docLabel(docType)}</div>
+                    <span className="text-[10px] text-red-500 font-medium">(requerido)</span>
+                </div>
+                <Badge className="bg-red-100 text-red-600 gap-1">
+                    <XCircle className="h-3.5 w-3.5" />
+                    NO SUBIDO
+                </Badge>
+            </div>
+            <div className="mt-1 text-xs text-red-500">
+                El postulante aún no ha subido este documento.
             </div>
         </div>
     );

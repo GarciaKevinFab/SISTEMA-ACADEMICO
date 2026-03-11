@@ -9,6 +9,8 @@
 //   6. Confirmación (N° postulación, instrucciones de pago si aplica)
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
+import axios from "axios";
+import { API_BASE } from "../../utils/config";
 import {
   AdmissionCalls,
   AdmissionPublic,
@@ -45,6 +47,7 @@ import {
   ChevronDown,
   Printer,
   Upload,
+  Download,
   Camera,
   Paperclip,
   X,
@@ -936,6 +939,42 @@ export default function ApplicationWizard() {
                     Este documento es una constancia de registro. No constituye comprobante de pago.
                   </p>
                 </div>
+              </div>
+
+              {/* ── Descargar Constancia de Inscripción ── */}
+              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-5 max-w-md mx-auto text-center space-y-3 no-print">
+                <div className="flex items-center justify-center gap-2 text-indigo-800 font-bold">
+                  <FileText className="h-5 w-5" />
+                  Constancia de Inscripción
+                </div>
+                <p className="text-sm text-indigo-700">
+                  Descargue su constancia oficial de inscripción al proceso de admisión.
+                  Debe presentarla el día del examen con su DNI.
+                </p>
+                <Button
+                  variant="outline"
+                  className="border-indigo-300 text-indigo-700 hover:bg-indigo-100"
+                  onClick={async () => {
+                    const appId = result.application_id || result.application_number;
+                    try {
+                      const resp = await axios.get(
+                        `${API_BASE}/admission/public/certificates/inscripcion`,
+                        { params: { application_id: appId }, responseType: "blob" }
+                      );
+                      const url = URL.createObjectURL(resp.data);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `Constancia_Inscripcion_${form.dni}.pdf`;
+                      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                      toast.success("Constancia descargada");
+                    } catch {
+                      toast.error("No se pudo descargar la constancia. Intente desde la sección de Constancias.");
+                    }
+                  }}
+                >
+                  <Download className="mr-2 h-4 w-4" /> Descargar Constancia (PDF)
+                </Button>
               </div>
 
               <div className="pt-4 flex flex-col sm:flex-row justify-center gap-3 no-print">
