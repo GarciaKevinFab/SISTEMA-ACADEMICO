@@ -22,10 +22,10 @@ import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 import {
-    Plus, Save, Calendar, Users, Clock, FileText, CheckCircle,
+    Plus, Save, Calendar, CalendarDays, Users, Clock, FileText, CheckCircle,
     Search as SearchIcon, BookOpen, GraduationCap, BarChart3,
     Inbox, LayoutGrid, ClipboardList, LibraryBig, RotateCw,
-    TrendingUp, AlertCircle, AlertTriangle, Loader2, Download,
+    TrendingUp, AlertCircle, AlertTriangle, Loader2, Download, FileSpreadsheet,
 } from "lucide-react";
 
 import {
@@ -44,6 +44,7 @@ import AcademicReportsPage from "./AcademicReports";
 import AcademicProcesses from "./AcademicProcesses";
 import StudentHistoricalGrades from "./StudentHistoricalGrades";
 import TransferManagement from "./TransferManagement";
+import { PeriodsSection, TeachersSection, ImportersSection, InjectCatalogStyles } from "./AcademicCatalogs";
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle,
@@ -1127,6 +1128,9 @@ export default function AcademicModule() {
             { key: "reports", label: "Reportes", need: REQS.reports },
             { key: "processes", label: "Procesos", need: REQS.processes },
             { key: "transfers", label: "Alumnos / Traslados", need: REQS.transfers },
+            { key: "periods", label: "Periodos", need: [] },
+            { key: "teachers", label: "Docentes", need: [] },
+            { key: "importers", label: "Importadores", need: [] },
         ].filter((t) => t.need.length === 0 || hasAny(t.need)),
         [hasAny]
     );
@@ -1207,6 +1211,9 @@ export default function AcademicModule() {
                         <TabsContent value="reports"><AcademicReportsPage /></TabsContent>
                         <TabsContent value="processes"><AcademicProcesses /></TabsContent>
                         <TabsContent value="transfers"><TransferManagement /></TabsContent>
+                        <TabsContent value="periods"><InjectCatalogStyles /><PeriodsSection /></TabsContent>
+                        <TabsContent value="teachers"><InjectCatalogStyles /><TeachersSection /></TabsContent>
+                        <TabsContent value="importers"><InjectCatalogStyles /><ImportersSection /></TabsContent>
                     </Tabs>
                 </div>
             </div>
@@ -1228,7 +1235,7 @@ function tabIcon(key) {
     const map = {
         dashboard: LayoutGrid, plans: BookOpen, load: Calendar, enroll: GraduationCap,
         grades: CheckCircle, syllabus: FileText, kardex: Users, reports: BarChart3, processes: Clock,
-        transfers: Inbox,
+        transfers: Inbox, periods: CalendarDays, teachers: Users, importers: FileSpreadsheet,
     };
     return map[key] || LayoutGrid;
 }
