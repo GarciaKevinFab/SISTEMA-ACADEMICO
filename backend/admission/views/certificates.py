@@ -119,7 +119,6 @@ def _build_inst_dict() -> dict:
     # Firma del director: catalogs (signature_url) → admission fallback
     firma_path = (
         _url_to_filepath(cat.get("signature_url", ""))
-        or _url_to_filepath(cat.get("responsible_signature_url", ""))
         or _get_setting_file_path("firma_director")
     )
 

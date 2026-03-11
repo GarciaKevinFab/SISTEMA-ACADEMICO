@@ -376,7 +376,7 @@ def _load_institution_data():
                 return obj.data
             return {
                 "logo_url": getattr(obj, "logo_url", ""),
-                "responsible_signature_url": getattr(obj, "responsible_signature_url", ""),
+                "signature_url": getattr(obj, "signature_url", "") or getattr(obj, "responsible_signature_url", ""),
                 "name": getattr(obj, "name", ""),
             }
     except (ImportError, Exception):
@@ -552,7 +552,7 @@ class GraduateConstanciaView(APIView):
 
         # ── Firma ──
         els.append(Spacer(1, 8))
-        firma_path = _resolve_media_path(inst.get("responsible_signature_url"))
+        firma_path = _resolve_media_path(inst.get("signature_url"))
         firmante = grad.director_general or inst.get("director_general", "") or DEFAULT_DIRECTOR
 
         if firma_path:

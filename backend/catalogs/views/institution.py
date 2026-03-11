@@ -17,7 +17,6 @@ VALID_MEDIA_KINDS = (
     "LOGO_ALT",
     "SIGNATURE",
     "SECRETARY_SIGNATURE",
-    "RESPONSIBLE_SIGNATURE",
 )
 
 # ── Mapeo kind → key en data JSON ────────────────────────────
@@ -26,7 +25,6 @@ KIND_TO_URL_KEY = {
     "LOGO_ALT": "logo_url",
     "SIGNATURE": "signature_url",
     "SECRETARY_SIGNATURE": "secretary_signature_url",
-    "RESPONSIBLE_SIGNATURE": "responsible_signature_url",
 }
 
 # ── Keys de URL que necesitan absolutización ──────────────────
@@ -34,7 +32,6 @@ URL_KEYS = [
     "logo_url",
     "signature_url",
     "secretary_signature_url",
-    "responsible_signature_url",
 ]
 
 
