@@ -133,7 +133,10 @@ export const Backup = {
 export const Credentials = {
     downloadBulk: (role) =>
         getResponse(
-            api.post("/catalogs/download-credentials", { role }, { responseType: "blob" })
+            api.post("/catalogs/download-credentials", { role }, {
+                responseType: "blob",
+                timeout: 300000, // 5 min — regenera contraseñas de todos los usuarios
+            })
         ),
 };
 

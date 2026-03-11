@@ -1002,28 +1002,40 @@ def users_bulk_credentials(request):
 
         if role_name == "TEACHER":
             from catalogs.models import Teacher
-            teachers = Teacher.objects.filter(
-                user__isnull=False, user__is_active=True
-            ).select_related("user").order_by("full_name", "user__username")
+            from concurrent.futures import ThreadPoolExecutor
+            from django.contrib.auth.hashers import make_password
 
-            if not teachers.exists():
+            teachers = list(
+                Teacher.objects.filter(
+                    user__isnull=False, user__is_active=True
+                ).select_related("user").order_by("full_name", "user__username")
+            )
+
+            if not teachers:
                 return Response(
                     {"detail": "No hay docentes con usuario activo."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-            for t in teachers:
+            plain_passwords = [get_random_string(10) for _ in teachers]
+
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                hashed_passwords = list(executor.map(make_password, plain_passwords))
+
+            users_to_update = []
+            for i, t in enumerate(teachers):
                 u = t.user
-                tmp = get_random_string(10)
-                u.set_password(tmp)
+                u.password = hashed_passwords[i]
                 u.must_change_password = True
-                u.save(update_fields=["password", "must_change_password"])
+                users_to_update.append(u)
                 rows.append({
                     "documento": t.document or u.username,
                     "nombre": u.full_name or t.full_name or "",
                     "usuario": u.username,
-                    "contraseña": tmp,
+                    "contraseña": plain_passwords[i],
                 })
+
+            User.objects.bulk_update(users_to_update, ["password", "must_change_password"], batch_size=500)
 
         else:  # STUDENT
             from students.models import Student
@@ -1039,12 +1051,20 @@ def users_bulk_credentials(request):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-            # Generar contraseñas en lote para mejor rendimiento
+            # Generar contraseñas en lote y hashear en paralelo
+            # (hashlib.pbkdf2_hmac libera el GIL → threading sí acelera)
+            from concurrent.futures import ThreadPoolExecutor
+            from django.contrib.auth.hashers import make_password
+
+            plain_passwords = [get_random_string(10) for _ in students]
+
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                hashed_passwords = list(executor.map(make_password, plain_passwords))
+
             users_to_update = []
-            for st in students:
+            for i, st in enumerate(students):
                 u = st.user
-                tmp = get_random_string(10)
-                u.set_password(tmp)
+                u.password = hashed_passwords[i]
                 u.must_change_password = True
                 users_to_update.append(u)
                 rows.append({
@@ -1053,11 +1073,10 @@ def users_bulk_credentials(request):
                         f"{st.apellido_paterno or ''} {st.apellido_materno or ''} {st.nombres or ''}".strip()
                     ),
                     "usuario": u.username,
-                    "contraseña": tmp,
+                    "contraseña": plain_passwords[i],
                 })
 
-            # bulk_update para no hacer 1092 queries individuales
-            User.objects.bulk_update(users_to_update, ["password", "must_change_password"], batch_size=200)
+            User.objects.bulk_update(users_to_update, ["password", "must_change_password"], batch_size=500)
 
         inst = _get_institution_info()
         excel_bytes = _build_credentials_excel(rows, role_name, inst)
