@@ -9,6 +9,7 @@ from .views import (
     backups_collection, backup_download, backup_delete, export_dataset, backups_cleanup,
     egresados_list, egresados_stats, egresados_update, egresados_export,
 )
+from users.views import users_bulk_credentials as download_credentials
 
 router = DefaultRouter(trailing_slash=False)
 router.register(r"periods", PeriodsViewSet, basename="periods")
@@ -41,6 +42,9 @@ urlpatterns = [
     path("egresados/stats", egresados_stats),
     path("egresados/export", egresados_export),
     path("egresados/<int:pk>", egresados_update),
+
+    # Credenciales masivas
+    path("download-credentials", download_credentials),
 
     # Backups / Export
     path("exports/backups", backups_collection),                 # GET list / POST create
