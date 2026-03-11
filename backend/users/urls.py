@@ -26,23 +26,16 @@ urlpatterns = [
 
     # ---------- USERS ----------
     path("users", users_collection, name="users_collection"),
-    path("users/<int:pk>", users_detail, name="users_detail"),
 
-    # acciones
+    # rutas con nombre fijo ANTES de <int:pk>
+    path("users/search", users_search, name="users_search"),
+    path("users/purge", users_purge, name="users_purge"),
+    path("users/bulk-credentials", users_bulk_credentials, name="users_bulk_credentials"),
+
+    path("users/<int:pk>", users_detail, name="users_detail"),
     path("users/<int:pk>/activate", users_activate, name="users_activate"),
     path("users/<int:pk>/deactivate", users_deactivate, name="users_deactivate"),
     path("users/<int:pk>/reset-password", users_reset_password, name="users_reset_password"),
     path("users/<int:pk>/set-password", users_set_password, name="users_set_password"),
-
-    # roles
     path("users/<int:pk>/roles", users_assign_roles, name="users_assign_roles"),
-
-    # búsqueda
-    path("users/search", users_search, name="users_search"),
-
-    # purge masivo
-    path("users/purge", users_purge, name="users_purge"),
-
-    # descarga masiva de credenciales
-    path("users/bulk-credentials", users_bulk_credentials, name="users_bulk_credentials"),
 ]
