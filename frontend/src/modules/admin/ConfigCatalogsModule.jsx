@@ -1209,7 +1209,6 @@ const BackupTab = () => {
 // ===============================================================
 const ALL_TABS = [
     { value: "catalogs", label: "Catálogos" },
-    { value: "importers", label: "Importadores" },
     { value: "backup", label: "Respaldo" },
 ];
 
@@ -1257,12 +1256,9 @@ const ConfigCatalogsModule = () => {
                     </TabsList>
 
                     <TabsContent value="catalogs" className="mt-5 space-y-5 pb-10">
-                        <PeriodsSection />
                         <CampusesSection />
-                        <TeachersSection />
                         <InstitutionSection />
                     </TabsContent>
-                    <TabsContent value="importers" className="mt-5 pb-10"><ImportersTab /></TabsContent>
                     <TabsContent value="backup" className="mt-5 pb-10"><BackupTab /></TabsContent>
                 </Tabs>
             </div>
