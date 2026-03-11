@@ -20,7 +20,8 @@ import {
     CalendarDays, Users, FileSpreadsheet, Plus, AlertCircle, Save, Trash2,
     Edit3, UserPlus, Mail, Phone, CreditCard, Loader2, UploadCloud, Download,
 } from "lucide-react";
-import { Periods, Teachers, Imports } from "@/services/catalogs.service";
+import { Periods, Teachers, Imports, Credentials } from "@/services/catalogs.service";
+import { KeyRound } from "lucide-react";
 
 /* ─── inject styles (reusa clases cfg-*) ─── */
 export function InjectCatalogStyles() {
@@ -346,6 +347,8 @@ export const TeachersSection = () => {
     const [editing, setEditing] = useState(null);
     const [search, setSearch] = useState("");
     const [form, setForm] = useState(INITIAL_TEACHER_FORM);
+    const [showCredConfirm, setShowCredConfirm] = useState(false);
+    const [downloadingCred, setDownloadingCred] = useState(false);
 
     const resetForm = () => { setForm(INITIAL_TEACHER_FORM); setEditing(null); };
 
@@ -368,6 +371,18 @@ export const TeachersSection = () => {
 
     const remove = async (id) => { try { await Teachers.remove(id); toast.success("Docente eliminado"); load(); } catch (e) { toast.error(formatApiError(e)); } };
 
+    const confirmDownloadCred = async () => {
+        setDownloadingCred(true);
+        try {
+            const res = await Credentials.downloadBulk("TEACHER");
+            const cd = res.headers?.["content-disposition"];
+            const filename = filenameFromContentDisposition(cd, "credenciales_teacher.xlsx");
+            saveBlobAsFile(new Blob([res.data], { type: res.headers?.["content-type"] || "application/octet-stream" }), filename);
+            toast.success("Credenciales de docentes descargadas");
+        } catch (e) { toast.error(formatApiError(e, "No se pudo descargar")); }
+        finally { setDownloadingCred(false); setShowCredConfirm(false); }
+    };
+
     const filtered = useMemo(() => {
         if (!search.trim()) return rows;
         const q = search.toLowerCase();
@@ -380,6 +395,11 @@ export const TeachersSection = () => {
         <SectionCard
             icon={Users} title="Directorio de Docentes" desc="Registro de profesores e información de contacto"
             action={
+                <div className="flex items-center gap-2">
+                <Button variant="outline" className="h-9 px-3 rounded-xl border-slate-200 text-sm gap-1.5"
+                    onClick={() => setShowCredConfirm(true)}>
+                    <KeyRound className="w-4 h-4" /> Credenciales
+                </Button>
                 <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
                     <DialogTrigger asChild>
                         <Button className="h-9 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-700 gap-1.5 shadow-sm">
@@ -433,8 +453,30 @@ export const TeachersSection = () => {
                         </div>
                     </DialogContent>
                 </Dialog>
+                </div>
             }
         >
+            {/* AlertDialog para confirmar descarga de credenciales docentes */}
+            <AlertDialog open={showCredConfirm} onOpenChange={setShowCredConfirm}>
+                <AlertDialogContent className="rounded-2xl max-w-sm">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2 text-slate-800">
+                            <KeyRound className="w-5 h-5 text-blue-600" /> Descargar credenciales
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-500 text-sm">
+                            Se regenerarán TODAS las contraseñas de los docentes. Las contraseñas anteriores dejarán de funcionar. ¿Continuar?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="gap-2 sm:gap-2">
+                        <AlertDialogCancel disabled={downloadingCred} className="rounded-xl">Cancelar</AlertDialogCancel>
+                        <Button onClick={confirmDownloadCred} disabled={downloadingCred}
+                            className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
+                            {downloadingCred ? <><Loader2 className="w-4 h-4 animate-spin" /> Descargando…</> : <><Download className="w-4 h-4" /> Sí, descargar</>}
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             <div className="mb-4 relative w-full sm:w-72">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -537,6 +579,8 @@ export const ImportersSection = () => {
     const [job, setJob] = useState(null);
     const [status, setStatus] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
+    const [showStudentCredConfirm, setShowStudentCredConfirm] = useState(false);
+    const [downloadingStudentCred, setDownloadingStudentCred] = useState(false);
     const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
     const pollRef = useRef(null);
     const intervalRef = useRef(2000);
@@ -621,6 +665,18 @@ export const ImportersSection = () => {
     const stopMonitoring = () => { clearPolling(); setIsImporting(false); setStatus(null); setJob(null); setLastUpdatedAt(null); clearJobMemory(); toast.info("Monitoreo detenido"); };
     const closeResults = () => { setStatus(null); setJob(null); setLastUpdatedAt(null); setFile(null); clearJobMemory(); toast.info("Resultados cerrados"); };
 
+    const confirmDownloadStudentCred = async () => {
+        setDownloadingStudentCred(true);
+        try {
+            const res = await Credentials.downloadBulk("STUDENT");
+            const cd = res.headers?.["content-disposition"];
+            const filename = filenameFromContentDisposition(cd, "credenciales_student.xlsx");
+            saveBlobAsFile(new Blob([res.data], { type: res.headers?.["content-type"] || "application/octet-stream" }), filename);
+            toast.success("Credenciales de estudiantes descargadas");
+        } catch (e) { toast.error(formatApiError(e, "No se pudo descargar")); }
+        finally { setDownloadingStudentCred(false); setShowStudentCredConfirm(false); }
+    };
+
     const progress = safeNum(status?.progress, 0);
     const processed = safeNum(status?.processed, 0);
     const total = safeNum(status?.total, 0);
@@ -690,12 +746,38 @@ export const ImportersSection = () => {
             </div>
 
             <div className="flex flex-col sm:flex-row justify-end gap-2 mt-5">
+                <Button variant="outline" className="h-9 rounded-xl border-slate-200 text-sm gap-1.5"
+                    disabled={isProcessing} onClick={() => setShowStudentCredConfirm(true)}>
+                    <KeyRound className="w-4 h-4" /> Credenciales Estudiantes
+                </Button>
+                <div className="flex-1" />
                 {isProcessing && <Button variant="outline" className="h-9 rounded-xl border-red-200 text-red-600 hover:bg-red-50 text-sm" onClick={stopMonitoring}>Dejar de monitorear</Button>}
                 {!isProcessing && status && <Button variant="outline" className="h-9 rounded-xl text-sm" onClick={closeResults}>Cerrar resultados</Button>}
                 <Button className="h-9 min-w-[180px] rounded-xl bg-blue-600 hover:bg-blue-700 text-sm font-700 shadow-sm gap-1.5" disabled={isProcessing || !file} onClick={start}>
                     {isProcessing ? <><Loader2 className="w-4 h-4 animate-spin" /> Procesando…</> : <><UploadCloud className="w-4 h-4" /> Iniciar importación</>}
                 </Button>
             </div>
+
+            {/* AlertDialog para confirmar descarga de credenciales estudiantes */}
+            <AlertDialog open={showStudentCredConfirm} onOpenChange={setShowStudentCredConfirm}>
+                <AlertDialogContent className="rounded-2xl max-w-sm">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2 text-slate-800">
+                            <KeyRound className="w-5 h-5 text-blue-600" /> Descargar credenciales
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-500 text-sm">
+                            Se regenerarán TODAS las contraseñas de los estudiantes. Las contraseñas anteriores dejarán de funcionar. ¿Continuar?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="gap-2 sm:gap-2">
+                        <AlertDialogCancel disabled={downloadingStudentCred} className="rounded-xl">Cancelar</AlertDialogCancel>
+                        <Button onClick={confirmDownloadStudentCred} disabled={downloadingStudentCred}
+                            className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
+                            {downloadingStudentCred ? <><Loader2 className="w-4 h-4 animate-spin" /> Descargando…</> : <><Download className="w-4 h-4" /> Sí, descargar</>}
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {showProgressCard && (
                 <div className="mt-6 rounded-2xl border border-slate-200 overflow-hidden cfg-fade">

@@ -13,7 +13,8 @@ from .views import (
     users_assign_roles,
     change_password,
     users_set_password,
-    users_purge,  # ✅ NUEVO
+    users_purge,
+    users_bulk_credentials,
 )
 
 urlpatterns = [
@@ -39,6 +40,9 @@ urlpatterns = [
     # búsqueda
     path("users/search", users_search, name="users_search"),
 
-    # ✅ PURGE MASIVO (rol / ids / seleccionar todo)
+    # purge masivo
     path("users/purge", users_purge, name="users_purge"),
+
+    # descarga masiva de credenciales
+    path("users/bulk-credentials", users_bulk_credentials, name="users_bulk_credentials"),
 ]

@@ -12,9 +12,14 @@ from rest_framework.response import Response
 from acl.models import UserRole, Role
 from .serializers import UserSerializer, UserCreateSerializer, UserUpdateSerializer
 from django.db import transaction
+from django.http import HttpResponse
 
 from django.db.models.deletion import ProtectedError
 from django.db import IntegrityError
+
+import io
+import openpyxl
+import openpyxl.styles
 
 from academic.models import (
     AcademicGradeRecord,
@@ -772,3 +777,100 @@ def users_purge(request):
         "errors": errors if errors else None,
         "message": f"Purge ejecutado. {totals['users']} usuario(s) eliminado(s)."
     })
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def users_bulk_credentials(request):
+    """
+    Regenera contraseñas temporales para todos los usuarios activos de un rol
+    y devuelve un Excel descargable con las credenciales.
+    Body: { "role": "STUDENT" | "TEACHER" }
+    """
+    not_ok = _require_staff(request)
+    if not_ok:
+        return not_ok
+
+    role_name = (request.data.get("role") or "").strip().upper()
+    if role_name not in ("STUDENT", "TEACHER"):
+        return Response(
+            {"detail": "role debe ser STUDENT o TEACHER"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    role = Role.objects.filter(name__iexact=role_name).first()
+    if not role:
+        return Response(
+            {"detail": f"Rol {role_name} no existe."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    users = (
+        User.objects.filter(user_roles__role=role, is_active=True)
+        .order_by("username")
+    )
+
+    if not users.exists():
+        return Response(
+            {"detail": "No hay usuarios activos con ese rol."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    rows = []
+    for u in users:
+        tmp = get_random_string(10)
+        u.set_password(tmp)
+        u.must_change_password = True
+        u.save(update_fields=["password", "must_change_password"])
+
+        if role_name == "STUDENT":
+            st = getattr(u, "student_profile", None)
+            rows.append({
+                "documento": st.num_documento if st else u.username,
+                "nombre": u.full_name or (
+                    f"{st.nombres or ''} {st.apellido_paterno or ''} {st.apellido_materno or ''}".strip()
+                    if st else ""
+                ),
+                "usuario": u.username,
+                "contraseña": tmp,
+            })
+        else:
+            teacher = None
+            try:
+                from catalogs.models import Teacher
+                teacher = Teacher.objects.filter(user=u).first()
+            except Exception:
+                pass
+            rows.append({
+                "documento": teacher.document if teacher else u.username,
+                "nombre": u.full_name or (teacher.full_name if teacher else ""),
+                "usuario": u.username,
+                "contraseña": tmp,
+            })
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"Credenciales {role_name}"
+    headers = ["DOCUMENTO", "NOMBRE", "USUARIO", "CONTRASEÑA"]
+    ws.append(headers)
+    for r in rows:
+        ws.append([r["documento"], r["nombre"], r["usuario"], r["contraseña"]])
+
+    bold = openpyxl.styles.Font(bold=True)
+    for cell in ws[1]:
+        cell.font = bold
+    for col in ws.columns:
+        max_len = max(len(str(c.value or "")) for c in col)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    filename = f"credenciales_{role_name.lower()}.xlsx"
+    response = HttpResponse(
+        buf.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response

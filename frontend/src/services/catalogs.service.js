@@ -129,6 +129,14 @@ export const Backup = {
         getData(api.post("/catalogs/exports/backups/cleanup", { days, only_datasets })),
 };
 
+// ------------------ Credenciales masivas ------------------
+export const Credentials = {
+    downloadBulk: (role) =>
+        getResponse(
+            api.post("/users/bulk-credentials", { role }, { responseType: "blob" })
+        ),
+};
+
 export const Egresados = {
     list: (params = {}) => {
         const q = new URLSearchParams(params).toString();
