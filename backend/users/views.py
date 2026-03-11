@@ -777,6 +777,154 @@ def users_purge(request):
     })
 
 
+def _get_institution_info():
+    """Obtiene datos de la institución para encabezados de reportes."""
+    info = {"name": "", "ruc": "", "address": "", "phone": "", "email": ""}
+    try:
+        from catalogs.models import InstitutionSetting
+        obj = InstitutionSetting.objects.filter(pk=1).first()
+        if obj and obj.data:
+            d = obj.data
+            info["name"] = d.get("name") or d.get("nombre") or ""
+            info["ruc"] = d.get("ruc") or ""
+            info["address"] = d.get("address") or d.get("direccion") or ""
+            info["phone"] = d.get("phone") or d.get("telefono") or ""
+            info["email"] = d.get("email") or ""
+    except Exception:
+        pass
+    if not info["name"]:
+        try:
+            from academic.models import InstitutionSettings
+            inst = InstitutionSettings.objects.first()
+            if inst:
+                info["name"] = inst.name or ""
+                info["ruc"] = getattr(inst, "ruc", "") or ""
+                info["address"] = getattr(inst, "address", "") or ""
+                info["phone"] = getattr(inst, "phone", "") or ""
+                info["email"] = getattr(inst, "email", "") or ""
+        except Exception:
+            pass
+    return info
+
+
+def _build_credentials_excel(rows, role_name, inst):
+    """Genera un Excel con formato profesional para credenciales."""
+    import openpyxl as _xl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = _xl.Workbook()
+    ws = wb.active
+    ws.title = f"Credenciales {role_name}"
+
+    # --- Colores y estilos ---
+    DARK_BLUE = "1F4E79"
+    LIGHT_BLUE = "D6E4F0"
+    WHITE = "FFFFFF"
+
+    fill_header = PatternFill(start_color=DARK_BLUE, end_color=DARK_BLUE, fill_type="solid")
+    fill_subheader = PatternFill(start_color=LIGHT_BLUE, end_color=LIGHT_BLUE, fill_type="solid")
+    font_title = Font(name="Arial", size=13, bold=True, color=WHITE)
+    font_subtitle = Font(name="Arial", size=10, color=WHITE)
+    font_col_header = Font(name="Arial", size=10, bold=True, color=WHITE)
+    font_data = Font(name="Arial", size=10)
+    font_note = Font(name="Arial", size=9, italic=True, color="666666")
+    align_center = Alignment(horizontal="center", vertical="center")
+    align_left = Alignment(horizontal="left", vertical="center")
+    thin_border = Border(
+        left=Side(style="thin", color="CCCCCC"),
+        right=Side(style="thin", color="CCCCCC"),
+        top=Side(style="thin", color="CCCCCC"),
+        bottom=Side(style="thin", color="CCCCCC"),
+    )
+
+    # Anchos de columna
+    col_widths = {"A": 18, "B": 38, "C": 18, "D": 18}
+    for col_letter, w in col_widths.items():
+        ws.column_dimensions[col_letter].width = w
+
+    # --- Fila 1: Nombre de institución (merge A1:D1) ---
+    ws.merge_cells("A1:D1")
+    cell_title = ws["A1"]
+    cell_title.value = inst.get("name") or "INSTITUCIÓN EDUCATIVA"
+    cell_title.font = font_title
+    cell_title.fill = fill_header
+    cell_title.alignment = align_center
+    ws.row_dimensions[1].height = 32
+
+    # --- Fila 2: Subtítulo (merge A2:D2) ---
+    ws.merge_cells("A2:D2")
+    role_label = "DOCENTES" if role_name == "TEACHER" else "ESTUDIANTES"
+    cell_sub = ws["A2"]
+    cell_sub.value = f"CREDENCIALES DE ACCESO - {role_label}"
+    cell_sub.font = font_subtitle
+    cell_sub.fill = fill_header
+    cell_sub.alignment = align_center
+    ws.row_dimensions[2].height = 22
+
+    # --- Fila 3: Info adicional (merge A3:D3) ---
+    ws.merge_cells("A3:D3")
+    parts = []
+    if inst.get("address"):
+        parts.append(inst["address"])
+    if inst.get("phone"):
+        parts.append(f"Tel: {inst['phone']}")
+    if inst.get("email"):
+        parts.append(inst["email"])
+    cell_info = ws["A3"]
+    cell_info.value = " | ".join(parts) if parts else ""
+    cell_info.font = Font(name="Arial", size=9, color="888888")
+    cell_info.alignment = align_center
+    ws.row_dimensions[3].height = 18
+
+    # --- Fila 4: Espacio ---
+    ws.row_dimensions[4].height = 8
+
+    # --- Fila 5: Headers de columna ---
+    header_row = 5
+    col_headers = ["DOCUMENTO", "NOMBRE COMPLETO", "USUARIO", "CONTRASEÑA"]
+    for col_idx, header in enumerate(col_headers, 1):
+        cell = ws.cell(row=header_row, column=col_idx, value=header)
+        cell.font = font_col_header
+        cell.fill = PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
+        cell.alignment = align_center
+        cell.border = thin_border
+    ws.row_dimensions[header_row].height = 24
+
+    # --- Filas de datos ---
+    for i, r in enumerate(rows):
+        row_num = header_row + 1 + i
+        is_alt = i % 2 == 1
+        values = [r["documento"], r["nombre"], r["usuario"], r["contraseña"]]
+        for col_idx, val in enumerate(values, 1):
+            cell = ws.cell(row=row_num, column=col_idx, value=val)
+            cell.font = font_data
+            cell.border = thin_border
+            cell.alignment = align_left
+            if is_alt:
+                cell.fill = PatternFill(start_color="F2F7FB", end_color="F2F7FB", fill_type="solid")
+
+    # --- Fila final: Nota ---
+    note_row = header_row + len(rows) + 2
+    ws.merge_cells(f"A{note_row}:D{note_row}")
+    cell_note = ws.cell(row=note_row, column=1)
+    cell_note.value = (
+        f"Total: {len(rows)} {role_label.lower()} | "
+        "Las contraseñas son temporales. El usuario deberá cambiarla al iniciar sesión."
+    )
+    cell_note.font = font_note
+    cell_note.alignment = align_center
+
+    # --- Configurar impresión ---
+    ws.print_title_rows = "1:5"
+    ws.sheet_properties.pageSetUpPr = _xl.worksheet.properties.PageSetupProperties(fitToPage=True)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+
+
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def users_bulk_credentials(request):
@@ -785,7 +933,6 @@ def users_bulk_credentials(request):
     y devuelve un Excel descargable con las credenciales.
     Body: { "role": "STUDENT" | "TEACHER" }
     """
-    import csv as _csv
     import traceback as _tb
 
     not_ok = _require_staff(request)
@@ -800,15 +947,13 @@ def users_bulk_credentials(request):
         )
 
     try:
-        # Buscar usuarios directamente desde los modelos Teacher/Student
-        # (la tabla UserRole puede no tener los roles asignados)
         rows = []
 
         if role_name == "TEACHER":
             from catalogs.models import Teacher
             teachers = Teacher.objects.filter(
                 user__isnull=False, user__is_active=True
-            ).select_related("user").order_by("user__username")
+            ).select_related("user").order_by("full_name", "user__username")
 
             if not teachers.exists():
                 return Response(
@@ -831,75 +976,48 @@ def users_bulk_credentials(request):
 
         else:  # STUDENT
             from students.models import Student
-            students = Student.objects.filter(
-                user__isnull=False, user__is_active=True
-            ).select_related("user").order_by("user__username")
+            students = list(
+                Student.objects.filter(
+                    user__isnull=False, user__is_active=True
+                ).select_related("user").order_by("apellido_paterno", "apellido_materno", "nombres")
+            )
 
-            if not students.exists():
+            if not students:
                 return Response(
                     {"detail": "No hay estudiantes con usuario activo."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
+            # Generar contraseñas en lote para mejor rendimiento
+            users_to_update = []
             for st in students:
                 u = st.user
                 tmp = get_random_string(10)
                 u.set_password(tmp)
                 u.must_change_password = True
-                u.save(update_fields=["password", "must_change_password"])
+                users_to_update.append(u)
                 rows.append({
                     "documento": st.num_documento or u.username,
                     "nombre": u.full_name or (
-                        f"{st.nombres or ''} {st.apellido_paterno or ''} {st.apellido_materno or ''}".strip()
+                        f"{st.apellido_paterno or ''} {st.apellido_materno or ''} {st.nombres or ''}".strip()
                     ),
                     "usuario": u.username,
                     "contraseña": tmp,
                 })
 
-        # Intentar generar Excel; si openpyxl falla, generar CSV
-        try:
-            import openpyxl as _xl
-            import openpyxl.styles as _xl_styles
+            # bulk_update para no hacer 1092 queries individuales
+            User.objects.bulk_update(users_to_update, ["password", "must_change_password"], batch_size=200)
 
-            wb = _xl.Workbook()
-            ws = wb.active
-            ws.title = f"Credenciales {role_name}"
-            col_headers = ["DOCUMENTO", "NOMBRE", "USUARIO", "CONTRASEÑA"]
-            ws.append(col_headers)
-            for r in rows:
-                ws.append([r["documento"], r["nombre"], r["usuario"], r["contraseña"]])
+        inst = _get_institution_info()
+        excel_bytes = _build_credentials_excel(rows, role_name, inst)
 
-            bold = _xl_styles.Font(bold=True)
-            for cell in ws[1]:
-                cell.font = bold
-            for col in ws.columns:
-                max_len = max(len(str(c.value or "")) for c in col)
-                ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
-
-            buf = io.BytesIO()
-            wb.save(buf)
-            buf.seek(0)
-
-            filename = f"credenciales_{role_name.lower()}.xlsx"
-            resp = HttpResponse(
-                buf.getvalue(),
-                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-            resp["Content-Disposition"] = f'attachment; filename="{filename}"'
-            return resp
-
-        except ImportError:
-            # Fallback a CSV si openpyxl no está instalado
-            buf = io.StringIO()
-            writer = _csv.writer(buf)
-            writer.writerow(["DOCUMENTO", "NOMBRE", "USUARIO", "CONTRASEÑA"])
-            for r in rows:
-                writer.writerow([r["documento"], r["nombre"], r["usuario"], r["contraseña"]])
-
-            filename = f"credenciales_{role_name.lower()}.csv"
-            resp = HttpResponse(buf.getvalue(), content_type="text/csv; charset=utf-8")
-            resp["Content-Disposition"] = f'attachment; filename="{filename}"'
-            return resp
+        filename = f"credenciales_{role_name.lower()}.xlsx"
+        resp = HttpResponse(
+            excel_bytes,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp
 
     except Exception as exc:
         return Response(
