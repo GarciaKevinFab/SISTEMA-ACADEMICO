@@ -799,53 +799,59 @@ def users_bulk_credentials(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    role = Role.objects.filter(name__iexact=role_name).first()
-    if not role:
-        return Response(
-            {"detail": f"Rol {role_name} no existe."},
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
-    users = (
-        User.objects.filter(user_roles__role=role, is_active=True)
-        .order_by("username")
-    )
-
-    if not users.exists():
-        return Response(
-            {"detail": "No hay usuarios activos con ese rol."},
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
     try:
+        # Buscar usuarios directamente desde los modelos Teacher/Student
+        # (la tabla UserRole puede no tener los roles asignados)
         rows = []
-        for u in users:
-            tmp = get_random_string(10)
-            u.set_password(tmp)
-            u.must_change_password = True
-            u.save(update_fields=["password", "must_change_password"])
 
-            if role_name == "STUDENT":
-                st = getattr(u, "student_profile", None)
+        if role_name == "TEACHER":
+            from catalogs.models import Teacher
+            teachers = Teacher.objects.filter(
+                user__isnull=False, user__is_active=True
+            ).select_related("user").order_by("user__username")
+
+            if not teachers.exists():
+                return Response(
+                    {"detail": "No hay docentes con usuario activo."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            for t in teachers:
+                u = t.user
+                tmp = get_random_string(10)
+                u.set_password(tmp)
+                u.must_change_password = True
+                u.save(update_fields=["password", "must_change_password"])
                 rows.append({
-                    "documento": (st.num_documento if st else None) or u.username,
-                    "nombre": u.full_name or (
-                        f"{st.nombres or ''} {st.apellido_paterno or ''} {st.apellido_materno or ''}".strip()
-                        if st else ""
-                    ),
+                    "documento": t.document or u.username,
+                    "nombre": u.full_name or t.full_name or "",
                     "usuario": u.username,
                     "contraseña": tmp,
                 })
-            else:
-                teacher = None
-                try:
-                    from catalogs.models import Teacher
-                    teacher = Teacher.objects.filter(user=u).first()
-                except Exception:
-                    pass
+
+        else:  # STUDENT
+            from students.models import Student
+            students = Student.objects.filter(
+                user__isnull=False, user__is_active=True
+            ).select_related("user").order_by("user__username")
+
+            if not students.exists():
+                return Response(
+                    {"detail": "No hay estudiantes con usuario activo."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            for st in students:
+                u = st.user
+                tmp = get_random_string(10)
+                u.set_password(tmp)
+                u.must_change_password = True
+                u.save(update_fields=["password", "must_change_password"])
                 rows.append({
-                    "documento": (getattr(teacher, "document", None) if teacher else None) or u.username,
-                    "nombre": u.full_name or (getattr(teacher, "full_name", "") if teacher else ""),
+                    "documento": st.num_documento or u.username,
+                    "nombre": u.full_name or (
+                        f"{st.nombres or ''} {st.apellido_paterno or ''} {st.apellido_materno or ''}".strip()
+                    ),
                     "usuario": u.username,
                     "contraseña": tmp,
                 })
