@@ -1226,7 +1226,73 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
               </div>
 
               <div className="pt-4 flex flex-col sm:flex-row justify-center gap-3 no-print">
-                <Button variant="outline" onClick={() => window.print()} className="h-12 rounded-xl px-8">
+                <Button variant="outline" onClick={() => {
+                  const el = document.getElementById("print-confirmation");
+                  if (!el) { window.print(); return; }
+                  const printWindow = window.open("", "_blank", "width=800,height=600");
+                  if (!printWindow) { window.print(); return; }
+                  const dataBox = el.querySelector(".print-data-box");
+                  const paymentBox = el.querySelector('[class*="bg-blue-50"]');
+                  printWindow.document.write(`<!DOCTYPE html><html><head>
+                    <meta charset="utf-8">
+                    <title>Comprobante de Postulación</title>
+                    <style>
+                      * { margin:0; padding:0; box-sizing:border-box; }
+                      body { font-family:'Inter','Segoe UI',sans-serif; padding:40px 50px; color:#1e293b; }
+                      .header { text-align:center; border-bottom:2px solid #1e3a5f; padding-bottom:14px; margin-bottom:24px; }
+                      .header h1 { font-size:16px; font-weight:800; color:#1e3a5f; text-transform:uppercase; letter-spacing:0.5px; }
+                      .header p { font-size:11px; color:#64748b; margin-top:3px; }
+                      .title { text-align:center; margin-bottom:20px; }
+                      .title h2 { font-size:18px; font-weight:700; color:#111827; }
+                      .title p { font-size:12px; color:#6b7280; margin-top:4px; }
+                      .card { background:#fafbfc; border:1px solid #d1d5db; border-radius:8px; padding:12px 18px; margin-bottom:16px; }
+                      .row { display:flex; justify-content:space-between; padding:8px 4px; border-bottom:1px solid #f1f5f9; font-size:12px; }
+                      .row:last-child { border-bottom:none; }
+                      .row .label { color:#6b7280; }
+                      .row .value { font-weight:600; color:#111827; text-align:right; }
+                      .badge { display:inline-block; background:#dcfce7; color:#166534; border:1px solid #bbf7d0; padding:2px 10px; border-radius:4px; font-size:10px; font-weight:600; }
+                      .num { color:#2563eb; font-size:16px; font-weight:700; }
+                      .payment { background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:12px 18px; margin-bottom:16px; }
+                      .payment h3 { font-size:13px; font-weight:700; color:#1e40af; margin-bottom:4px; }
+                      .payment p { font-size:11px; color:#1d4ed8; }
+                      .footer { margin-top:30px; padding-top:12px; border-top:1px solid #cbd5e1; text-align:center; }
+                      .footer p { font-size:10px; color:#94a3b8; }
+                      .footer .small { font-size:9px; color:#cbd5e1; margin-top:4px; }
+                      @media print { body { padding:30px 40px; } }
+                    </style>
+                  </head><body>
+                    <div class="header">
+                      <h1>IESPP Gustavo Allende Llavería</h1>
+                      <p>Proceso de Admisión — Comprobante de Postulación</p>
+                    </div>
+                    <div class="title">
+                      <h2>¡Postulación Registrada!</h2>
+                      <p>Su postulación ha sido registrada exitosamente.</p>
+                    </div>
+                    <div class="card">
+                      <div class="row"><span class="label">N° Postulación</span><span class="value num">#${result.application_number || result.application_id}</span></div>
+                      <div class="row"><span class="label">Estado</span><span class="value"><span class="badge">${result.status}</span></span></div>
+                      <div class="row"><span class="label">Postulante</span><span class="value">${fullName}</span></div>
+                      <div class="row"><span class="label">DNI</span><span class="value">${form.dni}</span></div>
+                      <div class="row"><span class="label">Convocatoria</span><span class="value">${selectedCall?.name || ""}</span></div>
+                      <div class="row"><span class="label">Programa de Estudios</span><span class="value">${(() => {
+                        const allC = selectedCall?.careers || [];
+                        if (preferences.length === 0) return "—";
+                        const c = allC.find(x => String(x.id) === String(preferences[0]) || String(x.career_id) === String(preferences[0]));
+                        return c?.name || c?.career_name || "—";
+                      })()}</span></div>
+                      <div class="row"><span class="label">Fecha de registro</span><span class="value">${new Date().toLocaleDateString("es-PE", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" })}</span></div>
+                    </div>
+                    ${hasFee ? `<div class="payment"><h3>💳 Pago registrado: S/. ${applicationFee.toFixed(2)}</h3><p>Su comprobante de pago ha sido registrado y será verificado por la oficina de finanzas.</p></div>` : ""}
+                    <div class="footer">
+                      <p>Documento generado el ${new Date().toLocaleDateString("es-PE", { day:"2-digit", month:"long", year:"numeric", hour:"2-digit", minute:"2-digit" })} — Sistema Académico IESPP Gustavo Allende Llavería</p>
+                      <p class="small">Este documento es una constancia de registro. No constituye comprobante de pago.</p>
+                    </div>
+                  </body></html>`);
+                  printWindow.document.close();
+                  printWindow.focus();
+                  setTimeout(() => { printWindow.print(); printWindow.close(); }, 300);
+                }} className="h-12 rounded-xl px-8">
                   <Printer className="mr-2 h-4 w-4" /> Imprimir
                 </Button>
                 {onClose ? (

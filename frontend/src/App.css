@@ -393,11 +393,26 @@ textarea:focus {
   .layout-root > .flex-1 > footer,
   header, footer, nav,
   [data-sonner-toaster],
+  [data-sonner-toast],
   [role="tablist"],
   .layout-root .sticky,
   .fixed,
-  .print-hide-icon {
+  .print-hide-icon,
+  /* Sonner toaster container (todas las variantes) */
+  section[data-sonner-toaster],
+  ol[data-sonner-toaster],
+  div[data-sonner-toaster],
+  li[data-sonner-toast],
+  /* Toaster global */
+  .sonner-toast-wrapper,
+  [class*="sonner"],
+  /* Sección Constancia y botones en confirmación */
+  #print-confirmation div[class*="bg-indigo-50"],
+  #print-confirmation .pt-4.flex {
     display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
   }
 
   /* ═══ MOSTRAR SOLO-PRINT ═══ */
@@ -473,12 +488,19 @@ textarea:focus {
     page-break-inside: avoid !important;
   }
 
-  /* Ocultar botones y sección de Constancia dentro de confirmación */
+  /* Ocultar botones, constancia, y toast dentro de confirmación */
   #print-confirmation .no-print,
   #print-confirmation button,
   #print-confirmation > .pt-4,
-  #print-confirmation > div[class*="bg-indigo-50"] {
+  #print-confirmation > div[class*="bg-indigo-50"],
+  #print-confirmation > div.pt-4,
+  #print-confirmation > div:last-child {
     display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   /* Comprimir espaciado vertical */
