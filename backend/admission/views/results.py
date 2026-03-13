@@ -217,11 +217,12 @@ def public_results_by_path(request, call_id: int, dni: str):
 def results_publish(request):
     """
     Publicar resultados de convocatoria.
-    FIX: acepta career_id opcional (el FE lo envía pero antes se ignoraba).
+    Acepta 'phase' para publicar por fase: 'phase1' o 'final'.
     """
     payload = request.data or {}
     call_id = payload.get("call_id")
-    career_id = payload.get("career_id")  # Ahora lo aceptamos
+    career_id = payload.get("career_id")
+    phase = payload.get("phase", "final")  # 'phase1' o 'final'
 
     if not call_id:
         return Response({"detail": "call_id requerido"}, status=400)
@@ -231,10 +232,68 @@ def results_publish(request):
     except AdmissionCall.DoesNotExist:
         return Response({"detail": "call not found"}, status=404)
 
-    call.published = True
-    call.save(update_fields=["published"])
+    meta = call.meta or {}
 
-    pub_payload = {"published_at": timezone.now().isoformat()}
+    if phase == "phase1":
+        # Publicar solo resultados de Fase 1
+        meta["phase1_published"] = True
+        meta["phase1_published_at"] = timezone.now().isoformat()
+        if career_id:
+            published_careers = meta.get("phase1_careers", [])
+            if str(career_id) not in [str(c) for c in published_careers]:
+                published_careers.append(career_id)
+            meta["phase1_careers"] = published_careers
+        call.meta = meta
+        call.save(update_fields=["meta"])
+    else:
+        # Publicar resultados finales
+        call.published = True
+        meta["final_published"] = True
+        meta["final_published_at"] = timezone.now().isoformat()
+        call.meta = meta
+        call.save(update_fields=["published", "meta"])
+
+        # Auto-asignar ADMITTED / NOT_ADMITTED según puntaje
+        if career_id:
+            apps = Application.objects.filter(
+                call_id=call_id,
+                preferences__career_id=career_id,
+            ).distinct()
+
+            # Obtener vacantes de meta de la convocatoria
+            vacancies = 0
+            try:
+                call_meta = call.meta or {}
+                careers_meta = call_meta.get("careers", [])
+                for cm in careers_meta:
+                    if str(cm.get("id", "")) == str(career_id) or str(cm.get("career_id", "")) == str(career_id):
+                        vacancies = int(cm.get("vacancies", 0))
+                        break
+                if not vacancies:
+                    vacancies = call.vacants_total or 0
+            except Exception:
+                vacancies = 0
+
+            # Rankear por puntaje final
+            scored = []
+            for app in apps:
+                w = EvaluationScore.objects.filter(application=app, phase="WRITTEN").first()
+                i = EvaluationScore.objects.filter(application=app, phase="INTERVIEW").first()
+                final = (float(w.total) if w else 0) + (float(i.total) if i else 0)
+                scored.append((app, final))
+            scored.sort(key=lambda x: x[1], reverse=True)
+
+            for idx, (app, score) in enumerate(scored):
+                if vacancies > 0 and idx < vacancies and score >= 60:
+                    app.status = "ADMITTED"
+                else:
+                    app.status = "NOT_ADMITTED"
+                app.save(update_fields=["status"])
+
+    pub_payload = {
+        "published_at": timezone.now().isoformat(),
+        "phase": phase,
+    }
     if career_id:
         pub_payload["career_id"] = career_id
 
@@ -246,7 +305,7 @@ def results_publish(request):
         },
     )
 
-    return Response({"ok": True, "published": True})
+    return Response({"ok": True, "published": True, "phase": phase})
 
 
 @api_view(["POST"])

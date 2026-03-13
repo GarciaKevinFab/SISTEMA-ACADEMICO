@@ -196,6 +196,7 @@ const SearchResult = ({ result, onUploadVoucher }) => {
     );
   }
 
+  const isAdmitted = result.status === "ADMITTED";
   const paymentRequired = result.payment?.required;
   const paymentAmount = Number(result.payment?.amount || 0).toFixed(2);
   const paymentStatus = result.payment?.status || "—";
@@ -203,7 +204,7 @@ const SearchResult = ({ result, onUploadVoucher }) => {
   return (
     <div className="mt-5 rounded-2xl border border-slate-200 bg-white overflow-hidden">
       {/* Result header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+      <div className={`flex items-center justify-between px-5 py-4 border-b ${isAdmitted ? "bg-gradient-to-r from-emerald-50 to-white border-emerald-100" : "bg-gradient-to-r from-slate-50 to-white border-slate-100"}`}>
         <p className="text-sm font-extrabold text-slate-800">Resultado</p>
         <AppStatusBadge status={result.status} />
       </div>
@@ -227,9 +228,20 @@ const SearchResult = ({ result, onUploadVoucher }) => {
         {/* Scores */}
         {result.score ? (
           <div className="grid grid-cols-3 gap-2">
-            <ScoreCell label="Fase 1" value={result.score.phase1_total} />
-            <ScoreCell label="Fase 2" value={result.score.phase2_total} />
-            <ScoreCell label="Final" value={result.score.final_total} />
+            <ScoreCell label="Fase 1" value={result.score.phase1_total != null ? result.score.phase1_total.toFixed?.(1) : null} />
+            <ScoreCell label="Fase 2" value={result.score.phase2_total != null ? result.score.phase2_total.toFixed?.(1) : null} />
+            <div className={`flex flex-col items-center rounded-xl border p-3.5 text-center gap-0.5 ${
+              result.score.final_total >= 60
+                ? "border-emerald-200 bg-emerald-50/60"
+                : result.score.final_total > 0
+                  ? "border-red-200 bg-red-50/60"
+                  : "border-slate-100 bg-slate-50/60"
+            }`}>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Final</p>
+              <p className={`text-xl font-black tabular-nums ${
+                result.score.final_total >= 60 ? "text-emerald-800" : result.score.final_total > 0 ? "text-red-700" : "text-slate-800"
+              }`}>{result.score.final_total?.toFixed?.(1) ?? "—"}</p>
+            </div>
           </div>
         ) : (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -237,11 +249,59 @@ const SearchResult = ({ result, onUploadVoucher }) => {
           </div>
         )}
 
+        {/* Credenciales — solo si es admitido */}
+        {isAdmitted && result.credentials && (
+          <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={18} className="text-emerald-600" />
+              <p className="text-sm font-extrabold text-emerald-800">¡Felicidades, has sido admitido!</p>
+            </div>
+            <p className="text-xs text-emerald-700">
+              Usa estas credenciales para ingresar al Sistema Académico:
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg bg-white border border-emerald-200 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Usuario</p>
+                <p className="text-sm font-bold font-mono text-slate-800">{result.credentials.username}</p>
+              </div>
+              <div className="rounded-lg bg-white border border-emerald-200 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Contraseña</p>
+                <p className="text-sm font-bold font-mono text-slate-800">{result.credentials.password}</p>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <a href={`/admission/public/certificates/ingreso?application_id=${result.application_id}`}
+                target="_blank" rel="noopener noreferrer"
+                className="flex-1 inline-flex items-center justify-center gap-2 h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition-colors">
+                <FileText size={13} /> Constancia de Ingreso
+              </a>
+              <a href={`/admission/public/certificates/inscripcion?application_id=${result.application_id}`}
+                target="_blank" rel="noopener noreferrer"
+                className="flex-1 inline-flex items-center justify-center gap-2 h-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold transition-colors">
+                <FileText size={13} /> Constancia de Inscripción
+              </a>
+            </div>
+          </div>
+        )}
+
+        {/* No admitido */}
+        {result.status === "NOT_ADMITTED" && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+            <div className="flex items-center gap-2">
+              <XCircle size={16} className="text-rose-600" />
+              <p className="text-sm font-bold text-rose-700">No alcanzaste vacante en este proceso.</p>
+            </div>
+            <p className="text-xs text-rose-600 mt-1">
+              Puedes consultar próximas convocatorias para volver a postular.
+            </p>
+          </div>
+        )}
+
         {/* Payment */}
-        {paymentRequired ? (
+        {paymentRequired && !isAdmitted ? (
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-3">
             <div>
-              <p className="text-sm font-extrabold text-slate-800">Terminar Admisión</p>
+              <p className="text-sm font-extrabold text-slate-800">Pago de Admisión</p>
               <p className="text-xs text-slate-600 mt-0.5">
                 Monto: <span className="font-bold">S/ {paymentAmount}</span>
                 {" · "}Estado: <span className="font-semibold">{paymentStatus}</span>
@@ -255,13 +315,12 @@ const SearchResult = ({ result, onUploadVoucher }) => {
               <Upload size={13} /> Subir voucher
             </Button>
           </div>
-        ) : (
+        ) : !isAdmitted && result.status !== "NOT_ADMITTED" ? (
           <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-500">
-            Pago: <span className="font-semibold text-slate-700">No requerido</span>
-            {" · "}Monto: S/ {paymentAmount}
+            Pago: <span className="font-semibold text-slate-700">{paymentRequired ? "Requerido" : "No requerido"}</span>
             {" · "}Estado: {paymentStatus}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

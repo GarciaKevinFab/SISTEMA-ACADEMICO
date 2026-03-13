@@ -107,9 +107,17 @@ def eval_save_scores(request, application_id):
         defaults={"rubric": rubric, "total": total},
     )
 
-    # Marca como evaluado
-    if app.status not in ("EVALUATED", "ADMITTED", "NOT_ADMITTED"):
-        app.status = "EVALUATED"
+    # Actualizar status según fase evaluada
+    if app.status not in ("ADMITTED", "NOT_ADMITTED"):
+        if phase == "WRITTEN":
+            # Fase 1 evaluada: APTO si >= 30/50, NO APTO si < 30
+            if total >= 30:
+                app.status = "PHASE1_PASSED"
+            else:
+                app.status = "PHASE1_FAILED"
+        elif phase == "INTERVIEW":
+            # Fase 2 evaluada: marcar como evaluado completo
+            app.status = "PHASE2_SCORED"
         app.save(update_fields=["status"])
 
     return Response({

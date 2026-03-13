@@ -255,7 +255,21 @@ export default function EvaluationBoard() {
     const saveManual = async () => {
         if (!manualRow) return;
         try {
-            await Evaluation.saveScores(manualRow.id, scores[manualRow.id] || {});
+            const rb = scores[manualRow.id] || {};
+            // Guardar Fase 1 (WRITTEN) y Fase 2 (INTERVIEW) por separado
+            const writtenRubric = {
+                comunicacion: rb.comunicacion, resolucion_problemas: rb.resolucion_problemas,
+                convivencia: rb.convivencia, estado_fase_1: rb.estado_fase_1, condicion: rb.condicion,
+                _phase: "WRITTEN",
+            };
+            const interviewRubric = {
+                pensamiento_critico: rb.pensamiento_critico, trabajo_colaborativo: rb.trabajo_colaborativo,
+                tic: rb.tic, _phase: "INTERVIEW",
+            };
+            await Promise.all([
+                Evaluation.saveScores(manualRow.id, writtenRubric),
+                Evaluation.saveScores(manualRow.id, interviewRubric),
+            ]);
             toast.success("Guardado"); setOpenManual(false); setManualRow(null); await load();
         } catch (e) { console.error(e); toast.error("No se pudo guardar"); }
     };

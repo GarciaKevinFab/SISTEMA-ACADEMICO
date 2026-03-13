@@ -44,11 +44,12 @@ export default function ResultsPublication() {
 
     useEffect(() => { if (call && careerId) load(); }, [call?.id, careerId]);
 
-    const publish = async () => {
+    const publish = async (phase = "final") => {
         try {
-            await Results.publish({ call_id: call.id, career_id: careerId });
-            toast.success("Resultados publicados");
-            setPublished(true);
+            await Results.publish({ call_id: call.id, career_id: careerId, phase });
+            toast.success(phase === "phase1" ? "Resultados Fase 1 publicados" : "Resultados finales publicados");
+            setPublished(phase === "final");
+            load();
         } catch (e) {
             toast.error(e?.response?.data?.detail || "No se pudo publicar");
         }
@@ -129,9 +130,14 @@ export default function ResultsPublication() {
     </Button>
 
     {!published ? (
-      <Button className="w-full md:w-auto" onClick={publish} disabled={!rows.length}>
-        Publicar
-      </Button>
+      <>
+        <Button className="w-full md:w-auto" variant="secondary" onClick={() => publish("phase1")} disabled={!rows.length}>
+          Publicar Fase 1
+        </Button>
+        <Button className="w-full md:w-auto" onClick={() => publish("final")} disabled={!rows.length}>
+          Publicar Final
+        </Button>
+      </>
     ) : (
       <Button className="w-full md:w-auto" onClick={closeProcess} variant="secondary">
         Cerrar Proceso
@@ -147,26 +153,55 @@ export default function ResultsPublication() {
                             <tr>
                                 <th className="p-2 text-left">#</th>
                                 <th className="p-2 text-left">Postulante</th>
-                                <th className="p-2 text-left">N° Postulación</th>
-                                <th className="p-2 text-center">Puntaje Final</th>
+                                <th className="p-2 text-left">N° Post.</th>
+                                <th className="p-2 text-center">Fase 1</th>
+                                <th className="p-2 text-center">Fase 2</th>
+                                <th className="p-2 text-center">Total</th>
                                 <th className="p-2 text-center">Estado</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {rows.map((r, i) => (
-                                <tr key={r.application_id} className="border-t">
-                                    <td className="p-2">{i + 1}</td>
-                                    <td className="p-2">{r.applicant_name}</td>
-                                    <td className="p-2">{r.application_number}</td>
-                                    <td className="p-2 text-center font-medium">{r.final_score?.toFixed?.(2) ?? "-"}</td>
+                            {rows.map((r, i) => {
+                                const total = r.final_score ?? 0;
+                                const statusLabels = {
+                                    CREATED: "Registrado", PHASE1_PASSED: "Apto F1", PHASE1_FAILED: "No Apto F1",
+                                    PHASE2_SCORED: "Evaluado", EVALUATED: "Evaluado",
+                                    ADMITTED: "INGRESA", NOT_ADMITTED: "NO INGRESA",
+                                };
+                                const statusColors = {
+                                    ADMITTED: "bg-emerald-100 text-emerald-800 border-emerald-200",
+                                    NOT_ADMITTED: "bg-rose-100 text-rose-800 border-rose-200",
+                                    PHASE1_PASSED: "bg-blue-100 text-blue-800 border-blue-200",
+                                    PHASE1_FAILED: "bg-rose-100 text-rose-700 border-rose-200",
+                                    PHASE2_SCORED: "bg-violet-100 text-violet-700 border-violet-200",
+                                };
+                                return (
+                                <tr key={r.application_id} className="border-t hover:bg-blue-50/30">
+                                    <td className="p-2 text-slate-500 font-medium">{i + 1}</td>
+                                    <td className="p-2 font-semibold">{r.applicant_name}</td>
+                                    <td className="p-2 text-slate-500">#{r.application_number}</td>
+                                    <td className="p-2 text-center font-mono font-semibold">
+                                        <span className={r.phase1_total >= 30 ? "text-emerald-700" : r.phase1_total > 0 ? "text-red-600" : "text-slate-400"}>
+                                            {r.phase1_total?.toFixed?.(1) ?? "—"}
+                                        </span>
+                                    </td>
+                                    <td className="p-2 text-center font-mono font-semibold">
+                                        <span className={r.phase2_total > 0 ? "text-indigo-700" : "text-slate-400"}>
+                                            {r.phase2_total?.toFixed?.(1) ?? "—"}
+                                        </span>
+                                    </td>
+                                    <td className={`p-2 text-center font-mono font-bold ${total >= 60 ? "text-emerald-800" : total > 0 ? "text-red-700" : "text-slate-400"}`}>
+                                        {total > 0 ? total.toFixed(1) : "—"}
+                                    </td>
                                     <td className="p-2 text-center">
-                                        <Badge variant={r.status === "ADMITTED" ? "default" : r.status === "WAITING_LIST" ? "secondary" : "outline"}>
-                                            {r.status || "—"}
+                                        <Badge className={`text-[10px] font-bold ${statusColors[r.status] || "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                                            {statusLabels[r.status] || r.status || "—"}
                                         </Badge>
                                     </td>
                                 </tr>
-                            ))}
-                            {!rows.length && <tr><td colSpan={5} className="p-4 text-center text-gray-500">Sin resultados</td></tr>}
+                                );
+                            })}
+                            {!rows.length && <tr><td colSpan={7} className="p-4 text-center text-gray-500">Sin resultados</td></tr>}
                         </tbody>
                     </table>
                 </div>
