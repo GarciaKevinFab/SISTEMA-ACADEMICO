@@ -61,6 +61,45 @@ def _compute_total(rubric: dict):
     return round(total, 2)
 
 
+# Campos de cada fase
+_FASE1_KEYS = {"comunicacion", "resolucion_problemas", "convivencia"}
+_FASE2_KEYS = {"pensamiento_critico", "trabajo_colaborativo", "tic"}
+
+
+def compute_phase_totals(written_score, interview_score):
+    """
+    Calcula totales de F1 y F2 de forma inteligente.
+    Si solo hay un score WRITTEN que contiene campos de ambas fases,
+    extrae los subtotales correctamente.
+    """
+    phase1_total = 0.0
+    phase2_total = 0.0
+
+    if written_score:
+        rubric = written_score.rubric or {}
+        # Extraer campos de F1 del rubric
+        for k in _FASE1_KEYS:
+            phase1_total += _to_float(rubric.get(k, 0))
+        # Si el score WRITTEN también tiene campos de F2 (legacy)
+        has_f2_in_written = any(k in rubric for k in _FASE2_KEYS)
+        if has_f2_in_written and not interview_score:
+            for k in _FASE2_KEYS:
+                phase2_total += _to_float(rubric.get(k, 0))
+        elif not any(k in rubric for k in _FASE1_KEYS):
+            # Fallback: el total del score es la fase 1
+            phase1_total = _to_float(written_score.total)
+
+    if interview_score:
+        rubric = interview_score.rubric or {}
+        phase2_total = 0.0
+        for k in _FASE2_KEYS:
+            phase2_total += _to_float(rubric.get(k, 0))
+        if phase2_total == 0:
+            phase2_total = _to_float(interview_score.total)
+
+    return round(phase1_total, 2), round(phase2_total, 2)
+
+
 # ══════════════════════════════════════════════════════════════
 # HELPERS DE ARCHIVOS Y PDF
 # ══════════════════════════════════════════════════════════════

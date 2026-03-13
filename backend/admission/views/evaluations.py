@@ -16,7 +16,7 @@ from rest_framework.response import Response
 
 from admission.models import Application, EvaluationScore, ApplicationPreference
 from admission.serializers import ApplicationSerializer
-from .utils import _normalize_rubric, _compute_total
+from .utils import _normalize_rubric, _compute_total, compute_phase_totals
 
 
 @api_view(["GET"])
@@ -56,8 +56,7 @@ def eval_list_for_scoring(request):
         if interview:
             combined_rubric.update(interview.rubric or {})
 
-        written_total = float(written.total) if written else 0
-        interview_total = float(interview.total) if interview else 0
+        p1, p2 = compute_phase_totals(written, interview)
 
         results.append({
             "id": app.id,
@@ -67,9 +66,9 @@ def eval_list_for_scoring(request):
             "career_name": app.career_name or "—",
             "status": app.status,
             "rubric": combined_rubric,
-            "written_total": written_total,
-            "interview_total": interview_total,
-            "total": round(written_total + interview_total, 2),
+            "written_total": p1,
+            "interview_total": p2,
+            "total": round(p1 + p2, 2),
         })
 
     return Response({"applications": results})

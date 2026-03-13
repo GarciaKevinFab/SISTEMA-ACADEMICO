@@ -17,7 +17,7 @@ from admission.models import (
     ResultPublication,
 )
 from admission.serializers import ApplicationSerializer
-from .utils import _ensure_media_tmp, _write_stub_pdf
+from .utils import _ensure_media_tmp, _write_stub_pdf, compute_phase_totals
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +52,7 @@ def results_list(request):
             application=app, phase="INTERVIEW"
         ).first()
 
-        phase1_total = float(written.total) if written else 0
-        phase2_total = float(interview.total) if interview else 0
+        phase1_total, phase2_total = compute_phase_totals(written, interview)
         final_score = phase1_total + phase2_total
 
         results.append({
@@ -115,11 +114,12 @@ def _build_public_result(call_id, dni):
     )
     pref_names = [{"rank": p.rank, "career": p.career.name} for p in prefs]
 
-    phase1_total = float(written.total) if written else None
-    phase2_total = float(interview.total) if interview else None
+    p1, p2 = compute_phase_totals(written, interview)
+    phase1_total = p1 if (written) else None
+    phase2_total = p2 if (interview or (written and p2 > 0)) else None
     final_total = None
-    if phase1_total is not None and phase2_total is not None:
-        final_total = phase1_total + phase2_total
+    if phase1_total is not None:
+        final_total = p1 + p2
 
     # Datos del pago (si existe)
     payment_data = {"required": False, "amount": 0, "status": None}
@@ -279,8 +279,8 @@ def results_publish(request):
             for app in apps:
                 w = EvaluationScore.objects.filter(application=app, phase="WRITTEN").first()
                 i = EvaluationScore.objects.filter(application=app, phase="INTERVIEW").first()
-                final = (float(w.total) if w else 0) + (float(i.total) if i else 0)
-                scored.append((app, final))
+                p1, p2 = compute_phase_totals(w, i)
+                scored.append((app, p1 + p2))
             scored.sort(key=lambda x: x[1], reverse=True)
 
             for idx, (app, score) in enumerate(scored):
@@ -368,8 +368,7 @@ def results_acta_pdf(request):
             application=app, phase="INTERVIEW"
         ).first()
 
-        p1 = float(written.total) if written else 0
-        p2 = float(interview.total) if interview else 0
+        p1, p2 = compute_phase_totals(written, interview)
 
         results.append({
             "applicant_name": app.applicant.names if app.applicant else "—",
