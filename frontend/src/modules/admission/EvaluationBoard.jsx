@@ -503,7 +503,9 @@ export default function EvaluationBoard() {
                                 const f2 = rb.fase2 || calcFase2(rb);
                                 const total = f1 + f2;
                                 const cond = rb.condicion || r.condicion || "";
-                                const estadoF1 = rb.estado_fase_1 || "";
+                                // Auto-calcular estado F1: APTO si >= 30/50, NO APTO si < 30 (solo si hay notas)
+                                const hasF1Scores = toNum(rb?.comunicacion) > 0 || toNum(rb?.resolucion_problemas) > 0 || toNum(rb?.convivencia) > 0;
+                                const estadoF1 = rb.estado_fase_1 || (hasF1Scores ? (f1 >= 30 ? "APTO" : "NO APTO") : "");
 
                                 return (
                                     <tr key={r.id} className="group hover:bg-blue-50/20 transition-colors">
@@ -529,8 +531,14 @@ export default function EvaluationBoard() {
                                         <td className="px-2 py-2.5 text-center bg-indigo-50/10 border-r border-indigo-50 font-mono font-semibold tabular-nums text-slate-700">{fmt(rb.trabajo_colaborativo)}</td>
                                         <td className="px-2 py-2.5 text-center bg-indigo-50/10 border-r border-indigo-50 font-mono font-semibold tabular-nums text-slate-700">{fmt(rb.tic)}</td>
                                         <td className="px-2 py-2.5 text-center bg-indigo-50/30 border-r border-indigo-200 font-mono font-extrabold tabular-nums text-indigo-800">{fmt(f2)}</td>
-                                        {/* Total */}
-                                        <td className="px-2 py-2.5 text-center bg-emerald-50/30 font-mono font-black tabular-nums text-emerald-800 text-sm">{fmt(total)}</td>
+                                        {/* Total — verde si >= 60, rojo si < 60 */}
+                                        <td className={`px-2 py-2.5 text-center font-mono font-black tabular-nums text-sm ${
+                                            total > 0
+                                                ? total >= 60
+                                                    ? "bg-emerald-50/40 text-emerald-800"
+                                                    : "bg-red-50/40 text-red-700"
+                                                : "bg-slate-50/30 text-slate-400"
+                                        }`}>{fmt(total)}</td>
                                         {/* Condición */}
                                         <td className="px-2 py-2.5 text-center">
                                             <CondicionBadge value={cond} />
