@@ -1051,7 +1051,15 @@ def users_bulk_credentials(request):
             from students.serializers import StudentSerializer
             students = list(
                 Student.objects.filter(
-                    user__isnull=False, user__is_active=True
+                    user__isnull=False,
+                    user__is_active=True,
+                    user__is_staff=False,
+                    user__is_superuser=False,
+                ).exclude(
+                    user__roles__name__in=[
+                        "ADMIN_SYSTEM", "ADMIN_ACADEMIC", "REGISTRAR",
+                        "MPV_OFFICER", "MPV_MANAGER",
+                    ]
                 ).select_related("user", "plan")
                 .order_by("apellido_paterno", "apellido_materno", "nombres")
             )
