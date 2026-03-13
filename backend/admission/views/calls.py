@@ -1,8 +1,11 @@
 """
 Vistas para Convocatorias (Públicas y Admin)
 """
+import os
+from django.conf import settings
 from django.db import models
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, parser_classes
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
@@ -155,3 +158,46 @@ def call_schedule_detail(request, call_id: int, item_id: int):
     # DELETE
     obj.delete()
     return Response(status=204)
+
+
+# ══════════════════════════════════════════════════════════════
+# REGLAMENTO - Subir PDF de reglamento para la convocatoria
+# ══════════════════════════════════════════════════════════════
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def call_upload_regulation(request, call_id: int):
+    """Sube el PDF de reglamento de una convocatoria."""
+    try:
+        obj = AdmissionCall.objects.get(pk=call_id)
+    except AdmissionCall.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+
+    file = request.FILES.get("file")
+    if not file:
+        return Response({"detail": "No se envió archivo"}, status=400)
+
+    # Validar que sea PDF
+    if not file.name.lower().endswith(".pdf"):
+        return Response({"detail": "Solo se permiten archivos PDF"}, status=400)
+
+    # Guardar en media/admission/reglamentos/
+    upload_dir = os.path.join(settings.MEDIA_ROOT, "admission", "reglamentos")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    filename = f"reglamento_call_{call_id}.pdf"
+    filepath = os.path.join(upload_dir, filename)
+
+    with open(filepath, "wb") as f:
+        for chunk in file.chunks():
+            f.write(chunk)
+
+    # Guardar URL en meta
+    url = f"{settings.MEDIA_URL}admission/reglamentos/{filename}"
+    meta = obj.meta or {}
+    meta["regulation_url"] = url
+    obj.meta = meta
+    obj.save(update_fields=["meta"])
+
+    return Response({"ok": True, "regulation_url": url})

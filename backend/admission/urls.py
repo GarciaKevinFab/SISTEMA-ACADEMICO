@@ -16,6 +16,7 @@ urlpatterns = [
     path("admission-calls/public", v.calls_list_public),
     path("admission-calls/public/<int:call_id>", v.call_detail_public),
     path("admission-calls/<int:call_id>", v.call_detail_admin),
+    path("admission-calls/<int:call_id>/regulation", v.call_upload_regulation),
     path("admission-calls/<int:call_id>/schedule", v.call_schedule_collection),
     path("admission-calls/<int:call_id>/schedule/<int:item_id>", v.call_schedule_detail),
     path("admission-calls", v.calls_collection),

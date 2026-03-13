@@ -149,6 +149,14 @@ export const updateAdmissionCall = async (callId, form) => {
     return (await api.put(`/admission-calls/${callId}`, payload)).data;
 };
 
+export const uploadRegulation = async (callId, file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return (await api.post(`/admission-calls/${callId}/regulation`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+    })).data;
+};
+
 export const AdmissionCalls = {
     listPublic: async () => {
         const endpoints = [

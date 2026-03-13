@@ -9,14 +9,14 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
 import {
-    Plus, Eye, Download, Calendar, FileText, BookOpenCheck,
+    Plus, Eye, Download, Calendar, FileText, BookOpenCheck, Check,
     Trash2, CheckCircle2, Clock3, AlertCircle, Users, CreditCard,
-    Loader2, GraduationCap, ChevronRight, Edit3,
+    Loader2, GraduationCap, ChevronRight, Edit3, Upload, ExternalLink, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
     listAdmissionCalls, createAdmissionCall, updateAdmissionCall, listCareers,
-    Results, deleteAdmissionCall, AdmissionParams,
+    Results, deleteAdmissionCall, AdmissionParams, uploadRegulation,
 } from "../../services/admission.service";
 
 /* ─── Helpers ────────────────────────────────────────────── */
@@ -42,6 +42,7 @@ const normalizeCall = (c) => {
         maximum_age: c.maximum_age ?? null,
         required_documents: migrateDocs(c.required_documents ?? []),
         careers,
+        regulation_url: c.regulation_url ?? c.reglamento_url ?? "",
         total_applications: c.total_applications ?? c.applications_count ?? 0,
         status: c.status ?? c.state ?? "OPEN",
     };
@@ -162,6 +163,8 @@ export default function AdmissionCallsManagement() {
     const [deleting, setDeleting] = useState(false);
 
     const [form, setForm] = useState(BASE_FORM);
+    const [regulationFile, setRegulationFile] = useState(null); // File object para subir
+    const [regulationUrl, setRegulationUrl] = useState("");     // URL existente
 
     /* ── Load ── */
     const load = async () => {
@@ -215,7 +218,7 @@ export default function AdmissionCallsManagement() {
             return { ...f, required_documents: Array.from(s) };
         });
 
-    const resetForm = () => { setForm(buildForm(defaults)); setEditing(null); };
+    const resetForm = () => { setForm(buildForm(defaults)); setEditing(null); setRegulationFile(null); setRegulationUrl(""); };
 
     /* ── Edit helpers ── */
     const toLocalDT = (v) => {
@@ -248,6 +251,8 @@ export default function AdmissionCallsManagement() {
             required_documents: call.required_documents || [],
         });
         setEditing(call);
+        setRegulationFile(null);
+        setRegulationUrl(call.regulation_url || "");
         setOpenCreate(true);
     };
 
@@ -255,12 +260,24 @@ export default function AdmissionCallsManagement() {
     const submit = async (e) => {
         e.preventDefault();
         try {
+            let callId;
             if (editing) {
-                await updateAdmissionCall(editing.id, form);
+                const res = await updateAdmissionCall(editing.id, form);
+                callId = editing.id;
                 toast.success("Convocatoria actualizada");
             } else {
-                await createAdmissionCall(form);
+                const res = await createAdmissionCall(form);
+                callId = res?.id;
                 toast.success("Convocatoria creada");
+            }
+            // Subir reglamento si se seleccionó un archivo
+            if (regulationFile && callId) {
+                try {
+                    await uploadRegulation(callId, regulationFile);
+                    toast.success("Reglamento subido");
+                } catch {
+                    toast.error("Convocatoria guardada pero falló al subir reglamento");
+                }
             }
             setOpenCreate(false); resetForm(); load();
         } catch (e) {
@@ -524,6 +541,64 @@ export default function AdmissionCallsManagement() {
                                             </div>
                                         )}
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* ── Sección 4: Reglamento ── */}
+                            <div className="space-y-4">
+                                <FormSectionHead n="4" label="Reglamento" />
+                                <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 space-y-3">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                        PDF de Reglamento de Admisión
+                                    </p>
+                                    {/* Mostrar URL existente */}
+                                    {regulationUrl && !regulationFile && (
+                                        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                                            <FileText size={14} className="text-emerald-600 shrink-0" />
+                                            <span className="text-xs text-emerald-700 font-medium truncate flex-1">
+                                                Reglamento cargado
+                                            </span>
+                                            <a href={regulationUrl} target="_blank" rel="noopener noreferrer"
+                                                className="text-emerald-600 hover:text-emerald-800">
+                                                <ExternalLink size={14} />
+                                            </a>
+                                            <button type="button" onClick={() => setRegulationUrl("")}
+                                                className="text-slate-400 hover:text-red-500">
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    )}
+                                    {/* Input de archivo */}
+                                    {regulationFile ? (
+                                        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                                            <Upload size={14} className="text-blue-600 shrink-0" />
+                                            <span className="text-xs text-blue-700 font-medium truncate flex-1">
+                                                {regulationFile.name}
+                                            </span>
+                                            <button type="button" onClick={() => setRegulationFile(null)}
+                                                className="text-slate-400 hover:text-red-500">
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-slate-200 hover:border-blue-300 hover:bg-blue-50/40 transition-all cursor-pointer">
+                                            <Upload size={16} className="text-slate-400" />
+                                            <span className="text-xs font-semibold text-slate-500">
+                                                {regulationUrl ? "Cambiar reglamento (PDF)" : "Subir reglamento (PDF)"}
+                                            </span>
+                                            <input type="file" accept=".pdf" className="hidden"
+                                                onChange={(e) => {
+                                                    const f = e.target.files?.[0];
+                                                    if (f) {
+                                                        if (!f.name.toLowerCase().endsWith(".pdf")) {
+                                                            toast.error("Solo se permiten archivos PDF");
+                                                            return;
+                                                        }
+                                                        setRegulationFile(f);
+                                                    }
+                                                }} />
+                                        </label>
+                                    )}
                                 </div>
                             </div>
 
@@ -815,14 +890,5 @@ export default function AdmissionCallsManagement() {
                 </DialogContent>
             </Dialog>
         </div>
-    );
-}
-
-// tiny inline icon since we're not importing it above to keep changes minimal
-function Check({ size = 16, className = "" }) {
-    return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}>
-            <polyline points="20 6 9 17 4 12" />
-        </svg>
     );
 }

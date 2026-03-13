@@ -281,6 +281,7 @@ def _fe_to_call(payload: dict) -> dict:
         "required_documents": payload.get("required_documents") or [],
         "careers": careers,
         "status": payload.get("status"),
+        "regulation_url": payload.get("regulation_url") or "",
     }
 
     return {
@@ -362,6 +363,7 @@ def _call_to_fe(obj, career_name_map=None) -> dict:
         "maximum_age": m.get("maximum_age"),
         "required_documents": _migrate_doc_codes(m.get("required_documents", [])),
         "careers": norm_careers,
+        "regulation_url": m.get("regulation_url", ""),
         "total_applications": apps_count,
         "status": status,
     }
