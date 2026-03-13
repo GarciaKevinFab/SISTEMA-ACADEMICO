@@ -96,6 +96,15 @@ def call_detail_admin(request, call_id: int):
         payload = request.data or {}
         mapped = _fe_to_call(payload)
 
+        # Preservar campos del meta existente que no vienen en el payload
+        # (ej: regulation_url subido por endpoint separado)
+        existing_meta = obj.meta or {}
+        new_meta = mapped.get("meta", {})
+        for key in ("regulation_url",):
+            if key not in new_meta and key in existing_meta:
+                new_meta[key] = existing_meta[key]
+        mapped["meta"] = new_meta
+
         s = AdmissionCallSerializer(obj, data=mapped, partial=True)
         s.is_valid(raise_exception=True)
         obj = s.save()

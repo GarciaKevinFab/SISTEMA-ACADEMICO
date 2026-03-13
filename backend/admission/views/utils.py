@@ -281,8 +281,11 @@ def _fe_to_call(payload: dict) -> dict:
         "required_documents": payload.get("required_documents") or [],
         "careers": careers,
         "status": payload.get("status"),
-        "regulation_url": payload.get("regulation_url") or "",
     }
+
+    # Solo incluir regulation_url si viene en el payload (evitar borrar la existente)
+    if "regulation_url" in payload:
+        meta["regulation_url"] = payload["regulation_url"] or ""
 
     return {
         "title": payload.get("name") or payload.get("title") or "Convocatoria",

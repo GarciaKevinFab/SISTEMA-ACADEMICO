@@ -249,6 +249,7 @@ export default function AdmissionCallsManagement() {
             minimum_age: call.minimum_age ?? 16,
             maximum_age: call.maximum_age ?? 35,
             required_documents: call.required_documents || [],
+            regulation_url: call.regulation_url || "",
         });
         setEditing(call);
         setRegulationFile(null);
