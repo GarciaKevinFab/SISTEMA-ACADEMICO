@@ -1145,8 +1145,11 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
                     label={preferences.length === 1 ? "Programa de Estudios" : "Programas (orden preferencia)"}
                     value={
                       preferences.length === 1
-                        ? preferences[0].name
-                        : preferences.map((p, i) => `${i + 1}. ${p.name}`).join(", ")
+                        ? ((selectedCall?.careers || []).find((c) => c.id === preferences[0])?.name || `ID ${preferences[0]}`)
+                        : preferences.map((cid, i) => {
+                            const c = (selectedCall?.careers || []).find((x) => x.id === cid);
+                            return `${i + 1}. ${c?.name || `ID ${cid}`}`;
+                          }).join(", ")
                     }
                   />
                 )}
