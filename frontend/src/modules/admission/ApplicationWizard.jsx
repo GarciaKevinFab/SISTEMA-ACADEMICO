@@ -1140,19 +1140,23 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
                 <SummaryRow label="Postulante" value={fullName} />
                 <SummaryRow label="DNI" value={form.dni} />
                 <SummaryRow label="Convocatoria" value={selectedCall?.name} />
-                {preferences.length > 0 && (
-                  <SummaryRow
-                    label={preferences.length === 1 ? "Programa de Estudios" : "Programas (orden preferencia)"}
-                    value={
-                      preferences.length === 1
-                        ? ((selectedCall?.careers || []).find((c) => c.id === preferences[0])?.name || `ID ${preferences[0]}`)
-                        : preferences.map((cid, i) => {
-                            const c = (selectedCall?.careers || []).find((x) => x.id === cid);
-                            return `${i + 1}. ${c?.name || `ID ${cid}`}`;
-                          }).join(", ")
-                    }
-                  />
-                )}
+                {preferences.length > 0 && (() => {
+                  const allCareers = selectedCall?.careers || result?.call?.careers || [];
+                  const getName = (cid) => {
+                    const c = allCareers.find((x) => String(x.id) === String(cid) || String(x.career_id) === String(cid));
+                    return c?.name || c?.career_name || `ID ${cid}`;
+                  };
+                  return (
+                    <SummaryRow
+                      label={preferences.length === 1 ? "Programa de Estudios" : "Programas (orden preferencia)"}
+                      value={
+                        preferences.length === 1
+                          ? getName(preferences[0])
+                          : preferences.map((cid, i) => `${i + 1}. ${getName(cid)}`).join(", ")
+                      }
+                    />
+                  );
+                })()}
                 <SummaryRow
                   label="Fecha de registro"
                   value={new Date().toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
