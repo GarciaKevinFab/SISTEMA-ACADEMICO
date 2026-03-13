@@ -42,6 +42,14 @@ class ApplicantSerializer(serializers.ModelSerializer):
         model = Applicant
         fields = "__all__"
 
+    def validate_dni(self, value):
+        v = (value or "").strip()
+        if not v.isdigit() or len(v) != 8:
+            raise serializers.ValidationError(
+                "El DNI debe contener exactamente 8 dígitos numéricos"
+            )
+        return v
+
 
 class ApplicationPreferenceSerializer(serializers.ModelSerializer):
     career_id = serializers.IntegerField(source="career.id", read_only=True)

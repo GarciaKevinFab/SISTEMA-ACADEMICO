@@ -290,6 +290,13 @@ def public_apply(request):
                 {"detail": "DNI, nombres y email son obligatorios"},
                 status=400,
             )
+
+        # Validar formato de DNI: solo dígitos, 8 caracteres
+        if not dni.isdigit() or len(dni) != 8:
+            return Response(
+                {"detail": "El DNI debe contener exactamente 8 dígitos numéricos"},
+                status=400,
+            )
         if not isinstance(prefs, list) or len(prefs) == 0:
             return Response(
                 {"detail": "Seleccione al menos una carrera"},
