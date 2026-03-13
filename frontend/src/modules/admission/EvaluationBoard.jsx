@@ -599,26 +599,52 @@ export default function EvaluationBoard() {
                         </div>
                     </div>
 
-                    {manualRow && (
-                        <div className="bg-white p-6 space-y-6">
+                    {manualRow && (() => {
+                        const rb = scores[manualRow.id] || {};
+                        const subF1 = calcFase1(rb);
+                        const subF2 = calcFase2(rb);
+                        const totalM = subF1 + subF2;
+                        const f1Pass = subF1 >= 30;
+                        const totalPass = totalM >= 60;
+                        const hasScores = totalM > 0;
+                        return (
+                        <div className="bg-white p-6 space-y-5">
 
                             {/* Fase 1 */}
                             <div>
                                 <SectionHead color="blue" icon={FileSpreadsheet} label="Fase 1 — Prueba Escrita" sub="Puntaje máximo: 50 pts" />
                                 <div className="grid grid-cols-3 gap-3">
-                                    {FASE1_FIELDS.map(({ key, label, max }) => (
+                                    {FASE1_FIELDS.map(({ key, label, max }) => {
+                                        const val = toNum(rb[key]);
+                                        const over = val > max;
+                                        return (
                                         <div key={key}>
                                             <FieldLabel>{label} ({max})</FieldLabel>
                                             <Input type="number" step="0.1" min="0" max={max}
-                                                className="h-9 rounded-xl font-mono text-center"
-                                                value={scores[manualRow.id]?.[key] ?? 0}
+                                                className={`h-9 rounded-xl font-mono text-center transition-colors ${over ? "border-red-400 bg-red-50 text-red-700 focus:ring-red-400" : "focus:ring-blue-400"}`}
+                                                value={rb[key] ?? 0}
                                                 onChange={e => setRubricField(manualRow.id, key, toNum(e.target.value))} />
+                                            {over && <p className="text-[9px] text-red-500 mt-0.5 font-medium">Máximo: {max}</p>}
                                         </div>
-                                    ))}
+                                    )})}
                                 </div>
-                                <div className="mt-3 flex justify-end">
-                                    <span className="text-xs font-extrabold text-blue-800 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-xl tabular-nums">
-                                        Subtotal Fase 1: {calcFase1(scores[manualRow.id] || {}).toFixed(1)} / 50
+                                <div className="mt-3 flex items-center justify-between">
+                                    {subF1 > 0 && (
+                                        <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${f1Pass
+                                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                            : "bg-red-50 text-red-700 border-red-200"}`}>
+                                            {f1Pass ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
+                                            {f1Pass ? "APTO" : "NO APTO"}
+                                        </span>
+                                    )}
+                                    <span className={`text-xs font-extrabold px-3 py-1.5 rounded-xl tabular-nums border ${
+                                        subF1 > 0
+                                            ? f1Pass
+                                                ? "text-emerald-800 bg-emerald-50 border-emerald-200"
+                                                : "text-red-800 bg-red-50 border-red-200"
+                                            : "text-blue-800 bg-blue-50 border-blue-200"
+                                    }`}>
+                                        Subtotal Fase 1: {subF1.toFixed(1)} / 50
                                     </span>
                                 </div>
                             </div>
@@ -627,30 +653,66 @@ export default function EvaluationBoard() {
                             <div>
                                 <SectionHead color="indigo" icon={FileSpreadsheet} label="Fase 2 — Entrevista / Desempeño" sub="Puntaje máximo: 50 pts" />
                                 <div className="grid grid-cols-3 gap-3">
-                                    {FASE2_FIELDS.map(({ key, label, max }) => (
+                                    {FASE2_FIELDS.map(({ key, label, max }) => {
+                                        const val = toNum(rb[key]);
+                                        const over = val > max;
+                                        return (
                                         <div key={key}>
                                             <FieldLabel>{label} ({max})</FieldLabel>
                                             <Input type="number" step="0.1" min="0" max={max}
-                                                className="h-9 rounded-xl font-mono text-center"
-                                                value={scores[manualRow.id]?.[key] ?? 0}
+                                                className={`h-9 rounded-xl font-mono text-center transition-colors ${over ? "border-red-400 bg-red-50 text-red-700 focus:ring-red-400" : "focus:ring-indigo-400"}`}
+                                                value={rb[key] ?? 0}
                                                 onChange={e => setRubricField(manualRow.id, key, toNum(e.target.value))} />
+                                            {over && <p className="text-[9px] text-red-500 mt-0.5 font-medium">Máximo: {max}</p>}
                                         </div>
-                                    ))}
+                                    )})}
                                 </div>
                                 <div className="mt-3 flex justify-end">
-                                    <span className="text-xs font-extrabold text-indigo-800 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl tabular-nums">
-                                        Subtotal Fase 2: {calcFase2(scores[manualRow.id] || {}).toFixed(1)} / 50
+                                    <span className={`text-xs font-extrabold px-3 py-1.5 rounded-xl tabular-nums border ${
+                                        subF2 > 0
+                                            ? subF2 >= 30
+                                                ? "text-emerald-800 bg-emerald-50 border-emerald-200"
+                                                : "text-red-800 bg-red-50 border-red-200"
+                                            : "text-indigo-800 bg-indigo-50 border-indigo-200"
+                                    }`}>
+                                        Subtotal Fase 2: {subF2.toFixed(1)} / 50
                                     </span>
                                 </div>
                             </div>
 
+                            {/* Barra de progreso visual */}
+                            {hasScores && (
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                        <span>Progreso</span>
+                                        <span className={totalPass ? "text-emerald-600" : "text-red-500"}>{totalM.toFixed(1)}%</span>
+                                    </div>
+                                    <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                                        <div className={`h-full rounded-full transition-all duration-500 ${totalPass ? "bg-gradient-to-r from-emerald-400 to-emerald-500" : "bg-gradient-to-r from-red-400 to-red-500"}`}
+                                            style={{ width: `${Math.min(totalM, 100)}%` }} />
+                                    </div>
+                                    {totalM >= 60 && <div className="h-0 relative"><div className="absolute left-[60%] -top-2.5 w-px h-2.5 bg-slate-300" title="Mínimo aprobatorio (60)" /></div>}
+                                </div>
+                            )}
+
                             {/* Total + condición */}
-                            <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 flex flex-wrap items-center justify-between gap-3">
+                            <div className={`rounded-xl border p-4 flex flex-wrap items-center justify-between gap-3 transition-colors ${
+                                !hasScores
+                                    ? "border-slate-200 bg-slate-50/40"
+                                    : totalPass
+                                        ? "border-emerald-200 bg-emerald-50/40"
+                                        : "border-red-200 bg-red-50/40"
+                            }`}>
                                 <div>
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-0.5">Total</p>
-                                    <p className="text-2xl font-black tabular-nums text-emerald-800">
-                                        {calcTotal(scores[manualRow.id] || {}).toFixed(1)} <span className="text-sm font-semibold text-emerald-600">/ 100</span>
+                                    <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 ${!hasScores ? "text-slate-400" : totalPass ? "text-emerald-600" : "text-red-500"}`}>Total</p>
+                                    <p className={`text-2xl font-black tabular-nums ${!hasScores ? "text-slate-400" : totalPass ? "text-emerald-800" : "text-red-700"}`}>
+                                        {totalM.toFixed(1)} <span className={`text-sm font-semibold ${!hasScores ? "text-slate-400" : totalPass ? "text-emerald-600" : "text-red-500"}`}>/ 100</span>
                                     </p>
+                                    {hasScores && (
+                                        <p className={`text-[10px] font-bold mt-1 ${totalPass ? "text-emerald-600" : "text-red-500"}`}>
+                                            {totalPass ? "✓ Aprobado" : "✗ Desaprobado (mín. 60)"}
+                                        </p>
+                                    )}
                                 </div>
                                 <div>
                                     <FieldLabel>Condición</FieldLabel>
@@ -662,10 +724,10 @@ export default function EvaluationBoard() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="__none__">(sin asignar)</SelectItem>
-                                            <SelectItem value="INGRESA">INGRESA</SelectItem>
-                                            <SelectItem value="NO INGRESA">NO INGRESA</SelectItem>
-                                            <SelectItem value="ALCANZA VACANTE">ALCANZA VACANTE</SelectItem>
-                                            <SelectItem value="NO ALCANZA VACANTE">NO ALCANZA VACANTE</SelectItem>
+                                            <SelectItem value="INGRESA">✅ INGRESA</SelectItem>
+                                            <SelectItem value="NO INGRESA">❌ NO INGRESA</SelectItem>
+                                            <SelectItem value="ALCANZA VACANTE">✅ ALCANZA VACANTE</SelectItem>
+                                            <SelectItem value="NO ALCANZA VACANTE">❌ NO ALCANZA VACANTE</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -681,6 +743,7 @@ export default function EvaluationBoard() {
                                 </Button>
                             </div>
                         </div>
+                    );})()}
                     )}
                 </DialogContent>
             </Dialog>
