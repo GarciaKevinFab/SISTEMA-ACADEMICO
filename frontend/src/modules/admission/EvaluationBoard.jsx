@@ -622,6 +622,7 @@ export default function EvaluationBoard() {
                                             <FieldLabel>{label} ({max})</FieldLabel>
                                             <Input type="number" step="0.1" min="0" max={max}
                                                 className={`h-9 rounded-xl font-mono text-center transition-colors ${over ? "border-red-400 bg-red-50 text-red-700 focus:ring-red-400" : "focus:ring-blue-400"}`}
+                                                onFocus={e => e.target.select()}
                                                 value={rb[key] ?? 0}
                                                 onChange={e => setRubricField(manualRow.id, key, toNum(e.target.value))} />
                                             {over && <p className="text-[9px] text-red-500 mt-0.5 font-medium">Máximo: {max}</p>}
@@ -661,6 +662,7 @@ export default function EvaluationBoard() {
                                             <FieldLabel>{label} ({max})</FieldLabel>
                                             <Input type="number" step="0.1" min="0" max={max}
                                                 className={`h-9 rounded-xl font-mono text-center transition-colors ${over ? "border-red-400 bg-red-50 text-red-700 focus:ring-red-400" : "focus:ring-indigo-400"}`}
+                                                onFocus={e => e.target.select()}
                                                 value={rb[key] ?? 0}
                                                 onChange={e => setRubricField(manualRow.id, key, toNum(e.target.value))} />
                                             {over && <p className="text-[9px] text-red-500 mt-0.5 font-medium">Máximo: {max}</p>}
