@@ -6,8 +6,14 @@ User = get_user_model()
 
 class Office(models.Model):
     name        = models.CharField(max_length=120)
-    description = models.TextField(blank=True)           # ← ADDED
-    is_active   = models.BooleanField(default=True)      # ← ADDED
+    description = models.TextField(blank=True)
+    is_active   = models.BooleanField(default=True)
+    head        = models.ForeignKey(
+        User, null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="offices_as_head",
+        verbose_name="Encargado",
+    )
 
     class Meta:
         ordering = ["name"]

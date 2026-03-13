@@ -162,18 +162,20 @@ def application_detail(request, application_id):
             "dni", "sexo", "fecha_nacimiento", "nacionalidad",
             "email", "phone", "direccion", "estado_civil",
             "lengua_materna", "autoidentificacion_etnica",
-            "discapacidad", "tipo_discapacidad",
+            "discapacidad", "tipo_discapacidad", "numero_conadis",
             "modalidad_admision",
+            "ubigeo_nacimiento", "ubigeo_domicilio",
             # Aliases en inglés
             "first_names", "last_name_father", "last_name_mother",
             "document_number", "birth_date", "nationality",
             "address", "mother_tongue", "ethnic_identity",
+            "birth_department", "address_department",
         ]
         school_fields = [
             "colegio_procedencia", "anio_egreso",
             "anio_finalizo_estudios_secundarios",
             "school_name", "school_type", "school_department",
-            "promotion_year",
+            "promotion_year", "tipo_colegio", "depto_colegio",
         ]
 
         changed_data = False

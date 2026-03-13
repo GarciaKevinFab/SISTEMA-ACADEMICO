@@ -178,7 +178,14 @@ def _resolve_media_path(url_or_path):
     if not url_or_path:
         return None
     p = str(url_or_path)
+    # Si es URL absoluta, intentar extraer ruta relativa de /media/ primero
     if p.startswith(("http://", "https://")):
+        if "/media/" in p:
+            rel = p.split("/media/")[-1]
+            full = os.path.join(settings.MEDIA_ROOT, rel)
+            if os.path.exists(full):
+                return full
+        # Fallback: descargar
         try:
             tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
             urllib.request.urlretrieve(p, tmp.name)
@@ -1041,29 +1048,51 @@ def _gen_ficha_matricula(process, student, extra, styles, inst):
     period = extra.get("period", student["periodo"] or "2025-I")
     ciclo  = student["ciclo"] or extra.get("cycle", "I")
     seccion= student["seccion"] or extra.get("section", "A")
-    ciclo_seccion = extra.get("cycle_section", f'{ciclo} - "{seccion}"')
+    ciclo_romano = _to_roman(ciclo) if str(ciclo).isdigit() else str(ciclo)
+    ciclo_seccion = extra.get("cycle_section", f'{ciclo_romano} - "{seccion}"')
 
     short      = inst.get("short_name", _DEFAULT_INST["short_name"])
     nombre_inst= inst.get("institution_name", _DEFAULT_INST["institution_name"])
     full_name  = inst.get("name", _DEFAULT_INST["name"])
     region     = inst.get("region", "Junín")
     province   = inst.get("province", "Tarma")
+    district   = inst.get("district", province)
     modular    = inst.get("modular_code", _DEFAULT_INST["modular_code"])
     gestion    = inst.get("management", _DEFAULT_INST["management"])
     address    = inst.get("address", "")
-    city       = inst.get("city", "Tarma")
     ds_creation = inst.get("ds_creation", _DEFAULT_INST["ds_creation"])
     director   = inst.get("director_name", "")
+    resolucion = extra.get("resolucion", "") or inst.get("resolution", "")
+
+    # ── Colores profesionales ──
+    DARK_BLUE  = colors.HexColor("#1a3a5c")
+    LIGHT_BG   = colors.HexColor("#f0f3f7")
+    BORDER_CLR = colors.HexColor("#b0b8c4")
+    TOTAL_BG   = colors.HexColor("#dce3ed")
+    SUB_HEADER = colors.HexColor("#5d4215")
+    ZEBRA      = colors.HexColor("#f7f9fb")
+
+    # ── Estilos ──
+    lbl_style = ParagraphStyle("FichaLbl", parent=styles["Normal"],
+                               fontSize=7.5, fontName="Helvetica-Bold",
+                               textColor=colors.HexColor("#333333"), leading=10)
+    val_style = ParagraphStyle("FichaVal", parent=styles["Normal"],
+                               fontSize=8.5, leading=11)
+    val_bold  = ParagraphStyle("FichaValB", parent=val_style,
+                               fontName="Helvetica-Bold")
 
     # ── Logo ──
-    logo = _load_image(inst, "logo_url", 2.5 * cm, 2.5 * cm)
+    logo = _load_image(inst, "logo_url", 2.2 * cm, 2.2 * cm)
 
     # ── Título con logo ──
-    title_style = ParagraphStyle("FT", parent=styles["DocTitle"], fontSize=16, spaceBefore=4, spaceAfter=4)
+    title_style = ParagraphStyle("FT", parent=styles["DocTitle"],
+                                 fontSize=17, spaceBefore=0, spaceAfter=0,
+                                 fontName="Helvetica-Bold",
+                                 textColor=DARK_BLUE)
     if logo:
         title_row = Table(
             [[logo, Paragraph("FICHA DE MATRÍCULA", title_style)]],
-            colWidths=[3 * cm, 13 * cm],
+            colWidths=[2.8 * cm, 13.2 * cm],
         )
         title_row.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -1073,90 +1102,97 @@ def _gen_ficha_matricula(process, student, extra, styles, inst):
         elems.append(title_row)
     else:
         elems.append(Paragraph("FICHA DE MATRÍCULA", title_style))
-    elems.append(Spacer(1, 6))
 
-    # ── Bloque institución (con todos los datos de InstitutionSetting) ──
-    lbl = ParagraphStyle("Lbl", parent=styles["Normal"], fontSize=7.5, textColor=colors.HexColor("#1a237e"), leading=10)
-    val = styles["Normal"]
+    # ── Línea separadora ──
+    sep = Table([[""]], colWidths=[16 * cm], rowHeights=[2.5])
+    sep.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), DARK_BLUE)]))
+    elems.append(sep)
+    elems.append(Spacer(1, 8))
 
+    # ── Bloque 1: Institución ──
     b1 = [
-        [Paragraph("<b>Institución</b>", lbl),
-         Paragraph(f"<b>{full_name}<br/>{nombre_inst}</b>", val),
-         Paragraph("<b>DREJ</b>", lbl),
-         Paragraph(region, val)],
-        [Paragraph("<b>Código Modular</b>", lbl),
-         Paragraph(f"<b>{modular}</b>", val),
-         Paragraph("<b>Gestión</b>", lbl),
-         Paragraph(gestion, val)],
-        [Paragraph("<b>Dirección</b>", lbl),
-         Paragraph(address, val),
-         Paragraph("<b>Provincia</b>", lbl),
-         Paragraph(f"{province} / {region}", val)],
-        [Paragraph("<b>Creación</b>", lbl),
-         Paragraph(ds_creation, val),
-         Paragraph("<b>Director</b>", lbl),
-         Paragraph(director, val)],
+        [Paragraph("<b>Nombre de la Institución</b>", lbl_style),
+         Paragraph(f"<b>{nombre_inst}</b>", val_bold),
+         Paragraph("<b>DREJ / UGEL</b>", lbl_style),
+         Paragraph(region, val_style)],
+        [Paragraph("<b>Código Modular</b>", lbl_style),
+         Paragraph(f"<b>{modular}</b>", val_bold),
+         Paragraph("<b>Gestión</b>", lbl_style),
+         Paragraph(gestion, val_style)],
+        [Paragraph("<b>Denominación</b>", lbl_style),
+         Paragraph(short, val_style),
+         Paragraph("<b>D.S. Creación</b>", lbl_style),
+         Paragraph(ds_creation, val_style)],
+        [Paragraph("<b>Dirección</b>", lbl_style),
+         Paragraph(address, val_style),
+         Paragraph("<b>Provincia / Distrito</b>", lbl_style),
+         Paragraph(f"{province} / {district}", val_style)],
     ]
     t1 = Table(b1, colWidths=[3.5 * cm, 5.5 * cm, 3 * cm, 4 * cm])
     t1.setStyle(TableStyle([
         ("FONTSIZE",   (0, 0), (-1, -1), 8),
-        ("GRID",       (0, 0), (-1, -1), 0.5, colors.HexColor("#bdbdbd")),
-        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#e8eaf6")),
-        ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#e8eaf6")),
+        ("GRID",       (0, 0), (-1, -1), 0.5, BORDER_CLR),
+        ("BACKGROUND", (0, 0), (0, -1), LIGHT_BG),
+        ("BACKGROUND", (2, 0), (2, -1), LIGHT_BG),
         ("TOPPADDING",    (0, 0), (-1, -1), 3),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 5),
+        ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
     ]))
     elems.append(t1)
-    elems.append(Spacer(1, 8))
+    elems.append(Spacer(1, 6))
 
+    # ── Bloque 2: Alumno ──
     carrera   = student["carrera"] or extra.get("career", "—")
     codigo    = student["codigo"] or extra.get("code", "")
-    resolucion= extra.get("resolucion", "R.V. Nº 143-2020-MINEDU")
     nombres   = student.get("nombres", "")
     apellidos = student.get("apellidos", "")
     nombre_ficha = f"{apellidos.upper()} {nombres}" if apellidos else student["nombre_completo"]
 
     b2 = [
-        [Paragraph("<b>Programa de Estudios</b>", styles["Normal"]),
-         Paragraph(f"<b>{carrera}</b>", styles["Normal"]),
-         Paragraph("<b>Período Académico</b>", styles["Normal"]),
-         Paragraph(f"<b>{period}</b>", styles["Normal"])],
-        [Paragraph("<b>Resolución Autorización</b>", styles["Normal"]),
-         Paragraph(resolucion, styles["Normal"]),
-         Paragraph("<b>Ciclo - Sección</b>", styles["Normal"]),
-         Paragraph(ciclo_seccion, styles["Normal"])],
-        [Paragraph("<b>Nombres y Apellidos</b>", styles["Normal"]),
-         Paragraph(f"<b>{nombre_ficha}</b>", styles["Normal"]),
-         Paragraph("<b>CÓDIGO</b>", styles["Normal"]),
-         Paragraph(f"<b>{codigo}</b>", styles["Normal"])],
+        [Paragraph("<b>Programa de Estudios</b>", lbl_style),
+         Paragraph(f"<b>{carrera.upper()}</b>", val_bold),
+         Paragraph("<b>Período Académico</b>", lbl_style),
+         Paragraph(f"<b>{period}</b>", val_bold)],
+        [Paragraph("<b>Resolución de Autorización</b>", lbl_style),
+         Paragraph(resolucion, val_style),
+         Paragraph("<b>Ciclo - Sección</b>", lbl_style),
+         Paragraph(f"<b>{ciclo_seccion}</b>", val_bold)],
+        [Paragraph("<b>Nombres y Apellidos</b>", lbl_style),
+         Paragraph(f"<b>{nombre_ficha}</b>", val_bold),
+         Paragraph("<b>CÓDIGO</b>", lbl_style),
+         Paragraph(f"<b>{codigo}</b>", val_bold)],
     ]
     t2 = Table(b2, colWidths=[3.5 * cm, 5.5 * cm, 3.5 * cm, 3.5 * cm])
     t2.setStyle(TableStyle([
         ("FONTSIZE",   (0, 0), (-1, -1), 9),
-        ("GRID",       (0, 0), (-1, -1), 0.5, colors.HexColor("#bdbdbd")),
-        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#e8eaf6")),
-        ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#e8eaf6")),
+        ("GRID",       (0, 0), (-1, -1), 0.5, BORDER_CLR),
+        ("BACKGROUND", (0, 0), (0, -1), LIGHT_BG),
+        ("BACKGROUND", (2, 0), (2, -1), LIGHT_BG),
         ("TOPPADDING",    (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 5),
+        ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
     ]))
     elems.append(t2)
     elems.append(Spacer(1, 10))
 
-    plan_id  = student.get("plan_id")
-    ciclo_int = None
-    try:
-        ciclo_int = int(ciclo)
-    except (ValueError, TypeError):
-        pass
-
-    courses = _get_enrolled_courses(plan_id, ciclo_int)
+    # ── Cursos: usar enrolled_courses de extra si están, si no plan ──
+    courses = extra.get("enrolled_courses", [])
+    if not courses:
+        plan_id  = student.get("plan_id")
+        ciclo_int = None
+        try:
+            ciclo_int = int(ciclo)
+        except (ValueError, TypeError):
+            pass
+        courses = _get_enrolled_courses(plan_id, ciclo_int)
     if not courses:
         for c in (extra.get("courses_list", []) or []):
             if isinstance(c, dict):
                 courses.append(c)
 
+    # ── Tabla de cursos ──
     rows    = [["N°", "ASIGNATURA", "HORAS", "CRÉDITOS"]]
     total_h = 0
     total_c = 0
@@ -1172,21 +1208,31 @@ def _gen_ficha_matricula(process, student, extra, styles, inst):
     rows.append(["", "TOTAL", str(total_h) if total_h else "", str(total_c) if total_c else ""])
 
     ct = Table(rows, colWidths=[1 * cm, 10 * cm, 2.5 * cm, 2.5 * cm])
-    ct.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1565c0")),
+    course_styles = [
+        ("BACKGROUND", (0, 0), (-1, 0), DARK_BLUE),
         ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
-        ("FONTSIZE",   (0, 0), (-1, -1), 9),
-        ("GRID",       (0, 0), (-1, -1), 0.5, colors.HexColor("#bdbdbd")),
+        ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE",   (0, 0), (-1, 0), 9),
+        ("FONTSIZE",   (0, 1), (-1, -1), 8.5),
+        ("GRID",       (0, 0), (-1, -1), 0.5, BORDER_CLR),
         ("ALIGN",      (0, 0), (0, -1), "CENTER"),
         ("ALIGN",      (2, 0), (3, -1), "CENTER"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#e3f2fd")),
+        ("TOPPADDING",    (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING",   (1, 1), (1, -2), 6),
+        # Total row
+        ("BACKGROUND", (0, -1), (-1, -1), TOTAL_BG),
         ("FONTNAME",   (0, -1), (-1, -1), "Helvetica-Bold"),
-    ]))
+        ("LINEABOVE",  (0, -1), (-1, -1), 1.5, DARK_BLUE),
+    ]
+    # Zebra striping
+    for row_idx in range(2, len(rows) - 1, 2):
+        course_styles.append(("BACKGROUND", (0, row_idx), (-1, row_idx), ZEBRA))
+    ct.setStyle(TableStyle(course_styles))
     elems.append(ct)
     elems.append(Spacer(1, 8))
 
+    # ── Subsanación ──
     sub_rows = [["N°", "CURSOS DE SUBSANACIÓN", "HORAS", "CRÉDITOS"]]
     subs = extra.get("subsanacion_courses", [])
     if subs:
@@ -1196,18 +1242,55 @@ def _gen_ficha_matricula(process, student, extra, styles, inst):
     else:
         sub_rows.append(["1", "", "", ""])
 
-    st = Table(sub_rows, colWidths=[1 * cm, 10 * cm, 2.5 * cm, 2.5 * cm])
-    st.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#ef6c00")),
+    st2 = Table(sub_rows, colWidths=[1 * cm, 10 * cm, 2.5 * cm, 2.5 * cm])
+    st2.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), SUB_HEADER),
         ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
-        ("FONTSIZE",   (0, 0), (-1, -1), 9),
-        ("GRID",       (0, 0), (-1, -1), 0.5, colors.HexColor("#bdbdbd")),
+        ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE",   (0, 0), (-1, -1), 8.5),
+        ("GRID",       (0, 0), (-1, -1), 0.5, BORDER_CLR),
         ("ALIGN",      (0, 0), (0, -1), "CENTER"),
         ("ALIGN",      (2, 0), (3, -1), "CENTER"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING",    (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
-    elems.append(st)
+    elems.append(st2)
+
+    # ── Firmas ──
+    elems.append(Spacer(1, 45))
+    firma_lbl = ParagraphStyle("FirmaLbl", parent=styles["Normal"],
+                               fontSize=8, fontName="Helvetica-Bold",
+                               alignment=1, textColor=DARK_BLUE)
+    firma_sub = ParagraphStyle("FirmaSub", parent=styles["Normal"],
+                               fontSize=6.5, alignment=1,
+                               textColor=colors.HexColor("#666666"))
+
+    # Firmas con imagen si están disponibles
+    dir_sig  = _load_image(inst, "signature_url", 2.5 * cm, 1.2 * cm)
+    sec_sig  = _load_image(inst, "secretary_signature_url", 2.5 * cm, 1.2 * cm)
+
+    def _firma_col(sig_img, title, subtitle="Firma, Post Firma y Sello"):
+        col_elems = []
+        if sig_img:
+            col_elems.append(sig_img)
+        col_elems.append(Paragraph("_" * 30, ParagraphStyle("FLine", parent=styles["Normal"], fontSize=8, alignment=1)))
+        col_elems.append(Paragraph(f"<b>{title}</b>", firma_lbl))
+        if subtitle:
+            col_elems.append(Paragraph(subtitle, firma_sub))
+        return col_elems
+
+    firma_rows = [[
+        _firma_col(dir_sig, "DIRECTOR(A) GENERAL"),
+        _firma_col(sec_sig, "SECRETARIO(A) ACADÉMICO"),
+        _firma_col(None, "ESTUDIANTE", ""),
+    ]]
+    ft = Table(firma_rows, colWidths=[5.3 * cm, 5.3 * cm, 5.3 * cm])
+    ft.setStyle(TableStyle([
+        ("ALIGN",  (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+    ]))
+    elems.append(ft)
+
     elems += _footer(styles, process.id)
     return elems
 

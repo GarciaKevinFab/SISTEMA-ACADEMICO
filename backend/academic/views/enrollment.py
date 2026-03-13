@@ -634,7 +634,63 @@ class StudentsOverviewView(APIView):
             "apellido_paterno", "apellido_materno", "nombres"
         )[offset: offset + page_size]
 
-        # ── 5. Serializar ─────────────────────────────────────
+        # ── 5. Pre-calcular egresados en batch ────────────────
+        # Obtener todos los cursos aprobados de los alumnos de esta página
+        student_ids = [st.id for st in students_page]
+        plan_ids = set(st.plan_id for st in students_page if st.plan_id)
+
+        # Cursos por plan
+        plan_courses_map = {}  # plan_id → list of PlanCourse
+        if plan_ids:
+            for pc in PlanCourse.objects.select_related("course").filter(plan_id__in=plan_ids):
+                plan_courses_map.setdefault(pc.plan_id, []).append(pc)
+
+        # Mejores notas por alumno
+        student_approved = {}  # student_id → (approved_ids set, approved_names set)
+        if student_ids:
+            grade_recs = (
+                AcademicGradeRecord.objects
+                .filter(student_id__in=student_ids)
+                .values_list("student_id", "course_id", "final_grade", "course__name")
+            )
+            best_by_student = {}  # student_id → {course_id: (grade, name)}
+            for sid, cid, fg, cname in grade_recs:
+                try:
+                    g = float(fg) if fg is not None else None
+                except Exception:
+                    g = None
+                bst = best_by_student.setdefault(sid, {})
+                prev = bst.get(cid)
+                if prev is None or (g is not None and (prev[0] is None or g > prev[0])):
+                    bst[cid] = (g, (cname or "").strip().upper())
+
+            for sid, courses in best_by_student.items():
+                a_ids = set()
+                a_names = set()
+                for cid, (g, nm) in courses.items():
+                    if g is not None and g >= PASSING_GRADE:
+                        a_ids.add(cid)
+                        if nm:
+                            a_names.add(nm)
+                student_approved[sid] = (a_ids, a_names)
+
+        def _is_egresado(st):
+            if not st.plan_id:
+                return False
+            pcs = plan_courses_map.get(st.plan_id, [])
+            if not pcs:
+                return False
+            a_ids, a_names = student_approved.get(st.id, (set(), set()))
+            for pc in pcs:
+                if pc.course_id in a_ids:
+                    continue
+                pc_name = (getattr(pc, "display_name", "") or getattr(pc.course, "name", "") or "").strip().upper()
+                if pc_name and pc_name in a_names:
+                    continue
+                return False
+            return True
+
+        # ── 6. Serializar ─────────────────────────────────────
         result = []
         for st in students_page:
             full_name = " ".join(filter(None, [
@@ -663,6 +719,8 @@ class StudentsOverviewView(APIView):
                 except Exception:
                     semester = None
 
+            egresado = _is_egresado(st)
+
             result.append({
                 "id":                     st.id,
                 "full_name":              full_name,
@@ -674,6 +732,7 @@ class StudentsOverviewView(APIView):
                 "plan_id":                st.plan_id,
                 "semester":               semester,
                 "is_enrolled":            st._enrollment_id is not None,
+                "is_egresado":            egresado,
                 "enrollment_id":          st._enrollment_id,
                 "enrolled_courses_count": st._enrolled_courses,
                 "enrolled_credits":       st._enrolled_credits,
@@ -1047,6 +1106,16 @@ class EnrollmentAvailableView(APIView):
         # ── Payment gate info ──
         _paid, _pay_info = check_enrollment_payment(st, academic_period)
 
+        # ── Max credits ──
+        inst       = InstitutionSettings.objects.filter(id=1).first()
+        max_normal = int(getattr(inst, "max_credits_normal",       22) or 22)
+        max_third  = int(getattr(inst, "max_credits_third_attempt", 11) or 11)
+        plan_max   = _max_credits_from_plan(st.plan_id)
+        if plan_max > max_normal:
+            max_normal = plan_max
+        has_third_in_selection = any(c.get("is_third_attempt") for c in out_courses)
+        _max_credits = max_third if has_third_in_selection else max_normal
+
         return ok(
             student={
                 "id":            st.id,
@@ -1069,6 +1138,7 @@ class EnrollmentAvailableView(APIView):
             total_plan_courses=total_plan_courses,
             approved_plan_courses=approved_plan_courses,
             courses=out_courses,
+            max_credits=_max_credits,
         )
 
 
@@ -1388,12 +1458,34 @@ class EnrollmentFichaPDFView(APIView):
         except (ValueError, TypeError):
             pass
 
-        courses = _get_enrolled_courses(student_data.get("plan_id"), ciclo)
+        # ── Usar cursos realmente matriculados si hay items ──
+        items = list(
+            enrollment.items
+            .select_related("plan_course__course")
+            .order_by("plan_course__semester", "plan_course__display_code", "id")
+        )
+        if items:
+            courses = []
+            for it in items:
+                pc = it.plan_course
+                course = pc.course
+                courses.append({
+                    "nombre":   pc.display_name or (course.name if course else "—"),
+                    "codigo":   pc.display_code or (course.code if course else ""),
+                    "horas":    pc.weekly_hours or 0,
+                    "creditos": it.credits or pc.credits or (course.credits if course else 0),
+                    "ciclo":    pc.semester or 0,
+                    "tipo":     pc.type or "MANDATORY",
+                })
+        else:
+            courses = _get_enrolled_courses(student_data.get("plan_id"), ciclo)
+
         inst = _get_institution()
         extra = {
             "period":  enrollment.period,
             "cycle":   student_data.get("ciclo", ""),
             "section": student_data.get("seccion", "A"),
+            "enrolled_courses": courses,
         }
 
         class _FakeProcess:
@@ -1417,7 +1509,18 @@ class EnrollmentFichaPDFView(APIView):
             logger.warning(f"Ficha {enrollment_id}: WeasyPrint falló: {exc}")
             pdf_buf = None
 
-        # ── Fallback: ReportLab ──
+        # ── Fallback: ReportLab Canvas (diseño profesional) ──
+        if pdf_buf is None:
+            try:
+                from .ficha_matricula_generator import generate_ficha_matricula_reportlab
+                pdf_buf = generate_ficha_matricula_reportlab(
+                    fake_proc, student_data, extra, inst, courses,
+                )
+            except Exception as exc2:
+                logger.warning(f"Ficha {enrollment_id}: ReportLab canvas falló: {exc2}")
+                pdf_buf = None
+
+        # ── Último fallback: ReportLab Platypus (legacy) ──
         if pdf_buf is None:
             from .process_document_gen import _get_styles, DOCUMENT_GENERATORS
             import io as _io
@@ -1919,7 +2022,17 @@ class EnrollmentBulkFichasView(APIView):
                         except Exception:
                             pdf_buf = None
 
-                    # Fallback ReportLab
+                    # Fallback ReportLab Canvas (diseño profesional)
+                    if pdf_buf is None:
+                        try:
+                            from .ficha_matricula_generator import generate_ficha_matricula_reportlab
+                            pdf_buf = generate_ficha_matricula_reportlab(
+                                fake_process, student_data, extra, inst, courses
+                            )
+                        except Exception:
+                            pdf_buf = None
+
+                    # Último fallback: ReportLab Platypus (legacy)
                     if pdf_buf is None:
                         import io as _io
                         from reportlab.lib.pagesizes import A4

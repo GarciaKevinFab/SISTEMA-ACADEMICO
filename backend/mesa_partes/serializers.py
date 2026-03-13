@@ -3,9 +3,17 @@ from .models import Office, ProcedureType, Procedure, ProcedureEvent, ProcedureF
 
 
 class OfficeSer(serializers.ModelSerializer):
+    head_name = serializers.SerializerMethodField()
+
     class Meta:
         model  = Office
-        fields = ["id", "name", "description", "is_active"]   # ← FIX #10: added description, is_active
+        fields = ["id", "name", "description", "is_active", "head", "head_name"]
+
+    def get_head_name(self, obj):
+        u = obj.head
+        if not u:
+            return None
+        return getattr(u, "get_full_name", lambda: None)() or getattr(u, "username", None)
 
 
 class ProcedureTypeSer(serializers.ModelSerializer):

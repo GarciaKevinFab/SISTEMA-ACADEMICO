@@ -62,6 +62,22 @@ def _json_path():
     return os.path.join(media, "admission_params.json")
 
 
+def _load_bank_info():
+    """Lee datos bancarios centralizados desde InstitutionSetting."""
+    try:
+        from catalogs.models import InstitutionSetting
+        obj = InstitutionSetting.objects.filter(pk=1).first()
+        if obj and isinstance(obj.data, dict):
+            return {
+                "bank_name":    obj.data.get("bank_name") or "",
+                "bank_account": obj.data.get("bank_account") or "",
+                "bank_holder":  obj.data.get("bank_holder") or "",
+            }
+    except Exception:
+        pass
+    return {}
+
+
 def _load_params():
     """Carga los parámetros desde el almacenamiento disponible."""
     if _USE_MODEL:
@@ -69,6 +85,8 @@ def _load_params():
             obj = AdmissionParam.objects.filter(pk=1).first()
             if obj and obj.data:
                 merged = {**DEFAULT_PARAMS, **obj.data}
+                # Inyectar datos bancarios desde InstitutionSetting (fuente centralizada)
+                merged.update({k: v for k, v in _load_bank_info().items() if v})
                 return merged
         except Exception:
             pass
@@ -79,11 +97,15 @@ def _load_params():
         if os.path.exists(path):
             with open(path, "r") as f:
                 data = json.load(f)
-            return {**DEFAULT_PARAMS, **data}
+            merged = {**DEFAULT_PARAMS, **data}
+            merged.update({k: v for k, v in _load_bank_info().items() if v})
+            return merged
     except Exception:
         pass
 
-    return dict(DEFAULT_PARAMS)
+    result = dict(DEFAULT_PARAMS)
+    result.update({k: v for k, v in _load_bank_info().items() if v})
+    return result
 
 
 def _save_params(data):

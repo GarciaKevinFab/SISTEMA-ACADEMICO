@@ -10,18 +10,23 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
     AlertTriangle, CheckCircle, Clock, Upload, Eye,
     DollarSign, CreditCard, FileText, RefreshCw, XCircle, Pencil,
+    AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EnrollmentPayment } from "@/services/academic.service";
 
 const CHANNEL_OPTIONS = [
-    { value: "PAGALO",          label: "Págalo.pe" },
-    { value: "CAJERO_MULTIRED", label: "Cajero Multired" },
     { value: "AGENCIA_BN",     label: "Agencia Banco de la Nación" },
+    { value: "CAJERO_MULTIRED", label: "Cajero Multired" },
+    { value: "PAGALO",          label: "Págalo.pe" },
 ];
 
 export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
@@ -34,6 +39,9 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
     // form
     const [channel, setChannel]           = useState("");
     const [operationCode, setOperationCode] = useState("");
+    const [nroSecuencia, setNroSecuencia] = useState("");
+    const [codigoCaja, setCodigoCaja]     = useState("");
+    const [fechaMovimiento, setFechaMovimiento] = useState("");
     const [voucherFile, setVoucherFile]   = useState(null);
 
     // ── Preview del archivo seleccionado ──
@@ -83,6 +91,9 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
             fd.append("period", period);
             fd.append("channel", channel);
             fd.append("operation_code", operationCode);
+            fd.append("nro_secuencia", nroSecuencia);
+            fd.append("codigo_caja", codigoCaja);
+            if (fechaMovimiento) fd.append("fecha_movimiento", fechaMovimiento);
             fd.append("voucher", voucherFile);
 
             const isReUpload = paymentInfo?.status === "REJECTED" || paymentInfo?.status === "PENDING";
@@ -92,7 +103,7 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                 await EnrollmentPayment.upload(fd);
             }
             toast.success("Voucher enviado correctamente");
-            setChannel(""); setOperationCode(""); setVoucherFile(null);
+            setChannel(""); setOperationCode(""); setNroSecuencia(""); setCodigoCaja(""); setFechaMovimiento(""); setVoucherFile(null);
             setEditingPending(false);
             await fetchStatus();
         } catch (err) {
@@ -112,7 +123,12 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
         );
     }
 
-    const status = paymentInfo?.status || "NOT_STARTED";
+    const status    = paymentInfo?.status || "NOT_STARTED";
+    const bankInfo  = paymentInfo?.bank_info || {};
+    const bankName  = bankInfo.bank_name || "Banco de la Nación";
+    const bankAcct  = bankInfo.bank_account || "";
+    const bankHolder = bankInfo.bank_holder || "";
+    const totalAmount = Number(paymentInfo?.total || paymentInfo?.amount || 180).toFixed(2);
 
     // ── APPROVED → no bloquear ──
     if (status === "APPROVED") {
@@ -124,7 +140,7 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                         <div>
                             <p className="font-semibold text-green-800">Pago Verificado</p>
                             <p className="text-sm text-slate-500">
-                                Monto: S/. {Number(paymentInfo?.total || paymentInfo?.amount || 0).toFixed(2)}
+                                Monto: S/. {totalAmount}
                                 {paymentInfo?.reviewed_at && (
                                     <> | Aprobado: {new Date(paymentInfo.reviewed_at).toLocaleDateString("es-PE")}</>
                                 )}
@@ -151,13 +167,33 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="bg-amber-50 rounded-lg p-4 space-y-2 text-sm">
+                    <div className="bg-amber-50 rounded-xl p-4 space-y-2 text-sm">
                         <div className="flex justify-between">
                             <span className="text-slate-600">Canal:</span>
                             <span className="font-medium">
                                 {CHANNEL_OPTIONS.find(c => c.value === paymentInfo?.channel)?.label || paymentInfo?.channel}
                             </span>
                         </div>
+                        {paymentInfo?.nro_secuencia && (
+                            <div className="flex justify-between">
+                                <span className="text-slate-600">Nro. Secuencia:</span>
+                                <span className="font-medium">{paymentInfo.nro_secuencia}</span>
+                            </div>
+                        )}
+                        {paymentInfo?.codigo_caja && (
+                            <div className="flex justify-between">
+                                <span className="text-slate-600">Código de Caja:</span>
+                                <span className="font-medium">{paymentInfo.codigo_caja}</span>
+                            </div>
+                        )}
+                        {paymentInfo?.fecha_movimiento && (
+                            <div className="flex justify-between">
+                                <span className="text-slate-600">Fecha de Movimiento:</span>
+                                <span className="font-medium">
+                                    {new Date(paymentInfo.fecha_movimiento + "T00:00:00").toLocaleDateString("es-PE")}
+                                </span>
+                            </div>
+                        )}
                         {paymentInfo?.operation_code && (
                             <div className="flex justify-between">
                                 <span className="text-slate-600">Nro. Operación:</span>
@@ -166,7 +202,7 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                         )}
                         <div className="flex justify-between">
                             <span className="text-slate-600">Monto:</span>
-                            <span className="font-medium">S/. {Number(paymentInfo?.total || paymentInfo?.amount || 0).toFixed(2)}</span>
+                            <span className="font-medium">S/. {totalAmount}</span>
                         </div>
                         {paymentInfo?.discount_tag === "PRIMER_PUESTO" && (
                             <div className="flex justify-between">
@@ -203,6 +239,9 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                             setEditingPending(true);
                             setChannel(paymentInfo?.channel || "");
                             setOperationCode(paymentInfo?.operation_code || "");
+                            setNroSecuencia(paymentInfo?.nro_secuencia || "");
+                            setCodigoCaja(paymentInfo?.codigo_caja || "");
+                            setFechaMovimiento(paymentInfo?.fecha_movimiento || "");
                         }}>
                             <Pencil className="h-4 w-4 mr-1" />
                             Modificar voucher
@@ -240,21 +279,21 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                     }
                 </CardDescription>
             </CardHeader>
-            <CardContent>
-                {/* Nota sutil si fue rechazado antes */}
+            <CardContent className="space-y-5">
+                {/* Nota rechazo */}
                 {isRejected && paymentInfo?.rejection_note && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm">
-                        <p className="text-amber-800">
-                            <span className="font-medium">Nota:</span> {paymentInfo.rejection_note}
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm">
+                        <p className="text-red-800">
+                            <span className="font-medium">Motivo de rechazo:</span> {paymentInfo.rejection_note}
                         </p>
                     </div>
                 )}
 
-                {/* Info de monto */}
-                <div className="bg-slate-50 rounded-lg p-4 mb-4">
-                    <div className="flex items-center gap-2 mb-3">
-                        <DollarSign className="h-5 w-5 text-slate-600" />
-                        <span className="font-semibold text-slate-800">Detalle de Pago</span>
+                {/* Detalle de Pago */}
+                <div className="bg-slate-50 rounded-xl p-5 space-y-3">
+                    <div className="flex items-center gap-2 text-slate-800 font-bold text-base">
+                        <DollarSign className="h-5 w-5" />
+                        Detalle de Pago
                     </div>
                     <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
@@ -278,64 +317,132 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                         <hr className="my-2" />
                         <div className="flex justify-between text-base font-bold">
                             <span>Total a pagar:</span>
-                            <span>S/. {Number(paymentInfo?.total || paymentInfo?.amount || 180).toFixed(2)}</span>
+                            <span>S/. {totalAmount}</span>
                         </div>
                     </div>
                 </div>
 
-                {/* Canales de pago */}
-                <div className="bg-blue-50 rounded-lg p-3 mb-4 text-sm text-blue-800">
-                    <p className="font-medium mb-1 flex items-center gap-1">
-                        <CreditCard className="h-4 w-4" /> Canales de pago disponibles:
-                    </p>
-                    <ul className="list-disc list-inside space-y-0.5 text-blue-700">
-                        <li>Págalo.pe (pago en línea)</li>
-                        <li>Cajero Multired (con código de pago)</li>
-                        <li>Agencia del Banco de la Nación (ventanilla)</li>
-                    </ul>
+                {/* Datos para el Depósito */}
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 space-y-3">
+                    <div className="flex items-center gap-2 text-blue-800 font-bold text-base">
+                        <CreditCard className="h-5 w-5" />
+                        Datos para el Depósito
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                        <div>
+                            <span className="text-gray-500">Banco:</span>{" "}
+                            <strong>{bankName}</strong>
+                        </div>
+                        <div>
+                            <span className="text-gray-500">N° Cuenta:</span>{" "}
+                            <strong className="text-blue-700 text-base">
+                                {bankAcct || "(no configurado)"}
+                            </strong>
+                        </div>
+                        {bankHolder && (
+                            <div>
+                                <span className="text-gray-500">Titular:</span>{" "}
+                                <strong>{bankHolder}</strong>
+                            </div>
+                        )}
+                        <div>
+                            <span className="text-gray-500">Monto:</span>{" "}
+                            <strong className="text-green-700 text-lg">S/. {totalAmount}</strong>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Formulario */}
-                <form onSubmit={handleUpload} className="space-y-4">
-                    {/* Canal */}
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                <form onSubmit={handleUpload} className="space-y-5">
+                    {/* Canal de pago */}
+                    <div className="space-y-2">
+                        <Label className="text-sm font-medium text-gray-700">
                             Canal de pago <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                            value={channel}
-                            onChange={e => setChannel(e.target.value)}
-                            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                            required
-                        >
-                            <option value="">Seleccionar canal...</option>
-                            {CHANNEL_OPTIONS.map(ch => (
-                                <option key={ch.value} value={ch.value}>{ch.label}</option>
-                            ))}
-                        </select>
+                        </Label>
+                        <Select value={channel} onValueChange={setChannel}>
+                            <SelectTrigger className="h-11 rounded-xl">
+                                <SelectValue placeholder="Seleccionar canal..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {CHANNEL_OPTIONS.map(ch => (
+                                    <SelectItem key={ch.value} value={ch.value}>{ch.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
-                    {/* Nro. Operación */}
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                            Nro. de Operación
-                        </label>
-                        <Input
-                            value={operationCode}
-                            onChange={e => setOperationCode(e.target.value)}
-                            placeholder="Ej: 190000475205"
-                            className="text-sm"
-                        />
+                    {/* Guía visual del voucher */}
+                    <details className="group rounded-xl border border-indigo-200 bg-indigo-50/50">
+                        <summary className="flex items-center gap-2 cursor-pointer px-4 py-3 text-sm font-medium text-indigo-700 hover:bg-indigo-100/50 rounded-xl transition-colors">
+                            <Eye className="h-4 w-4" />
+                            ¿Dónde encuentro los datos del voucher?
+                            <span className="ml-auto text-xs text-indigo-400 group-open:hidden">Click para ver guía</span>
+                        </summary>
+                        <div className="px-4 pb-4 pt-2">
+                            <p className="text-xs text-indigo-600 mb-3">
+                                Ubique los siguientes datos en la parte inferior de su voucher de depósito del Banco de la Nación:
+                            </p>
+                            <div className="flex justify-center">
+                                <img
+                                    src="/guia-voucher-bn.png"
+                                    alt="Guía de voucher - Banco de la Nación"
+                                    className="max-w-full sm:max-w-sm rounded-lg border border-slate-200 shadow-sm"
+                                />
+                            </div>
+                            <p className="text-[11px] text-indigo-500 mt-3 text-center">
+                                Los datos resaltados en rojo son los que debe ingresar en el formulario.
+                            </p>
+                        </div>
+                    </details>
+
+                    {/* Datos del comprobante */}
+                    <div className="grid sm:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                            <Label className="text-sm font-medium text-gray-700">
+                                Nro. Secuencia <span className="text-red-500">*</span>
+                            </Label>
+                            <Input
+                                value={nroSecuencia}
+                                onChange={e => setNroSecuencia(e.target.value)}
+                                placeholder="Ej: 12345678"
+                                className="h-11 rounded-xl"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-sm font-medium text-gray-700">
+                                Código de Caja <span className="text-red-500">*</span>
+                            </Label>
+                            <Input
+                                value={codigoCaja}
+                                onChange={e => setCodigoCaja(e.target.value)}
+                                placeholder="Ej: 0041"
+                                className="h-11 rounded-xl"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-sm font-medium text-gray-700">
+                                Fecha de Movimiento <span className="text-red-500">*</span>
+                            </Label>
+                            <Input
+                                type="date"
+                                value={fechaMovimiento}
+                                onChange={e => setFechaMovimiento(e.target.value)}
+                                className="h-11 rounded-xl"
+                                required
+                            />
+                        </div>
                     </div>
 
                     {/* Voucher */}
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                    <div className="space-y-2">
+                        <Label className="text-sm font-medium text-gray-700">
                             Voucher de pago <span className="text-red-500">*</span>
-                        </label>
+                        </Label>
                         <div className="flex items-center gap-2">
                             <label className="flex-1 cursor-pointer">
-                                <div className="flex items-center justify-center gap-2 rounded-md border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600 hover:border-blue-400 hover:bg-blue-50 transition-colors">
+                                <div className="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600 hover:border-blue-400 hover:bg-blue-50 transition-colors">
                                     <Upload className="h-4 w-4" />
                                     {voucherFile ? voucherFile.name : "Seleccionar archivo (imagen o PDF)"}
                                 </div>
@@ -358,13 +465,13 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                                 </Button>
                             )}
                         </div>
-                        <p className="text-xs text-slate-400 mt-1">
+                        <p className="text-xs text-slate-400">
                             Formatos: JPG, PNG, WebP, PDF. Máximo 5 MB.
                         </p>
 
-                        {/* Preview del archivo seleccionado */}
+                        {/* Preview */}
                         {voucherPreview && (
-                            <div className="mt-2 rounded-lg border border-slate-200 overflow-hidden bg-white">
+                            <div className="mt-2 rounded-xl border border-slate-200 overflow-hidden bg-white">
                                 {voucherPreview.isImage && (
                                     <img
                                         src={voucherPreview.url}
@@ -387,22 +494,32 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                         )}
                     </div>
 
-                    {/* Submit */}
+                    {/* Nota importante */}
+                    <div className="flex gap-3 p-4 bg-amber-50/70 rounded-xl border border-amber-200">
+                        <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="text-xs text-amber-700 space-y-1">
+                            <p className="font-semibold text-amber-800">Importante:</p>
+                            <p>Los datos del comprobante serán verificados por la oficina de finanzas.</p>
+                            <p>Si los datos son incorrectos, su matrícula quedará pendiente hasta la verificación.</p>
+                        </div>
+                    </div>
+
+                    {/* Botones */}
                     <div className="flex gap-2">
                         {isEditing && (
                             <Button
                                 type="button"
                                 variant="outline"
-                                className="flex-1"
-                                onClick={() => { setEditingPending(false); setVoucherFile(null); }}
+                                className="flex-1 rounded-xl"
+                                onClick={() => { setEditingPending(false); setVoucherFile(null); setNroSecuencia(""); setCodigoCaja(""); setFechaMovimiento(""); }}
                             >
                                 Cancelar
                             </Button>
                         )}
                         <Button
                             type="submit"
-                            className="flex-1"
-                            disabled={submitting || !channel || !voucherFile}
+                            className="flex-1 rounded-xl"
+                            disabled={submitting || !channel || !nroSecuencia || !codigoCaja || !fechaMovimiento || !voucherFile}
                         >
                             {submitting ? (
                                 <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Enviando...</>

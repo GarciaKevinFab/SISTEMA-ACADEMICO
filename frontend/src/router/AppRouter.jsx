@@ -19,6 +19,7 @@ import DashboardHome from "../pages/DashboardHome";
 /* Módulos */
 import PublicAdmissionCalls from "../modules/admission/PublicAdmissionCalls";
 import PublicAdmissionCallDetails from "../modules/admission/PublicAdmissionCallDetails";
+import PublicAdmissionSearch from "../modules/admission/PublicAdmissionSearch";
 import AccessControlModule from "../modules/admin/AccessControlModule";
 
 import CompleteAdmissionModule from "../modules/admission/CompleteAdmissionModule";
@@ -71,6 +72,7 @@ export default function AppRouter() {
 
             {/* Admisión pública */}
             <Route path="/public/admission" element={<PublicAdmissionCalls />} />
+            <Route path="/public/admission/search" element={<PublicAdmissionSearch />} />
             <Route path="/public/admission/:id" element={<PublicAdmissionCallDetails />} />
 
             {/* ✅ Mesa de Partes Pública */}

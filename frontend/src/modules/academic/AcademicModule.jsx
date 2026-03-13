@@ -25,7 +25,7 @@ import {
     Plus, Save, Calendar, CalendarDays, Users, Clock, FileText, CheckCircle,
     Search as SearchIcon, BookOpen, GraduationCap, BarChart3,
     Inbox, LayoutGrid, ClipboardList, LibraryBig, RotateCw,
-    TrendingUp, AlertCircle, AlertTriangle, Loader2, Download, FileSpreadsheet,
+    TrendingUp, AlertCircle, AlertTriangle, Loader2, Download, FileSpreadsheet, KeyRound,
 } from "lucide-react";
 
 import {
@@ -44,7 +44,7 @@ import AcademicReportsPage from "./AcademicReports";
 import AcademicProcesses from "./AcademicProcesses";
 import StudentHistoricalGrades from "./StudentHistoricalGrades";
 import TransferManagement from "./TransferManagement";
-import { PeriodsSection, TeachersSection, ImportersSection, InjectCatalogStyles } from "./AcademicCatalogs";
+import { PeriodsSection, TeachersSection, CredentialsSection, ImportersSection, InjectCatalogStyles } from "./AcademicCatalogs";
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle,
@@ -203,7 +203,11 @@ const REQS = {
     kardex: [PERMS["academic.kardex.view"]],
     reports: [PERMS["academic.reports.view"]],
     processes: [PERMS["academic.reports.view"], PERMS["academic.enrollment.view"], PERMS["student.self.enrollment.view"]],
-    transfers: [PERMS["academic.enrollment.view"], PERMS["academic.enrollment.commit"]],
+    transfers: [PERMS["student.manage.list"], PERMS["student.manage.view"]],
+    periods: [PERMS["academic.periods.manage"]],
+    teachers: [PERMS["academic.teachers.manage"]],
+    credentials: [PERMS["academic.credentials.manage"]],
+    importers: [PERMS["academic.importers.manage"]],
 };
 
 /* ─────────────────────────── ACCIONES RÁPIDAS ─────────────────────────── */
@@ -1128,9 +1132,10 @@ export default function AcademicModule() {
             { key: "reports", label: "Reportes", need: REQS.reports },
             { key: "processes", label: "Procesos", need: REQS.processes },
             { key: "transfers", label: "Alumnos / Traslados", need: REQS.transfers },
-            { key: "periods", label: "Periodos", need: [] },
-            { key: "teachers", label: "Docentes", need: [] },
-            { key: "importers", label: "Importadores", need: [] },
+            { key: "periods", label: "Periodos", need: REQS.periods },
+            { key: "teachers", label: "Docentes", need: REQS.teachers },
+            { key: "credentials", label: "Credenciales", need: REQS.credentials },
+            { key: "importers", label: "Importadores", need: REQS.importers },
         ].filter((t) => t.need.length === 0 || hasAny(t.need)),
         [hasAny]
     );
@@ -1213,6 +1218,7 @@ export default function AcademicModule() {
                         <TabsContent value="transfers"><TransferManagement /></TabsContent>
                         <TabsContent value="periods"><InjectCatalogStyles /><PeriodsSection /></TabsContent>
                         <TabsContent value="teachers"><InjectCatalogStyles /><TeachersSection /></TabsContent>
+                        <TabsContent value="credentials"><InjectCatalogStyles /><CredentialsSection /></TabsContent>
                         <TabsContent value="importers"><InjectCatalogStyles /><ImportersSection /></TabsContent>
                     </Tabs>
                 </div>
@@ -1235,7 +1241,7 @@ function tabIcon(key) {
     const map = {
         dashboard: LayoutGrid, plans: BookOpen, load: Calendar, enroll: GraduationCap,
         grades: CheckCircle, syllabus: FileText, kardex: Users, reports: BarChart3, processes: Clock,
-        transfers: Inbox, periods: CalendarDays, teachers: Users, importers: FileSpreadsheet,
+        transfers: Inbox, periods: CalendarDays, teachers: Users, credentials: KeyRound, importers: FileSpreadsheet,
     };
     return map[key] || LayoutGrid;
 }

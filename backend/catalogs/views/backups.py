@@ -16,16 +16,74 @@ from rest_framework.response import Response
 
 from catalogs.models import BackupExport
 from catalogs.serializers import BackupExportSerializer
+from .utils import _require_staff, _csv_bytes
+
+# ── Imports por módulo (lazy-safe) ──
 from students.models import Student
 from academic.models import Course, PlanCourse, Plan
 from catalogs.models import Period, Campus, Classroom, Teacher, Career
-from .utils import _require_staff, _csv_bytes
 
-# Import AcademicGradeRecord si existe
 try:
     from academic.models import AcademicGradeRecord
 except Exception:
     AcademicGradeRecord = None
+
+try:
+    from academic.models import Enrollment, EnrollmentItem, EnrollmentPayment
+except Exception:
+    Enrollment = EnrollmentItem = EnrollmentPayment = None
+
+try:
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+except Exception:
+    User = None
+
+try:
+    from acl.models import Role, Permission, UserRole
+except Exception:
+    Role = Permission = UserRole = None
+
+try:
+    from admission.models import (
+        AdmissionCall, Applicant, Application,
+        ApplicationDocument, Payment as AdmissionPayment,
+        EvaluationScore,
+    )
+except Exception:
+    AdmissionCall = Applicant = Application = None
+    ApplicationDocument = AdmissionPayment = EvaluationScore = None
+
+try:
+    from mesa_partes.models import Office, ProcedureType, Procedure, ProcedureEvent, ProcedureFile
+except Exception:
+    Office = ProcedureType = Procedure = ProcedureEvent = ProcedureFile = None
+
+try:
+    from finance.models import (
+        Concept, BankAccount, CashSession, CashMovement,
+        StudentAccountCharge, StudentAccountPayment, Receipt,
+        InventoryItem, Employee,
+    )
+except Exception:
+    Concept = BankAccount = CashSession = CashMovement = None
+    StudentAccountCharge = StudentAccountPayment = Receipt = None
+    InventoryItem = Employee = None
+
+try:
+    from graduates.models import Graduate, GradoTituloType
+except Exception:
+    Graduate = GradoTituloType = None
+
+try:
+    from research.models import Project as ResearchProject, Publication, ResearchLine, Advisor
+except Exception:
+    ResearchProject = Publication = ResearchLine = Advisor = None
+
+try:
+    from audit.models import AuditLog
+except Exception:
+    AuditLog = None
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -217,87 +275,245 @@ def export_dataset(request):
     dataset = (request.data.get("dataset") or "DATA").upper().strip()
     now = datetime.now().strftime("%Y%m%d_%H%M%S")
     
+    # ── Mapa de exportadores ──
+    def _export_students(zf):
+        rows = list(Student.objects.all().values(
+            "num_documento", "nombres", "apellido_paterno", "apellido_materno",
+            "sexo", "fecha_nac", "region", "provincia", "distrito",
+            "codigo_modular", "nombre_institucion", "gestion", "tipo",
+            "programa_carrera", "ciclo", "turno", "seccion", "periodo",
+            "lengua", "discapacidad", "tipo_discapacidad",
+            "email", "celular", "plan_id", "user_id",
+        ))
+        h = list(rows[0].keys()) if rows else ["num_documento", "nombres"]
+        zf.writestr(f"students_{now}.csv", _csv_bytes(rows, h))
+
+    def _export_courses(zf):
+        rows = list(Course.objects.all().values("code", "name", "credits"))
+        zf.writestr(f"courses_{now}.csv", _csv_bytes(rows, ["code", "name", "credits"]))
+        pc = list(PlanCourse.objects.all().values("plan_id", "course_id", "semester", "weekly_hours", "type"))
+        zf.writestr(f"plan_courses_{now}.csv", _csv_bytes(pc, ["plan_id", "course_id", "semester", "weekly_hours", "type"]))
+
+    def _export_grades(zf):
+        if AcademicGradeRecord is None:
+            zf.writestr(f"grades_{now}.csv", "# AcademicGradeRecord no disponible\n")
+            return
+        rows = list(AcademicGradeRecord.objects.select_related("student", "course").values(
+            "student__num_documento", "course__code", "term", "final_grade", "components"
+        ))
+        zf.writestr(f"grades_{now}.csv", _csv_bytes(rows, ["student__num_documento", "course__code", "term", "final_grade", "components"]))
+
+    def _export_catalogs(zf):
+        zf.writestr(f"catalog_periods_{now}.csv", _csv_bytes(
+            list(Period.objects.all().values("code", "year", "term", "start_date", "end_date", "is_active", "label")),
+            ["code", "year", "term", "start_date", "end_date", "is_active", "label"]))
+        zf.writestr(f"catalog_campuses_{now}.csv", _csv_bytes(
+            list(Campus.objects.all().values("code", "name", "address")),
+            ["code", "name", "address"]))
+        zf.writestr(f"catalog_classrooms_{now}.csv", _csv_bytes(
+            list(Classroom.objects.all().values("campus_id", "code", "name", "capacity")),
+            ["campus_id", "code", "name", "capacity"]))
+        zf.writestr(f"catalog_teachers_{now}.csv", _csv_bytes(
+            list(Teacher.objects.all().values("document", "full_name", "email", "phone", "specialization")),
+            ["document", "full_name", "email", "phone", "specialization"]))
+        zf.writestr(f"catalog_careers_{now}.csv", _csv_bytes(
+            list(Career.objects.all().values("id", "name", "code")),
+            ["id", "name", "code"]))
+        zf.writestr(f"catalog_plans_{now}.csv", _csv_bytes(
+            list(Plan.objects.all().values("id", "career_id", "name", "start_year", "end_year", "semesters")),
+            ["id", "career_id", "name", "start_year", "end_year", "semesters"]))
+
+    def _export_users(zf):
+        if User is None:
+            return
+        rows = list(User.objects.all().values("id", "username", "email", "full_name", "is_active", "is_staff", "is_superuser", "last_login"))
+        zf.writestr(f"users_{now}.csv", _csv_bytes(rows, ["id", "username", "email", "full_name", "is_active", "is_staff", "is_superuser", "last_login"]))
+        if Role:
+            zf.writestr(f"roles_{now}.csv", _csv_bytes(
+                list(Role.objects.all().values("id", "name", "description")),
+                ["id", "name", "description"]))
+        if UserRole:
+            zf.writestr(f"user_roles_{now}.csv", _csv_bytes(
+                list(UserRole.objects.all().values("user_id", "role__name")),
+                ["user_id", "role_name"]))
+
+    def _export_enrollment(zf):
+        if Enrollment is None:
+            return
+        rows = list(Enrollment.objects.all().values(
+            "id", "student_id", "student__num_documento", "period", "status", "total_credits", "created_at", "confirmed_at"
+        ))
+        zf.writestr(f"enrollments_{now}.csv", _csv_bytes(rows,
+            ["id", "student_id", "student__num_documento", "period", "status", "total_credits", "created_at", "confirmed_at"]))
+        if EnrollmentItem:
+            items = list(EnrollmentItem.objects.all().values(
+                "enrollment_id", "plan_course_id", "plan_course__course__code", "section_id", "credits"
+            ))
+            zf.writestr(f"enrollment_items_{now}.csv", _csv_bytes(items,
+                ["enrollment_id", "plan_course_id", "course_code", "section_id", "credits"]))
+        if EnrollmentPayment:
+            pays = list(EnrollmentPayment.objects.all().values(
+                "id", "student_id", "period", "amount", "channel", "operation_code", "status", "created_at"
+            ))
+            zf.writestr(f"enrollment_payments_{now}.csv", _csv_bytes(pays,
+                ["id", "student_id", "period", "amount", "channel", "operation_code", "status", "created_at"]))
+
+    def _export_admission(zf):
+        if AdmissionCall is None:
+            return
+        zf.writestr(f"admission_calls_{now}.csv", _csv_bytes(
+            list(AdmissionCall.objects.all().values("id", "title", "period", "published", "vacants_total")),
+            ["id", "title", "period", "published", "vacants_total"]))
+        if Applicant:
+            zf.writestr(f"admission_applicants_{now}.csv", _csv_bytes(
+                list(Applicant.objects.all().values("id", "dni", "names", "email", "phone")),
+                ["id", "dni", "names", "email", "phone"]))
+        if Application:
+            zf.writestr(f"admission_applications_{now}.csv", _csv_bytes(
+                list(Application.objects.all().values("id", "call_id", "applicant_id", "career_name", "status", "created_at")),
+                ["id", "call_id", "applicant_id", "career_name", "status", "created_at"]))
+        if AdmissionPayment:
+            zf.writestr(f"admission_payments_{now}.csv", _csv_bytes(
+                list(AdmissionPayment.objects.all().values("id", "application_id", "method", "status", "amount", "channel", "created_at")),
+                ["id", "application_id", "method", "status", "amount", "channel", "created_at"]))
+        if EvaluationScore:
+            zf.writestr(f"admission_scores_{now}.csv", _csv_bytes(
+                list(EvaluationScore.objects.all().values("id", "application_id", "phase", "total")),
+                ["id", "application_id", "phase", "total"]))
+
+    def _export_mesa_partes(zf):
+        if Procedure is None:
+            return
+        if Office:
+            zf.writestr(f"mp_offices_{now}.csv", _csv_bytes(
+                list(Office.objects.all().values("id", "name", "description", "is_active", "head_id")),
+                ["id", "name", "description", "is_active", "head_id"]))
+        if ProcedureType:
+            zf.writestr(f"mp_procedure_types_{now}.csv", _csv_bytes(
+                list(ProcedureType.objects.all().values("id", "name", "description", "processing_days", "cost", "is_active")),
+                ["id", "name", "description", "processing_days", "cost", "is_active"]))
+        zf.writestr(f"mp_procedures_{now}.csv", _csv_bytes(
+            list(Procedure.objects.all().values(
+                "id", "tracking_code", "procedure_type_id", "applicant_name", "applicant_document",
+                "applicant_email", "status", "current_office_id", "assignee_id", "created_at", "updated_at"
+            )),
+            ["id", "tracking_code", "procedure_type_id", "applicant_name", "applicant_document",
+             "applicant_email", "status", "current_office_id", "assignee_id", "created_at", "updated_at"]))
+        if ProcedureEvent:
+            zf.writestr(f"mp_events_{now}.csv", _csv_bytes(
+                list(ProcedureEvent.objects.all().values("id", "procedure_id", "at", "type", "description", "actor_id")),
+                ["id", "procedure_id", "at", "type", "description", "actor_id"]))
+
+    def _export_finance(zf):
+        if Concept is None:
+            return
+        zf.writestr(f"fin_concepts_{now}.csv", _csv_bytes(
+            list(Concept.objects.all().values("id", "code", "name", "type", "default_amount")),
+            ["id", "code", "name", "type", "default_amount"]))
+        if BankAccount:
+            zf.writestr(f"fin_bank_accounts_{now}.csv", _csv_bytes(
+                list(BankAccount.objects.all().values("id", "bank_name", "account_number", "currency")),
+                ["id", "bank_name", "account_number", "currency"]))
+        if StudentAccountCharge:
+            zf.writestr(f"fin_charges_{now}.csv", _csv_bytes(
+                list(StudentAccountCharge.objects.all().values(
+                    "id", "subject_id", "subject_type", "concept_name", "amount", "due_date", "paid", "created_at"
+                )),
+                ["id", "subject_id", "subject_type", "concept_name", "amount", "due_date", "paid", "created_at"]))
+        if StudentAccountPayment:
+            zf.writestr(f"fin_payments_{now}.csv", _csv_bytes(
+                list(StudentAccountPayment.objects.all().values(
+                    "id", "subject_id", "subject_type", "amount", "method", "ref", "date", "created_at"
+                )),
+                ["id", "subject_id", "subject_type", "amount", "method", "ref", "date", "created_at"]))
+        if Receipt:
+            zf.writestr(f"fin_receipts_{now}.csv", _csv_bytes(
+                list(Receipt.objects.all().values(
+                    "id", "receipt_number", "concept", "description", "amount",
+                    "customer_name", "customer_document", "status", "issued_at", "paid_at"
+                )),
+                ["id", "receipt_number", "concept", "description", "amount",
+                 "customer_name", "customer_document", "status", "issued_at", "paid_at"]))
+        if Employee:
+            zf.writestr(f"fin_employees_{now}.csv", _csv_bytes(
+                list(Employee.objects.all().values(
+                    "id", "employee_code", "first_name", "last_name", "document_number",
+                    "position", "department", "contract_type", "salary", "status"
+                )),
+                ["id", "employee_code", "first_name", "last_name", "document_number",
+                 "position", "department", "contract_type", "salary", "status"]))
+
+    def _export_graduates(zf):
+        if Graduate is None:
+            return
+        zf.writestr(f"graduates_{now}.csv", _csv_bytes(
+            list(Graduate.objects.all().values(
+                "id", "dni", "apellidos_nombres", "grado_titulo", "especialidad", "nivel",
+                "anio_ingreso", "anio_egreso", "fecha_sustentacion", "resolucion_acta",
+                "codigo_diploma", "registro_pedagogico", "is_active"
+            )),
+            ["id", "dni", "apellidos_nombres", "grado_titulo", "especialidad", "nivel",
+             "anio_ingreso", "anio_egreso", "fecha_sustentacion", "resolucion_acta",
+             "codigo_diploma", "registro_pedagogico", "is_active"]))
+        if GradoTituloType:
+            zf.writestr(f"grado_titulo_types_{now}.csv", _csv_bytes(
+                list(GradoTituloType.objects.all().values("id", "code", "name", "diploma_label", "is_active")),
+                ["id", "code", "name", "diploma_label", "is_active"]))
+
+    def _export_research(zf):
+        if ResearchProject is None:
+            return
+        if ResearchLine:
+            zf.writestr(f"research_lines_{now}.csv", _csv_bytes(
+                list(ResearchLine.objects.all().values("id", "name", "description", "is_active")),
+                ["id", "name", "description", "is_active"]))
+        if Advisor:
+            zf.writestr(f"research_advisors_{now}.csv", _csv_bytes(
+                list(Advisor.objects.all().values("id", "full_name", "email", "specialty", "orcid", "is_active")),
+                ["id", "full_name", "email", "specialty", "orcid", "is_active"]))
+        zf.writestr(f"research_projects_{now}.csv", _csv_bytes(
+            list(ResearchProject.objects.all().values(
+                "id", "title", "line_id", "advisor_id", "status", "start_date", "end_date", "created_at"
+            )),
+            ["id", "title", "line_id", "advisor_id", "status", "start_date", "end_date", "created_at"]))
+        if Publication:
+            zf.writestr(f"research_publications_{now}.csv", _csv_bytes(
+                list(Publication.objects.all().values("id", "project_id", "type", "title", "journal", "year", "doi", "indexed")),
+                ["id", "project_id", "type", "title", "journal", "year", "doi", "indexed"]))
+
+    def _export_audit(zf):
+        if AuditLog is None:
+            return
+        rows = list(AuditLog.objects.order_by("-timestamp")[:10000].values(
+            "id", "timestamp", "actor_id", "actor_name", "action", "entity", "entity_id", "summary", "ip"
+        ))
+        zf.writestr(f"audit_log_{now}.csv", _csv_bytes(rows,
+            ["id", "timestamp", "actor_id", "actor_name", "action", "entity", "entity_id", "summary", "ip"]))
+
+    # ── Registro de datasets válidos ──
+    DATASETS = {
+        "STUDENTS": _export_students,
+        "COURSES": _export_courses,
+        "GRADES": _export_grades,
+        "CATALOGS": _export_catalogs,
+        "USERS": _export_users,
+        "ENROLLMENT": _export_enrollment,
+        "ADMISSION": _export_admission,
+        "MESA_PARTES": _export_mesa_partes,
+        "FINANCE": _export_finance,
+        "GRADUATES": _export_graduates,
+        "RESEARCH": _export_research,
+        "AUDIT": _export_audit,
+    }
+
     zbuf = io.BytesIO()
     with zipfile.ZipFile(zbuf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        if dataset == "STUDENTS":
-            rows = list(Student.objects.all().values(
-                "num_documento", "nombres", "apellido_paterno", "apellido_materno",
-                "sexo", "fecha_nac",
-                "region", "provincia", "distrito",
-                "codigo_modular", "nombre_institucion", "gestion", "tipo",
-                "programa_carrera", "ciclo", "turno", "seccion", "periodo",
-                "lengua", "discapacidad", "tipo_discapacidad",
-                "email", "celular", "plan_id", "user_id",
-            ))
-            headers = [
-                "num_documento", "nombres", "apellido_paterno", "apellido_materno",
-                "sexo", "fecha_nac",
-                "region", "provincia", "distrito",
-                "codigo_modular", "nombre_institucion", "gestion", "tipo",
-                "programa_carrera", "ciclo", "turno", "seccion", "periodo",
-                "lengua", "discapacidad", "tipo_discapacidad",
-                "email", "celular", "plan_id", "user_id",
-            ]
-            zf.writestr(f"students_{now}.csv", _csv_bytes(rows, headers))
-        
-        elif dataset == "COURSES":
-            rows = list(Course.objects.all().values("code", "name", "credits"))
-            headers = ["code", "name", "credits"]
-            zf.writestr(f"courses_{now}.csv", _csv_bytes(rows, headers))
-            
-            pc_rows = list(PlanCourse.objects.all().values(
-                "plan_id", "course_id", "semester", "weekly_hours", "type"
-            ))
-            pc_headers = ["plan_id", "course_id", "semester", "weekly_hours", "type"]
-            zf.writestr(f"plan_courses_{now}.csv", _csv_bytes(pc_rows, pc_headers))
-        
-        elif dataset == "GRADES":
-            if AcademicGradeRecord is None:
-                return Response(
-                    {"detail": "AcademicGradeRecord no existe. Agrégalo y migra."},
-                    status=400
-                )
-            
-            rows = list(AcademicGradeRecord.objects.select_related(
-                "student", "course"
-            ).values(
-                "student__num_documento", "course__code", "term", "final_grade", "components"
-            ))
-            headers = ["student__num_documento", "course__code", "term", "final_grade", "components"]
-            zf.writestr(f"grades_{now}.csv", _csv_bytes(rows, headers))
-        
-        elif dataset == "CATALOGS":
-            p_rows = list(Period.objects.all().values(
-                "code", "year", "term", "start_date", "end_date", "is_active", "label"
-            ))
-            p_headers = ["code", "year", "term", "start_date", "end_date", "is_active", "label"]
-            zf.writestr(f"catalog_periods_{now}.csv", _csv_bytes(p_rows, p_headers))
-            
-            c_rows = list(Campus.objects.all().values("code", "name", "address"))
-            c_headers = ["code", "name", "address"]
-            zf.writestr(f"catalog_campuses_{now}.csv", _csv_bytes(c_rows, c_headers))
-            
-            a_rows = list(Classroom.objects.all().values("campus_id", "code", "name", "capacity"))
-            a_headers = ["campus_id", "code", "name", "capacity"]
-            zf.writestr(f"catalog_classrooms_{now}.csv", _csv_bytes(a_rows, a_headers))
-            
-            t_rows = list(Teacher.objects.all().values("document", "full_name", "email", "phone", "specialization"))
-            t_headers = ["document", "full_name", "email", "phone", "specialization"]
-            zf.writestr(f"catalog_teachers_{now}.csv", _csv_bytes(t_rows, t_headers))
-            
-            ac_rows = list(Career.objects.all().values("id", "name", "code"))
-            ac_headers = ["id", "name", "code"]
-            zf.writestr(f"academic_careers_{now}.csv", _csv_bytes(ac_rows, ac_headers))
-            
-            pl_rows = list(Plan.objects.all().values(
-                "id", "career_id", "name", "start_year", "end_year", "semesters"
-            ))
-            pl_headers = ["id", "career_id", "name", "start_year", "end_year", "semesters"]
-            zf.writestr(f"academic_plans_{now}.csv", _csv_bytes(pl_rows, pl_headers))
-        
-        else:
-            return Response({"detail": "dataset inválido"}, status=400)
-        
+        exporter = DATASETS.get(dataset)
+        if exporter is None:
+            valid = ", ".join(sorted(DATASETS.keys()))
+            return Response({"detail": f"dataset inválido. Válidos: {valid}"}, status=400)
+
+        exporter(zf)
         zf.writestr("meta/info.txt", f"dataset={dataset}\ncreated_at={now}\n")
     
     zbuf.seek(0)

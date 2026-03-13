@@ -30,6 +30,33 @@ from academic.serializers_payment import (
     EnrollmentPaymentUploadSerializer,
 )
 
+try:
+    from catalogs.models import InstitutionSetting as _InstitutionSetting
+except ImportError:
+    _InstitutionSetting = None
+
+
+def _get_bank_info():
+    """Lee datos bancarios de InstitutionSetting para mostrar al estudiante."""
+    defaults = {
+        "bank_name": "Banco de la Nación",
+        "bank_account": "",
+        "bank_holder": "",
+    }
+    if not _InstitutionSetting:
+        return defaults
+    try:
+        obj = _InstitutionSetting.objects.filter(pk=1).first()
+        if obj and isinstance(obj.data, dict):
+            return {
+                "bank_name":    obj.data.get("bank_name") or defaults["bank_name"],
+                "bank_account": obj.data.get("bank_account") or defaults["bank_account"],
+                "bank_holder":  obj.data.get("bank_holder") or defaults["bank_holder"],
+            }
+    except Exception:
+        pass
+    return defaults
+
 # ── Constantes de monto ────────────────────────────────────────
 ENROLLMENT_AMOUNT_REGULAR     = Decimal("180.00")
 ENROLLMENT_AMOUNT_PRIMER_PUESTO = Decimal("135.00")
@@ -212,6 +239,7 @@ class EnrollmentPaymentStatusView(APIView):
             return Response({"detail": "Parámetro 'period' requerido."}, status=400)
 
         amount, discount_tag, surcharge = _compute_enrollment_amount(student, period)
+        bank_info = _get_bank_info()
 
         # Verificar si ya tiene matrícula confirmada
         is_enrolled = Enrollment.objects.filter(
@@ -227,6 +255,7 @@ class EnrollmentPaymentStatusView(APIView):
             data["computed_surcharge"] = float(surcharge)
             data["computed_total"] = float(amount + surcharge)
             data["is_enrolled"] = is_enrolled
+            data["bank_info"] = bank_info
             return Response(data)
         except EnrollmentPayment.DoesNotExist:
             return Response({
@@ -237,6 +266,7 @@ class EnrollmentPaymentStatusView(APIView):
                 "total": float(amount + surcharge),
                 "period": period,
                 "is_enrolled": is_enrolled,
+                "bank_info": bank_info,
             })
 
 
@@ -259,6 +289,9 @@ class EnrollmentPaymentUploadView(APIView):
         period = ser.validated_data["period"]
         channel = ser.validated_data["channel"]
         operation_code = ser.validated_data.get("operation_code", "")
+        nro_secuencia = ser.validated_data.get("nro_secuencia", "")
+        codigo_caja = ser.validated_data.get("codigo_caja", "")
+        fecha_movimiento = ser.validated_data.get("fecha_movimiento", None)
         voucher = ser.validated_data["voucher"]
 
         # Verificar que no tenga ya un pago APPROVED
@@ -291,6 +324,9 @@ class EnrollmentPaymentUploadView(APIView):
             surcharge=surcharge,
             channel=channel,
             operation_code=operation_code,
+            nro_secuencia=nro_secuencia,
+            codigo_caja=codigo_caja,
+            fecha_movimiento=fecha_movimiento,
             voucher=voucher,
             voucher_name=voucher.name,
             status=EnrollmentPayment.STATUS_PENDING,
@@ -332,6 +368,9 @@ class EnrollmentPaymentReUploadView(APIView):
 
         channel = (request.data.get("channel") or "").strip()
         operation_code = (request.data.get("operation_code") or "").strip()
+        nro_secuencia = (request.data.get("nro_secuencia") or "").strip()
+        codigo_caja = (request.data.get("codigo_caja") or "").strip()
+        fecha_movimiento_raw = (request.data.get("fecha_movimiento") or "").strip()
         voucher = request.FILES.get("voucher")
 
         if not voucher:
@@ -358,6 +397,16 @@ class EnrollmentPaymentReUploadView(APIView):
         payment.surcharge = surcharge
         payment.channel = channel
         payment.operation_code = operation_code
+        payment.nro_secuencia = nro_secuencia
+        payment.codigo_caja = codigo_caja
+        if fecha_movimiento_raw:
+            try:
+                from datetime import date as _date
+                payment.fecha_movimiento = _date.fromisoformat(fecha_movimiento_raw)
+            except (ValueError, TypeError):
+                payment.fecha_movimiento = None
+        else:
+            payment.fecha_movimiento = None
         payment.voucher = voucher
         payment.voucher_name = voucher.name
         payment.status = EnrollmentPayment.STATUS_PENDING
@@ -401,7 +450,9 @@ class EnrollmentPaymentPendingView(APIView):
                 Q(student__nombres__icontains=search) |
                 Q(student__apellido_paterno__icontains=search) |
                 Q(student__apellido_materno__icontains=search) |
-                Q(operation_code__icontains=search)
+                Q(operation_code__icontains=search) |
+                Q(nro_secuencia__icontains=search) |
+                Q(codigo_caja__icontains=search)
             )
 
         # Conteos para resumen

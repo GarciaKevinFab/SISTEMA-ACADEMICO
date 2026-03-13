@@ -435,6 +435,9 @@ class EnrollmentPayment(models.Model):
     surcharge      = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     channel        = models.CharField(max_length=20, choices=CHANNEL_CHOICES)
     operation_code = models.CharField(max_length=60, blank=True, default="")
+    nro_secuencia  = models.CharField(max_length=30, blank=True, default="")
+    codigo_caja    = models.CharField(max_length=20, blank=True, default="")
+    fecha_movimiento = models.DateField(null=True, blank=True)
     voucher        = models.FileField(upload_to="enrollment_vouchers/")
     voucher_name   = models.CharField(max_length=255, blank=True, default="")
 

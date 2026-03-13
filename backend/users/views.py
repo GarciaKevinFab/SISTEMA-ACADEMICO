@@ -863,7 +863,12 @@ def _build_credentials_excel(rows, role_name, inst):
     )
 
     # Anchos de columna
-    col_widths = {"A": 18, "B": 38, "C": 18, "D": 18}
+    has_semester = any("semestre" in r for r in rows)
+    if has_semester:
+        col_widths = {"A": 18, "B": 38, "C": 18, "D": 18, "E": 16}
+    else:
+        col_widths = {"A": 18, "B": 38, "C": 18, "D": 18}
+    last_col = "E" if has_semester else "D"
     for col_letter, w in col_widths.items():
         ws.column_dimensions[col_letter].width = w
 
@@ -884,10 +889,10 @@ def _build_credentials_excel(rows, role_name, inst):
 
     # --- Fila 1: Nombre de institución ---
     if has_logo:
-        ws.merge_cells("B1:D1")
+        ws.merge_cells(f"B1:{last_col}1")
         cell_title = ws["B1"]
     else:
-        ws.merge_cells("A1:D1")
+        ws.merge_cells(f"A1:{last_col}1")
         cell_title = ws["A1"]
     cell_title.value = inst.get("name") or "INSTITUCIÓN EDUCATIVA"
     cell_title.font = font_title
@@ -900,11 +905,11 @@ def _build_credentials_excel(rows, role_name, inst):
 
     # --- Fila 2: Subtítulo ---
     if has_logo:
-        ws.merge_cells("B2:D2")
+        ws.merge_cells(f"B2:{last_col}2")
         cell_sub = ws["B2"]
         ws["A2"].fill = fill_header
     else:
-        ws.merge_cells("A2:D2")
+        ws.merge_cells(f"A2:{last_col}2")
         cell_sub = ws["A2"]
     role_label = "DOCENTES" if role_name == "TEACHER" else "ESTUDIANTES"
     cell_sub.value = f"CREDENCIALES DE ACCESO - {role_label}"
@@ -913,8 +918,8 @@ def _build_credentials_excel(rows, role_name, inst):
     cell_sub.alignment = align_center
     ws.row_dimensions[2].height = 22
 
-    # --- Fila 3: Info adicional (merge A3:D3) ---
-    ws.merge_cells("A3:D3")
+    # --- Fila 3: Info adicional ---
+    ws.merge_cells(f"A3:{last_col}3")
     parts = []
     if inst.get("address"):
         parts.append(inst["address"])
@@ -934,6 +939,8 @@ def _build_credentials_excel(rows, role_name, inst):
     # --- Fila 5: Headers de columna ---
     header_row = 5
     col_headers = ["DOCUMENTO", "NOMBRE COMPLETO", "USUARIO", "CONTRASEÑA"]
+    if has_semester:
+        col_headers.append("SEMESTRE")
     for col_idx, header in enumerate(col_headers, 1):
         cell = ws.cell(row=header_row, column=col_idx, value=header)
         cell.font = font_col_header
@@ -947,6 +954,8 @@ def _build_credentials_excel(rows, role_name, inst):
         row_num = header_row + 1 + i
         is_alt = i % 2 == 1
         values = [r["documento"], r["nombre"], r["usuario"], r["contraseña"]]
+        if has_semester:
+            values.append(r.get("semestre", ""))
         for col_idx, val in enumerate(values, 1):
             cell = ws.cell(row=row_num, column=col_idx, value=val)
             cell.font = font_data
@@ -957,7 +966,7 @@ def _build_credentials_excel(rows, role_name, inst):
 
     # --- Fila final: Nota ---
     note_row = header_row + len(rows) + 2
-    ws.merge_cells(f"A{note_row}:D{note_row}")
+    ws.merge_cells(f"A{note_row}:{last_col}{note_row}")
     cell_note = ws.cell(row=note_row, column=1)
     cell_note.value = (
         f"Total: {len(rows)} {role_label.lower()} | "
@@ -1039,10 +1048,12 @@ def users_bulk_credentials(request):
 
         else:  # STUDENT
             from students.models import Student
+            from students.serializers import StudentSerializer
             students = list(
                 Student.objects.filter(
                     user__isnull=False, user__is_active=True
-                ).select_related("user").order_by("apellido_paterno", "apellido_materno", "nombres")
+                ).select_related("user", "plan")
+                .order_by("apellido_paterno", "apellido_materno", "nombres")
             )
 
             if not students:
@@ -1067,6 +1078,15 @@ def users_bulk_credentials(request):
                 u.password = hashed_passwords[i]
                 u.must_change_password = True
                 users_to_update.append(u)
+                # Determinar semestre o egresado (misma lógica del serializer)
+                sem_label = StudentSerializer._check_all_approved(st)
+                if sem_label:
+                    sem_label = "Egresado"
+                elif st.ciclo:
+                    sem_label = f"Semestre {st.ciclo}"
+                else:
+                    sem_label = "—"
+
                 rows.append({
                     "documento": st.num_documento or u.username,
                     "nombre": u.full_name or (
@@ -1074,6 +1094,7 @@ def users_bulk_credentials(request):
                     ),
                     "usuario": u.username,
                     "contraseña": plain_passwords[i],
+                    "semestre": sem_label,
                 })
 
             User.objects.bulk_update(users_to_update, ["password", "must_change_password"], batch_size=500)

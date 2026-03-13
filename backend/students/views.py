@@ -163,7 +163,7 @@ def students_collection(request):
 
     if request.method == "GET":
         q = (request.query_params.get("q") or "").strip()
-        qs = Student.objects.all().order_by("id")
+        qs = Student.objects.select_related("plan").order_by("id")
         if q:
             terms = [t for t in q.split() if t]
             for term in terms:
@@ -174,7 +174,6 @@ def students_collection(request):
                 Q(apellido_materno__icontains=term) |
                 Q(email__icontains=term)
             )
-
 
         data = StudentSerializer(qs, many=True, context={"request": request}).data
         return Response({"students": data})

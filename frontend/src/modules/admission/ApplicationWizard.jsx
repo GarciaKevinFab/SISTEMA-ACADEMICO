@@ -44,8 +44,6 @@ import {
   Clock,
   Users,
   AlertCircle,
-  ChevronUp,
-  ChevronDown,
   Printer,
   Upload,
   Download,
@@ -112,9 +110,16 @@ const EMPTY_FORM = {
   estado_civil: "SOLTERO",
   lengua_materna: "CASTELLANO",
   discapacidad: "NO",
+  tipo_discapacidad: "",
+  numero_conadis: "",
   modalidad_admision: "INGRESO ORDINARIO",
   colegio_procedencia: "",
   anio_egreso: "",
+  ubigeo_nacimiento: "",
+  autoidentificacion_etnica: "",
+  ubigeo_domicilio: "",
+  tipo_colegio: "",
+  depto_colegio: "",
 };
 
 // Documentos requeridos por defecto
@@ -249,7 +254,7 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
           const found = list.find((c) => String(c.id) === String(propCallId));
           if (found) setSelectedCall(found);
         }
-        // Cargar parámetros (cuenta bancaria)
+        // Cargar parámetros (cuenta bancaria viene inyectada desde InstitutionSetting)
         try {
           const params = await AdmissionParamsService.get();
           setAdmissionParams(params);
@@ -319,11 +324,14 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
   const canNext = useMemo(() => {
     if (step === 1) return !!selectedCall;
     if (step === 2) {
+      const dniLen = form.dni.trim().length;
+      const dniOk = form.doc_type === "DNI" ? dniLen === 8 : dniLen >= 6;
+      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
       return (
-        form.dni.trim().length >= 8 &&
+        dniOk &&
         form.names.trim().length >= 2 &&
         form.apellido_paterno.trim().length >= 2 &&
-        form.email.trim().includes("@") &&
+        emailOk &&
         form.sexo &&
         form.fecha_nacimiento
       );
@@ -359,29 +367,10 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
 
   // ── Preferencias (reordenar) ──
   const toggleCareer = (careerId) => {
+    // Solo se permite seleccionar una carrera
     setPreferences((prev) =>
-      prev.includes(careerId)
-        ? prev.filter((id) => id !== careerId)
-        : [...prev, careerId]
+      prev.includes(careerId) ? [] : [careerId]
     );
-  };
-
-  const moveUp = (idx) => {
-    if (idx === 0) return;
-    setPreferences((prev) => {
-      const arr = [...prev];
-      [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
-      return arr;
-    });
-  };
-
-  const moveDown = (idx) => {
-    setPreferences((prev) => {
-      if (idx >= prev.length - 1) return prev;
-      const arr = [...prev];
-      [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
-      return arr;
-    });
   };
 
   // ── Adjuntar archivo ──
@@ -445,11 +434,18 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
           estado_civil: form.estado_civil,
           lengua_materna: form.lengua_materna,
           discapacidad: form.discapacidad,
+          tipo_discapacidad: form.tipo_discapacidad,
+          numero_conadis: form.numero_conadis,
           modalidad_admision: form.modalidad_admision,
+          ubigeo_nacimiento: form.ubigeo_nacimiento,
+          autoidentificacion_etnica: form.autoidentificacion_etnica,
+          ubigeo_domicilio: form.ubigeo_domicilio,
         },
         school: {
           colegio_procedencia: form.colegio_procedencia,
           anio_egreso: form.anio_egreso,
+          tipo_colegio: form.tipo_colegio,
+          depto_colegio: form.depto_colegio,
         },
       };
 
@@ -677,15 +673,15 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
               </div>
 
               <div className="grid sm:grid-cols-3 gap-4">
-                <FormSelect label="Tipo documento *" value={form.doc_type} onChange={(v) => setField("doc_type", v)} options={DOC_TYPES} />
-                <FormInput label="N° documento *" value={form.dni} onChange={(v) => setField("dni", v)} placeholder="Ej: 70123456" maxLength={12} />
+                <FormSelect label="Tipo documento *" value={form.doc_type} onChange={(v) => { setField("doc_type", v); setField("dni", ""); }} options={DOC_TYPES} />
+                <FormInput label="N° documento *" value={form.dni} onChange={(v) => setField("dni", v)} placeholder={form.doc_type === "DNI" ? "Ej: 70123456" : "Ej: CE001234567"} maxLength={form.doc_type === "DNI" ? 8 : 12} onlyDigits={form.doc_type === "DNI"} hint={form.doc_type === "DNI" ? "8 dígitos" : "Máx. 12 caracteres"} />
                 <FormSelect label="Nacionalidad" value={form.nacionalidad} onChange={(v) => setField("nacionalidad", v)} options={[{ value: "PERUANO", label: "Peruano(a)" }, { value: "EXTRANJERO", label: "Extranjero(a)" }]} />
               </div>
 
               <div className="grid sm:grid-cols-3 gap-4">
-                <FormInput label="Nombres *" value={form.names} onChange={(v) => setField("names", v)} placeholder="Nombres completos" />
-                <FormInput label="Apellido paterno *" value={form.apellido_paterno} onChange={(v) => setField("apellido_paterno", v)} placeholder="Apellido paterno" />
-                <FormInput label="Apellido materno" value={form.apellido_materno} onChange={(v) => setField("apellido_materno", v)} placeholder="Apellido materno" />
+                <FormInput label="Nombres *" value={form.names} onChange={(v) => setField("names", v)} placeholder="Nombres completos" toUpperCase />
+                <FormInput label="Apellido paterno *" value={form.apellido_paterno} onChange={(v) => setField("apellido_paterno", v)} placeholder="Apellido paterno" toUpperCase />
+                <FormInput label="Apellido materno" value={form.apellido_materno} onChange={(v) => setField("apellido_materno", v)} placeholder="Apellido materno" toUpperCase />
               </div>
 
               <div className="grid sm:grid-cols-3 gap-4">
@@ -697,23 +693,47 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
                 <FormSelect label="Estado civil" value={form.estado_civil} onChange={(v) => setField("estado_civil", v)} options={CIVIL_STATUS} />
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-4">
-                <FormInput label="Correo electrónico *" value={form.email} onChange={(v) => setField("email", v)} placeholder="correo@ejemplo.com" type="email" />
-                <FormInput label="Teléfono celular" value={form.phone} onChange={(v) => setField("phone", v)} placeholder="900 000 000" type="tel" />
+              <div className="grid sm:grid-cols-3 gap-4">
+                <FormInput label="Ubigeo / Depto. Nacimiento" value={form.ubigeo_nacimiento} onChange={(v) => setField("ubigeo_nacimiento", v)} placeholder="Ej: Junín" toUpperCase />
+                <FormSelect label="Autoidentificación étnica" value={form.autoidentificacion_etnica} onChange={(v) => setField("autoidentificacion_etnica", v)} options={[{ value: "MESTIZO", label: "Mestizo(a)" }, { value: "QUECHUA", label: "Quechua" }, { value: "AIMARA", label: "Aimara" }, { value: "NATIVO_AMAZONICO", label: "Nativo amazónico" }, { value: "AFROPERUANO", label: "Afroperuano(a)" }, { value: "BLANCO", label: "Blanco(a)" }, { value: "OTRO", label: "Otro" }]} placeholder="Seleccionar" />
+                <FormSelect label="Lengua materna" value={form.lengua_materna} onChange={(v) => setField("lengua_materna", v)} options={[{ value: "CASTELLANO", label: "Castellano" }, { value: "QUECHUA", label: "Quechua" }, { value: "AIMARA", label: "Aimara" }, { value: "ASHANINKA", label: "Asháninka" }, { value: "OTRO", label: "Otro" }]} />
               </div>
 
-              <FormInput label="Dirección de domicilio" value={form.direccion} onChange={(v) => setField("direccion", v)} placeholder="Jr. / Av. / Calle..." />
-
               <div className="border-t pt-4 space-y-4">
-                <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Datos Académicos</div>
-                <div className="grid sm:grid-cols-3 gap-4">
-                  <FormInput label="Colegio de procedencia" value={form.colegio_procedencia} onChange={(v) => setField("colegio_procedencia", v)} placeholder="Nombre del colegio" />
-                  <FormInput label="Año de egreso" value={form.anio_egreso} onChange={(v) => setField("anio_egreso", v)} placeholder="Ej: 2024" maxLength={4} />
-                  <FormSelect label="Modalidad de admisión" value={form.modalidad_admision} onChange={(v) => setField("modalidad_admision", v)} options={MODALIDAD_ADMISION} />
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Contacto y Domicilio</div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <FormInput label="Correo electrónico *" value={form.email} onChange={(v) => setField("email", v.toLowerCase())} placeholder="correo@ejemplo.com" type="email" hint="Ejemplo: usuario@gmail.com" />
+                  <FormInput label="Teléfono celular" value={form.phone} onChange={(v) => setField("phone", v)} placeholder="900000000" maxLength={9} onlyDigits hint="9 dígitos" />
                 </div>
                 <div className="grid sm:grid-cols-3 gap-4">
-                  <FormSelect label="Lengua materna" value={form.lengua_materna} onChange={(v) => setField("lengua_materna", v)} options={[{ value: "CASTELLANO", label: "Castellano" }, { value: "QUECHUA", label: "Quechua" }, { value: "AIMARA", label: "Aimara" }, { value: "ASHANINKA", label: "Asháninka" }, { value: "OTRO", label: "Otro" }]} />
-                  <FormSelect label="¿Tiene discapacidad?" value={form.discapacidad} onChange={(v) => setField("discapacidad", v)} options={[{ value: "NO", label: "No" }, { value: "SI", label: "Sí" }]} />
+                  <FormInput label="Dirección de domicilio" value={form.direccion} onChange={(v) => setField("direccion", v)} placeholder="Jr. / Av. / Calle..." toUpperCase />
+                  <FormInput label="Ubigeo / Depto. Domicilio" value={form.ubigeo_domicilio} onChange={(v) => setField("ubigeo_domicilio", v)} placeholder="Ej: Junín" toUpperCase />
+                </div>
+              </div>
+
+              <div className="border-t pt-4 space-y-4">
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Estudios Secundarios / Previos</div>
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <FormInput label="Colegio de procedencia" value={form.colegio_procedencia} onChange={(v) => setField("colegio_procedencia", v)} placeholder="Nombre del colegio" toUpperCase />
+                  <FormInput label="Año de egreso" value={form.anio_egreso} onChange={(v) => setField("anio_egreso", v)} placeholder="Ej: 2024" maxLength={4} onlyDigits />
+                  <FormSelect label="Tipo de colegio" value={form.tipo_colegio} onChange={(v) => setField("tipo_colegio", v)} options={[{ value: "PUBLICO", label: "Público" }, { value: "PRIVADO", label: "Privado" }]} placeholder="Seleccionar" />
+                </div>
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <FormInput label="Depto. del colegio" value={form.depto_colegio} onChange={(v) => setField("depto_colegio", v)} placeholder="Ej: Junín" toUpperCase />
+                  <FormSelect label="Modalidad de admisión" value={form.modalidad_admision} onChange={(v) => setField("modalidad_admision", v)} options={MODALIDAD_ADMISION} />
+                </div>
+              </div>
+
+              <div className="border-t pt-4 space-y-4">
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Discapacidad</div>
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <FormSelect label="¿Tiene discapacidad?" value={form.discapacidad} onChange={(v) => { setField("discapacidad", v); if (v === "NO") { setField("tipo_discapacidad", ""); setField("numero_conadis", ""); } }} options={[{ value: "NO", label: "No" }, { value: "SI", label: "Sí" }]} />
+                  {form.discapacidad === "SI" && (
+                    <>
+                      <FormInput label="Tipo de discapacidad" value={form.tipo_discapacidad} onChange={(v) => setField("tipo_discapacidad", v)} placeholder="Ej: Física, Visual, Auditiva..." toUpperCase />
+                      <FormInput label="N° CONADIS" value={form.numero_conadis} onChange={(v) => setField("numero_conadis", v)} placeholder="N° de registro" />
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -726,17 +746,16 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
             <div className="space-y-6 animate-in fade-in duration-300">
               <div>
                 <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                  Seleccione Programa(s) de Estudios
+                  Seleccione Programa de Estudios
                 </Label>
                 <p className="text-xs text-gray-500 mt-1">
-                  Seleccione por orden de preferencia. La primera opción será su carrera principal.
+                  Seleccione el programa al que desea postular.
                 </p>
               </div>
 
               <div className="space-y-2">
                 {careers.map((c) => {
                   const isSelected = preferences.includes(c.id);
-                  const order = preferences.indexOf(c.id);
                   return (
                     <button
                       key={c.id}
@@ -749,9 +768,7 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
                     >
                       <div className="flex items-center gap-3">
                         {isSelected ? (
-                          <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
-                            {order + 1}
-                          </div>
+                          <CheckCircle2 className="h-7 w-7 text-blue-600" />
                         ) : (
                           <Circle className="h-7 w-7 text-gray-300" />
                         )}
@@ -774,33 +791,7 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
                 })}
               </div>
 
-              {preferences.length > 1 && (
-                <div className="border rounded-xl p-4 space-y-2 bg-gray-50/50">
-                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    Orden de preferencia
-                  </div>
-                  {preferences.map((cid, idx) => {
-                    const c = (selectedCall?.careers || []).find((x) => x.id === cid);
-                    if (!c) return null;
-                    return (
-                      <div key={cid} className="flex items-center justify-between bg-white border rounded-lg px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">{idx + 1}</span>
-                          <span className="text-sm font-medium">{c.name}</span>
-                        </div>
-                        <div className="flex gap-1">
-                          <button type="button" onClick={(e) => { e.stopPropagation(); moveUp(idx); }} disabled={idx === 0} className="p-1 hover:bg-gray-100 rounded disabled:opacity-30">
-                            <ChevronUp className="h-4 w-4" />
-                          </button>
-                          <button type="button" onClick={(e) => { e.stopPropagation(); moveDown(idx); }} disabled={idx === preferences.length - 1} className="p-1 hover:bg-gray-100 rounded disabled:opacity-30">
-                            <ChevronDown className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              {/* Selección única — no se necesita reordenar */}
             </div>
           )}
 
@@ -921,6 +912,30 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Guía visual del voucher */}
+              <details className="group rounded-xl border border-indigo-200 bg-indigo-50/50">
+                <summary className="flex items-center gap-2 cursor-pointer px-4 py-3 text-sm font-medium text-indigo-700 hover:bg-indigo-100/50 rounded-xl transition-colors">
+                  <Eye className="h-4 w-4" />
+                  ¿Dónde encuentro los datos del voucher?
+                  <span className="ml-auto text-xs text-indigo-400 group-open:hidden">Click para ver guía</span>
+                </summary>
+                <div className="px-4 pb-4 pt-2">
+                  <p className="text-xs text-indigo-600 mb-3">
+                    Ubique los siguientes datos en la parte inferior de su voucher de depósito del Banco de la Nación:
+                  </p>
+                  <div className="flex justify-center">
+                    <img
+                      src="/guia-voucher-bn.png"
+                      alt="Guía de voucher - Banco de la Nación"
+                      className="max-w-full sm:max-w-sm rounded-lg border border-slate-200 shadow-sm"
+                    />
+                  </div>
+                  <p className="text-[11px] text-indigo-500 mt-3 text-center">
+                    Los datos resaltados en rojo son los que debe ingresar en el formulario.
+                  </p>
+                </div>
+              </details>
 
               {/* Datos del comprobante */}
               <div className="grid sm:grid-cols-3 gap-4">
@@ -1398,11 +1413,19 @@ function FileUploadCard({ config, attachment, onAttach, onRemove }) {
 // SUB-COMPONENTES REUTILIZABLES
 // ═══════════════════════════════════════════════════════
 
-function FormInput({ label, value, onChange, placeholder, type = "text", maxLength }) {
+function FormInput({ label, value, onChange, placeholder, type = "text", maxLength, pattern, hint, onlyDigits, toUpperCase }) {
+  const handleChange = (e) => {
+    let v = e.target.value;
+    if (onlyDigits) v = v.replace(/\D/g, "");
+    if (toUpperCase) v = v.toUpperCase();
+    if (maxLength && v.length > maxLength) v = v.slice(0, maxLength);
+    onChange(v);
+  };
   return (
     <div className="space-y-1.5">
       <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{label}</Label>
-      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} maxLength={maxLength} className="h-11 border-gray-300 rounded-xl" />
+      <Input type={type} value={value} onChange={handleChange} placeholder={placeholder} maxLength={maxLength} pattern={pattern} className="h-11 border-gray-300 rounded-xl" />
+      {hint && <p className="text-[10px] text-gray-400">{hint}</p>}
     </div>
   );
 }

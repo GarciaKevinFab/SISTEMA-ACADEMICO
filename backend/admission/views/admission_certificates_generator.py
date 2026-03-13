@@ -42,6 +42,12 @@ try:
 except ImportError:
     HAS_WEASYPRINT = False
 
+try:
+    import qrcode as _qrcode_lib
+    HAS_QRCODE = True
+except ImportError:
+    HAS_QRCODE = False
+
 MESES_ES = {
     1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
     5: "mayo",  6: "junio",   7: "julio", 8: "agosto",
@@ -106,25 +112,42 @@ def _field_row(label: str, value: str) -> str:
     </tr>"""
 
 
+def _qr_b64(url: str, box_size: int = 6) -> str:
+    """Genera un QR como data URI base64 PNG para incrustar en HTML."""
+    if not HAS_QRCODE or not url:
+        return ""
+    try:
+        qr = _qrcode_lib.QRCode(version=1, box_size=box_size, border=2,
+                                 error_correction=_qrcode_lib.constants.ERROR_CORRECT_M)
+        qr.add_data(url)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        data = base64.b64encode(buf.getvalue()).decode()
+        return f"data:image/png;base64,{data}"
+    except Exception as e:
+        logger.warning(f"Error generando QR: {e}")
+        return ""
+
+
 # ═══════════════════════════════════════════════════════════════
-# 1. CONSTANCIA DE INSCRIPCIÓN  (A4 landscape)
+# 1. CONSTANCIA DE INSCRIPCIÓN  (A4 portrait)
 # ═══════════════════════════════════════════════════════════════
 
 def cert_inscripcion_html(app_data: dict, inst: dict) -> str:
     """
-    Construye el HTML de la Constancia de Inscripción.
+    Construye el HTML de la Constancia de Inscripción (A4 portrait con QR).
 
     app_data keys esperados (todos opcionales con fallback):
       ap_paterno, ap_materno, nombres, especialidad, dni,
       sexo, discapacidad, domicilio, telefono, email,
       fecha_nacimiento, modalidad_admision, call_name,
-      photo_path  ← ruta absoluta a la foto del postulante
-      firma_postulante_path  ← si existe firma digitalizada
+      photo_path, verify_url, application_number
 
     inst keys:
       institution_name, city, logo_path, firma_director_path,
-      sello_path, director_name, director_title, lema_anio,
-      year_motto, rvm  (resolución)
+      sello_path, director_name, director_title, rvm
     """
     now = datetime.now()
     mr  = _get_media_root()
@@ -144,6 +167,8 @@ def cert_inscripcion_html(app_data: dict, inst: dict) -> str:
     fecha_nac   = app_data.get("fecha_nacimiento", "") or ""
     modalidad   = (app_data.get("modalidad_admision", "ORDINARIO") or "ORDINARIO").upper()
     call_name   = (app_data.get("call_name", "") or "").upper()
+    verify_url  = app_data.get("verify_url", "") or ""
+    app_number  = app_data.get("application_number", "") or ""
 
     # ── Institución ──
     inst_nombre   = (inst.get("institution_name", "") or "GUSTAVO ALLENDE LLAVERÍA").strip('"').strip("'")
@@ -157,13 +182,15 @@ def cert_inscripcion_html(app_data: dict, inst: dict) -> str:
     firma_b64  = _img_b64(inst.get("firma_director_path", ""), mr)
     sello_b64  = _img_b64(inst.get("sello_path", ""), mr)
     photo_b64  = _img_b64(app_data.get("photo_path", ""), mr)
-    firma_post = _img_b64(app_data.get("firma_postulante_path", ""), mr)
 
     logo_html  = f'<img src="{logo_b64}" class="logo" alt="Logo">'  if logo_b64  else '<div class="logo-ph"></div>'
     photo_html = f'<img src="{photo_b64}" class="photo" alt="Foto">' if photo_b64 else '<div class="photo-ph">Foto<br>carné</div>'
     firma_dir_html = f'<img src="{firma_b64}" class="firma-img" alt="Firma">' if firma_b64 else '<div class="firma-space"></div>'
     sello_html = f'<img src="{sello_b64}" class="sello-img" alt="Sello">' if sello_b64 else ''
-    firma_post_html = f'<img src="{firma_post}" class="firma-post-img" alt="Firma">' if firma_post else '<div class="firma-space"></div>'
+
+    # ── QR ──
+    qr_b64_data = _qr_b64(verify_url) if verify_url else ""
+    qr_html = f'<img src="{qr_b64_data}" class="qr-img" alt="QR">' if qr_b64_data else ""
 
     fecha_doc = f"{city}, {now.day} de {MESES_ES[now.month]} de {now.year}"
 
@@ -173,180 +200,155 @@ def cert_inscripcion_html(app_data: dict, inst: dict) -> str:
 <meta charset="UTF-8">
 <style>
 /* ══════════════════════════════════════════════
-   CONSTANCIA DE INSCRIPCIÓN  — A4 Landscape
-   Fiel al documento original del IESPP
+   CONSTANCIA DE INSCRIPCIÓN  — A4 Portrait + QR
    ══════════════════════════════════════════════ */
 
 @page {{
-  size: A4 landscape;
-  margin: 0.8cm 1cm 0.8cm 1cm;
+  size: A4 portrait;
+  margin: 1.2cm 1.5cm 1cm 1.5cm;
 }}
 
 * {{ box-sizing: border-box; margin: 0; padding: 0; }}
 
 body {{
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 8pt;
+  font-size: 9pt;
   color: #000;
   background: #fff;
 }}
 
-/* ── Layout ── */
-.wrapper {{
+/* ── Header institucional ── */
+.header {{
   display: flex;
-  flex-direction: row;
-  width: 100%;
-  min-height: 18.5cm;
-  gap: 0;
-}}
-
-/* ══ COLUMNA IZQUIERDA ══ */
-.col-left {{
-  width: 30%;
-  padding-right: 10px;
-  border-right: 1px solid #333;
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 4px;
+  background: #1a237e;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 4px;
+  margin-bottom: 14px;
 }}
 
-.logo {{
-  width: 60px;
-  height: 60px;
+.header .logo {{
+  width: 55px;
+  height: 55px;
   object-fit: contain;
-  margin-bottom: 4px;
-}}
-.logo-ph {{
-  width: 60px;
-  height: 60px;
-  border: 1px solid #ccc;
-  background: #f0f0f0;
-}}
-
-.inst-top {{
-  text-align: center;
-  font-size: 7pt;
-  font-weight: bold;
-  line-height: 1.4;
-  color: #1a237e;
-  text-transform: uppercase;
-}}
-
-.inst-nombre {{
-  text-align: center;
-  font-size: 9pt;
-  font-weight: 900;
-  line-height: 1.3;
-  color: #000;
-  text-transform: uppercase;
-  margin: 2px 0;
-}}
-
-/* Título grande rotado — "PROCESO DE ADMISIÓN 2025-I" */
-.titulo-proceso-wrapper {{
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: visible;
-}}
-
-.titulo-proceso {{
-  font-size: 23pt;
-  font-weight: 900;
-  color: #000;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  text-align: center;
-  line-height: 1.1;
-  transform: rotate(-90deg);
-  white-space: nowrap;
-  transform-origin: center center;
-}}
-
-/* ══ COLUMNA DERECHA ══ */
-.col-right {{
-  width: 70%;
-  padding-left: 12px;
-  display: flex;
-  flex-direction: column;
-}}
-
-/* Foto + datos en fila */
-.top-row {{
-  display: flex;
-  flex-direction: row;
-  gap: 12px;
-  align-items: flex-start;
-  margin-bottom: 8px;
-}}
-
-/* Foto */
-.photo-block {{
+  margin-right: 14px;
   flex-shrink: 0;
 }}
 
+.header .logo-ph {{
+  width: 55px;
+  height: 55px;
+  border: 1px solid rgba(255,255,255,0.3);
+  margin-right: 14px;
+  flex-shrink: 0;
+}}
+
+.header-text {{
+  flex: 1;
+}}
+
+.header-inst {{
+  font-size: 8pt;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+}}
+
+.header-nombre {{
+  font-size: 9pt;
+  font-weight: 900;
+  text-transform: uppercase;
+  line-height: 1.3;
+  margin-top: 2px;
+}}
+
+.header-right {{
+  text-align: right;
+  flex-shrink: 0;
+  margin-left: 10px;
+}}
+
+.header-right .proc-label {{
+  font-size: 7pt;
+  text-transform: uppercase;
+  opacity: 0.8;
+}}
+
+.header-right .proc-name {{
+  font-size: 10pt;
+  font-weight: 900;
+  text-transform: uppercase;
+}}
+
+/* ── Título ── */
+.titulo {{
+  text-align: center;
+  font-size: 15pt;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-transform: uppercase;
+  margin: 10px 0 16px 0;
+  letter-spacing: 1px;
+}}
+
+/* ── Foto + datos ── */
+.content-row {{
+  display: flex;
+  gap: 16px;
+  margin-bottom: 14px;
+}}
+
+.photo-block {{ flex-shrink: 0; }}
+
 .photo {{
-  width: 75px;
-  height: 95px;
+  width: 85px;
+  height: 105px;
   object-fit: cover;
   border: 3px solid #1565c0;
   display: block;
 }}
 
 .photo-ph {{
-  width: 75px;
-  height: 95px;
+  width: 85px;
+  height: 105px;
   border: 3px solid #1565c0;
   background: #e8eaf6;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 7pt;
+  font-size: 8pt;
   color: #666;
   text-align: center;
 }}
 
-/* Título de la constancia */
-.titulo-constancia {{
-  text-align: center;
-  font-size: 12pt;
-  font-weight: 900;
-  letter-spacing: 1px;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  margin-bottom: 8px;
-  text-transform: uppercase;
-}}
-
-/* Tabla de datos */
+/* ── Tabla de datos ── */
 .data-table {{
   width: 100%;
   border-collapse: collapse;
-  font-size: 8pt;
-  flex: 1;
+  font-size: 9pt;
 }}
 
 .data-table td {{
-  padding: 2.5px 3px;
+  padding: 4px 5px;
   vertical-align: middle;
-  border: none;
+  border-bottom: 1px solid #e0e0e0;
 }}
 
 .data-table .lbl {{
   font-weight: bold;
-  width: 38%;
+  width: 35%;
   text-transform: uppercase;
-  white-space: nowrap;
-  color: #000;
+  color: #222;
 }}
 
 .data-table .sep {{
-  width: 8px;
+  width: 10px;
   text-align: center;
   font-weight: bold;
-  padding: 0 2px;
+  padding: 0 3px;
 }}
 
 .data-table .val {{
@@ -355,238 +357,245 @@ body {{
   color: #000;
 }}
 
-/* Indicaciones */
+/* ── Indicaciones ── */
 .indicaciones {{
-  margin-top: 8px;
-  font-size: 7.5pt;
+  margin: 14px 0 8px 0;
+  font-size: 8.5pt;
+  line-height: 1.5;
 }}
 
 .indicaciones .ind-title {{
   font-weight: bold;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }}
 
 .indicaciones ol {{
-  padding-left: 0;
-  list-style: none;
+  padding-left: 20px;
   margin: 0;
 }}
 
 .indicaciones li {{
-  margin-bottom: 2px;
-  padding-left: 16px;
-  position: relative;
+  margin-bottom: 3px;
 }}
 
-.indicaciones .ind-num {{
-  position: absolute;
-  left: 0;
-  font-weight: bold;
-}}
-
-/* Aviso ÚNICO DOCUMENTO */
+/* ── Aviso ── */
 .aviso {{
-  margin-top: 6px;
-  font-size: 6.5pt;
+  margin: 10px 0;
+  padding: 8px 12px;
+  font-size: 8pt;
   font-weight: bold;
   text-transform: uppercase;
-  line-height: 1.4;
-  color: #000;
+  line-height: 1.5;
+  color: #b71c1c;
+  border: 1.5px solid #b71c1c;
+  border-radius: 3px;
+  text-align: center;
 }}
 
-/* ── Zona de firmas (pie) ── */
+/* ── QR + Verificación ── */
+.verify-section {{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 10px 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fafafa;
+}}
+
+.qr-img {{
+  width: 90px;
+  height: 90px;
+}}
+
+.verify-text {{
+  font-size: 8pt;
+  line-height: 1.5;
+  color: #333;
+}}
+
+.verify-text .verify-label {{
+  font-weight: bold;
+  font-size: 8.5pt;
+  color: #1a237e;
+  margin-bottom: 3px;
+}}
+
+.verify-url {{
+  color: #1565c0;
+  text-decoration: underline;
+  word-break: break-all;
+  font-size: 7.5pt;
+}}
+
+.verify-code {{
+  font-weight: bold;
+  font-size: 9pt;
+  margin-top: 3px;
+}}
+
+/* ── Firmas ── */
 .firmas-row {{
   display: flex;
-  flex-direction: row;
   justify-content: space-between;
   align-items: flex-end;
-  margin-top: auto;
-  padding-top: 8px;
+  margin-top: 30px;
+  padding-top: 10px;
 }}
 
-.firma-postulante {{
+.firma-col {{
   text-align: center;
-  min-width: 140px;
-}}
-
-.firma-director-block {{
-  text-align: center;
-  min-width: 160px;
-  position: relative;
+  min-width: 180px;
 }}
 
 .firma-img {{
-  height: 40px;
+  height: 45px;
   width: auto;
   display: block;
   margin: 0 auto;
 }}
 
-.firma-post-img {{
-  height: 35px;
-  width: auto;
-  display: block;
-  margin: 0 auto;
-}}
-
-.firma-space {{ height: 35px; }}
+.firma-space {{ height: 40px; }}
 
 .firma-line {{
   border-top: 1px solid #000;
-  margin: 3px 10px 2px 10px;
+  margin: 3px 10px 3px 10px;
 }}
 
-.firma-label  {{ font-size: 7pt; color: #444; margin-bottom: 1px; }}
-.firma-name   {{ font-size: 7.5pt; font-weight: bold; }}
-.firma-cargo  {{ font-size: 7pt; text-transform: uppercase; }}
-.firma-dni    {{ font-size: 7pt; color: #444; }}
+.firma-label {{ font-size: 7.5pt; color: #555; margin-bottom: 1px; }}
+.firma-name  {{ font-size: 8.5pt; font-weight: bold; }}
+.firma-cargo {{ font-size: 7.5pt; text-transform: uppercase; color: #444; }}
+.firma-dni   {{ font-size: 7.5pt; color: #555; }}
 
 .sello-img {{
-  width: 50px;
-  height: 50px;
+  width: 55px;
+  height: 55px;
   object-fit: contain;
   opacity: 0.7;
   position: absolute;
-  right: -10px;
+  right: -15px;
   bottom: 10px;
 }}
 
-/* Fecha */
+.firma-director-block {{
+  position: relative;
+  text-align: center;
+  min-width: 180px;
+}}
+
 .fecha-doc {{
-  font-size: 8pt;
+  font-size: 8.5pt;
   text-align: center;
   margin-bottom: 4px;
 }}
 
-/* Footer */
+/* ── Footer ── */
 .doc-footer {{
-  text-align: right;
-  font-size: 6pt;
-  color: #888;
-  margin-top: 4px;
-  border-top: 1px solid #eee;
-  padding-top: 2px;
-}}
-
-.rvm-text {{
-  font-size: 6.5pt;
-  color: #555;
   text-align: center;
-  margin-top: 2px;
+  font-size: 6.5pt;
+  color: #999;
+  margin-top: 12px;
+  border-top: 1px solid #eee;
+  padding-top: 4px;
 }}
 </style>
 </head>
 <body>
 
-<div class="wrapper">
-
-  <!-- ══ COLUMNA IZQUIERDA ══ -->
-  <div class="col-left">
-
-    {logo_html}
-
-    <div class="inst-top">
-      MINISTERIO DE EDUCACIÓN<br>
-      INSTITUTO DE EDUCACIÓN SUPERIOR PEDAGÓGICO PÚBLICO
-    </div>
-
-    <div class="inst-nombre">"{inst_nombre}"</div>
-
-    {f'<div class="rvm-text">{rvm}</div>' if rvm else ""}
-
-    <div class="titulo-proceso-wrapper">
-      <div class="titulo-proceso">{call_name}</div>
-    </div>
-
+<!-- ══ HEADER INSTITUCIONAL ══ -->
+<div class="header">
+  {logo_html}
+  <div class="header-text">
+    <div class="header-inst">INSTITUTO DE EDUCACIÓN SUPERIOR PEDAGÓGICO PÚBLICO</div>
+    <div class="header-nombre">"Instituto Superior Pedagógico {inst_nombre}"</div>
   </div>
-
-  <!-- ══ COLUMNA DERECHA ══ -->
-  <div class="col-right">
-
-    <div class="titulo-constancia">CONSTANCIA DE INSCRIPCIÓN</div>
-
-    <!-- foto + tabla -->
-    <div class="top-row">
-
-      <!-- Foto -->
-      <div class="photo-block">
-        {photo_html}
-      </div>
-
-      <!-- Datos -->
-      <div style="flex:1;">
-        <table class="data-table">
-          <tbody>
-            {_field_row("CONDICIÓN DEL POSTULANTE", modalidad)}
-            {_field_row("APELLIDOS PATERNO", ap_paterno)}
-            {_field_row("APELLIDOS MATERNO", ap_materno)}
-            {_field_row("NOMBRES", nombres)}
-            {_field_row("ESPECIALIDAD", especialidad)}
-            {_field_row("DNI", dni)}
-            {_field_row("SEXO", sexo)}
-            {_field_row("DISCAPACIDAD", discapacidad)}
-            {_field_row("DOMICILIO", domicilio)}
-            {_field_row("TELÉFONO", telefono)}
-            {_field_row("CORREO ELECTRÓNICO", email)}
-            {_field_row("FECHA Y LUGAR DE NACIMIENTO", fecha_nac)}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Indicaciones -->
-    <div class="indicaciones">
-      <div class="ind-title">Indicaciones:</div>
-      <ol>
-        <li>
-          <span class="ind-num">109.</span>
-          Presentarse en la sede de aplicación, con 1 hora de anticipación a la hora establecida.
-        </li>
-        <li>
-          <span class="ind-num">110.</span>
-          Portar su documento de identidad (DNI) al ingresar al local.
-        </li>
-        <li>
-          <span class="ind-num">111.</span>
-          Presentar esta constancia (con foto, sello institucional y firmas del postulante y director de la institución de Educación Superior.
-        </li>
-      </ol>
-    </div>
-
-    <!-- Aviso -->
-    <div class="aviso">
-      ESTE ES EL ÚNICO DOCUMENTO QUE LO ACREDITA COMO POSTULANTE CORRECTAMENTE REGISTRADO EN SISTEMA DE INFORMACIÓN
-      DEL INSTITUTO Y PERMITE SU ACCESO AL LOCAL PARA RENDIR LAS PRUEBAS.
-    </div>
-
-    <!-- Firmas -->
-    <div class="firmas-row">
-
-      <!-- Firma postulante -->
-      <div class="firma-postulante">
-        {firma_post_html}
-        <div class="firma-line"></div>
-        <div class="firma-label">Firma del postulante</div>
-        <div class="firma-name">{full_name}</div>
-        <div class="firma-dni">{dni}</div>
-      </div>
-
-      <!-- Fecha + Firma Director -->
-      <div class="firma-director-block">
-        <div class="fecha-doc">{fecha_doc}</div>
-        {firma_dir_html}
-        <div class="firma-line"></div>
-        <div class="firma-name">{director_name}</div>
-        <div class="firma-cargo">{director_title}</div>
-        {sello_html}
-      </div>
-
-    </div>
-
-    <div class="doc-footer">Área de Innovación e Investigación - Informática</div>
-
+  <div class="header-right">
+    <div class="proc-label">PROCESO DE ADMISIÓN</div>
+    <div class="proc-name">{call_name}</div>
   </div>
 </div>
+
+<!-- ══ TÍTULO ══ -->
+<div class="titulo">CONSTANCIA DE INSCRIPCIÓN</div>
+
+<!-- ══ FOTO + DATOS ══ -->
+<div class="content-row">
+  <div class="photo-block">
+    {photo_html}
+  </div>
+  <div style="flex:1;">
+    <table class="data-table">
+      <tbody>
+        {_field_row("CONDICIÓN DEL POSTULANTE", modalidad)}
+        {_field_row("APELLIDO PATERNO", ap_paterno)}
+        {_field_row("APELLIDO MATERNO", ap_materno)}
+        {_field_row("NOMBRES", nombres)}
+        {_field_row("ESPECIALIDAD", especialidad)}
+        {_field_row("DNI", dni)}
+        {_field_row("SEXO", sexo)}
+        {_field_row("DISCAPACIDAD", discapacidad)}
+        {_field_row("DOMICILIO", domicilio)}
+        {_field_row("TELÉFONO", telefono)}
+        {_field_row("CORREO ELECTRÓNICO", email)}
+        {_field_row("FECHA DE NACIMIENTO", fecha_nac)}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══ INDICACIONES ══ -->
+<div class="indicaciones">
+  <div class="ind-title">Indicaciones:</div>
+  <ol>
+    <li>Presentarse en la sede de aplicación con 1 hora de anticipación a la hora establecida.</li>
+    <li>Portar su Documento de Identidad (DNI) al ingresar al local.</li>
+    <li>Presentar esta constancia (con foto, sello institucional y firmas).</li>
+  </ol>
+</div>
+
+<!-- ══ AVISO ══ -->
+<div class="aviso">
+  ESTE ES EL ÚNICO DOCUMENTO QUE LO ACREDITA COMO POSTULANTE CORRECTAMENTE
+  REGISTRADO EN EL SISTEMA Y PERMITE SU ACCESO AL LOCAL PARA RENDIR LAS PRUEBAS.
+</div>
+
+<!-- ══ QR DE VERIFICACIÓN ══ -->
+{"" if not qr_html else f'''
+<div class="verify-section">
+  {qr_html}
+  <div class="verify-text">
+    <div class="verify-label">Verificación Digital</div>
+    Escanee el código QR o ingrese al siguiente enlace:<br>
+    <span class="verify-url">{verify_url}</span>
+    {f'<div class="verify-code">N° Postulación: {app_number}</div>' if app_number else ''}
+  </div>
+</div>
+'''}
+
+<!-- ══ FIRMAS ══ -->
+<div class="firmas-row">
+
+  <div class="firma-col">
+    <div class="firma-space"></div>
+    <div class="firma-line"></div>
+    <div class="firma-label">Firma del Postulante</div>
+    <div class="firma-name">{full_name}</div>
+    <div class="firma-dni">DNI: {dni}</div>
+  </div>
+
+  <div class="firma-director-block">
+    <div class="fecha-doc">{fecha_doc}</div>
+    {firma_dir_html}
+    <div class="firma-line"></div>
+    <div class="firma-name">{director_name}</div>
+    <div class="firma-cargo">{director_title}</div>
+    {sello_html}
+  </div>
+
+</div>
+
+<div class="doc-footer">Área de Innovación e Investigación - Informática</div>
 
 </body>
 </html>"""

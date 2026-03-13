@@ -323,11 +323,20 @@ export default function EnrollmentPaymentsReview() {
                                                 )}
                                             </td>
 
-                                            {/* Canal */}
+                                            {/* Canal / Datos comprobante */}
                                             <td className="px-4 py-3 hidden sm:table-cell">
                                                 <span className="text-slate-600">{CHANNEL_LABELS[payment.channel] || payment.channel}</span>
+                                                {payment.nro_secuencia && (
+                                                    <div className="text-xs text-slate-400">Sec: <span className="font-mono">{payment.nro_secuencia}</span></div>
+                                                )}
+                                                {payment.codigo_caja && (
+                                                    <div className="text-xs text-slate-400">Caja: <span className="font-mono">{payment.codigo_caja}</span></div>
+                                                )}
+                                                {payment.fecha_movimiento && (
+                                                    <div className="text-xs text-slate-400">Fecha: {new Date(payment.fecha_movimiento + "T00:00:00").toLocaleDateString("es-PE")}</div>
+                                                )}
                                                 {payment.operation_code && (
-                                                    <div className="text-xs text-slate-400 font-mono">{payment.operation_code}</div>
+                                                    <div className="text-xs text-slate-400">Op: <span className="font-mono">{payment.operation_code}</span></div>
                                                 )}
                                             </td>
 
@@ -437,6 +446,24 @@ export default function EnrollmentPaymentsReview() {
                                     <span className="text-slate-500">Canal:</span>
                                     <span>{CHANNEL_LABELS[reviewingPayment.channel] || reviewingPayment.channel}</span>
                                 </div>
+                                {reviewingPayment.nro_secuencia && (
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Nro. Secuencia:</span>
+                                        <span className="font-mono text-xs">{reviewingPayment.nro_secuencia}</span>
+                                    </div>
+                                )}
+                                {reviewingPayment.codigo_caja && (
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Código de Caja:</span>
+                                        <span className="font-mono text-xs">{reviewingPayment.codigo_caja}</span>
+                                    </div>
+                                )}
+                                {reviewingPayment.fecha_movimiento && (
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Fecha Mov.:</span>
+                                        <span>{new Date(reviewingPayment.fecha_movimiento + "T00:00:00").toLocaleDateString("es-PE")}</span>
+                                    </div>
+                                )}
                                 {reviewingPayment.operation_code && (
                                     <div className="flex justify-between">
                                         <span className="text-slate-500">Nro. Op:</span>
@@ -500,6 +527,9 @@ export default function EnrollmentPaymentsReview() {
                                 </h3>
                                 <p className="text-xs text-slate-500">
                                     {CHANNEL_LABELS[previewPayment.channel] || previewPayment.channel}
+                                    {previewPayment.nro_secuencia && ` · Sec: ${previewPayment.nro_secuencia}`}
+                                    {previewPayment.codigo_caja && ` · Caja: ${previewPayment.codigo_caja}`}
+                                    {previewPayment.fecha_movimiento && ` · ${new Date(previewPayment.fecha_movimiento + "T00:00:00").toLocaleDateString("es-PE")}`}
                                     {previewPayment.operation_code && ` · Op: ${previewPayment.operation_code}`}
                                     {" · S/. "}
                                     {Number(previewPayment.total || previewPayment.amount || 0).toFixed(2)}

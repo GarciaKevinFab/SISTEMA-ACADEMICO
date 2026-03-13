@@ -116,7 +116,7 @@ export const Catalog = {
         return { offices: pickFirstArray(data, ["offices", "items", "results"]) };
     },
     users: async (params = {}) => {
-        const data = await asJson(api, "GET", "/users", null, { params });
+        const data = await asJson(api, "GET", "/mp-users", null, { params });
         return { users: pickFirstArray(data, ["users", "items", "results"]) };
     },
 };
@@ -263,4 +263,14 @@ export const Offices = {
     create: async (payload) => asJson(api, "POST", "/offices", payload),
     update: async (id, payload) => asJson(api, "PATCH", `/offices/${id}`, payload),
     remove: async (id) => asJson(api, "DELETE", `/offices/${id}`),
+};
+
+/* -------------------------------------------------------
+   Personal de Mesa de Partes
+------------------------------------------------------- */
+export const MpStaff = {
+    list: async () => asJson(api, "GET", "/staff"),
+    create: async (payload) => asJson(api, "POST", "/staff", payload),
+    update: async (id, payload) => asJson(api, "PATCH", `/staff/${id}`, payload),
+    remove: async (id) => asJson(api, "DELETE", `/staff/${id}`),
 };

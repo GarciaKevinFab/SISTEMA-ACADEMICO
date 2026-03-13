@@ -12,7 +12,7 @@ import { Label } from "../../components/ui/label";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { toast } from "sonner";
-import { Settings, Save, RotateCcw, GraduationCap, Globe, KeyRound, Landmark } from "lucide-react";
+import { Settings, Save, RotateCcw, GraduationCap, Globe, KeyRound } from "lucide-react";
 
 const ALL_DOCS = [
     { value: "FOTO_CARNET", label: "Fotografía tamaño carné" },
@@ -51,10 +51,6 @@ const DEFAULT_PARAMS = {
     // Credenciales
     auto_generate_credentials: true,
     credential_password_length: 8,
-    // Datos bancarios para pago de admisión
-    bank_name: "Banco de la Nación",
-    bank_account: "",
-    bank_holder: "",
 };
 
 const normalize = (raw) => ({
@@ -299,58 +295,6 @@ export default function AdmissionParamsModule() {
                             <p className="text-xs text-gray-500">
                                 El usuario siempre será el N° de DNI del postulante.
                             </p>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* ══════════════════════════════════════════ */}
-            {/* SECCIÓN 4: Datos Bancarios                */}
-            {/* ══════════════════════════════════════════ */}
-            <Card className="border shadow-sm rounded-xl">
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base font-bold text-gray-700 flex items-center gap-2">
-                        <Landmark className="h-4 w-4 text-blue-500" />
-                        Datos Bancarios para Pago de Admisión
-                    </CardTitle>
-                    <p className="text-xs text-gray-500 mt-1">
-                        Estos datos se mostrarán a los postulantes para que realicen el depósito.
-                    </p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid sm:grid-cols-3 gap-4">
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                Nombre del banco
-                            </Label>
-                            <Input
-                                value={params.bank_name || ""}
-                                onChange={(e) => setField("bank_name", e.target.value)}
-                                placeholder="Banco de la Nación"
-                                className="h-11 border-gray-300 rounded-xl"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                N° de Cuenta
-                            </Label>
-                            <Input
-                                value={params.bank_account || ""}
-                                onChange={(e) => setField("bank_account", e.target.value)}
-                                placeholder="Ej: 00-123-456789"
-                                className="h-11 border-gray-300 rounded-xl"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                Titular de la cuenta
-                            </Label>
-                            <Input
-                                value={params.bank_holder || ""}
-                                onChange={(e) => setField("bank_holder", e.target.value)}
-                                placeholder="IESPP Gustavo Allende Llavería"
-                                className="h-11 border-gray-300 rounded-xl"
-                            />
                         </div>
                     </div>
                 </CardContent>

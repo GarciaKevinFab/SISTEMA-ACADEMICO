@@ -20,6 +20,7 @@ class EnrollmentPaymentSerializer(serializers.ModelSerializer):
             "id", "student", "period",
             "amount", "discount_tag", "surcharge", "total",
             "channel", "operation_code",
+            "nro_secuencia", "codigo_caja", "fecha_movimiento",
             "voucher_url", "voucher_name",
             "status", "reviewer", "reviewer_name", "reviewed_at",
             "rejection_note",
@@ -74,6 +75,9 @@ class EnrollmentPaymentUploadSerializer(serializers.Serializer):
     period = serializers.CharField(max_length=20)
     channel = serializers.ChoiceField(choices=EnrollmentPayment.CHANNEL_CHOICES)
     operation_code = serializers.CharField(max_length=60, required=False, allow_blank=True)
+    nro_secuencia = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    codigo_caja = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    fecha_movimiento = serializers.DateField(required=False, allow_null=True)
     voucher = serializers.FileField()
 
     def validate_voucher(self, value):

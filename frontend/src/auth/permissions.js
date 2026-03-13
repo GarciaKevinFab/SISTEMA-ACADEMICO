@@ -48,6 +48,12 @@ export const PERMS = {
     "academic.attendance.manage": "academic.attendance.manage",
     "academic.processes.inbox.view": "academic.processes.inbox.view",
 
+    // Catálogos académicos (admin-only)
+    "academic.periods.manage": "academic.periods.manage",
+    "academic.teachers.manage": "academic.teachers.manage",
+    "academic.credentials.manage": "academic.credentials.manage",
+    "academic.importers.manage": "academic.importers.manage",
+
     /* ============================
      * ✅ ESTUDIANTE (SELF vs MANAGE)
      * ============================ */
@@ -206,6 +212,12 @@ export const ROLE_POLICIES = {
         "student.manage.edit",
         "student.manage.enrollment",
         "student.manage.kardex",
+
+        // Catálogos académicos (admin-only)
+        "academic.periods.manage",
+        "academic.teachers.manage",
+        "academic.credentials.manage",
+        "academic.importers.manage",
     ],
 
     REGISTRAR: [
@@ -224,6 +236,12 @@ export const ROLE_POLICIES = {
 
         "admin.catalogs.view",
         "admin.catalogs.manage",
+
+        // Catálogos académicos
+        "academic.periods.manage",
+        "academic.teachers.manage",
+        "academic.credentials.manage",
+        "academic.importers.manage",
 
         // (opcional) si secretaría también gestiona estudiantes:
         // "student.manage.list",

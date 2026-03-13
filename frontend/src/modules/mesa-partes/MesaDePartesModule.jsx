@@ -32,7 +32,7 @@ import {
 import { toast } from "sonner";
 import {
   Procedures as ProcSvc, Catalog, ProcedureFiles,
-  ProcedureTypes, MesaPartesDashboard, MesaPartesPublic, Offices,
+  ProcedureTypes, MesaPartesDashboard, MesaPartesPublic, Offices, MpStaff,
 } from "../../services/mesaPartes.service";
 import MesaPartesReports from "./MesaPartesReports";
 import {
@@ -899,9 +899,20 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                       <div>
                         <FieldLabel>Oficina destino</FieldLabel>
                         <Select value={routeForm.to_office_id || undefined}
-                          onValueChange={v => setRouteForm({ ...routeForm, to_office_id: v })} disabled={!canResolve}>
+                          onValueChange={v => {
+                            const off = offices.find(o => String(o.id) === v);
+                            setRouteForm({
+                              ...routeForm,
+                              to_office_id: v,
+                              assignee_id: off?.head ? String(off.head) : "",
+                            });
+                          }} disabled={!canResolve}>
                           <SelectTrigger className="h-9 rounded-xl text-sm"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                          <SelectContent>{offices.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}</SelectContent>
+                          <SelectContent>{offices.map(o => (
+                            <SelectItem key={o.id} value={String(o.id)}>
+                              {o.name}{o.head_name ? ` — ${o.head_name}` : ""}
+                            </SelectItem>
+                          ))}</SelectContent>
                         </Select>
                       </div>
                       <div>
@@ -909,7 +920,15 @@ const ProcedureDetailDialog = ({ open, onOpenChange, procedureId, onChanged }) =
                         <Select value={routeForm.assignee_id || undefined}
                           onValueChange={v => setRouteForm({ ...routeForm, assignee_id: v })} disabled={!canResolve}>
                           <SelectTrigger className="h-9 rounded-xl text-sm"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                          <SelectContent>{users.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.full_name || u.name}</SelectItem>)}</SelectContent>
+                          <SelectContent>{users.map(u => {
+                            const selectedOffice = offices.find(o => String(o.id) === routeForm.to_office_id);
+                            const isHead = selectedOffice?.head && String(selectedOffice.head) === String(u.id);
+                            return (
+                              <SelectItem key={u.id} value={String(u.id)}>
+                                {u.label || u.full_name || u.name}{isHead ? " ★ Encargado" : ""}
+                              </SelectItem>
+                            );
+                          })}</SelectContent>
                         </Select>
                       </div>
                       <div>
@@ -1505,9 +1524,10 @@ const OfficesSection = () => {
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState(null);
   const [search, setSearch] = React.useState("");
-  const [form, setForm] = React.useState({ name: "", description: "", is_active: true });
+  const [form, setForm] = React.useState({ name: "", description: "", is_active: true, head: "" });
+  const [staffUsers, setStaffUsers] = React.useState([]);
 
-  const resetForm = () => { setForm({ name: "", description: "", is_active: true }); setEditing(null); };
+  const resetForm = () => { setForm({ name: "", description: "", is_active: true, head: "" }); setEditing(null); };
 
   const load = useCallback(async () => {
     try {
@@ -1519,12 +1539,16 @@ const OfficesSection = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    Catalog.users({ role: "STAFF" }).then(u => setStaffUsers(Array.isArray(u?.users) ? u.users : Array.isArray(u) ? u : [])).catch(() => {});
+  }, []);
 
   const save = async () => {
     try {
       if (!form.name?.trim()) return toast.error("El nombre es requerido");
-      if (editing) { await Offices.update(editing.id, form); toast.success("Oficina actualizada"); }
-      else { await Offices.create(form); toast.success("Oficina creada"); }
+      const payload = { ...form, head: form.head ? Number(form.head) : null };
+      if (editing) { await Offices.update(editing.id, payload); toast.success("Oficina actualizada"); }
+      else { await Offices.create(payload); toast.success("Oficina creada"); }
       setOpen(false); resetForm(); load();
     } catch { toast.error("Error al guardar la oficina"); }
   };
@@ -1621,6 +1645,19 @@ const OfficesSection = () => {
                     onChange={e => setForm({ ...form, description: e.target.value })}
                   />
                 </div>
+                <div>
+                  <Label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Encargado / Responsable</Label>
+                  <Select value={form.head || undefined} onValueChange={v => setForm({ ...form, head: v === "__none__" ? "" : v })}>
+                    <SelectTrigger className="h-9 rounded-xl border-slate-200 bg-slate-50 text-sm"><SelectValue placeholder="Sin encargado asignado" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">
+                        <span className="text-slate-400 italic">Sin encargado</span>
+                      </SelectItem>
+                      {staffUsers.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.label || u.full_name || u.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-slate-400 mt-1">Se pre-asignará al derivar trámites a esta oficina</p>
+                </div>
                 <div
                   className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors"
                   onClick={() => setForm({ ...form, is_active: !form.is_active })}
@@ -1662,6 +1699,7 @@ const OfficesSection = () => {
               <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                 <tr>
                   <TH>Oficina / Dependencia</TH>
+                  <TH>Encargado</TH>
                   <TH>Descripción</TH>
                   <TH center>Estado</TH>
                   <TH center>Acciones</TH>
@@ -1669,7 +1707,7 @@ const OfficesSection = () => {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={4} className="py-12 text-center">
+                  <tr><td colSpan={5} className="py-12 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <Loader2 className="w-6 h-6 text-violet-500 animate-spin" />
                       <p className="text-xs text-slate-400">Cargando oficinas…</p>
@@ -1686,6 +1724,11 @@ const OfficesSection = () => {
                         </div>
                         <span className="text-sm font-semibold text-slate-800">{r.name}</span>
                       </div>
+                    </TD>
+                    <TD>
+                      {r.head_name
+                        ? <span className="text-xs font-semibold text-violet-700">{r.head_name}</span>
+                        : <span className="text-xs text-slate-300 italic">Sin asignar</span>}
                     </TD>
                     <TD>
                       {r.description
@@ -1707,7 +1750,7 @@ const OfficesSection = () => {
                         </button>
                         <button
                           className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"
-                          onClick={() => { setEditing(r); setForm({ name: r.name || "", description: r.description || "", is_active: !!r.is_active }); setOpen(true); }}
+                          onClick={() => { setEditing(r); setForm({ name: r.name || "", description: r.description || "", is_active: !!r.is_active, head: r.head ? String(r.head) : "" }); setOpen(true); }}
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
@@ -1739,7 +1782,7 @@ const OfficesSection = () => {
                   </tr>
                 ))}
                 {!loading && filtered.length === 0 && (
-                  <tr><td colSpan={4} className="py-12">
+                  <tr><td colSpan={5} className="py-12">
                     <div className="flex flex-col items-center gap-3 text-center">
                       <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
                         <Building2 className="w-5 h-5 text-slate-300" />
@@ -1769,6 +1812,302 @@ const OfficesSection = () => {
 };
 
 /* ════════════════════════════════════════════════════════════
+   PERSONAL DE MESA DE PARTES
+════════════════════════════════════════════════════════════ */
+const MP_ROLES_OPTIONS = [
+  { value: "MPV_OFFICER", label: "Oficial de Mesa de Partes" },
+  { value: "MPV_MANAGER", label: "Gestor de Mesa de Partes" },
+];
+
+const StaffSection = () => {
+  const [staff, setStaff] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [open, setOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState(null);
+  const [form, setForm] = React.useState({ full_name: "", username: "", email: "", password: "", role: "MPV_OFFICER" });
+
+  const resetForm = () => { setForm({ full_name: "", username: "", email: "", password: "", role: "MPV_OFFICER" }); setEditing(null); };
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await MpStaff.list();
+      setStaff(Array.isArray(res?.staff) ? res.staff : []);
+    } catch { setStaff([]); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    try {
+      if (!form.full_name?.trim()) return toast.error("El nombre completo es requerido");
+      if (!form.email?.trim()) return toast.error("El correo es requerido");
+      if (editing) {
+        const payload = { full_name: form.full_name, email: form.email, role: form.role };
+        if (form.password?.trim()) payload.password = form.password;
+        await MpStaff.update(editing.id, payload);
+        toast.success("Usuario actualizado");
+      } else {
+        if (!form.password || form.password.length < 6) return toast.error("La contraseña debe tener al menos 6 caracteres");
+        await MpStaff.create(form);
+        toast.success("Usuario creado exitosamente");
+      }
+      setOpen(false); resetForm(); load();
+    } catch (e) { toast.error(e?.message || "Error al guardar"); }
+  };
+
+  const deactivate = async (u) => {
+    try {
+      await MpStaff.remove(u.id);
+      toast.success("Usuario desactivado");
+      load();
+    } catch (e) { toast.error(e?.message || "Error"); }
+  };
+
+  const ROW_STYLE = { borderBottom: "1px solid #F1F5F9", transition: "background .15s ease" };
+  const TH = ({ children, center }) => (
+    <th style={{
+      padding: "10px 16px", fontSize: 10, fontWeight: 800, color: "#64748B",
+      textTransform: "uppercase", letterSpacing: ".1em", background: "#F8FAFC",
+      borderBottom: "1px solid #E2E8F0", textAlign: center ? "center" : "left",
+    }}>{children}</th>
+  );
+  const TD = ({ children, center, style = {} }) => (
+    <td style={{ padding: "11px 16px", fontSize: 13, color: "#334155", textAlign: center ? "center" : "left", ...style }}>
+      {children}
+    </td>
+  );
+
+  const roleLabel = (name) => MP_ROLES_OPTIONS.find(r => r.value === name)?.label || name;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
+            <ShieldAlert className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Personal de Mesa de Partes</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Gestiona los usuarios con acceso al módulo ·{" "}
+              <span className="text-blue-600 font-semibold">{staff.length} registrados</span>
+            </p>
+          </div>
+        </div>
+
+        <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) resetForm(); }}>
+          <button
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-sm transition-colors"
+            onClick={() => { resetForm(); setOpen(true); }}
+          >
+            <Plus className="w-4 h-4" /> Nuevo usuario
+          </button>
+
+          <DialogContent className="max-w-md rounded-2xl p-0 overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-blue-500 to-indigo-600" />
+            <div className="p-6">
+              <DialogHeader className="mb-5">
+                <DialogTitle className="text-lg font-bold text-slate-800">
+                  {editing ? "Editar usuario" : "Nuevo usuario de Mesa de Partes"}
+                </DialogTitle>
+                <p className="text-sm text-slate-500 mt-1">
+                  {editing ? "Modifica los datos del usuario." : "Se creará con acceso al módulo de Mesa de Partes."}
+                </p>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">DNI (será su usuario de login) *</Label>
+                  <Input
+                    className="h-9 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-mono"
+                    placeholder="Ej: 71584712"
+                    maxLength={15}
+                    value={form.username}
+                    onChange={e => setForm({ ...form, username: e.target.value.replace(/\s/g, "") })}
+                    disabled={!!editing}
+                  />
+                  {!editing && <p className="text-[10px] text-slate-400 mt-1">El DNI será el usuario con el que iniciará sesión</p>}
+                </div>
+                <div>
+                  <Label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Nombre completo *</Label>
+                  <Input
+                    className="h-9 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm"
+                    placeholder="Ej: María López Torres"
+                    value={form.full_name}
+                    onChange={e => setForm({ ...form, full_name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Correo electrónico *</Label>
+                  <Input
+                    className="h-9 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm"
+                    type="email"
+                    placeholder="correo@ejemplo.com"
+                    value={form.email}
+                    onChange={e => setForm({ ...form, email: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
+                    Contraseña {editing ? "(dejar vacío para no cambiar)" : "*"}
+                  </Label>
+                  <Input
+                    className="h-9 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm"
+                    type="password"
+                    placeholder={editing ? "••••••" : "Mínimo 6 caracteres"}
+                    value={form.password}
+                    onChange={e => setForm({ ...form, password: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Rol *</Label>
+                  <Select value={form.role} onValueChange={v => setForm({ ...form, role: v })}>
+                    <SelectTrigger className="h-9 rounded-xl border-slate-200 bg-slate-50 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {MP_ROLES_OPTIONS.map(r => (
+                        <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    <strong>Oficial:</strong> Recibe y deriva trámites · <strong>Gestor:</strong> Administra todo el módulo
+                  </p>
+                </div>
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                  <Button variant="outline" className="h-9 rounded-xl text-sm border-slate-200" onClick={() => setOpen(false)}>Cancelar</Button>
+                  <Button className="h-9 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-sm font-semibold shadow-sm" onClick={save}>
+                    {editing ? "Guardar cambios" : "Crear usuario"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Table */}
+      <div className="p-5">
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div style={{ maxHeight: 500, overflowY: "auto", scrollbarWidth: "thin" }}>
+            <table className="w-full border-collapse">
+              <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+                <tr>
+                  <TH>Usuario</TH>
+                  <TH>Correo</TH>
+                  <TH>Rol</TH>
+                  <TH>Oficinas asignadas</TH>
+                  <TH center>Acciones</TH>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={5} className="py-12 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+                      <p className="text-xs text-slate-400">Cargando personal…</p>
+                    </div>
+                  </td></tr>
+                ) : staff.length === 0 ? (
+                  <tr><td colSpan={5} className="py-12 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <ShieldAlert className="w-8 h-8 text-slate-300" />
+                      <p className="text-sm font-semibold text-slate-500">No hay personal registrado</p>
+                      <p className="text-xs text-slate-400">Crea un nuevo usuario con el botón superior</p>
+                    </div>
+                  </td></tr>
+                ) : staff.map(u => (
+                  <tr key={u.id} style={ROW_STYLE}
+                    onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
+                    onMouseLeave={e => e.currentTarget.style.background = ""}>
+                    <TD>
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-700 shrink-0">
+                          {(u.full_name || u.username || "?").slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">{u.full_name}</p>
+                          <p className="text-[11px] text-slate-400">@{u.username}</p>
+                        </div>
+                      </div>
+                    </TD>
+                    <TD><span className="text-xs text-slate-600">{u.email}</span></TD>
+                    <TD>
+                      {(u.roles || []).filter(r => r !== "STUDENT").map(r => (
+                        <span key={r} className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold mr-1 ${
+                          r === "MPV_MANAGER" ? "bg-indigo-100 text-indigo-700" : "bg-blue-100 text-blue-700"
+                        }`}>
+                          {roleLabel(r)}
+                        </span>
+                      ))}
+                    </TD>
+                    <TD>
+                      {(u.offices || []).length > 0
+                        ? u.offices.map((o, i) => (
+                          <span key={i} className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700 mr-1 mb-0.5">
+                            {o}
+                          </span>
+                        ))
+                        : <span className="text-xs text-slate-300 italic">Sin oficina</span>}
+                    </TD>
+                    <TD center>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          title="Editar"
+                          onClick={() => {
+                            setEditing(u);
+                            const mpRole = (u.roles || []).find(r => r === "MPV_OFFICER" || r === "MPV_MANAGER") || "MPV_OFFICER";
+                            setForm({ full_name: u.full_name || "", username: u.username || "", email: u.email || "", password: "", role: mpRole });
+                            setOpen(true);
+                          }}
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Desactivar">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="max-w-sm rounded-2xl">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+                                <AlertCircle className="h-5 w-5" /> ¿Desactivar usuario?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Se desactivará la cuenta de <strong>{u.full_name}</strong>. Ya no podrá acceder al sistema.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter className="gap-2 mt-2">
+                              <AlertDialogCancel className="rounded-xl border-slate-200">Cancelar</AlertDialogCancel>
+                              <AlertDialogAction className="bg-red-600 hover:bg-red-700 rounded-xl" onClick={() => deactivate(u)}>
+                                Sí, desactivar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TD>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {!loading && staff.length > 0 && (
+          <p className="text-[11px] text-slate-400 mt-3">
+            {staff.length} usuarios con acceso a Mesa de Partes
+          </p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ════════════════════════════════════════════════════════════
    MAIN MODULE
 ════════════════════════════════════════════════════════════ */
 const MesaDePartesModule = () => {
@@ -1779,6 +2118,7 @@ const MesaDePartesModule = () => {
     { key: "types", label: "Tipos de Trámite", Icon: Settings2, need: [PERMS["mpv.processes.resolve"]] },
     { key: "procedures", label: "Trámites", Icon: ClipboardList, need: [PERMS["mpv.processes.review"]] },
     { key: "offices", label: "Oficinas", Icon: Building2, need: [PERMS["mpv.processes.resolve"]] },
+    { key: "staff", label: "Personal", Icon: ShieldAlert, need: [PERMS["mpv.processes.resolve"]] },
     { key: "reports", label: "Reportes", Icon: BarChart3, need: [PERMS["mpv.reports.view"]] },
   ].filter(t => user ? hasAny(t.need) : false);
 
@@ -1901,6 +2241,11 @@ const MesaDePartesModule = () => {
         {tabs.some(t => t.key === "offices") && (
           <TabsContent value="offices" className="mt-0 focus-visible:outline-none">
             <TabWrap><OfficesSection /></TabWrap>
+          </TabsContent>
+        )}
+        {tabs.some(t => t.key === "staff") && (
+          <TabsContent value="staff" className="mt-0 focus-visible:outline-none">
+            <TabWrap><StaffSection /></TabWrap>
           </TabsContent>
         )}
         {tabs.some(t => t.key === "reports") && (

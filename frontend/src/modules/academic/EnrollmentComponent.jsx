@@ -25,7 +25,7 @@ import {
   Clock, Plus, Search as SearchIcon, FileText, Hash, User, Shield,
   ChevronDown, Lock, Unlock, AlertCircle, DollarSign, Calendar,
   Users, UserCheck, UserX, RefreshCw, ChevronLeft, ChevronRight,
-  BookOpenCheck, Download, RotateCcw,
+  BookOpenCheck, Download, RotateCcw, GraduationCap,
 } from "lucide-react";
 import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
 import EnrollmentPaymentGate from "./EnrollmentPaymentGate";
@@ -433,7 +433,11 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
                       {st.semester ? `${st.semester}°` : "—"}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {st.is_enrolled ? (
+                      {st.is_egresado ? (
+                        <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs">
+                          <GraduationCap className="h-3 w-3 mr-1" />Egresado
+                        </Badge>
+                      ) : st.is_enrolled ? (
                         <Badge className="bg-green-100 text-green-700 border border-green-200 text-xs">
                           <UserCheck className="h-3 w-3 mr-1" />Matriculado
                         </Badge>
@@ -449,31 +453,35 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          size="sm"
-                          variant={st.is_enrolled ? "outline" : "default"}
-                          className={`text-xs ${st.is_enrolled
-                              ? "border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600"
-                              : "bg-blue-600 hover:bg-blue-700"
-                            }`}
-                          onClick={() => onEnrollStudent(st.dni || st.num_documento, st)}
-                        >
-                          <BookOpenCheck className="h-3.5 w-3.5 mr-1" />
-                          {st.is_enrolled ? "Ver / editar" : "Matricular"}
-                        </Button>
-                        {st.is_enrolled && (
+                      {st.is_egresado ? (
+                        <span className="text-xs text-emerald-600 italic">Completó plan</span>
+                      ) : (
+                        <div className="flex items-center justify-end gap-1">
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="text-xs border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
-                            onClick={() => setResetTarget(st)}
-                            title="Reiniciar matrícula"
+                            variant={st.is_enrolled ? "outline" : "default"}
+                            className={`text-xs ${st.is_enrolled
+                                ? "border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600"
+                                : "bg-blue-600 hover:bg-blue-700"
+                              }`}
+                            onClick={() => onEnrollStudent(st.dni || st.num_documento, st)}
                           >
-                            <RotateCcw className="h-3.5 w-3.5" />
+                            <BookOpenCheck className="h-3.5 w-3.5 mr-1" />
+                            {st.is_enrolled ? "Ver / editar" : "Matricular"}
                           </Button>
-                        )}
-                      </div>
+                          {st.is_enrolled && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                              onClick={() => setResetTarget(st)}
+                              title="Reiniciar matrícula"
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -591,6 +599,7 @@ const EnrollmentComponent = () => {
   const [selectedCourses, setSelectedCourses] = useState([]);
   const [selectedSections, setSelectedSections] = useState({});
   const [validation, setValidation] = useState({ status: null, errors: [], warnings: [], suggestions: [] });
+  const [maxCredits, setMaxCredits] = useState(null);
   const [scheduleConflicts, setScheduleConflicts] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -621,6 +630,7 @@ const EnrollmentComponent = () => {
 
       setResolvedStudent(student);
       setCourses(Array.isArray(list) ? list : []);
+      if (data?.max_credits) setMaxCredits(data.max_credits);
       setIsEgresado(!!data?.is_egresado);
       setIsAlreadyEnrolled(!!data?.is_enrolled);
       setExistingEnrollmentId(data?.enrollment_id || null);
@@ -721,12 +731,14 @@ const EnrollmentComponent = () => {
     setScheduleConflicts([]);
     try {
       const { data } = await api.post("/academic/enrollments/validate", buildPayload());
+      if (data?.max_credits) setMaxCredits(data.max_credits);
       setValidation({ status: "success", errors: [], warnings: data?.warnings || [], suggestions: [] });
       toast.success("Validación exitosa. Puede proceder con la matrícula.");
     } catch (err) {
       const status = err?.response?.status;
       const result = err?.response?.data || {};
       if (status === 409) {
+        if (result.max_credits) setMaxCredits(result.max_credits);
         setValidation({ status: "conflict", errors: result.errors || [], warnings: result.warnings || [], suggestions: result.suggestions || [] });
         if (result.schedule_conflicts) setScheduleConflicts(result.schedule_conflicts);
         toast.error("Conflictos detectados en la matrícula");
@@ -758,7 +770,6 @@ const EnrollmentComponent = () => {
       setSuggestions([]);
 
       if (data?.enrollment_id) {
-        await generateEnrollmentCertificate(data.enrollment_id);
         await generateFichaMatricula(data.enrollment_id);
       }
 
@@ -793,19 +804,11 @@ const EnrollmentComponent = () => {
 
   const generateFichaMatricula = async (enrollmentId) => {
     try {
-      const token = localStorage.getItem("access") || localStorage.getItem("token") || "";
-      const base = window.__APP_CONFIG__?.BACKEND_URL || process.env.REACT_APP_BACKEND_URL || "https://sis.iesppallende.edu.pe";
-      const res = await fetch(
-        `${base.replace(/\/+$/, "")}/api/academic/enrollments/${enrollmentId}/ficha/pdf`,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const res = await api.get(
+        `/academic/enrollments/${enrollmentId}/ficha/pdf`,
+        { responseType: "blob" }
       );
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "");
-        console.error("Ficha PDF error:", res.status, errText);
-        toast.error(`Error descargando ficha: ${res.status}`);
-        return;
-      }
-      const blob = await res.blob();
+      const blob = new Blob([res.data], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -817,7 +820,7 @@ const EnrollmentComponent = () => {
       toast.success("Ficha de matrícula descargada");
     } catch (e) {
       console.error("Ficha matrícula error:", e);
-      toast.error("Error descargando ficha de matrícula");
+      toast.error(`Error descargando ficha: ${e?.response?.status || e.message}`);
     }
   };
 
@@ -877,7 +880,7 @@ const EnrollmentComponent = () => {
             <select
               value={academicPeriod}
               onChange={(e) => setAcademicPeriod(e.target.value)}
-              className="h-9 rounded-md border border-slate-200 bg-white px-3 pr-8 text-sm appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="h-9 w-28 rounded-md border border-slate-200 bg-white px-3 pr-8 text-sm appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {generatePeriodOptions().map((p) => (
                 <option key={p} value={p}>{p}</option>
@@ -1306,7 +1309,7 @@ const EnrollmentComponent = () => {
               <CardHeader className="pb-3 border-b border-green-100">
                 <CardTitle className="text-base text-green-800 flex items-center gap-2">
                   <Check className="h-5 w-5 p-1 bg-green-200 rounded-full text-green-700" />
-                  Cursos Seleccionados ({selectedCourses.length}) · {totalCredits} créditos
+                  Cursos Seleccionados ({selectedCourses.length}) · {totalCredits} créditos{maxCredits ? ` / ${maxCredits} máx.` : ""}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4">

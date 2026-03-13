@@ -124,7 +124,7 @@ const SideNav = () => {
       items: [
         {
           id: "security", title: "Seguridad", path: "/dashboard/security", icon: ShieldCheck,
-          show: canAny(PERMS["security.policies.manage"], PERMS["security.sessions.inspect"], PERMS["admin.audit.view"], PERMS["admin.audit.export"]),
+          show: !!user,
         },
         {
           id: "admin", title: "Administración", path: "/dashboard/admin", icon: Settings,

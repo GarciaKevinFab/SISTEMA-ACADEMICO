@@ -22,9 +22,10 @@ import {
 import {
     CalendarDays, Users, FileSpreadsheet, Plus, AlertCircle, Save, Trash2,
     Edit3, UserPlus, Mail, Phone, CreditCard, Loader2, UploadCloud, Download,
-    KeyRound, GraduationCap, ChevronDown,
+    KeyRound, GraduationCap, ChevronDown, Search, BookOpen,
 } from "lucide-react";
 import { Periods, Teachers, Imports, Credentials } from "@/services/catalogs.service";
+import { StudentsService } from "@/services/students.service";
 
 /* ─── inject styles (reusa clases cfg-*) ─── */
 export function InjectCatalogStyles() {
@@ -240,7 +241,7 @@ export const PeriodsSection = () => {
                                             <SelectContent>
                                                 <SelectItem value="I">Semestre I</SelectItem>
                                                 <SelectItem value="II">Semestre II</SelectItem>
-                                                <SelectItem value="III">Verano / III</SelectItem>
+                                                <SelectItem value="0">Verano</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </Field>
@@ -290,7 +291,7 @@ export const PeriodsSection = () => {
                                 {rows.map((r) => (
                                     <tr key={r.id} className="cfg-tr">
                                         <td className="cfg-td"><span className="font-800 text-slate-800">{r.code}</span></td>
-                                        <td className="cfg-td text-slate-500">{r.year} <span className="text-slate-300 mx-1">·</span> Sem. {r.term}</td>
+                                        <td className="cfg-td text-slate-500">{r.year} <span className="text-slate-300 mx-1">·</span> {r.term === "0" ? "Verano" : `Sem. ${r.term}`}</td>
                                         <td className="cfg-td">
                                             <div className="text-xs text-slate-500 leading-relaxed">
                                                 <span className="font-600 text-slate-600">{r.start_date || "—"}</span>
@@ -350,8 +351,6 @@ export const TeachersSection = () => {
     const [editing, setEditing] = useState(null);
     const [search, setSearch] = useState("");
     const [form, setForm] = useState(INITIAL_TEACHER_FORM);
-    const [credRole, setCredRole] = useState(null); // "TEACHER" | "STUDENT" | null
-    const [downloadingCred, setDownloadingCred] = useState(false);
 
     const resetForm = () => { setForm(INITIAL_TEACHER_FORM); setEditing(null); };
 
@@ -374,19 +373,6 @@ export const TeachersSection = () => {
 
     const remove = async (id) => { try { await Teachers.remove(id); toast.success("Docente eliminado"); load(); } catch (e) { toast.error(formatApiError(e)); } };
 
-    const confirmDownloadCred = async () => {
-        if (!credRole) return;
-        setDownloadingCred(true);
-        const label = credRole === "TEACHER" ? "docentes" : "estudiantes";
-        try {
-            const res = await Credentials.downloadBulk(credRole);
-            const cd = res.headers?.["content-disposition"];
-            const filename = filenameFromContentDisposition(cd, `credenciales_${credRole.toLowerCase()}.xlsx`);
-            saveBlobAsFile(new Blob([res.data], { type: res.headers?.["content-type"] || "application/octet-stream" }), filename);
-            toast.success(`Credenciales de ${label} descargadas`);
-        } catch (e) { toast.error(formatApiError(e, "No se pudo descargar")); }
-        finally { setDownloadingCred(false); setCredRole(null); }
-    };
 
     const filtered = useMemo(() => {
         if (!search.trim()) return rows;
@@ -401,21 +387,6 @@ export const TeachersSection = () => {
             icon={Users} title="Directorio de Docentes" desc="Registro de profesores e información de contacto"
             action={
                 <div className="flex items-center gap-2">
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="h-9 px-3 rounded-xl border-slate-200 text-sm gap-1.5">
-                            <KeyRound className="w-4 h-4" /> Credenciales <ChevronDown className="w-3.5 h-3.5 ml-0.5 opacity-60" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56 rounded-xl">
-                        <DropdownMenuItem onClick={() => setCredRole("TEACHER")} className="flex items-center gap-2.5 text-sm rounded-lg cursor-pointer">
-                            <Users className="w-4 h-4 text-blue-600" /> Credenciales Docentes
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setCredRole("STUDENT")} className="flex items-center gap-2.5 text-sm rounded-lg cursor-pointer">
-                            <GraduationCap className="w-4 h-4 text-green-600" /> Credenciales Estudiantes
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
                 <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
                     <DialogTrigger asChild>
                         <Button className="h-9 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-700 gap-1.5 shadow-sm">
@@ -472,28 +443,6 @@ export const TeachersSection = () => {
                 </div>
             }
         >
-            {/* AlertDialog para confirmar descarga de credenciales (docentes o estudiantes) */}
-            <AlertDialog open={!!credRole} onOpenChange={(v) => { if (!v) setCredRole(null); }}>
-                <AlertDialogContent className="rounded-2xl max-w-sm">
-                    <AlertDialogHeader>
-                        <AlertDialogTitle className="flex items-center gap-2 text-slate-800">
-                            <KeyRound className="w-5 h-5 text-blue-600" /> Descargar credenciales
-                        </AlertDialogTitle>
-                        <AlertDialogDescription className="text-slate-500 text-sm">
-                            Se regenerarán <strong>TODAS</strong> las contraseñas de los {credRole === "TEACHER" ? "docentes" : "estudiantes"}.
-                            Las contraseñas anteriores dejarán de funcionar. ¿Continuar?
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter className="gap-2 sm:gap-2">
-                        <AlertDialogCancel disabled={downloadingCred} className="rounded-xl">Cancelar</AlertDialogCancel>
-                        <Button onClick={confirmDownloadCred} disabled={downloadingCred}
-                            className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
-                            {downloadingCred ? <><Loader2 className="w-4 h-4 animate-spin" /> Descargando…</> : <><Download className="w-4 h-4" /> Sí, descargar</>}
-                        </Button>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
             <div className="mb-4 relative w-full sm:w-72">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -583,6 +532,164 @@ export const TeachersSection = () => {
 };
 
 // ===============================================================
+// Credenciales (Docentes / Estudiantes)
+// ===============================================================
+export const CredentialsSection = () => {
+    const [credRole, setCredRole] = useState(null);
+    const [downloading, setDownloading] = useState(false);
+    const [students, setStudents] = useState([]);
+    const [loadingStudents, setLoadingStudents] = useState(false);
+    const [search, setSearch] = useState("");
+
+    useEffect(() => {
+        setLoadingStudents(true);
+        StudentsService.list().then(r => setStudents(r.students || []))
+            .catch(() => {})
+            .finally(() => setLoadingStudents(false));
+    }, []);
+
+    const filtered = useMemo(() => {
+        if (!search.trim()) return students;
+        const q = search.toLowerCase();
+        return students.filter(s =>
+            (s.numDocumento || "").toLowerCase().includes(q) ||
+            (s.nombres || "").toLowerCase().includes(q) ||
+            (s.apellidoPaterno || "").toLowerCase().includes(q) ||
+            (s.apellidoMaterno || "").toLowerCase().includes(q) ||
+            (s.semestreLabel || "").toLowerCase().includes(q)
+        );
+    }, [students, search]);
+
+    const doDownload = async (role) => {
+        setDownloading(true);
+        const label = role === "TEACHER" ? "docentes" : "estudiantes";
+        try {
+            const res = await Credentials.downloadBulk(role);
+            const cd = res.headers?.["content-disposition"];
+            const filename = filenameFromContentDisposition(cd, `credenciales_${role.toLowerCase()}.xlsx`);
+            saveBlobAsFile(new Blob([res.data], { type: res.headers?.["content-type"] || "application/octet-stream" }), filename);
+            toast.success(`Credenciales de ${label} descargadas`);
+        } catch (e) { toast.error(formatApiError(e, "No se pudo descargar")); }
+        finally { setDownloading(false); setCredRole(null); }
+    };
+
+    return (
+        <SectionCard icon={KeyRound} title="Credenciales de Acceso" desc="Genera y descarga credenciales masivas para docentes y estudiantes">
+            <AlertDialog open={!!credRole} onOpenChange={(v) => { if (!v) setCredRole(null); }}>
+                <AlertDialogContent className="rounded-2xl max-w-sm">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2 text-slate-800">
+                            <KeyRound className="w-5 h-5 text-blue-600" /> Descargar credenciales
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-500 text-sm">
+                            Se regenerarán <strong>TODAS</strong> las contraseñas de los {credRole === "TEACHER" ? "docentes" : "estudiantes"}.
+                            Las contraseñas anteriores dejarán de funcionar. ¿Continuar?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="gap-2 sm:gap-2">
+                        <AlertDialogCancel disabled={downloading} className="rounded-xl">Cancelar</AlertDialogCancel>
+                        <Button onClick={() => doDownload(credRole)} disabled={downloading}
+                            className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
+                            {downloading ? <><Loader2 className="w-4 h-4 animate-spin" /> Descargando…</> : <><Download className="w-4 h-4" /> Sí, descargar</>}
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Botones de descarga */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                <div className="flex flex-col items-center gap-3 p-6 border border-slate-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/30 transition-all cursor-pointer"
+                    onClick={() => setCredRole("TEACHER")}>
+                    <div className="w-12 h-12 rounded-2xl bg-blue-100 flex items-center justify-center">
+                        <Users className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div className="text-center">
+                        <p className="text-sm font-700 text-slate-800">Credenciales Docentes</p>
+                        <p className="text-xs text-slate-500 mt-1">Genera archivo Excel con usuarios y contraseñas de todos los docentes</p>
+                    </div>
+                    <Button variant="outline" className="h-8 text-xs rounded-lg gap-1.5 border-blue-200 text-blue-600 hover:bg-blue-50">
+                        <Download className="w-3.5 h-3.5" /> Descargar
+                    </Button>
+                </div>
+                <div className="flex flex-col items-center gap-3 p-6 border border-slate-200 rounded-xl hover:border-green-300 hover:bg-green-50/30 transition-all cursor-pointer"
+                    onClick={() => setCredRole("STUDENT")}>
+                    <div className="w-12 h-12 rounded-2xl bg-green-100 flex items-center justify-center">
+                        <GraduationCap className="w-6 h-6 text-green-600" />
+                    </div>
+                    <div className="text-center">
+                        <p className="text-sm font-700 text-slate-800">Credenciales Estudiantes</p>
+                        <p className="text-xs text-slate-500 mt-1">Genera archivo Excel con usuarios y contraseñas de todos los estudiantes</p>
+                    </div>
+                    <Button variant="outline" className="h-8 text-xs rounded-lg gap-1.5 border-green-200 text-green-600 hover:bg-green-50">
+                        <Download className="w-3.5 h-3.5" /> Descargar
+                    </Button>
+                </div>
+            </div>
+
+            {/* Tabla de estudiantes con semestre */}
+            <div className="border-t border-slate-100 pt-4">
+                <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                    <div className="flex items-center gap-2">
+                        <BookOpen className="w-4 h-4 text-green-600" />
+                        <p className="text-sm font-700 text-slate-700">Estudiantes — Semestre Actual</p>
+                        <span className="text-xs text-slate-400">({filtered.length})</span>
+                    </div>
+                    <div className="relative w-64">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <Input placeholder="Buscar estudiante…" value={search} onChange={e => setSearch(e.target.value)}
+                            className="pl-9 h-8 text-xs rounded-lg" />
+                    </div>
+                </div>
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                        <table className="cfg-table w-full">
+                            <thead className="sticky top-0 z-10">
+                                <tr>
+                                    <th className="cfg-th">Documento</th>
+                                    <th className="cfg-th">Nombre Completo</th>
+                                    <th className="cfg-th">Carrera</th>
+                                    <th className="cfg-th text-center">Semestre / Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {loadingStudents ? (
+                                    <tr><td colSpan={4} className="text-center py-10">
+                                        <Loader2 className="w-5 h-5 animate-spin mx-auto text-slate-400" />
+                                    </td></tr>
+                                ) : filtered.length > 0 ? filtered.map(s => (
+                                    <tr key={s.id} className="cfg-tr">
+                                        <td className="cfg-td font-mono text-xs">{s.numDocumento}</td>
+                                        <td className="cfg-td">{`${s.apellidoPaterno || ""} ${s.apellidoMaterno || ""} ${s.nombres || ""}`.trim()}</td>
+                                        <td className="cfg-td text-xs text-slate-500">{s.programaCarrera || "—"}</td>
+                                        <td className="cfg-td text-center">
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-600 ${
+                                                s.semestreLabel === "Egresado"
+                                                    ? "bg-emerald-100 text-emerald-700"
+                                                    : s.semestreLabel === "—"
+                                                        ? "bg-slate-100 text-slate-500"
+                                                        : "bg-blue-100 text-blue-700"
+                                            }`}>
+                                                {s.semestreLabel || "—"}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                )) : (
+                                    <tr><td colSpan={4}>
+                                        <EmptyState icon={GraduationCap}
+                                            title={search ? "Sin resultados" : "Sin estudiantes registrados"}
+                                            subtitle={search ? "Prueba con otro término" : ""} />
+                                    </td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </SectionCard>
+    );
+};
+
+// ===============================================================
 // Importadores Excel / CSV
 // ===============================================================
 const IMPORT_JOB_STORAGE_KEY = "acad_import_job";
@@ -606,7 +713,8 @@ export const ImportersSection = () => {
         if (type === "students") return "Usa la plantilla de alumnos. Campos obligatorios: Num Documento, Nombres. Verifica Periodo (ej. 2026-I) y ubigeo.";
         if (type === "grades") return "Antes de importar notas: los alumnos deben existir. Verifica Periodo (ej. 2026-I) y que el documento exista.";
         if (type === "plans") return "El plan debe ser .xlsx y mantener el formato (AREAS/ASIGNATURAS, CRED.). Una hoja por carrera.";
-        if (type === "traslados") return "Excel con datos del alumno + notas históricas. Cada fila = 1 nota. Un alumno puede tener múltiples filas (una por curso/período).";
+        if (type === "traslados") return "Excel con datos del alumno trasladado + notas históricas. Cada fila = 1 nota. Un alumno puede tener múltiples filas (una por curso/período).";
+        if (type === "verano") return "Importar notas del período de verano/subsanación. Formato similar a notas históricas con Periodo de verano (ej. 2026-0).";
         return "Usa la plantilla oficial para evitar errores.";
     }, [type]);
 
@@ -719,6 +827,7 @@ export const ImportersSection = () => {
                             <SelectItem value="students">Alumnos</SelectItem>
                             <SelectItem value="grades">Notas históricas</SelectItem>
                             <SelectItem value="traslados">Traslados</SelectItem>
+                            <SelectItem value="verano">Verano / Subsanación</SelectItem>
                         </SelectContent>
                     </Select>
                 </Field>

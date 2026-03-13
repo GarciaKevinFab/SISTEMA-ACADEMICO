@@ -12,7 +12,7 @@ import { Badge } from "../../components/ui/badge";
 import { Input } from "../../components/ui/input";
 import {
     CheckCircle, XCircle, Clock, Eye, Search,
-    RefreshCw, FileText, Users,
+    RefreshCw, FileText, Users, Paperclip,
     DollarSign, AlertTriangle, Image, Trash2, X,
     ZoomIn, ZoomOut, Download,
 } from "lucide-react";
@@ -365,10 +365,15 @@ export default function AdmissionPaymentsReview() {
                             </div>
                         </div>
                         <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-gray-100">
-                            {previewPayment.voucher_url?.endsWith(".pdf") ? (
+                            {!previewPayment.voucher_url ? (
+                                <div className="text-center text-gray-500 py-8">
+                                    <Paperclip className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                                    <p className="font-medium">Sin voucher adjunto</p>
+                                </div>
+                            ) : /\.pdf(\?|$)/i.test(previewPayment.voucher_url) ? (
                                 <iframe
                                     src={previewPayment.voucher_url}
-                                    className="w-full h-[70vh] rounded border"
+                                    className="w-full h-[70vh] rounded border bg-white"
                                     title="Voucher PDF"
                                 />
                             ) : (
@@ -377,6 +382,11 @@ export default function AdmissionPaymentsReview() {
                                     alt="Voucher"
                                     className="max-w-full rounded shadow transition-transform"
                                     style={{ transform: `scale(${previewZoom})` }}
+                                    onError={(e) => {
+                                        e.target.style.display = "none";
+                                        e.target.parentNode.innerHTML =
+                                            '<div class="text-center text-gray-500 py-8"><p class="font-medium">No se pudo cargar la imagen</p><p class="text-sm mt-1">Intenta abrir el enlace en otra pestaña.</p></div>';
+                                    }}
                                 />
                             )}
                         </div>

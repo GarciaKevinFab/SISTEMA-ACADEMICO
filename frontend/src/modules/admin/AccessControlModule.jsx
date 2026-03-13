@@ -18,8 +18,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/ta
 import { Separator } from "../../components/ui/separator";
 
 import {
-  Users, Shield, Plus, Edit, Trash2, KeyRound, Search, RefreshCw,
-  Check, AlertTriangle, Database, ChevronLeft, ChevronRight,
+  Users, Shield, Plus, Edit, Edit3, Trash2, KeyRound, Search, RefreshCw,
+  Check, AlertTriangle, AlertCircle, Database, ChevronLeft, ChevronRight,
   Loader2, Lock, UserCheck, UserX, Eye, ShieldCheck, ClipboardList,
 } from "lucide-react";
 
@@ -30,6 +30,31 @@ import AuditTab from "./AuditTab";
 import { useAuth } from "../../context/AuthContext";
 import { PERMS } from "../../auth/permissions";
 import ConfigCatalogsModule from "./ConfigCatalogsModule";
+import {
+  AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogCancel, AlertDialogAction,
+} from "../../components/ui/alert-dialog";
+
+const DeleteConfirm = ({ trigger, title, description, onConfirm }) => (
+  <AlertDialog>
+    <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
+    <AlertDialogContent className="max-w-[92vw] sm:max-w-md rounded-2xl">
+      <AlertDialogHeader>
+        <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+          <AlertCircle className="h-5 w-5" />{title}
+        </AlertDialogTitle>
+        <AlertDialogDescription className="text-slate-600">{description}</AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter className="flex-col sm:flex-row gap-2 mt-4">
+        <AlertDialogCancel className="w-full sm:w-auto rounded-xl border-slate-200">Cancelar</AlertDialogCancel>
+        <AlertDialogAction className="w-full sm:w-auto bg-red-600 hover:bg-red-700 rounded-xl" onClick={onConfirm}>
+          Sí, eliminar
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
+);
 
 /* ─────────────────────────── ESTILOS ─────────────────────────── */
 const adminStyles = `
@@ -434,8 +459,10 @@ const AccessControlModule = () => {
 };
 
 /* ═══════════════════════════ USUARIOS TAB ═══════════════════════════ */
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
 const UsersTab = () => {
-  const PAGE_SIZE = 10;
+  const [pageSize, setPageSize] = useState(10);
 
   const [list, setList] = useState([]);
   const [q, setQ] = useState("");
@@ -519,13 +546,13 @@ const UsersTab = () => {
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await UsersService.list({ page, page_size: PAGE_SIZE, ...(debouncedQ ? { q: debouncedQ } : {}) });
+      const data = await UsersService.list({ page, page_size: pageSize, ...(debouncedQ ? { q: debouncedQ } : {}) });
       const norm = normalizeUsers(data);
       setList(norm.items); setCount(norm.count);
     } catch {
       toast.error("Error al cargar usuarios"); setList([]); setCount(0);
     } finally { setLoading(false); }
-  }, [debouncedQ, page]);
+  }, [debouncedQ, page, pageSize]);
 
   const fetchRoles = useCallback(async () => {
     try {
@@ -648,11 +675,11 @@ const UsersTab = () => {
     setConfirm((s) => ({ ...s, open: false }));
   };
 
-  const totalPages = useMemo(() => Math.max(1, Math.ceil((count || 0) / PAGE_SIZE)), [count]);
+  const totalPages = useMemo(() => Math.max(1, Math.ceil((count || 0) / pageSize)), [count, pageSize]);
   const canPrev = page > 1;
   const canNext = page < totalPages;
-  const from = count === 0 ? 0 : PAGE_SIZE * (page - 1) + 1;
-  const to = Math.min(PAGE_SIZE * page, count);
+  const from = count === 0 ? 0 : pageSize * (page - 1) + 1;
+  const to = Math.min(pageSize * page, count);
 
   const activosPage = list.filter((u) => u.is_active).length;
   const inactivosPage = list.length - activosPage;
@@ -950,9 +977,23 @@ const UsersTab = () => {
 
         {/* Paginación */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-1">
-          <p className="text-xs text-slate-400">
-            Mostrando <span className="font-700 text-slate-600">{from}–{to}</span> de <span className="font-700 text-slate-600">{count}</span> usuarios
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-slate-400">
+              Mostrando <span className="font-700 text-slate-600">{from}–{to}</span> de <span className="font-700 text-slate-600">{count}</span> usuarios
+            </p>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-slate-400">|</span>
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                className="h-7 text-xs border border-slate-200 rounded-md px-1.5 bg-white text-slate-600 cursor-pointer hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                {PAGE_SIZE_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{s} por página</option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="h-8 text-xs gap-1 rounded-lg"
               onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={!canPrev || loading}>
@@ -1239,10 +1280,15 @@ function PurgeDialog({ open, onClose, purgeMode, purgeRole, selectedCount, purge
 
 /* ═══════════════════════════ ROLES TAB ═══════════════════════════ */
 const RolesTab = () => {
+  const { roles: userRoles } = useAuth();
+  const isSystemAdmin = (userRoles || []).some((r) => (typeof r === "string" ? r : r?.name || "").toUpperCase() === "ADMIN_SYSTEM");
   const [roles, setRoles] = useState([]);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: "", description: "" });
   const [loading, setLoading] = useState(true);
+
+  const resetForm = () => { setForm({ name: "", description: "" }); setEditing(null); };
 
   const fetch = async () => {
     try {
@@ -1257,10 +1303,23 @@ const RolesTab = () => {
   const create = async (e) => {
     e.preventDefault();
     try {
-      await ACLService.createRole(form);
-      toast.success("Rol creado");
-      setOpen(false); setForm({ name: "", description: "" }); fetch();
-    } catch { toast.error("No se pudo crear el rol"); }
+      if (editing) {
+        await ACLService.updateRole(editing.id || editing.name, { description: form.description });
+        toast.success("Rol actualizado");
+      } else {
+        await ACLService.createRole(form);
+        toast.success("Rol creado");
+      }
+      setOpen(false); resetForm(); fetch();
+    } catch { toast.error(editing ? "No se pudo actualizar el rol" : "No se pudo crear el rol"); }
+  };
+
+  const remove = async (role) => {
+    try {
+      await ACLService.deleteRole(role.id || role.name);
+      toast.success("Rol eliminado");
+      fetch();
+    } catch { toast.error("No se pudo eliminar el rol"); }
   };
 
   return (
@@ -1268,39 +1327,41 @@ const RolesTab = () => {
       <CardHeader className="pb-4 border-b border-slate-50">
         <div className="flex items-center justify-between gap-3">
           <SectionHeader title="Roles del sistema" description="Define perfiles y sus propósitos" Icon={Shield} accent="violet" />
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="h-9 text-xs gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white shrink-0">
-                <Plus size={13} /> Nuevo rol
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md rounded-2xl bg-white border border-slate-100">
-              <DialogHeader>
-                <DialogTitle className="text-base font-700">Crear rol</DialogTitle>
-                <DialogDescription className="text-xs">Define el nombre técnico y descripción del rol</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={create} className="space-y-3 pt-1">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-600">Nombre técnico (ID) *</Label>
-                  <Input className="h-9 text-sm rounded-lg font-mono" value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })} required
-                    placeholder="ADMIN, TEACHER, STUDENT..." />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-600">Descripción</Label>
-                  <Input className="h-9 text-sm rounded-lg" value={form.description}
-                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    placeholder="Describe las responsabilidades del rol" />
-                </div>
-                <div className="flex justify-end gap-2 pt-1">
-                  <Button type="button" variant="outline" size="sm" className="h-8 text-xs rounded-lg" onClick={() => setOpen(false)}>Cancelar</Button>
-                  <Button type="submit" size="sm" className="h-8 text-xs gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white">
-                    <Check size={12} /> Crear rol
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+          {isSystemAdmin && (
+            <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="h-9 text-xs gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white shrink-0">
+                  <Plus size={13} /> Nuevo rol
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md rounded-2xl bg-white border border-slate-100">
+                <DialogHeader>
+                  <DialogTitle className="text-base font-700">{editing ? "Editar rol" : "Crear rol"}</DialogTitle>
+                  <DialogDescription className="text-xs">{editing ? `Editando: ${editing.name}` : "Define el nombre técnico y descripción del rol"}</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={create} className="space-y-3 pt-1">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-600">Nombre técnico (ID) *</Label>
+                    <Input className="h-9 text-sm rounded-lg font-mono" value={form.name}
+                      onChange={(e) => setForm({ ...form, name: e.target.value })} required
+                      placeholder="ADMIN, TEACHER, STUDENT..." disabled={!!editing} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-600">Descripción</Label>
+                    <Input className="h-9 text-sm rounded-lg" value={form.description}
+                      onChange={(e) => setForm({ ...form, description: e.target.value })}
+                      placeholder="Describe las responsabilidades del rol" />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-1">
+                    <Button type="button" variant="outline" size="sm" className="h-8 text-xs rounded-lg" onClick={() => setOpen(false)}>Cancelar</Button>
+                    <Button type="submit" size="sm" className="h-8 text-xs gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white">
+                      <Check size={12} /> {editing ? "Guardar" : "Crear rol"}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </CardHeader>
 
@@ -1311,12 +1372,13 @@ const RolesTab = () => {
               <tr>
                 <th className="px-4 py-2.5 text-left text-[10px] font-700 uppercase tracking-wide text-slate-500">Rol</th>
                 <th className="px-4 py-2.5 text-left text-[10px] font-700 uppercase tracking-wide text-slate-500">Descripción</th>
+                {isSystemAdmin && <th className="px-4 py-2.5 text-right text-[10px] font-700 uppercase tracking-wide text-slate-500">Acciones</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 bg-white">
-              {loading && <TableSkeleton cols={2} rows={8} />}
+              {loading && <TableSkeleton cols={isSystemAdmin ? 3 : 2} rows={8} />}
               {!loading && roles.length === 0 && (
-                <EmptyState icon={Shield} title="Sin roles" description="Crea el primer rol del sistema" colSpan={2} />
+                <EmptyState icon={Shield} title="Sin roles" description="Crea el primer rol del sistema" colSpan={isSystemAdmin ? 3 : 2} />
               )}
               {!loading && roles.map((r) => (
                 <tr key={r.id || r.name} className="user-row">
@@ -1332,6 +1394,23 @@ const RolesTab = () => {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-600">{r.description || <span className="text-slate-300">—</span>}</td>
+                  {isSystemAdmin && (
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button size="icon" variant="ghost"
+                          className="h-7 w-7 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                          onClick={() => { setEditing(r); setForm({ name: r.name, description: r.description || "" }); setOpen(true); }}>
+                          <Edit3 size={13} />
+                        </Button>
+                        <DeleteConfirm
+                          trigger={<Button size="icon" variant="ghost" className="h-7 w-7 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50"><Trash2 size={13} /></Button>}
+                          title="¿Eliminar rol?"
+                          description={<>Se eliminará permanentemente el rol <strong>{r.name}</strong>. Los usuarios con este rol perderán sus permisos asociados.</>}
+                          onConfirm={() => remove(r)}
+                        />
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

@@ -54,7 +54,7 @@ def _generate_password(length=8):
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
-def _payment_to_dict(payment):
+def _payment_to_dict(payment, request=None):
     """Serializa un Payment con datos enriquecidos del postulante"""
     app = payment.application
     applicant = app.applicant if app else None
@@ -62,7 +62,11 @@ def _payment_to_dict(payment):
     voucher_url = None
     if payment.voucher:
         try:
-            voucher_url = payment.voucher.url
+            url = payment.voucher.url
+            if request:
+                voucher_url = request.build_absolute_uri(url)
+            else:
+                voucher_url = url
         except Exception:
             pass
 
@@ -140,7 +144,7 @@ def payments_list(request):
             | Q(nro_secuencia__icontains=search)
         )
 
-    payments = [_payment_to_dict(p) for p in qs]
+    payments = [_payment_to_dict(p, request) for p in qs]
 
     # Resumen de totales por estado
     from django.db.models import Count

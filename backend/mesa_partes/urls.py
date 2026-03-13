@@ -8,13 +8,14 @@ from .views import (
     dashboard_stats,
     procedures_summary, procedures_report_sla, procedures_report_volume,
     public_create, public_upload_file, public_track,
-    public_procedure_types,  # ✅ NUEVO
-    my_procedures
+    public_procedure_types,
+    my_procedures,
+    mp_staff_view, mp_staff_detail,
 )
 
 router = DefaultRouter(trailing_slash=False)
 router.register(r"offices", OfficeView, basename="office")
-router.register(r"users", UsersCatalogView, basename="users")
+router.register(r"mp-users", UsersCatalogView, basename="mp-users")
 router.register(r"procedure-types", ProcedureTypeViewSet, basename="ptype")
 router.register(r"procedures", ProcedureViewSet, basename="procedure")
 
@@ -26,6 +27,10 @@ urlpatterns = [
     re_path(r"^dashboard/stats/?$", dashboard_stats, name="dashboard-stats"),
     # Mis trámites (dashboard estudiante)
     path("my", my_procedures),
+
+    # Personal de Mesa de Partes
+    re_path(r"^staff/?$", mp_staff_view, name="mp-staff"),
+    re_path(r"^staff/(?P<pk>\d+)/?$", mp_staff_detail, name="mp-staff-detail"),
 
     # Reportes (acepta / y sin /)
     re_path(r"^procedures/reports/summary/?$", procedures_summary, name="proc-summary"),
