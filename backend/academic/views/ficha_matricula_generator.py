@@ -127,7 +127,7 @@ def _build_html(
     cod_digits = list(cod_modular.ljust(7))
     cod_cells = "".join(f'<td class="cod-cell">{d}</td>' for d in cod_digits)
 
-    # ── Logo y firmas ──
+    # ── Logo, foto y firmas ──
     try:
         from django.conf import settings
         media_root = settings.MEDIA_ROOT
@@ -140,6 +140,11 @@ def _build_html(
         f'<img src="{logo_src}" alt="Logo" class="logo">'
         if logo_src else ""
     )
+
+    # Foto del estudiante
+    photo_url = student.get("photo_url", "")
+    photo_path = _resolve_logo_path(photo_url, media_root) if photo_url else ""
+    photo_src = _logo_base64(photo_path) if photo_path else ""
 
     # Firmas del director y secretario
     dir_sig_src = _resolve_signature(inst.get("signature_url", ""), media_root)
@@ -469,6 +474,22 @@ def _build_html(
     font-size: 8pt;
   }}
 
+  /* ══ FOTO ESTUDIANTE ══ */
+  .student-photo {{
+    width: 2.2cm;
+    height: 2.8cm;
+    object-fit: cover;
+    border: 1.5px solid #c5ccd6;
+    border-radius: 3px;
+  }}
+  .photo-cell {{
+    width: 2.6cm;
+    text-align: center;
+    vertical-align: middle;
+    border: 1px solid #c5ccd6;
+    padding: 4px;
+  }}
+
   /* ══ FIRMAS ══ */
   .firmas {{
     width: 100%;
@@ -483,8 +504,8 @@ def _build_html(
     width: 33.3%;
   }}
   .firma-img {{
-    max-width: 90px;
-    max-height: 45px;
+    max-width: 120px;
+    max-height: 60px;
     object-fit: contain;
     margin-bottom: 2px;
   }}
@@ -577,10 +598,11 @@ def _build_html(
 <!-- ═══ BLOQUE 2: PROGRAMA, RESOLUCIÓN, ALUMNO ═══ -->
 <table class="student-table">
   <tr>
-    <td class="lbl" style="width:22%">Programa de Estudios</td>
-    <td class="val-bold" style="width:32%">{carrera.upper() if carrera else ""}</td>
-    <td class="lbl" style="width:18%; text-align:center">Per&iacute;odo Acad&eacute;mico</td>
-    <td class="val-bold" style="width:28%; text-align:center">{period}</td>
+    <td class="lbl" style="width:20%">Programa de Estudios</td>
+    <td class="val-bold" style="width:30%">{carrera.upper() if carrera else ""}</td>
+    <td class="lbl" style="width:16%; text-align:center">Per&iacute;odo Acad&eacute;mico</td>
+    <td class="val-bold" style="text-align:center">{period}</td>
+    {f'<td class="photo-cell" rowspan="3"><img src="{photo_src}" class="student-photo" alt="Foto"></td>' if photo_src else '<td class="photo-cell" rowspan="3" style="color:#aaa; font-size:7pt;">Sin foto</td>'}
   </tr>
   <tr>
     <td class="lbl">Resoluci&oacute;n de Autorizaci&oacute;n</td>
@@ -638,7 +660,7 @@ def _build_html(
 
 <!-- ═══ BLOQUE 5: FIRMAS ═══ -->
 <table class="firmas">
-  <tr style="height:45px;">
+  <tr style="height:65px;">
     <td>{dir_sig_html}</td>
     <td>{sec_sig_html}</td>
     <td></td>
@@ -948,6 +970,21 @@ def generate_ficha_matricula_reportlab(
     for i, (l1, v1, l2, v2) in enumerate(stu_rows):
         _draw_inst_row(y_stu - i * row_h, l1, v1, l2, v2, i % 2 == 0)
 
+    # ── Foto del estudiante ──
+    photo_path = _resolve_img(student.get("photo_url", ""))
+    if photo_path:
+        photo_w, photo_h = 2.0 * cm, 2.5 * cm
+        photo_x = pw - margin - photo_w - 0.1 * cm
+        photo_y = y_stu - len(stu_rows) * row_h + 0.05 * cm
+        try:
+            c.setStrokeColor(GRIS_BORDE)
+            c.setLineWidth(0.5)
+            c.rect(photo_x - 2, photo_y - 2, photo_w + 4, photo_h + 4, fill=False)
+            c.drawImage(photo_path, photo_x, photo_y, width=photo_w, height=photo_h,
+                        preserveAspectRatio=True, mask="auto")
+        except Exception as exc:
+            logger.warning(f"Error dibujando foto estudiante: {exc}")
+
     # ═══════════════════════════════════════════════════════════
     # TABLA DE CURSOS
     # ═══════════════════════════════════════════════════════════
@@ -1149,9 +1186,9 @@ def generate_ficha_matricula_reportlab(
     # ═══════════════════════════════════════════════════════════
     # FIRMAS  (con imagen de firma/sello si existe)
     # ═══════════════════════════════════════════════════════════
-    y_firma = y_qr_section - qr_block_h - 1.6 * cm
+    y_firma = y_qr_section - qr_block_h - 2.0 * cm
     firma_w = content_w / 3
-    sig_w, sig_h = 2.5 * cm, 1.2 * cm
+    sig_w, sig_h = 3.2 * cm, 1.6 * cm
 
     # Director
     dir_sig = _resolve_img(inst.get("signature_url", ""))

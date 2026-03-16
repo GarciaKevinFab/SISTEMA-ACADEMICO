@@ -266,6 +266,12 @@ def _get_student(student_id):
         data["sexo"]   = getattr(st, "sexo", "") or ""
         data["email"]  = getattr(st, "email", "") or ""
 
+        # Foto del estudiante
+        if hasattr(st, "photo") and st.photo:
+            data["photo_url"] = st.photo.url
+        else:
+            data["photo_url"] = ""
+
         if hasattr(st, "plan") and st.plan:
             plan = st.plan
             data["plan_name"] = plan.name or ""
