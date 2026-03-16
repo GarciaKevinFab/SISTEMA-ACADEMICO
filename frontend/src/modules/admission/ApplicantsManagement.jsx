@@ -5,6 +5,7 @@
 //
 import React, { useEffect, useState, useMemo } from "react";
 import api from "../../lib/api";
+import { AdmissionModalities } from "../../services/admission.service";
 
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -238,6 +239,7 @@ export default function ApplicantsManagement() {
     const [deleteRow, setDeleteRow] = useState(null);
     const [deleting, setDeleting] = useState(false);
     const [page, setPage] = useState(1);
+    const [modalidades, setModalidades] = useState([]);
 
     const callName = (id) => calls.find(c => String(c.id) === String(id))?.name ?? `Conv. ${id ?? "—"}`;
     const careerName = (id) => careers.find(c => String(c.id) === String(id))?.name ?? `${id ?? "—"}`;
@@ -268,7 +270,12 @@ export default function ApplicantsManagement() {
         }
     };
 
-    useEffect(() => { fetchAll(); }, []);
+    useEffect(() => {
+        fetchAll();
+        AdmissionModalities.list().then(m => {
+            if (Array.isArray(m) && m.length) setModalidades(m);
+        }).catch(() => {});
+    }, []);
     useEffect(() => { setLoading(true); fetchAll(); }, [callFilter, careerFilter]);
 
     const submitCreate = async (e) => {
@@ -915,8 +922,19 @@ export default function ApplicantsManagement() {
                         <SectionHead label="Admisión" color="indigo" icon={GraduationCap} />
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <FormField label="Modalidad de Admisión">
-                                <Input className="h-10 rounded-xl"
-                                    value={editForm.modalidad_admision || ""} onChange={e => setEditForm(f => ({ ...f, modalidad_admision: e.target.value }))} />
+                                {modalidades.length > 0 ? (
+                                    <Select value={editForm.modalidad_admision || ""} onValueChange={v => setEditForm(f => ({ ...f, modalidad_admision: v }))}>
+                                        <SelectTrigger className="h-10 rounded-xl"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                        <SelectContent>
+                                            {modalidades.map(m => (
+                                                <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                ) : (
+                                    <Input className="h-10 rounded-xl"
+                                        value={editForm.modalidad_admision || ""} onChange={e => setEditForm(f => ({ ...f, modalidad_admision: e.target.value }))} />
+                                )}
                             </FormField>
                             <FormField label="Estado">
                                 <Select value={editForm.status || "CREATED"} onValueChange={v => setEditForm(f => ({ ...f, status: v }))}>

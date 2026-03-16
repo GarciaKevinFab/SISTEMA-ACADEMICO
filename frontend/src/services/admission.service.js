@@ -286,6 +286,16 @@ export const AdmissionReports = {
 };
 
 /* ------------------------------------------
+   Modalidades de admisión
+-------------------------------------------*/
+export const AdmissionModalities = {
+    list: async () => (await api.get("/admission/modalities")).data,
+    create: async (payload) => (await api.post("/admission/modalities", payload)).data,
+    update: async (id, payload) => (await api.put(`/admission/modalities/${id}`, payload)).data,
+    remove: async (id) => (await api.delete(`/admission/modalities/${id}`)).data,
+};
+
+/* ------------------------------------------
    Parámetros
 -------------------------------------------*/
 export const AdmissionParams = {

@@ -9,6 +9,19 @@ class AdmissionParam(models.Model):
     data = models.JSONField(default=dict)
 
 
+class AdmissionModality(models.Model):
+    """Modalidades de admisión configurables (Ingreso Ordinario, etc.)."""
+    name = models.CharField(max_length=120, unique=True)
+    active = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
 class AdmissionCall(models.Model):
     title = models.CharField(max_length=160)
     period = models.CharField(max_length=20, blank=True, default="")

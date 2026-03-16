@@ -98,6 +98,12 @@ urlpatterns = [
     path("reports/admission/vacants-vs.xlsx", v.reports_vacants_vs_xlsx),
 
     # ══════════════════════════════════════════════════════════
+    # Modalidades de admisión
+    # ══════════════════════════════════════════════════════════
+    path("admission/modalities", v.modalities_collection),
+    path("admission/modalities/<int:modality_id>", v.modality_detail),
+
+    # ══════════════════════════════════════════════════════════
     # Parámetros
     # ══════════════════════════════════════════════════════════
     path("admission/params", v.admission_params),

@@ -15,6 +15,7 @@ import {
   AdmissionCalls,
   AdmissionPublic,
   AdmissionParams as AdmissionParamsService,
+  AdmissionModalities,
 } from "../../services/admission.service";
 
 import { Card, CardContent } from "../../components/ui/card";
@@ -86,7 +87,8 @@ const CIVIL_STATUS = [
   { value: "VIUDO", label: "Viudo(a)" },
 ];
 
-const MODALIDAD_ADMISION = [
+// Fallback si la API no retorna modalidades
+const MODALIDAD_ADMISION_DEFAULT = [
   { value: "INGRESO ORDINARIO", label: "Ingreso Ordinario" },
   {
     value: "INGRESO POR PROGRAMAS DE PREPARACION",
@@ -225,6 +227,9 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
   const [voucherFile, setVoucherFile] = useState(null);
   const [admissionParams, setAdmissionParams] = useState(null);
 
+  // Modalidades dinámicas
+  const [modalidades, setModalidades] = useState(MODALIDAD_ADMISION_DEFAULT);
+
   // Step 7 (resultado)
   const [result, setResult] = useState(null);
 
@@ -258,6 +263,13 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
         try {
           const params = await AdmissionParamsService.get();
           setAdmissionParams(params);
+        } catch {}
+        // Cargar modalidades dinámicas
+        try {
+          const mods = await AdmissionModalities.list();
+          if (Array.isArray(mods) && mods.length > 0) {
+            setModalidades(mods.map((m) => ({ value: m.name, label: m.name })));
+          }
         } catch {}
       } catch {
         toast.error("No se pudieron cargar las convocatorias");
@@ -720,7 +732,7 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
                 </div>
                 <div className="grid sm:grid-cols-3 gap-4">
                   <FormInput label="Depto. del colegio" value={form.depto_colegio} onChange={(v) => setField("depto_colegio", v)} placeholder="Ej: Junín" toUpperCase />
-                  <FormSelect label="Modalidad de admisión" value={form.modalidad_admision} onChange={(v) => setField("modalidad_admision", v)} options={MODALIDAD_ADMISION} />
+                  <FormSelect label="Modalidad de admisión" value={form.modalidad_admision} onChange={(v) => setField("modalidad_admision", v)} options={modalidades} />
                 </div>
               </div>
 

@@ -89,6 +89,12 @@ from .certificates import (
     cert_ingreso,
 )
 
+# Modalidades de admisión
+from .modalities import (
+    modalities_collection,
+    modality_detail,
+)
+
 __all__ = [
     # Calls
     'calls_list_public',
@@ -145,4 +151,7 @@ __all__ = [
     'search_by_dni',
     'cert_inscripcion',
     'cert_ingreso',
+    # Modalities
+    'modalities_collection',
+    'modality_detail',
 ]
