@@ -183,11 +183,13 @@ def _register_admission_income(payment, reviewer):
     # Buscar o crear concepto ADMISION
     concept = Concept.objects.filter(type="ADMISION").first()
     if not concept:
-        concept = Concept.objects.create(
+        concept, _ = Concept.objects.get_or_create(
             code="ADMISION",
-            name="Derecho de Admisión",
-            type="ADMISION",
-            default_amount=total,
+            defaults={
+                "name": "Derecho de Admisión",
+                "type": "ADMISION",
+                "default_amount": total,
+            },
         )
     concept_name = concept.name if concept else "Derecho de Admisión"
 
@@ -356,39 +358,49 @@ def payment_confirm(request, payment_id):
                     credentials = None
                 else:
                     # Generar credenciales nuevas
-                    dni = applicant.dni.strip()
-                    password = _generate_password(max(6, min(16, pwd_len)))
+                    try:
+                        dni = applicant.dni.strip()
+                        password = _generate_password(max(6, min(16, pwd_len)))
 
-                    # Username = DNI. Si ya existe un user con ese username, agregar sufijo
-                    username = dni
-                    if User.objects.filter(username=username).exists():
-                        username = f"{dni}_{applicant.id}"
+                        # Username = DNI. Si ya existe un user con ese username, agregar sufijo
+                        username = dni
+                        suffix = 0
+                        while User.objects.filter(username=username).exists():
+                            suffix += 1
+                            username = f"{dni}_{suffix}"
 
-                    # Crear el usuario
-                    user = User.objects.create_user(
-                        username=username,
-                        password=password,
-                        email=applicant.email or "",
-                        first_name=applicant.names or "",
-                        is_active=True,
-                    )
+                        # Crear el usuario
+                        user = User.objects.create_user(
+                            username=username,
+                            password=password,
+                            email=applicant.email or "",
+                            first_name=(applicant.names or "")[:150],
+                            is_active=True,
+                        )
 
-                    # Vincular al applicant
-                    applicant.user = user
-                    applicant.save(update_fields=["user"])
+                        # Vincular al applicant
+                        applicant.user = user
+                        applicant.save(update_fields=["user"])
 
-                    # Guardar password en meta del payment (para poder consultarla después)
-                    meta["generated_username"] = username
-                    meta["generated_password"] = password
-                    payment.meta = meta
-                    payment.save(update_fields=["meta"])
+                        # Guardar password en meta del payment
+                        meta["generated_username"] = username
+                        meta["generated_password"] = password
+                        payment.meta = meta
+                        payment.save(update_fields=["meta"])
 
-                    credentials = {
-                        "username": username,
-                        "password": password,
-                        "already_existed": False,
-                        "user_id": user.id,
-                    }
+                        credentials = {
+                            "username": username,
+                            "password": password,
+                            "already_existed": False,
+                            "user_id": user.id,
+                        }
+                    except Exception as exc:
+                        logger.error(f"Error creando usuario para {applicant.dni}: {exc}")
+                        credentials = {
+                            "error": str(exc),
+                            "username": None,
+                            "already_existed": False,
+                        }
 
     return Response({
         "ok": True,
