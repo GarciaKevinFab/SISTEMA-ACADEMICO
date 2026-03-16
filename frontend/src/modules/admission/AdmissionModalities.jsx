@@ -44,7 +44,7 @@ export default function AdmissionModalitiesManagement() {
   };
 
   const handleDelete = async (id, name) => {
-    if (!confirm(`¿Eliminar "${name}"?`)) return;
+    if (!window.confirm(`¿Eliminar "${name}"?`)) return;
     try {
       await AdmissionModalities.remove(id);
       toast.success("Modalidad eliminada");
