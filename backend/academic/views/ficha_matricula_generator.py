@@ -504,8 +504,8 @@ def _build_html(
     width: 33.3%;
   }}
   .firma-img {{
-    max-width: 120px;
-    max-height: 60px;
+    max-width: 160px;
+    max-height: 80px;
     object-fit: contain;
     margin-bottom: 2px;
   }}
@@ -660,7 +660,7 @@ def _build_html(
 
 <!-- ═══ BLOQUE 5: FIRMAS ═══ -->
 <table class="firmas">
-  <tr style="height:65px;">
+  <tr style="height:85px;">
     <td>{dir_sig_html}</td>
     <td>{sec_sig_html}</td>
     <td></td>
@@ -958,7 +958,7 @@ def generate_ficha_matricula_reportlab(
         _draw_inst_row(y_inst - i * row_h, l1, v1, l2, v2, i % 2 == 0)
 
     # ═══════════════════════════════════════════════════════════
-    # BLOQUE ALUMNO (programa, ciclo, nombre, código)
+    # BLOQUE ALUMNO (programa, ciclo, nombre, código) + FOTO
     # ═══════════════════════════════════════════════════════════
     y_stu = y_inst - len(inst_rows) * row_h - 0.2 * cm
     stu_rows = [
@@ -967,19 +967,70 @@ def generate_ficha_matricula_reportlab(
         ("Nombres y Apellidos", nombre_ficha, "CÓDIGO", codigo),
     ]
 
-    for i, (l1, v1, l2, v2) in enumerate(stu_rows):
-        _draw_inst_row(y_stu - i * row_h, l1, v1, l2, v2, i % 2 == 0)
-
-    # ── Foto del estudiante ──
+    # Detectar si hay foto para reducir ancho de tabla
     photo_path = _resolve_img(student.get("photo_url", ""))
+    photo_w_space = 2.6 * cm if photo_path else 0
+    stu_table_w = content_w - photo_w_space
+
+    # Dibujar filas del alumno (ancho reducido si hay foto)
+    _saved_col2 = col2
+    _saved_col4 = col4
     if photo_path:
-        photo_w, photo_h = 2.0 * cm, 2.5 * cm
-        photo_x = pw - margin - photo_w - 0.1 * cm
-        photo_y = y_stu - len(stu_rows) * row_h + 0.05 * cm
+        col2 = stu_table_w * 0.38
+        col4 = stu_table_w - col1 - col2 - col3
+
+    for i, (l1, v1, l2, v2) in enumerate(stu_rows):
+        ry = y_stu - i * row_h
+        # Fondo alternado
+        bg = AZUL_CLARO if i % 2 == 0 else white
+        c.setFillColor(bg)
+        c.rect(margin, ry - row_h, stu_table_w, row_h, fill=True, stroke=False)
+        # Labels con fondo
+        c.setFillColor(LABEL_BG)
+        c.rect(margin, ry - row_h, col1, row_h, fill=True, stroke=False)
+        c.rect(margin + col1 + col2, ry - row_h, col3, row_h, fill=True, stroke=False)
+        # Bordes
+        c.setStrokeColor(GRIS_BORDE)
+        c.setLineWidth(0.3)
+        c.rect(margin, ry - row_h, stu_table_w, row_h, fill=False)
+        c.line(margin + col1, ry, margin + col1, ry - row_h)
+        c.line(margin + col1 + col2, ry, margin + col1 + col2, ry - row_h)
+        c.line(margin + col1 + col2 + col3, ry, margin + col1 + col2 + col3, ry - row_h)
+        # Labels
+        c.setFillColor(LABEL_CLR)
+        c.setFont("Helvetica-Bold", 6.5)
+        c.drawString(margin + 4, ry - row_h + 3.5, l1)
+        c.drawString(margin + col1 + col2 + 4, ry - row_h + 3.5, l2)
+        # Values
+        c.setFillColor(AZUL_OSCURO)
+        c.setFont("Helvetica-Bold", 7.5)
+        v1s = str(v1)
+        max_w1 = col2 - 10
+        while c.stringWidth(v1s, "Helvetica-Bold", 7.5) > max_w1 and len(v1s) > 5:
+            v1s = v1s[:-1]
+        c.drawString(margin + col1 + 5, ry - row_h + 3.5, v1s)
+        v2s = str(v2)
+        max_w2 = col4 - 10
+        while c.stringWidth(v2s, "Helvetica-Bold", 7.5) > max_w2 and len(v2s) > 5:
+            v2s = v2s[:-1]
+        c.drawString(margin + col1 + col2 + col3 + 5, ry - row_h + 3.5, v2s)
+
+    # Restaurar anchos originales para otras tablas
+    col2 = _saved_col2
+    col4 = _saved_col4
+
+    # ── Foto del estudiante (a la derecha del bloque alumno) ──
+    if photo_path:
+        photo_w, photo_h = 2.2 * cm, 2.8 * cm
+        stu_block_h = len(stu_rows) * row_h
+        photo_x = margin + stu_table_w + 0.15 * cm
+        photo_y = y_stu - stu_block_h + (stu_block_h - photo_h) / 2
+        # Fondo blanco + borde
+        c.setFillColor(white)
+        c.setStrokeColor(GRIS_BORDE)
+        c.setLineWidth(0.8)
+        c.rect(photo_x - 3, photo_y - 3, photo_w + 6, photo_h + 6, fill=True)
         try:
-            c.setStrokeColor(GRIS_BORDE)
-            c.setLineWidth(0.5)
-            c.rect(photo_x - 2, photo_y - 2, photo_w + 4, photo_h + 4, fill=False)
             c.drawImage(photo_path, photo_x, photo_y, width=photo_w, height=photo_h,
                         preserveAspectRatio=True, mask="auto")
         except Exception as exc:
@@ -1186,9 +1237,9 @@ def generate_ficha_matricula_reportlab(
     # ═══════════════════════════════════════════════════════════
     # FIRMAS  (con imagen de firma/sello si existe)
     # ═══════════════════════════════════════════════════════════
-    y_firma = y_qr_section - qr_block_h - 2.0 * cm
+    y_firma = y_qr_section - qr_block_h - 2.5 * cm
     firma_w = content_w / 3
-    sig_w, sig_h = 3.2 * cm, 1.6 * cm
+    sig_w, sig_h = 4.0 * cm, 2.0 * cm
 
     # Director
     dir_sig = _resolve_img(inst.get("signature_url", ""))
