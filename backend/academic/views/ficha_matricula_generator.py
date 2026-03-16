@@ -967,71 +967,77 @@ def generate_ficha_matricula_reportlab(
         ("Nombres y Apellidos", nombre_ficha, "CÓDIGO", codigo),
     ]
 
-    # Detectar si hay foto para reducir ancho de tabla
+    # Detectar si hay foto para ajustar layout
     photo_path = _resolve_img(student.get("photo_url", ""))
-    photo_w_space = 2.6 * cm if photo_path else 0
-    stu_table_w = content_w - photo_w_space
+    photo_w_img = 2.0 * cm
+    photo_h_img = 2.5 * cm
+    photo_col_w = photo_w_img + 0.4 * cm  # espacio para foto + padding
 
-    # Dibujar filas del alumno (ancho reducido si hay foto)
-    _saved_col2 = col2
-    _saved_col4 = col4
     if photo_path:
-        col2 = stu_table_w * 0.38
-        col4 = stu_table_w - col1 - col2 - col3
+        # Aumentar altura de filas del alumno para acomodar la foto
+        stu_row_h = photo_h_img / len(stu_rows)  # ~0.83cm por fila
+        stu_table_w = content_w - photo_col_w
+    else:
+        stu_row_h = row_h
+        stu_table_w = content_w
+
+    # Columnas ajustadas para tabla de alumno
+    s_col1 = 3.8 * cm
+    s_col2 = stu_table_w * 0.38
+    s_col3 = 3.0 * cm
+    s_col4 = stu_table_w - s_col1 - s_col2 - s_col3
 
     for i, (l1, v1, l2, v2) in enumerate(stu_rows):
-        ry = y_stu - i * row_h
+        ry = y_stu - i * stu_row_h
         # Fondo alternado
         bg = AZUL_CLARO if i % 2 == 0 else white
         c.setFillColor(bg)
-        c.rect(margin, ry - row_h, stu_table_w, row_h, fill=True, stroke=False)
+        c.rect(margin, ry - stu_row_h, stu_table_w, stu_row_h, fill=True, stroke=False)
         # Labels con fondo
         c.setFillColor(LABEL_BG)
-        c.rect(margin, ry - row_h, col1, row_h, fill=True, stroke=False)
-        c.rect(margin + col1 + col2, ry - row_h, col3, row_h, fill=True, stroke=False)
+        c.rect(margin, ry - stu_row_h, s_col1, stu_row_h, fill=True, stroke=False)
+        c.rect(margin + s_col1 + s_col2, ry - stu_row_h, s_col3, stu_row_h, fill=True, stroke=False)
         # Bordes
         c.setStrokeColor(GRIS_BORDE)
         c.setLineWidth(0.3)
-        c.rect(margin, ry - row_h, stu_table_w, row_h, fill=False)
-        c.line(margin + col1, ry, margin + col1, ry - row_h)
-        c.line(margin + col1 + col2, ry, margin + col1 + col2, ry - row_h)
-        c.line(margin + col1 + col2 + col3, ry, margin + col1 + col2 + col3, ry - row_h)
+        c.rect(margin, ry - stu_row_h, stu_table_w, stu_row_h, fill=False)
+        c.line(margin + s_col1, ry, margin + s_col1, ry - stu_row_h)
+        c.line(margin + s_col1 + s_col2, ry, margin + s_col1 + s_col2, ry - stu_row_h)
+        c.line(margin + s_col1 + s_col2 + s_col3, ry, margin + s_col1 + s_col2 + s_col3, ry - stu_row_h)
         # Labels
+        text_y = ry - stu_row_h / 2 - 3
         c.setFillColor(LABEL_CLR)
         c.setFont("Helvetica-Bold", 6.5)
-        c.drawString(margin + 4, ry - row_h + 3.5, l1)
-        c.drawString(margin + col1 + col2 + 4, ry - row_h + 3.5, l2)
+        c.drawString(margin + 4, text_y, l1)
+        c.drawString(margin + s_col1 + s_col2 + 4, text_y, l2)
         # Values
         c.setFillColor(AZUL_OSCURO)
         c.setFont("Helvetica-Bold", 7.5)
         v1s = str(v1)
-        max_w1 = col2 - 10
+        max_w1 = s_col2 - 10
         while c.stringWidth(v1s, "Helvetica-Bold", 7.5) > max_w1 and len(v1s) > 5:
             v1s = v1s[:-1]
-        c.drawString(margin + col1 + 5, ry - row_h + 3.5, v1s)
+        c.drawString(margin + s_col1 + 5, text_y, v1s)
         v2s = str(v2)
-        max_w2 = col4 - 10
+        max_w2 = s_col4 - 10
         while c.stringWidth(v2s, "Helvetica-Bold", 7.5) > max_w2 and len(v2s) > 5:
             v2s = v2s[:-1]
-        c.drawString(margin + col1 + col2 + col3 + 5, ry - row_h + 3.5, v2s)
+        c.drawString(margin + s_col1 + s_col2 + s_col3 + 5, text_y, v2s)
 
-    # Restaurar anchos originales para otras tablas
-    col2 = _saved_col2
-    col4 = _saved_col4
+    stu_block_h = len(stu_rows) * stu_row_h
 
-    # ── Foto del estudiante (a la derecha del bloque alumno) ──
+    # ── Foto del estudiante (a la derecha, alineada con bloque alumno) ──
     if photo_path:
-        photo_w, photo_h = 2.2 * cm, 2.8 * cm
-        stu_block_h = len(stu_rows) * row_h
-        photo_x = margin + stu_table_w + 0.15 * cm
-        photo_y = y_stu - stu_block_h + (stu_block_h - photo_h) / 2
+        photo_x = margin + stu_table_w + (photo_col_w - photo_w_img) / 2
+        # drawImage usa esquina inferior-izquierda; alinear arriba con y_stu
+        photo_y = y_stu - photo_h_img
         # Fondo blanco + borde
         c.setFillColor(white)
         c.setStrokeColor(GRIS_BORDE)
         c.setLineWidth(0.8)
-        c.rect(photo_x - 3, photo_y - 3, photo_w + 6, photo_h + 6, fill=True)
+        c.rect(photo_x - 3, photo_y - 3, photo_w_img + 6, photo_h_img + 6, fill=True)
         try:
-            c.drawImage(photo_path, photo_x, photo_y, width=photo_w, height=photo_h,
+            c.drawImage(photo_path, photo_x, photo_y, width=photo_w_img, height=photo_h_img,
                         preserveAspectRatio=True, mask="auto")
         except Exception as exc:
             logger.warning(f"Error dibujando foto estudiante: {exc}")
@@ -1039,7 +1045,7 @@ def generate_ficha_matricula_reportlab(
     # ═══════════════════════════════════════════════════════════
     # TABLA DE CURSOS
     # ═══════════════════════════════════════════════════════════
-    y_courses = y_stu - len(stu_rows) * row_h - 0.4 * cm
+    y_courses = y_stu - stu_block_h - 0.3 * cm
 
     # Header de tabla
     th_h = 0.45 * cm
