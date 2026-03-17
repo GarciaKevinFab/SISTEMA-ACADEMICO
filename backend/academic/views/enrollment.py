@@ -534,6 +534,9 @@ class StudentsOverviewView(APIView):
         # ── 1. Base queryset ──────────────────────────────────
         qs = StudentProfile.objects.select_related("plan", "plan__career")
 
+        # Solo mostrar estudiantes con rol STUDENT (excluir admins, secretarias, etc.)
+        qs = qs.filter(user__user_roles__role__name="STUDENT")
+
         if hasattr(StudentProfile, "is_active"):
             qs = qs.filter(is_active=True)
 

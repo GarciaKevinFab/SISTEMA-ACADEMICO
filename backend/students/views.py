@@ -164,6 +164,12 @@ def students_collection(request):
     if request.method == "GET":
         q = (request.query_params.get("q") or "").strip()
         qs = Student.objects.select_related("plan").order_by("id")
+
+        # Filtrar solo estudiantes con rol STUDENT (excluir admins, secretarias, etc.)
+        only_students = request.query_params.get("only_students", "").lower()
+        if only_students in ("1", "true", "yes"):
+            qs = qs.filter(user__user_roles__role__name="STUDENT")
+
         if q:
             terms = [t for t in q.split() if t]
             for term in terms:
