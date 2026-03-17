@@ -191,9 +191,10 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
 
     const isAdmin = mode === "admin";
     const studentEditable = useMemo(() => new Set([
-        "email", "celular", "fechaNac", "sexo",
+        "nombres", "apellidoPaterno", "apellidoMaterno",
+        "sexo", "fechaNac",
+        "email", "celular",
         "region", "provincia", "distrito",
-        "lengua", "discapacidad", "tipoDiscapacidad",
     ]), []);
     const canEdit = (key) => (isAdmin ? true : studentEditable.has(key));
     const busy = loading || saving;

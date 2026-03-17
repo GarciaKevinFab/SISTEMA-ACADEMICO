@@ -159,16 +159,20 @@ class StudentUpdateSerializer(serializers.ModelSerializer):
 
 
 class StudentMeUpdateSerializer(serializers.ModelSerializer):
-    fechaNac = serializers.DateField(source="fecha_nac", required=False, allow_null=True)
-    tipoDiscapacidad = serializers.CharField(
-        source="tipo_discapacidad", required=False, allow_blank=True,
+    apellidoPaterno = serializers.CharField(
+        source="apellido_paterno", required=False, allow_blank=True,
     )
+    apellidoMaterno = serializers.CharField(
+        source="apellido_materno", required=False, allow_blank=True,
+    )
+    fechaNac = serializers.DateField(source="fecha_nac", required=False, allow_null=True)
 
     class Meta:
         model = Student
         fields = [
-            "email", "celular", "fechaNac", "sexo",
+            "nombres", "apellidoPaterno", "apellidoMaterno",
+            "sexo", "fechaNac",
+            "email", "celular",
             "region", "provincia", "distrito",
-            "lengua", "discapacidad", "tipoDiscapacidad",
         ]
 
