@@ -75,29 +75,14 @@ def _student_of(user):
 
 def _is_primer_puesto(student):
     """
-    Determina si el estudiante es primer puesto en su carrera
-    (mérito = 1, es decir, el promedio más alto).
+    Determina si el estudiante califica como "Primer Puesto"
+    (promedio ponderado >= 17.0).
     """
-    programa = getattr(student, "programa_carrera", "") or ""
-    if not programa:
-        return False
-
     avg = AcademicGradeRecord.objects.filter(student=student).aggregate(
         a=Coalesce(Avg("final_grade"), 0.0, output_field=FloatField())
     )["a"]
 
-    if avg <= 0:
-        return False
-
-    better = (
-        AcademicGradeRecord.objects
-        .filter(student__programa_carrera=programa)
-        .values("student")
-        .annotate(a=Avg("final_grade"))
-        .filter(a__gt=avg)
-        .count()
-    )
-    return better == 0  # nadie tiene mejor promedio → es primer puesto
+    return avg >= 17.0
 
 
 def _compute_enrollment_amount(student, period_code):

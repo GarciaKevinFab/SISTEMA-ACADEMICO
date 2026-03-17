@@ -128,7 +128,9 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
     const bankName  = bankInfo.bank_name || "Banco de la Nación";
     const bankAcct  = bankInfo.bank_account || "";
     const bankHolder = bankInfo.bank_holder || "";
-    const totalAmount = Number(paymentInfo?.total || paymentInfo?.amount || 180).toFixed(2);
+    const totalAmount = Number(
+        paymentInfo?.computed_total || paymentInfo?.total || paymentInfo?.amount || 180
+    ).toFixed(2);
 
     // ── APPROVED → no bloquear ──
     if (status === "APPROVED") {
@@ -204,7 +206,7 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                             <span className="text-slate-600">Monto:</span>
                             <span className="font-medium">S/. {totalAmount}</span>
                         </div>
-                        {paymentInfo?.discount_tag === "PRIMER_PUESTO" && (
+                        {(paymentInfo?.computed_discount_tag || paymentInfo?.discount_tag) === "PRIMER_PUESTO" && (
                             <div className="flex justify-between">
                                 <span className="text-slate-600">Descuento:</span>
                                 <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
@@ -298,9 +300,9 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                     <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
                             <span className="text-slate-600">Monto base:</span>
-                            <span className="font-medium">S/. {Number(paymentInfo?.amount || 180).toFixed(2)}</span>
+                            <span className="font-medium">S/. {Number(paymentInfo?.computed_amount || paymentInfo?.amount || 180).toFixed(2)}</span>
                         </div>
-                        {paymentInfo?.discount_tag === "PRIMER_PUESTO" && (
+                        {(paymentInfo?.computed_discount_tag || paymentInfo?.discount_tag) === "PRIMER_PUESTO" && (
                             <div className="flex justify-between text-blue-700">
                                 <span>Descuento 1er Puesto:</span>
                                 <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">
@@ -308,10 +310,10 @@ export default function EnrollmentPaymentGate({ period, onPaymentApproved }) {
                                 </Badge>
                             </div>
                         )}
-                        {Number(paymentInfo?.surcharge || 0) > 0 && (
+                        {Number(paymentInfo?.computed_surcharge || paymentInfo?.surcharge || 0) > 0 && (
                             <div className="flex justify-between text-amber-700">
                                 <span>Recargo extemporáneo:</span>
-                                <span className="font-medium">+ S/. {Number(paymentInfo.surcharge).toFixed(2)}</span>
+                                <span className="font-medium">+ S/. {Number(paymentInfo.computed_surcharge || paymentInfo.surcharge).toFixed(2)}</span>
                             </div>
                         )}
                         <hr className="my-2" />
