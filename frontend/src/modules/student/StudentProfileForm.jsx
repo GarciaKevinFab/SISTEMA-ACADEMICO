@@ -190,7 +190,11 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
     const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
 
     const isAdmin = mode === "admin";
-    const studentEditable = useMemo(() => new Set(["email", "celular"]), []);
+    const studentEditable = useMemo(() => new Set([
+        "email", "celular", "fechaNac", "sexo",
+        "region", "provincia", "distrito",
+        "lengua", "discapacidad", "tipoDiscapacidad",
+    ]), []);
     const canEdit = (key) => (isAdmin ? true : studentEditable.has(key));
     const busy = loading || saving;
 
@@ -296,7 +300,7 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
                             <div>
                                 <h2 className="text-xl font-900 text-slate-800 tracking-tight">Perfil del Estudiante</h2>
                                 <p className="text-xs text-slate-400 mt-0.5 font-500">
-                                    {isAdmin ? "Edición completa de datos del estudiante" : "Puedes actualizar tu correo y teléfono"}
+                                    {isAdmin ? "Edición completa de datos del estudiante" : "Puedes actualizar tus datos personales, contacto y ubicación"}
                                 </p>
                             </div>
                         </div>
