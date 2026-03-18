@@ -159,6 +159,10 @@ class StudentUpdateSerializer(serializers.ModelSerializer):
 
 
 class StudentMeUpdateSerializer(serializers.ModelSerializer):
+    """
+    Campos editables por el estudiante.
+    Bloqueados: num_documento, programa_carrera, lengua.
+    """
     apellidoPaterno = serializers.CharField(
         source="apellido_paterno", required=False, allow_blank=True,
     )
@@ -166,6 +170,9 @@ class StudentMeUpdateSerializer(serializers.ModelSerializer):
         source="apellido_materno", required=False, allow_blank=True,
     )
     fechaNac = serializers.DateField(source="fecha_nac", required=False, allow_null=True)
+    codigoModular = serializers.CharField(source="codigo_modular", required=False, allow_blank=True)
+    nombreInstitucion = serializers.CharField(source="nombre_institucion", required=False, allow_blank=True)
+    tipoDiscapacidad = serializers.CharField(source="tipo_discapacidad", required=False, allow_blank=True)
 
     class Meta:
         model = Student
@@ -174,5 +181,8 @@ class StudentMeUpdateSerializer(serializers.ModelSerializer):
             "sexo", "fechaNac",
             "email", "celular",
             "region", "provincia", "distrito",
+            "codigoModular", "nombreInstitucion", "gestion", "tipo",
+            "ciclo", "turno", "seccion", "periodo",
+            "discapacidad", "tipoDiscapacidad",
         ]
 

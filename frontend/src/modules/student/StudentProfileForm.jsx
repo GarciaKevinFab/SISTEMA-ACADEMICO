@@ -190,13 +190,10 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
     const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
 
     const isAdmin = mode === "admin";
-    const studentEditable = useMemo(() => new Set([
-        "nombres", "apellidoPaterno", "apellidoMaterno",
-        "sexo", "fechaNac",
-        "email", "celular",
-        "region", "provincia", "distrito",
+    const studentLocked = useMemo(() => new Set([
+        "numDocumento", "programaCarrera", "lengua",
     ]), []);
-    const canEdit = (key) => (isAdmin ? true : studentEditable.has(key));
+    const canEdit = (key) => (isAdmin ? true : !studentLocked.has(key));
     const busy = loading || saving;
 
     /* load student */
@@ -256,7 +253,7 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
             payload.ciclo = payload.ciclo === "" ? null : Number(payload.ciclo);
             if (!isAdmin) {
                 const filtered = {};
-                for (const k of Object.keys(payload)) if (studentEditable.has(k)) filtered[k] = payload[k];
+                for (const k of Object.keys(payload)) if (!studentLocked.has(k)) filtered[k] = payload[k];
                 await onSave(filtered);
             } else { await onSave(payload); }
             if (photoFile) { await onUploadPhoto(photoFile); setPhotoFile(null); }
