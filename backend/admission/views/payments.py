@@ -531,6 +531,67 @@ def payment_receipt_pdf(request, payment_id):
 
 
 # ═══════════════════════════════════════════════════════
+# ADMIN: Crear pago manual para postulante
+# ═══════════════════════════════════════════════════════
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def payment_admin_create(request):
+    """
+    Admin crea un pago pendiente para un postulante que no completó el flujo.
+    Body: { application_id, amount, channel, nro_secuencia, codigo_caja, fecha_movimiento }
+    """
+    app_id = request.data.get("application_id")
+    if not app_id:
+        return Response({"detail": "application_id requerido"}, status=400)
+
+    try:
+        app = Application.objects.select_related("applicant", "call").get(pk=app_id)
+    except Application.DoesNotExist:
+        return Response({"detail": "Postulación no encontrada"}, status=404)
+
+    # Si ya tiene pago, retornarlo
+    existing = Payment.objects.filter(application=app).first()
+    if existing:
+        return Response({
+            "detail": "Ya existe un pago para esta postulación",
+            "payment": _payment_to_dict(existing, request),
+        }, status=200)
+
+    # Obtener monto del fee o del body
+    amount = request.data.get("amount")
+    if not amount:
+        try:
+            meta = app.call.meta or {}
+            amount = float(meta.get("application_fee") or 0)
+        except Exception:
+            amount = 0
+
+    payment = Payment.objects.create(
+        application=app,
+        method="CASHIER",
+        status="PENDING_REVIEW",
+        amount=Decimal(str(amount)),
+        channel=request.data.get("channel", "AGENCIA_BN"),
+        nro_secuencia=request.data.get("nro_secuencia", ""),
+        codigo_caja=request.data.get("codigo_caja", ""),
+        fecha_movimiento=request.data.get("fecha_movimiento") or None,
+        meta={"created_by_admin": request.user.id},
+    )
+
+    # Actualizar estado de la postulación
+    if app.status in ("CREATED", "REGISTERED"):
+        app.status = "REGISTERED"
+        app.save(update_fields=["status"])
+
+    return Response({
+        "ok": True,
+        "payment": _payment_to_dict(payment, request),
+    }, status=201)
+
+
+# ═══════════════════════════════════════════════════════
 # ENDPOINTS DEL POSTULANTE (requieren auth del postulante)
 # ═══════════════════════════════════════════════════════
 
