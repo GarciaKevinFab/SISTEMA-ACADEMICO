@@ -256,10 +256,15 @@ class SectionsViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, pk=None, *args, **kwargs):
         sec = get_object_or_404(Section, id=int(pk))
+        # No permitir eliminar si hay alumnos matriculados
+        from academic.models import EnrollmentItem
+        enrolled = EnrollmentItem.objects.filter(section=sec).count()
+        if enrolled:
+            return Response(
+                {"detail": f"No se puede eliminar: hay {enrolled} alumno(s) matriculado(s) en esta sección."},
+                status=400,
+            )
         try:
-            # Intentar eliminar enrollment items vinculados primero
-            from academic.models import EnrollmentItem
-            EnrollmentItem.objects.filter(section=sec).delete()
             sec.delete()
         except Exception as exc:
             return Response(
