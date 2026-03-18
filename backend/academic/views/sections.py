@@ -256,7 +256,16 @@ class SectionsViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, pk=None, *args, **kwargs):
         sec = get_object_or_404(Section, id=int(pk))
-        sec.delete()
+        try:
+            # Intentar eliminar enrollment items vinculados primero
+            from academic.models import EnrollmentItem
+            EnrollmentItem.objects.filter(section=sec).delete()
+            sec.delete()
+        except Exception as exc:
+            return Response(
+                {"detail": f"No se puede eliminar: {exc}"},
+                status=400,
+            )
         return ok(success=True)
 
     # ── ACTION: schedule ───────────────────────────────────────
