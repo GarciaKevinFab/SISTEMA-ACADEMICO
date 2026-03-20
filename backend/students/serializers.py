@@ -159,10 +159,10 @@ class StudentUpdateSerializer(serializers.ModelSerializer):
 
 
 class StudentMeUpdateSerializer(serializers.ModelSerializer):
-    """
-    Campos editables por el estudiante.
-    Bloqueados: num_documento, programa_carrera, lengua.
-    """
+    """Todos los campos editables por el estudiante."""
+    numDocumento = serializers.CharField(
+        source="num_documento", required=False, allow_blank=True,
+    )
     apellidoPaterno = serializers.CharField(
         source="apellido_paterno", required=False, allow_blank=True,
     )
@@ -172,17 +172,23 @@ class StudentMeUpdateSerializer(serializers.ModelSerializer):
     fechaNac = serializers.DateField(source="fecha_nac", required=False, allow_null=True)
     codigoModular = serializers.CharField(source="codigo_modular", required=False, allow_blank=True)
     nombreInstitucion = serializers.CharField(source="nombre_institucion", required=False, allow_blank=True)
+    programaCarrera = serializers.CharField(source="programa_carrera", required=False, allow_blank=True)
     tipoDiscapacidad = serializers.CharField(source="tipo_discapacidad", required=False, allow_blank=True)
 
     class Meta:
         model = Student
         fields = [
-            "nombres", "apellidoPaterno", "apellidoMaterno",
+            "numDocumento", "nombres", "apellidoPaterno", "apellidoMaterno",
             "sexo", "fechaNac",
             "email", "celular",
             "region", "provincia", "distrito",
             "codigoModular", "nombreInstitucion", "gestion", "tipo",
-            "ciclo", "turno", "seccion", "periodo",
+            "programaCarrera", "ciclo", "turno", "seccion", "periodo", "lengua",
             "discapacidad", "tipoDiscapacidad",
         ]
+
+    def validate_num_documento(self, v):
+        if v and isinstance(v, str) and len(v) > 12:
+            raise serializers.ValidationError("Documento demasiado largo.")
+        return v.strip() if v else v
 

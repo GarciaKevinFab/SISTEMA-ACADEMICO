@@ -190,10 +190,7 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
     const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
 
     const isAdmin = mode === "admin";
-    const studentLocked = useMemo(() => new Set([
-        "numDocumento", "programaCarrera", "lengua",
-    ]), []);
-    const canEdit = (key) => (isAdmin ? true : !studentLocked.has(key));
+    const canEdit = () => true;
     const busy = loading || saving;
 
     /* load student */
@@ -251,11 +248,7 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
             setSaving(true);
             const payload = { ...form };
             payload.ciclo = payload.ciclo === "" ? null : Number(payload.ciclo);
-            if (!isAdmin) {
-                const filtered = {};
-                for (const k of Object.keys(payload)) if (!studentLocked.has(k)) filtered[k] = payload[k];
-                await onSave(filtered);
-            } else { await onSave(payload); }
+            await onSave(payload);
             if (photoFile) { await onUploadPhoto(photoFile); setPhotoFile(null); }
         } finally { setSaving(false); }
     };
@@ -298,15 +291,10 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
                             <div>
                                 <h2 className="text-xl font-900 text-slate-800 tracking-tight">Perfil del Estudiante</h2>
                                 <p className="text-xs text-slate-400 mt-0.5 font-500">
-                                    {isAdmin ? "Edición completa de datos del estudiante" : "Puedes actualizar tus datos personales, contacto y ubicación"}
+                                    {isAdmin ? "Edición completa de datos del estudiante" : "Actualiza tu información personal y académica"}
                                 </p>
                             </div>
                         </div>
-                        {!isAdmin && (
-                            <span className="inline-flex items-center px-3 py-1.5 rounded-full bg-amber-50 border border-amber-100 text-[11px] font-800 text-amber-700 uppercase tracking-wider">
-                                <Lock className="w-3 h-3 mr-1.5" /> Vista limitada
-                            </span>
-                        )}
                     </div>
 
                     {/* form body */}
