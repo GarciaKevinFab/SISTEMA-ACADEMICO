@@ -233,9 +233,10 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
   // Step 7 (resultado)
   const [result, setResult] = useState(null);
 
-  // Fee de la convocatoria
-  const applicationFee = parseFloat(selectedCall?.application_fee || selectedCall?.meta?.application_fee || 0);
-  const hasFee = applicationFee > 0;
+  // Fee de la convocatoria (default 180 si no está configurado)
+  const rawFee = parseFloat(selectedCall?.application_fee || selectedCall?.meta?.application_fee || 0);
+  const applicationFee = rawFee > 0 ? rawFee : 180;
+  const hasFee = true; // Siempre mostrar paso de pago
 
   // Pasos filtrados (sin paso Pago si no hay fee, sin paso 1 si propCallId)
   const visibleSteps = useMemo(() => {

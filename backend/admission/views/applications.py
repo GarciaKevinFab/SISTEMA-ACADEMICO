@@ -482,40 +482,47 @@ def public_apply(request):
                             status="UPLOADED",
                         )
 
-            # ── Crear Payment con datos de comprobante si hay fee ──
+            # ── Crear Payment SIEMPRE (con o sin fee configurado) ──
             fee = 0
             try:
                 fee = float(meta.get("application_fee") or 0)
             except (ValueError, TypeError):
                 fee = 0
 
+            nro_sec = (
+                payload.get("nro_secuencia") or ""
+            ).strip()
+            cod_caja = (
+                payload.get("codigo_caja") or ""
+            ).strip()
+            fecha_mov_str = (
+                payload.get("fecha_movimiento") or ""
+            ).strip()
+            channel = (
+                payload.get("channel") or "AGENCIA_BN"
+            ).strip()
+
+            from datetime import date as date_cls
+
+            fecha_mov = None
+            if fecha_mov_str:
+                try:
+                    fecha_mov = date_cls.fromisoformat(fecha_mov_str)
+                except ValueError:
+                    pass
+
+            voucher_file = None
+            if "multipart" in content_type:
+                voucher_file = request.FILES.get("voucher")
+
+            # Si el postulante envió datos de pago o hay fee, crear Payment
+            has_payment_data = nro_sec or cod_caja or voucher_file or fee > 0
             payment_data = None
-            if fee > 0:
-                nro_sec = (
-                    payload.get("nro_secuencia") or ""
-                ).strip()
-                cod_caja = (
-                    payload.get("codigo_caja") or ""
-                ).strip()
-                fecha_mov_str = (
-                    payload.get("fecha_movimiento") or ""
-                ).strip()
-                channel = (
-                    payload.get("channel") or "AGENCIA_BN"
-                ).strip()
 
-                from datetime import date as date_cls
-
-                fecha_mov = None
-                if fecha_mov_str:
-                    try:
-                        fecha_mov = date_cls.fromisoformat(fecha_mov_str)
-                    except ValueError:
-                        pass
-
-                voucher_file = None
-                if "multipart" in content_type:
-                    voucher_file = request.FILES.get("voucher")
+            if has_payment_data:
+                # Usar fee o monto por defecto de 180
+                if fee <= 0:
+                    fee = 180
 
                 pmt = Payment.objects.create(
                     application=app,
