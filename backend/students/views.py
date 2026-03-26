@@ -224,6 +224,28 @@ def students_detail(request, pk: int):
     ser = StudentUpdateSerializer(st, data=request.data, partial=partial)
     ser.is_valid(raise_exception=True)
     st = ser.save()
+
+    # Sincronizar datos del Student → User
+    if st.user:
+        user_dirty = False
+        full = " ".join(filter(None, [st.nombres, st.apellido_paterno, st.apellido_materno])).strip()
+        if full and st.user.first_name != full:
+            st.user.first_name = full[:150]
+            user_dirty = True
+        if st.email and st.user.email != st.email:
+            st.user.email = st.email
+            user_dirty = True
+        new_doc = st.num_documento or ""
+        if new_doc and st.user.username != new_doc:
+            # Solo cambiar username si es un DNI (no un admin con username diferente)
+            old_username = st.user.username
+            if old_username.isdigit() or old_username.startswith("TMP-"):
+                if not User.objects.filter(username=new_doc).exclude(pk=st.user.pk).exists():
+                    st.user.username = new_doc
+                    user_dirty = True
+        if user_dirty:
+            st.user.save(update_fields=["first_name", "email", "username"])
+
     return Response(StudentSerializer(st, context={"request": request}).data)
 
 
@@ -353,6 +375,21 @@ def students_me(request):
     ser = StudentMeUpdateSerializer(st, data=request.data, partial=True)
     ser.is_valid(raise_exception=True)
     st = ser.save()
+
+    # Sincronizar datos del Student → User para mantener consistencia
+    if st.user:
+        user_dirty = False
+        full = " ".join(filter(None, [st.nombres, st.apellido_paterno, st.apellido_materno])).strip()
+        if full and st.user.first_name != full:
+            st.user.first_name = full[:150]
+            user_dirty = True
+        if st.email and st.user.email != st.email:
+            st.user.email = st.email
+            user_dirty = True
+        if user_dirty:
+            update_fields = ["first_name", "email"]
+            st.user.save(update_fields=update_fields)
+
     return Response(StudentSerializer(st, context={"request": request}).data)
 
 
