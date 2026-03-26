@@ -1118,7 +1118,7 @@ def _run_import_job(job_id: int, raw: bytes, safe_name: str, type: str, mapping:
                 # ───────────────────────────────────────────────
                 # GRADES
                 # ───────────────────────────────────────────────
-                elif type == "grades":
+                elif type in ("grades", "verano"):
                     if AcademicGradeRecord is None:
                         job.status = "FAILED"
                         job.result = {
