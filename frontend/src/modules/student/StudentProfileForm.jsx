@@ -248,8 +248,19 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
             setSaving(true);
             const payload = { ...form };
             payload.ciclo = payload.ciclo === "" ? null : Number(payload.ciclo);
+            // Limpiar campos que no son del serializer
+            delete payload.photoUrl;
+            delete payload.id;
+            delete payload.userId;
+            delete payload.planId;
+            delete payload.planName;
+            delete payload.createdAt;
+            delete payload.updatedAt;
             await onSave(payload);
             if (photoFile) { await onUploadPhoto(photoFile); setPhotoFile(null); }
+            toast.success("Datos guardados correctamente");
+        } catch (err) {
+            console.error("Error guardando perfil:", err);
         } finally { setSaving(false); }
     };
 

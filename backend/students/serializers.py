@@ -211,6 +211,7 @@ class StudentMeUpdateSerializer(serializers.ModelSerializer):
     discapacidad = serializers.CharField(required=False, allow_blank=True)
     email = serializers.CharField(required=False, allow_blank=True)
     celular = serializers.CharField(required=False, allow_blank=True)
+    ciclo = serializers.IntegerField(required=False, allow_null=True)
 
     class Meta:
         model = Student
