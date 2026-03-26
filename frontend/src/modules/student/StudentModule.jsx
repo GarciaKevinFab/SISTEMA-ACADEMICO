@@ -511,7 +511,19 @@ export default function StudentModule() {
                 setStudent(await StudentsService.updateMe(payload));
                 toast.success("Perfil actualizado");
             }
-        } catch (e) { toast.error(e?.response?.data?.detail || "No se pudo guardar"); }
+        } catch (e) {
+            const d = e?.response?.data;
+            if (d?.detail) {
+                toast.error(d.detail);
+            } else if (d && typeof d === "object") {
+                const msgs = Object.entries(d)
+                    .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+                    .join(" | ");
+                toast.error(msgs || "No se pudo guardar");
+            } else {
+                toast.error("No se pudo guardar");
+            }
+        }
     };
 
     const onUploadPhoto = async (file) => {

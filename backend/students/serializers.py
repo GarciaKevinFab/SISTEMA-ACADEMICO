@@ -110,15 +110,30 @@ class StudentSerializer(serializers.ModelSerializer):
 
 
 class StudentUpdateSerializer(serializers.ModelSerializer):
-    numDocumento = serializers.CharField(source="num_documento", required=False)
+    numDocumento = serializers.CharField(source="num_documento", required=False, allow_blank=True)
+    nombres = serializers.CharField(required=False, allow_blank=True)
     apellidoPaterno = serializers.CharField(source="apellido_paterno", required=False, allow_blank=True)
     apellidoMaterno = serializers.CharField(source="apellido_materno", required=False, allow_blank=True)
     fechaNac = serializers.DateField(source="fecha_nac", required=False, allow_null=True)
+    sexo = serializers.CharField(required=False, allow_blank=True)
 
     codigoModular = serializers.CharField(source="codigo_modular", required=False, allow_blank=True)
     nombreInstitucion = serializers.CharField(source="nombre_institucion", required=False, allow_blank=True)
     programaCarrera = serializers.CharField(source="programa_carrera", required=False, allow_blank=True)
     tipoDiscapacidad = serializers.CharField(source="tipo_discapacidad", required=False, allow_blank=True)
+
+    region = serializers.CharField(required=False, allow_blank=True)
+    provincia = serializers.CharField(required=False, allow_blank=True)
+    distrito = serializers.CharField(required=False, allow_blank=True)
+    gestion = serializers.CharField(required=False, allow_blank=True)
+    tipo = serializers.CharField(required=False, allow_blank=True)
+    turno = serializers.CharField(required=False, allow_blank=True)
+    seccion = serializers.CharField(required=False, allow_blank=True)
+    periodo = serializers.CharField(required=False, allow_blank=True)
+    lengua = serializers.CharField(required=False, allow_blank=True)
+    discapacidad = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.CharField(required=False, allow_blank=True)
+    celular = serializers.CharField(required=False, allow_blank=True)
 
     userId = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     planId = serializers.IntegerField(source="plan_id", required=False, allow_null=True)
@@ -136,9 +151,16 @@ class StudentUpdateSerializer(serializers.ModelSerializer):
         ]
 
     def validate_num_documento(self, v):
-        # Si quieres: validar que tenga dígitos (pero ojo: CE puede tener letras)
-        if v and isinstance(v, str) and len(v) > 12:
-            raise serializers.ValidationError("Num Documento demasiado largo.")
+        v = (v or "").strip()
+        if v and len(v) > 12:
+            raise serializers.ValidationError("Documento demasiado largo (máx 12).")
+        # Verificar unicidad excluyendo instancia actual
+        if v and self.instance:
+            dup = Student.objects.filter(num_documento=v).exclude(pk=self.instance.pk).first()
+            if dup:
+                raise serializers.ValidationError(
+                    f"Ya existe otro estudiante con documento {v}."
+                )
         return v
 
     def validate(self, attrs):
@@ -175,6 +197,21 @@ class StudentMeUpdateSerializer(serializers.ModelSerializer):
     programaCarrera = serializers.CharField(source="programa_carrera", required=False, allow_blank=True)
     tipoDiscapacidad = serializers.CharField(source="tipo_discapacidad", required=False, allow_blank=True)
 
+    nombres = serializers.CharField(required=False, allow_blank=True)
+    sexo = serializers.CharField(required=False, allow_blank=True)
+    region = serializers.CharField(required=False, allow_blank=True)
+    provincia = serializers.CharField(required=False, allow_blank=True)
+    distrito = serializers.CharField(required=False, allow_blank=True)
+    gestion = serializers.CharField(required=False, allow_blank=True)
+    tipo = serializers.CharField(required=False, allow_blank=True)
+    turno = serializers.CharField(required=False, allow_blank=True)
+    seccion = serializers.CharField(required=False, allow_blank=True)
+    periodo = serializers.CharField(required=False, allow_blank=True)
+    lengua = serializers.CharField(required=False, allow_blank=True)
+    discapacidad = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.CharField(required=False, allow_blank=True)
+    celular = serializers.CharField(required=False, allow_blank=True)
+
     class Meta:
         model = Student
         fields = [
@@ -188,7 +225,14 @@ class StudentMeUpdateSerializer(serializers.ModelSerializer):
         ]
 
     def validate_num_documento(self, v):
-        if v and isinstance(v, str) and len(v) > 12:
-            raise serializers.ValidationError("Documento demasiado largo.")
-        return v.strip() if v else v
+        v = (v or "").strip()
+        if v and len(v) > 12:
+            raise serializers.ValidationError("Documento demasiado largo (máx 12).")
+        if v and self.instance:
+            dup = Student.objects.filter(num_documento=v).exclude(pk=self.instance.pk).first()
+            if dup:
+                raise serializers.ValidationError(
+                    f"Ya existe otro estudiante con documento {v}."
+                )
+        return v
 
