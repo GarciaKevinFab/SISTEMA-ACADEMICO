@@ -379,15 +379,28 @@ def students_me(request):
     # Sincronizar datos del Student → User para mantener consistencia
     if st.user:
         user_dirty = False
+        update_fields = []
+        # Nombre completo
         full = " ".join(filter(None, [st.nombres, st.apellido_paterno, st.apellido_materno])).strip()
         if full and st.user.first_name != full:
             st.user.first_name = full[:150]
+            update_fields.append("first_name")
             user_dirty = True
+        # Email
         if st.email and st.user.email != st.email:
             st.user.email = st.email
+            update_fields.append("email")
             user_dirty = True
+        # Username = DNI (solo si username actual es numérico o TMP-)
+        new_doc = st.num_documento or ""
+        if new_doc and st.user.username != new_doc:
+            old_username = st.user.username
+            if old_username.isdigit() or old_username.startswith("TMP-"):
+                if not User.objects.filter(username=new_doc).exclude(pk=st.user.pk).exists():
+                    st.user.username = new_doc
+                    update_fields.append("username")
+                user_dirty = True
         if user_dirty:
-            update_fields = ["first_name", "email"]
             st.user.save(update_fields=update_fields)
 
     return Response(StudentSerializer(st, context={"request": request}).data)
