@@ -354,15 +354,16 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
       return docsRequired.every((d) => attachments[d.type]?.file);
     }
     if (step === 5 && hasFee) {
-      // Pago: nro_secuencia y codigo_caja obligatorios, fecha obligatoria
+      // Pago: nro_secuencia, codigo_caja, fecha y voucher obligatorios
       return (
         paymentForm.nro_secuencia.trim().length > 0 &&
         paymentForm.codigo_caja.trim().length > 0 &&
-        paymentForm.fecha_movimiento.trim().length > 0
+        paymentForm.fecha_movimiento.trim().length > 0 &&
+        !!voucherFile
       );
     }
     return true;
-  }, [step, selectedCall, form, preferences, attachments, docsRequired, paymentForm, hasFee]);
+  }, [step, selectedCall, form, preferences, attachments, docsRequired, paymentForm, hasFee, voucherFile]);
 
   // ── Navegar ──
   const goNext = () => {
@@ -987,10 +988,10 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
                 </div>
               </div>
 
-              {/* Voucher opcional */}
+              {/* Voucher obligatorio */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-700">
-                  Voucher / Comprobante (opcional)
+                <Label className="text-sm font-bold text-gray-700">
+                  Voucher / Comprobante <span className="text-red-500">*</span>
                 </Label>
                 <div className="flex items-center gap-3">
                   <Input
