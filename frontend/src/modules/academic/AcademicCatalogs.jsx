@@ -786,7 +786,7 @@ export const ImportersSection = () => {
     };
 
     const stopMonitoring = () => { clearPolling(); setIsImporting(false); setStatus(null); setJob(null); setLastUpdatedAt(null); clearJobMemory(); toast.info("Monitoreo detenido"); };
-    const closeResults = () => { setStatus(null); setJob(null); setLastUpdatedAt(null); setFile(null); clearJobMemory(); toast.info("Resultados cerrados"); };
+    const closeResults = () => { clearPolling(); setIsImporting(false); setStatus(null); setJob(null); setLastUpdatedAt(null); setFile(null); clearJobMemory(); };
 
     const progress = safeNum(status?.progress, 0);
     const processed = safeNum(status?.processed, 0);
