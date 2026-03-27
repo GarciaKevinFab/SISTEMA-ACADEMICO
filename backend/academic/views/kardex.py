@@ -51,19 +51,26 @@ logger = logging.getLogger(__name__)
 def _period_to_num(p: str):
     """
     Convierte un período a número comparable.
-    2019-I → 6057,  2019-II → 6058,  2025-II → 6076, 2025-VERANO → 6077
-    Usa base *3 para acomodar I, II, VERANO por año.
+    2019-I → 6057,  2019-II → 6058,  2025-VERANO → 6077
+    2026-0 → 6078 (verano del año siguiente)
+    2025-EXTRAORDINARIO → 6077 (equivale a verano)
+    Usa base *3 para acomodar I, II, VERANO/0/EXTRA por año.
     """
     s = (p or "").strip().upper()
+    # Regular: YYYY-I, YYYY-II, YYYY-1, YYYY-2
     m = re.match(r'^(\d{4})-(I{1,2}|[12])$', s)
     if m:
         year = int(m.group(1))
         sem = 0 if m.group(2) in ('I', '1') else 1
         return year * 3 + sem
-    # VERANO: después de II del mismo año
-    m2 = re.match(r'^(\d{4})-VERANO$', s)
+    # Verano/Extraordinario/0: después de II del mismo año
+    m2 = re.match(r'^(\d{4})-(VERANO|EXTRAORDINARIO|0)$', s)
     if m2:
         return int(m2.group(1)) * 3 + 2
+    # Fallback: intentar extraer año de cualquier formato YYYY-XXX
+    m3 = re.match(r'^(\d{4})-', s)
+    if m3:
+        return int(m3.group(1)) * 3 + 2  # asumir "fin de año"
     return None
 
 
