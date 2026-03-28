@@ -51,10 +51,12 @@ logger = logging.getLogger(__name__)
 def _period_to_num(p: str):
     """
     Convierte un período a número comparable.
-    2019-I → 6057,  2019-II → 6058,  2025-VERANO → 6077
-    2026-0 → 6078 (verano del año siguiente)
-    2025-EXTRAORDINARIO → 6077 (equivale a verano)
-    Usa base *3 para acomodar I, II, VERANO/0/EXTRA por año.
+    Usa base *3 por año: I=+0, II=+1, VERANO/0/EXTRA=+2.
+
+    2025-I  → 6075    2025-II → 6076    2025-VERANO → 6077
+    2026-0  → 6077  (verano entre 2025-II y 2026-I, ubica como fin 2025)
+    2026-I  → 6078    2026-II → 6079
+    2025-EXTRAORDINARIO → 6077
     """
     s = (p or "").strip().upper()
     # Regular: YYYY-I, YYYY-II, YYYY-1, YYYY-2
@@ -63,14 +65,18 @@ def _period_to_num(p: str):
         year = int(m.group(1))
         sem = 0 if m.group(2) in ('I', '1') else 1
         return year * 3 + sem
-    # Verano/Extraordinario/0: después de II del mismo año
-    m2 = re.match(r'^(\d{4})-(VERANO|EXTRAORDINARIO|0)$', s)
+    # YYYY-0: verano entre (YYYY-1)-II y YYYY-I → ubica como fin del año anterior
+    m0 = re.match(r'^(\d{4})-0$', s)
+    if m0:
+        return (int(m0.group(1)) - 1) * 3 + 2
+    # VERANO/EXTRAORDINARIO: después de II del mismo año
+    m2 = re.match(r'^(\d{4})-(VERANO|EXTRAORDINARIO)$', s)
     if m2:
         return int(m2.group(1)) * 3 + 2
-    # Fallback: intentar extraer año de cualquier formato YYYY-XXX
+    # Fallback: cualquier formato YYYY-XXX → fin del año
     m3 = re.match(r'^(\d{4})-', s)
     if m3:
-        return int(m3.group(1)) * 3 + 2  # asumir "fin de año"
+        return int(m3.group(1)) * 3 + 2
     return None
 
 
