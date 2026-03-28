@@ -831,7 +831,7 @@ def _run_import_job(job_id: int, raw: bytes, safe_name: str, type: str, mapping:
             # ═══════════════════════════════════════════════════
             # STUDENTS / COURSES / GRADES
             # ═══════════════════════════════════════════════════
-            elif type in ("students", "courses", "grades"):
+            elif type in ("students", "courses", "grades", "verano"):
                 rows = []
                 total = 0
 

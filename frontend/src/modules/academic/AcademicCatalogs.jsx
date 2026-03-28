@@ -708,6 +708,7 @@ export const ImportersSection = () => {
     const intervalRef = useRef(2000);
     const lastProgressRef = useRef(-1);
     const sameProgressCountRef = useRef(0);
+    const fileInputRef = useRef(null);
 
     const helpText = useMemo(() => {
         if (type === "students") return "Usa la plantilla de alumnos. Campos obligatorios: Num Documento, Nombres. Verifica Periodo (ej. 2026-I) y ubigeo.";
@@ -786,7 +787,7 @@ export const ImportersSection = () => {
     };
 
     const stopMonitoring = () => { clearPolling(); setIsImporting(false); setStatus(null); setJob(null); setLastUpdatedAt(null); clearJobMemory(); toast.info("Monitoreo detenido"); };
-    const closeResults = () => { clearPolling(); setIsImporting(false); setStatus(null); setJob(null); setLastUpdatedAt(null); setFile(null); clearJobMemory(); };
+    const closeResults = () => { clearPolling(); setIsImporting(false); setStatus(null); setJob(null); setLastUpdatedAt(null); setFile(null); clearJobMemory(); if (fileInputRef.current) fileInputRef.current.value = ""; };
 
     const progress = safeNum(status?.progress, 0);
     const processed = safeNum(status?.processed, 0);
@@ -846,7 +847,7 @@ export const ImportersSection = () => {
                     </Button>
                 </Field>
                 <Field label="Archivo a importar">
-                    <Input type="file" accept={(type === "plans") ? ".xlsx" : ".xlsx,.csv"} className="h-9 text-xs rounded-xl border-slate-200" disabled={isProcessing}
+                    <Input ref={fileInputRef} type="file" accept={(type === "plans") ? ".xlsx" : ".xlsx,.csv"} className="h-9 text-xs rounded-xl border-slate-200" disabled={isProcessing}
                         onChange={(e) => {
                             const f = e.target.files?.[0] || null; setFile(f); if (!f) return;
                             const name = (f.name || "").toLowerCase();
