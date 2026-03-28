@@ -257,6 +257,56 @@ class KardexView(APIView):
             if (prev is None) or (score(item) > score(prev)):
                 best_by_key[key] = item
 
+        # ── Agregar cursos de matrículas activas sin notas aún ──
+        try:
+            from academic.models import Enrollment, EnrollmentItem
+            active_enrollments = Enrollment.objects.filter(
+                student=st
+            ).exclude(status="CANCELLED")
+
+            for enr in active_enrollments:
+                enr_period = _norm_term(enr.period or "")
+                if not enr_period:
+                    continue
+                for ei in EnrollmentItem.objects.select_related(
+                    "section__course", "plan_course", "plan_course__course"
+                ).filter(enrollment=enr):
+                    crs = None
+                    pc = ei.plan_course
+                    if pc and hasattr(pc, "course"):
+                        crs = pc.course
+                    elif hasattr(ei, "section") and ei.section and hasattr(ei.section, "course"):
+                        crs = ei.section.course
+
+                    if not crs:
+                        continue
+
+                    course_code = (getattr(crs, "code", "") or "").strip() or f"CRS-{crs.id}"
+                    key = (enr_period, course_code)
+
+                    # Solo agregar si no existe ya un registro de notas para este curso/periodo
+                    if key not in best_by_key:
+                        semester = int(getattr(pc, "semester", 0) or 0) if pc else 0
+                        weekly_hours = int(getattr(pc, "weekly_hours", 0) or 0) if pc else 0
+                        credits = int(getattr(ei, "credits", 0) or 0)
+                        if credits <= 0 and pc:
+                            credits = int(getattr(pc, "credits", 0) or 0)
+                        if credits <= 0:
+                            credits = int(getattr(crs, "credits", 0) or 0)
+
+                        best_by_key[key] = {
+                            "period": enr_period,
+                            "semester": semester,
+                            "weekly_hours": weekly_hours,
+                            "course_code": course_code,
+                            "course_name": getattr(crs, "name", "") or "",
+                            "credits": max(0, credits),
+                            "grade": None,
+                            "status": "EN PROCESO",
+                        }
+        except Exception as exc:
+            logger.warning(f"Error agregando cursos matriculados al kardex: {exc}")
+
         items = list(best_by_key.values())
         items.sort(key=lambda x: (
             str(x.get("period") or ""),
