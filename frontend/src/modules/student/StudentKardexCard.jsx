@@ -125,12 +125,24 @@ const pickArray = (data, keys) => {
 
 const parsePeriod = (p) => {
     const s = String(p || "").trim();
+    // Regular: YYYY-I, YYYY-II, YYYY-1, YYYY-2
     const m = s.match(/^(\d{4})\s*[-/]\s*([IVX]+|[12])$/i);
-    if (!m) return { y: 0, t: 0, raw: s };
-    const y = parseInt(m[1], 10);
-    const term = String(m[2] || "").toUpperCase();
-    const t = term === "I" || term === "1" ? 1 : term === "II" || term === "2" ? 2 : term === "III" ? 3 : term === "IV" ? 4 : 0;
-    return { y, t, raw: s };
+    if (m) {
+        const y = parseInt(m[1], 10);
+        const term = String(m[2] || "").toUpperCase();
+        const t = term === "I" || term === "1" ? 1 : term === "II" || term === "2" ? 2 : term === "III" ? 3 : term === "IV" ? 4 : 0;
+        return { y, t, raw: s };
+    }
+    // YYYY-0: verano entre (YYYY-1)-II y YYYY-I → ordena como (YYYY-1), t=3
+    const m0 = s.match(/^(\d{4})\s*[-/]\s*0$/);
+    if (m0) return { y: parseInt(m0[1], 10) - 1, t: 3, raw: s };
+    // YYYY-VERANO, YYYY-EXTRAORDINARIO → después de II del mismo año
+    const m2 = s.match(/^(\d{4})\s*[-/]\s*(VERANO|EXTRAORDINARIO)$/i);
+    if (m2) return { y: parseInt(m2[1], 10), t: 3, raw: s };
+    // Fallback: extraer año
+    const m3 = s.match(/^(\d{4})/);
+    if (m3) return { y: parseInt(m3[1], 10), t: 9, raw: s };
+    return { y: 0, t: 0, raw: s };
 };
 
 const toApiPeriod = (raw) => {
