@@ -67,11 +67,7 @@ const CareerRow = ({ career }) => (
             </div>
             <p className="text-sm font-semibold text-slate-800 truncate">{career.name}</p>
         </div>
-        {career.vacancies != null && (
-            <span className="inline-flex items-center gap-1.5 shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                <Users size={10} />{career.vacancies} vac.
-            </span>
-        )}
+{/* vacantes ocultas en vista pública */}
     </div>
 );
 

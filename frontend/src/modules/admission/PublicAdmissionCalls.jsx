@@ -157,11 +157,6 @@ const CallCard = ({ call, onDetails, onReglamento }) => {
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold border border-slate-200"
                 >
                   {career.name}
-                  {career.vacancies != null && (
-                    <span className="text-[10px] text-slate-400 font-bold border-l border-slate-300 pl-2 ml-0.5 flex items-center gap-0.5">
-                      <Users size={9} />{career.vacancies}
-                    </span>
-                  )}
                 </span>
               ))}
             </div>
