@@ -1778,38 +1778,74 @@ def procedures_summary(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def procedures_report_sla(request):
-    """Exporta datos SLA en CSV real."""
-    buf = io.StringIO()
-    w   = csv.writer(buf)
-    w.writerow(["procedure_id", "tracking_code", "tipo", "estado", "fecha_registro",
-                "fecha_actualizacion", "dias_transcurridos", "plazo", "vencido"])
+    """Exporta datos SLA en formato XLSX."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "SLA"
+
+    headers = ["ID", "Código", "Tipo", "Estado", "Fecha Registro",
+               "Fecha Actualización", "Días Transcurridos", "Plazo", "Vencido"]
+    header_font = Font(bold=True, color="FFFFFF", size=10)
+    header_fill = PatternFill(start_color="1E3A5F", end_color="1E3A5F", fill_type="solid")
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
     now = timezone.now()
+    row_num = 2
     for p in Procedure.objects.select_related("procedure_type").all()[:2000]:
         dias = round((p.updated_at - p.created_at).total_seconds() / 86400, 1)
         vencido = "Sí" if (p.deadline_at and p.deadline_at < now
                            and p.status not in ["COMPLETED", "REJECTED"]) else "No"
-        w.writerow([
-            p.id, p.tracking_code,
-            getattr(p.procedure_type, "name", "—") if p.procedure_type else "—",
-            p.status, p.created_at.strftime("%d/%m/%Y %H:%M") if p.created_at else "—",
-            p.updated_at.strftime("%d/%m/%Y %H:%M") if p.updated_at else "—",
-            dias,
-            p.deadline_at.strftime("%d/%m/%Y") if p.deadline_at else "—",
-            vencido,
-        ])
-    out = buf.getvalue().encode("utf-8-sig")   # UTF-8 con BOM para Excel
-    res = HttpResponse(out, content_type="text/csv; charset=utf-8-sig")
-    res["Content-Disposition"] = 'attachment; filename="sla.csv"'
+        ws.cell(row=row_num, column=1, value=p.id)
+        ws.cell(row=row_num, column=2, value=p.tracking_code)
+        ws.cell(row=row_num, column=3, value=getattr(p.procedure_type, "name", "—") if p.procedure_type else "—")
+        ws.cell(row=row_num, column=4, value=p.status)
+        ws.cell(row=row_num, column=5, value=p.created_at.strftime("%d/%m/%Y %H:%M") if p.created_at else "—")
+        ws.cell(row=row_num, column=6, value=p.updated_at.strftime("%d/%m/%Y %H:%M") if p.updated_at else "—")
+        ws.cell(row=row_num, column=7, value=dias)
+        ws.cell(row=row_num, column=8, value=p.deadline_at.strftime("%d/%m/%Y") if p.deadline_at else "—")
+        ws.cell(row=row_num, column=9, value=vencido)
+        row_num += 1
+
+    # Auto-ancho
+    for col in ws.columns:
+        max_len = max((len(str(c.value or "")) for c in col), default=10)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 3, 35)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    res = HttpResponse(buf.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    res["Content-Disposition"] = 'attachment; filename="sla.xlsx"'
     return res
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def procedures_report_volume(request):
-    """Exporta volumen diario en CSV real."""
-    buf = io.StringIO()
-    w   = csv.writer(buf)
-    w.writerow(["fecha", "tipo_tramite", "canal_ingreso", "cantidad"])
+    """Exporta volumen diario en formato XLSX."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Volumen"
+
+    headers = ["Fecha", "Tipo Trámite", "Canal Ingreso", "Cantidad"]
+    header_font = Font(bold=True, color="FFFFFF", size=10)
+    header_fill = PatternFill(start_color="1E3A5F", end_color="1E3A5F", fill_type="solid")
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
     rows = (
         Procedure.objects
         .select_related("procedure_type")
@@ -1818,16 +1854,23 @@ def procedures_report_volume(request):
         .annotate(count=Count("id"))
         .order_by("-d")[:2000]
     )
+    row_num = 2
     for r in rows:
-        w.writerow([
-            str(r["d"]) if r["d"] else "—",
-            r["procedure_type__name"] or "Sin tipo",
-            r["canal_ingreso"] or "—",
-            r["count"],
-        ])
-    out = buf.getvalue().encode("utf-8-sig")
-    res = HttpResponse(out, content_type="text/csv; charset=utf-8-sig")
-    res["Content-Disposition"] = 'attachment; filename="volumen.csv"'
+        ws.cell(row=row_num, column=1, value=str(r["d"]) if r["d"] else "—")
+        ws.cell(row=row_num, column=2, value=r["procedure_type__name"] or "Sin tipo")
+        ws.cell(row=row_num, column=3, value=r["canal_ingreso"] or "—")
+        ws.cell(row=row_num, column=4, value=r["count"])
+        row_num += 1
+
+    for col in ws.columns:
+        max_len = max((len(str(c.value or "")) for c in col), default=10)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 3, 35)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    res = HttpResponse(buf.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    res["Content-Disposition"] = 'attachment; filename="volumen.xlsx"'
     return res
 
 
