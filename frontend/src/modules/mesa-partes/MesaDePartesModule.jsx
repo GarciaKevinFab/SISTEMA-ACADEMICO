@@ -22,8 +22,9 @@ import {
   ExternalLink, ChevronDown, Loader2, ArrowRight, Inbox,
   ShieldAlert, Settings2, ClipboardList, AlertCircle, AlertTriangle,
   CalendarClock, Flame, Calendar, Filter, X, RefreshCw,
-  Building2, Edit3,
+  Building2, Edit3, Lock, ShieldCheck,
 } from "lucide-react";
+import UsersService from "../../services/users.service";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
@@ -2110,8 +2111,80 @@ const StaffSection = () => {
 /* ════════════════════════════════════════════════════════════
    MAIN MODULE
 ════════════════════════════════════════════════════════════ */
+/* ─── Cambio de contraseña forzado ─── */
+const ForcePasswordChangeMesa = ({ onDone }) => {
+  const [current, setCurrent] = useState("");
+  const [newPwd, setNewPwd] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [saving, setSaving] = useState(false);
+  const { refreshMe } = useAuth();
+
+  const match = confirm && newPwd === confirm;
+  const canSubmit = current.length > 0 && newPwd.length >= 8 && match;
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!canSubmit || saving) return;
+    try {
+      setSaving(true);
+      await UsersService.changeMyPassword({ current_password: current, new_password: newPwd });
+      if (refreshMe) await refreshMe();
+      toast.success("Contraseña actualizada correctamente");
+      if (onDone) onDone();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "No se pudo actualizar la contraseña");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="max-w-md mx-auto py-10">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-r from-slate-700 to-slate-900 px-6 py-5 text-white">
+          <div className="flex items-center gap-3">
+            <ShieldCheck size={24} />
+            <div>
+              <h2 className="font-extrabold text-lg">Cambiar Contraseña</h2>
+              <p className="text-slate-300 text-xs mt-0.5">Debes cambiar tu contraseña temporal antes de continuar</p>
+            </div>
+          </div>
+        </div>
+        <form onSubmit={submit} className="p-6 space-y-4">
+          <div>
+            <Label className="text-xs font-bold text-slate-600 uppercase">Contraseña temporal actual</Label>
+            <Input type="password" value={current} onChange={e => setCurrent(e.target.value)}
+              placeholder="Ingresa tu contraseña temporal" className="mt-1 rounded-xl" />
+          </div>
+          <div>
+            <Label className="text-xs font-bold text-slate-600 uppercase">Nueva contraseña</Label>
+            <Input type="password" value={newPwd} onChange={e => setNewPwd(e.target.value)}
+              placeholder="Mínimo 8 caracteres" className="mt-1 rounded-xl" />
+            {newPwd && newPwd.length < 8 && (
+              <p className="text-[11px] text-red-500 mt-1">Mínimo 8 caracteres</p>
+            )}
+          </div>
+          <div>
+            <Label className="text-xs font-bold text-slate-600 uppercase">Confirmar nueva contraseña</Label>
+            <Input type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+              placeholder="Repite la nueva contraseña" className="mt-1 rounded-xl" />
+            {confirm && !match && (
+              <p className="text-[11px] text-red-500 mt-1">Las contraseñas no coinciden</p>
+            )}
+            {match && confirm && (
+              <p className="text-[11px] text-emerald-600 mt-1">Las contraseñas coinciden</p>
+            )}
+          </div>
+          <Button type="submit" disabled={!canSubmit || saving}
+            className="w-full h-11 rounded-xl bg-slate-800 hover:bg-slate-900 font-bold">
+            {saving ? <><Loader2 size={16} className="animate-spin mr-2" /> Guardando...</> : "Cambiar Contraseña"}
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 const MesaDePartesModule = () => {
-  const { user, hasAny } = useAuth();
+  const { user, hasAny, refreshMe } = useAuth();
 
   const tabs = [
     { key: "dashboard", label: "Dashboard", Icon: BarChart3, need: [PERMS["mpv.processes.review"], PERMS["mpv.reports.view"]] },
@@ -2149,6 +2222,24 @@ const MesaDePartesModule = () => {
     return (
       <div className="flex items-center justify-center min-h-64 text-sm text-slate-400">
         Acceso no autorizado
+      </div>
+    );
+  }
+
+  // Forzar cambio de contraseña temporal
+  if (user.must_change_password) {
+    return (
+      <div className="w-full min-w-0 overflow-x-hidden p-4 sm:p-6 pb-16">
+        <div className="rounded-2xl border border-slate-200/60 bg-white shadow-sm px-5 py-4 flex items-center gap-3 mb-6">
+          <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-slate-600 to-slate-900 grid place-items-center shadow-sm shrink-0">
+            <FileText size={20} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-lg font-extrabold text-slate-800 leading-tight">Mesa de Partes Digital</h1>
+            <p className="text-xs text-slate-400 mt-0.5">Gestión de trámites documentarios</p>
+          </div>
+        </div>
+        <ForcePasswordChangeMesa onDone={() => {}} />
       </div>
     );
   }
