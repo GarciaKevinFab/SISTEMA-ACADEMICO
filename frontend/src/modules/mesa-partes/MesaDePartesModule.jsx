@@ -24,7 +24,7 @@ import {
   CalendarClock, Flame, Calendar, Filter, X, RefreshCw,
   Building2, Edit3, Lock, ShieldCheck,
 } from "lucide-react";
-import UsersService from "../../services/users.service";
+import { UsersService } from "../../services/users.service";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
