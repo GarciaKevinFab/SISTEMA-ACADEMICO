@@ -417,6 +417,27 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
     });
   };
 
+  // ── Helper: comprimir imagen para reducir tamaño de subida ──
+  const compressImage = (file, maxWidth = 1200, quality = 0.7) =>
+    new Promise((resolve) => {
+      if (!file.type.startsWith("image/")) return resolve(file);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => resolve(blob ? new File([blob], file.name, { type: "image/jpeg" }) : file),
+          "image/jpeg",
+          quality
+        );
+      };
+      img.onerror = () => resolve(file);
+      img.src = URL.createObjectURL(file);
+    });
+
   // ── SUBMIT → public_apply con archivos ──
   const handleSubmit = async () => {
     if (!selectedCall || preferences.length === 0) return;
@@ -473,16 +494,18 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
 
       formData.append("data", JSON.stringify(payload));
 
-      // Adjuntar archivos de documentos
-      Object.entries(attachments).forEach(([docType, { file }]) => {
+      // Adjuntar archivos de documentos (comprimir imágenes)
+      for (const [docType, { file }] of Object.entries(attachments)) {
         if (file) {
-          formData.append(`doc_${docType}`, file, file.name);
+          const compressed = await compressImage(file);
+          formData.append(`doc_${docType}`, compressed, file.name);
         }
-      });
+      }
 
-      // Adjuntar voucher de pago
+      // Adjuntar voucher de pago (comprimir si es imagen)
       if (hasFee && voucherFile) {
-        formData.append("voucher", voucherFile, voucherFile.name);
+        const compressed = await compressImage(voucherFile);
+        formData.append("voucher", compressed, voucherFile.name);
       }
 
       const resp = await AdmissionPublic.apply(formData);
@@ -497,11 +520,16 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
       setStep(confirmStep);
       toast.success("¡Postulación registrada exitosamente!");
     } catch (e) {
-      const detail =
-        e?.response?.data?.detail ||
-        e?.message ||
-        "Error al registrar postulación";
-      toast.error(detail);
+      const isNetwork = !e?.response && (e?.message === "Network Error" || e?.code === "ERR_NETWORK");
+      if (isNetwork) {
+        toast.error("Error de conexión. Verifique su internet e intente de nuevo. Si el problema persiste, use una red WiFi.");
+      } else {
+        const detail =
+          e?.response?.data?.detail ||
+          e?.message ||
+          "Error al registrar postulación";
+        toast.error(detail);
+      }
     } finally {
       setSubmitting(false);
     }
