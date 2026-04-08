@@ -69,6 +69,7 @@ from .reports import (
     reports_admission_summary,
     reports_ranking_xlsx,
     reports_vacants_vs_xlsx,
+    reports_aulas_pdf,
 )
 
 # Carreras (sin admission_params)
@@ -143,6 +144,7 @@ __all__ = [
     'reports_admission_summary',
     'reports_ranking_xlsx',
     'reports_vacants_vs_xlsx',
+    'reports_aulas_pdf',
     # Careers
     'careers_collection',
     'career_detail',

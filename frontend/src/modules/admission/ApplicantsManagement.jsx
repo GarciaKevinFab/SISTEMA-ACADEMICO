@@ -19,7 +19,7 @@ import {
 import { toast } from "sonner";
 import {
     Plus, Eye, Edit, Download, Calendar, GraduationCap, X,
-    Trash2, Search, Users, FileSpreadsheet, User, Loader2,
+    Trash2, Search, Users, FileSpreadsheet, FileText, User, Loader2,
     BookOpen, CheckCircle2, AlertCircle, Award, Layers,
     ChevronLeft, ChevronRight, Mail, Phone, Hash,
     UserCheck, Clock, XCircle, ClipboardList,
@@ -391,6 +391,52 @@ export default function ApplicantsManagement() {
         }
     };
 
+    const exportAulasPdf = async () => {
+        if (!callFilter) {
+            toast.error("Selecciona una convocatoria para generar las aulas");
+            return;
+        }
+        try {
+            const params = new URLSearchParams();
+            params.set("call_id", callFilter);
+            if (careerFilter) params.set("career_id", careerFilter);
+            const query = `?${params.toString()}`;
+
+            const resp = await api.get(`/reports/admission/aulas.pdf${query}`, {
+                responseType: "blob",
+            });
+
+            const blob = new Blob([resp.data], { type: "application/pdf" });
+
+            if (blob.size < 200) {
+                toast.error("El reporte está vacío o hubo un error al generarlo");
+                return;
+            }
+
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "aulas_evaluacion.pdf";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (e) {
+            // Blob responses don't auto-parse JSON errors
+            let msg = "No se pudo generar el PDF de aulas";
+            try {
+                if (e?.response?.data instanceof Blob) {
+                    const text = await e.response.data.text();
+                    const json = JSON.parse(text);
+                    msg = json?.detail || msg;
+                } else {
+                    msg = formatApiError(e, msg);
+                }
+            } catch { /* ignore parse error */ }
+            toast.error(msg);
+        }
+    };
+
     // ── Filtrado por texto (DNI o nombre) ──
     const filteredRows = useMemo(() => {
         if (!searchText) return rows;
@@ -502,6 +548,9 @@ export default function ApplicantsManagement() {
                                 <X size={13} className="mr-1" /> Limpiar
                             </Button>
                         )}
+                        <Button variant="outline" size="sm" className="rounded-lg text-xs font-semibold h-9 gap-1.5" onClick={exportAulasPdf}>
+                            <FileText size={13} /> Aulas PDF
+                        </Button>
                         <Button variant="outline" size="sm" className="rounded-lg text-xs font-semibold h-9 gap-1.5" onClick={exportXlsx}>
                             <FileSpreadsheet size={13} /> Excel
                         </Button>

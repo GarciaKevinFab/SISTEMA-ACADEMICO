@@ -21,7 +21,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from admission.models import AdmissionCall, Application, ApplicationPreference
+from admission.models import AdmissionCall, Application, ApplicationDocument, ApplicationPreference
 
 
 # ══════════════════════════════════════════════════════════════
@@ -404,6 +404,119 @@ def reports_admission_summary(request):
     """Resumen simple de admision"""
     total = Application.objects.count()
     return Response({"total_applications": total})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def reports_aulas_pdf(request):
+    """
+    PDF de Aulas de Evaluación — agrupa postulantes en aulas de 25.
+    Query params: call_id (obligatorio), career_id (opcional).
+    """
+    import logging as _log
+
+    call_id = request.query_params.get("call_id")
+    if not call_id:
+        return Response({"detail": "Falta call_id"}, status=400)
+
+    try:
+        call = AdmissionCall.objects.get(pk=call_id)
+    except AdmissionCall.DoesNotExist:
+        return Response({"detail": "Convocatoria no encontrada"}, status=404)
+
+    # Filtrar postulaciones
+    qs = (
+        Application.objects
+        .select_related("applicant", "call")
+        .prefetch_related("preferences__career", "documents")
+        .filter(call_id=call_id)
+        .order_by("applicant__dni")
+    )
+    career_id = request.query_params.get("career_id")
+    if career_id:
+        qs = qs.filter(preferences__career_id=career_id).distinct()
+
+    # Construir lista de postulantes
+    applicants = []
+    for app in qs:
+        # Datos del profile
+        data = app.data if isinstance(getattr(app, "data", None), dict) else {}
+        profile = data.get("profile") or {}
+
+        dni = _get_app_field(app, "dni")
+        if not dni and app.applicant:
+            dni = app.applicant.dni or ""
+
+        nombres = _get_app_field(app, "nombres")
+        ap_pat = _get_app_field(app, "apellido_paterno")
+        ap_mat = _get_app_field(app, "apellido_materno")
+        modalidad = _get_app_field(app, "modalidad_admision") or "ORDINARIO"
+
+        # Carrera
+        especialidad = app.career_name or ""
+        if not especialidad:
+            try:
+                fp = app.preferences.order_by("rank").first()
+                if fp and fp.career:
+                    especialidad = fp.career.name
+            except Exception:
+                pass
+
+        # Foto
+        foto_path = ""
+        try:
+            doc = app.documents.filter(document_type="FOTO_CARNET").first()
+            if doc and doc.file:
+                foto_path = doc.file.path
+        except Exception:
+            pass
+
+        applicants.append({
+            "dni": dni,
+            "nombres": nombres,
+            "apellido_paterno": ap_pat,
+            "apellido_materno": ap_mat,
+            "especialidad": especialidad,
+            "modalidad_admision": modalidad,
+            "foto_path": foto_path,
+        })
+
+    if not applicants:
+        return Response({"detail": "No hay postulantes para esta convocatoria"}, status=404)
+
+    # Datos de la convocatoria
+    call_data = {
+        "call_name": call.title or "",
+        "period": call.period or "",
+        "exam_date": "",  # Si existe en meta
+    }
+    meta = call.meta if isinstance(call.meta, dict) else {}
+    if meta.get("exam_date"):
+        try:
+            from datetime import datetime as _dt
+            ed = _dt.fromisoformat(str(meta["exam_date"]).replace("Z", "+00:00"))
+            call_data["exam_date"] = ed.strftime("%d/%m/%Y")
+        except Exception:
+            call_data["exam_date"] = str(meta["exam_date"])
+
+    # Datos institucionales
+    from .certificates import _build_inst_dict
+    inst = _build_inst_dict()
+
+    # Generar PDF
+    try:
+        from .aulas_evaluacion_generator import generate_aulas_pdf
+        pdf_bytes = generate_aulas_pdf(applicants, call_data, inst)
+    except Exception as exc:
+        import traceback
+        tb = traceback.format_exc()
+        _log.getLogger(__name__).exception("Error generando PDF de aulas: %s\n%s", exc, tb)
+        return Response({"detail": "Error al generar PDF: {}".format(str(exc))}, status=500)
+
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = 'inline; filename="aulas_evaluacion.pdf"'
+    response["Content-Length"] = len(pdf_bytes)
+    return response
 
 
 @api_view(["GET"])

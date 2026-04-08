@@ -96,6 +96,7 @@ urlpatterns = [
     path("reports/admission/summary", v.reports_admission_summary),
     path("reports/admission/ranking.xlsx", v.reports_ranking_xlsx),
     path("reports/admission/vacants-vs.xlsx", v.reports_vacants_vs_xlsx),
+    path("reports/admission/aulas.pdf", v.reports_aulas_pdf),
 
     # ══════════════════════════════════════════════════════════
     # Modalidades de admisión
