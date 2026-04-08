@@ -51,7 +51,7 @@ import {
   Camera,
   Paperclip,
   X,
-  Image,
+  Image as ImageIcon,
   Shield,
   Eye,
 } from "lucide-react";
