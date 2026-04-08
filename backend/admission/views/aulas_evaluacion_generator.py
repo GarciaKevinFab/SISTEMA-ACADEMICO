@@ -51,29 +51,32 @@ def _get_logo_path(inst):
     return None
 
 
+# Registrar pillow-heif para que Pillow reconozca HEIC/HEIF
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass  # pillow-heif no instalado, HEIC no se soportará
+
+
 def _safe_image(path, width, height):
     """Retorna un Image de reportlab o '' si no existe.
     Pre-valida con Pillow para evitar crash en doc.build() con HEIC u otros
-    formatos no soportados.
+    formatos no soportados. Convierte a JPEG en memoria si es necesario.
     """
     if not path or not os.path.isfile(str(path)):
         return ""
     try:
         from PIL import Image as PILImage
-        # Intentar abrir y convertir a formato que ReportLab entiende
         pil_img = PILImage.open(str(path))
-        pil_img.verify()  # Verifica que sea una imagen válida
-        # Re-abrir después de verify (verify cierra el archivo)
-        pil_img = PILImage.open(str(path))
-        # Si es HEIC, WEBP u otro formato exótico, convertir a PNG en memoria
-        fmt = (pil_img.format or "").upper()
-        if fmt not in ("JPEG", "JPG", "PNG", "GIF", "BMP", "TIFF"):
-            buf = io.BytesIO()
-            pil_img = pil_img.convert("RGB")
-            pil_img.save(buf, format="PNG")
-            buf.seek(0)
-            return Image(buf, width=width, height=height)
-        return Image(str(path), width=width, height=height)
+        # Siempre convertir a JPEG en memoria para que ReportLab no falle
+        buf = io.BytesIO()
+        rgb = pil_img.convert("RGB")
+        # Redimensionar si es muy grande (max 300px lado mayor para miniatura)
+        rgb.thumbnail((300, 300), PILImage.LANCZOS)
+        rgb.save(buf, format="JPEG", quality=85)
+        buf.seek(0)
+        return Image(buf, width=width, height=height)
     except Exception as exc:
         logger.warning("No se pudo cargar imagen %s: %s", path, exc)
         return ""
