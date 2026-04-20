@@ -248,8 +248,14 @@ def admission_reset(request):
     Body:
       {
         "confirm": "BORRAR ADMISION",        # Obligatorio, texto exacto
-        "include_students": false              # opcional: también borrar Students no matriculados
+        "include_students": false              # opcional: también borrar
+                                                #   Students creados por el
+                                                #   proceso de admisión (sin
+                                                #   matrícula).
       }
+
+    SIEMPRE preserva estudiantes matriculados y cualquier Student cuyo DNI
+    no aparezca en los Applicants (estudiantes de otros procesos manuales).
     """
     data = request.data or {}
     confirm = str(data.get("confirm", "")).strip().upper()
@@ -277,8 +283,45 @@ def admission_reset(request):
 
     students_deleted = 0
     users_deleted = 0
+    skipped_enrolled = 0
+    skipped_not_from_admission = 0
+
+    # ── Si se pide borrar Students, identificarlos ANTES de borrar Applicants ──
+    students_to_delete_ids = []
+    user_ids_to_delete = []
+    if include_students:
+        from students.models import Student
+        from academic.models import Enrollment
+
+        # 1. DNIs de postulantes (del proceso de admisión)
+        admission_dnis = set(
+            Applicant.objects.exclude(dni="").values_list("dni", flat=True)
+        )
+
+        if admission_dnis:
+            # 2. IDs de estudiantes con cualquier matrícula (preservarlos)
+            enrolled_ids = set(Enrollment.objects.values_list("student_id", flat=True))
+
+            # 3. Students cuyo num_documento coincida con un DNI de admisión
+            candidates = Student.objects.filter(num_documento__in=admission_dnis)
+
+            for st in candidates:
+                if st.id in enrolled_ids:
+                    skipped_enrolled += 1
+                    continue
+                students_to_delete_ids.append(st.id)
+                if st.user_id:
+                    user_ids_to_delete.append(st.user_id)
+
+            # Contar los que NO se borran por no venir de admisión
+            skipped_not_from_admission = (
+                Student.objects.exclude(id__in=enrolled_ids)
+                .exclude(num_documento__in=admission_dnis)
+                .count()
+            )
 
     with transaction.atomic():
+        # Borrar datos de admisión
         ApplicationDocument.objects.all().delete()
         EvaluationScore.objects.all().delete()
         Payment.objects.all().delete()
@@ -289,19 +332,17 @@ def admission_reset(request):
         Applicant.objects.all().delete()
         AdmissionCall.objects.all().delete()
 
-        if include_students:
+        # Borrar Students y Users sólo identificados (vinieron del proceso de
+        # admisión y no están matriculados)
+        if students_to_delete_ids:
             from students.models import Student
-            from academic.models import Enrollment
-            enrolled_ids = set(Enrollment.objects.values_list("student_id", flat=True))
-            students_qs = Student.objects.exclude(id__in=enrolled_ids)
-            user_ids = [s.user_id for s in students_qs if s.user_id]
+            students_deleted = Student.objects.filter(
+                id__in=students_to_delete_ids
+            ).delete()[0]
 
-            students_deleted = students_qs.count()
-            students_qs.delete()
-
-            # Borrar users asociados
+        if user_ids_to_delete:
             try:
-                users_deleted = User.objects.filter(id__in=user_ids).delete()[0]
+                users_deleted = User.objects.filter(id__in=user_ids_to_delete).delete()[0]
             except Exception:
                 users_deleted = 0
 
@@ -310,4 +351,6 @@ def admission_reset(request):
         "deleted": counts_before,
         "students_deleted": students_deleted,
         "users_deleted": users_deleted,
+        "skipped_enrolled": skipped_enrolled,
+        "skipped_not_from_admission": skipped_not_from_admission,
     })

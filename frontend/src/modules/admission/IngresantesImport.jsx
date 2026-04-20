@@ -727,14 +727,21 @@ export default function IngresantesImport() {
               </div>
             </div>
 
-            <label className="flex items-center gap-2 text-sm text-slate-700">
+            <label className="flex items-start gap-2 text-sm text-slate-700">
               <input
                 type="checkbox"
                 checked={resetIncludeStudents}
                 onChange={e => setResetIncludeStudents(e.target.checked)}
-                className="h-4 w-4 accent-red-600"
+                className="h-4 w-4 mt-0.5 accent-red-600"
               />
-              También borrar Estudiantes y Usuarios creados (solo los NO matriculados)
+              <span>
+                También borrar Estudiantes/Usuarios <b>creados por este proceso de admisión</b>
+                <br />
+                <span className="text-xs text-slate-500">
+                  Solo borra estudiantes cuyo DNI coincida con un postulante y que NO estén matriculados.
+                  Los demás estudiantes (matriculados, creados manualmente, de otros procesos) no se tocan.
+                </span>
+              </span>
             </label>
 
             <div className="space-y-1.5">
@@ -764,19 +771,34 @@ export default function IngresantesImport() {
             </div>
 
             {resetResult && (
-              <div className="rounded-lg bg-white border border-emerald-200 p-3 text-xs">
-                <p className="font-bold text-emerald-700 mb-1">✓ Borrado completado:</p>
-                <ul className="text-slate-700 space-y-0.5">
-                  {Object.entries(resetResult.deleted || {}).map(([k, v]) => (
-                    <li key={k}><span className="font-mono">{k}</span>: {v}</li>
-                  ))}
-                  {resetResult.students_deleted > 0 && (
-                    <li><span className="font-mono">students</span>: {resetResult.students_deleted}</li>
-                  )}
-                  {resetResult.users_deleted > 0 && (
-                    <li><span className="font-mono">users</span>: {resetResult.users_deleted}</li>
-                  )}
-                </ul>
+              <div className="rounded-lg bg-white border border-emerald-200 p-3 text-xs space-y-2">
+                <div>
+                  <p className="font-bold text-emerald-700 mb-1">✓ Borrado completado:</p>
+                  <ul className="text-slate-700 space-y-0.5">
+                    {Object.entries(resetResult.deleted || {}).map(([k, v]) => (
+                      <li key={k}><span className="font-mono">{k}</span>: {v}</li>
+                    ))}
+                    {resetResult.students_deleted > 0 && (
+                      <li><span className="font-mono">students_deleted</span>: {resetResult.students_deleted}</li>
+                    )}
+                    {resetResult.users_deleted > 0 && (
+                      <li><span className="font-mono">users_deleted</span>: {resetResult.users_deleted}</li>
+                    )}
+                  </ul>
+                </div>
+                {(resetResult.skipped_enrolled > 0 || resetResult.skipped_not_from_admission > 0) && (
+                  <div className="pt-2 border-t border-slate-100">
+                    <p className="font-bold text-blue-700 mb-1">🛡️ Preservados (no borrados):</p>
+                    <ul className="text-slate-700 space-y-0.5">
+                      {resetResult.skipped_enrolled > 0 && (
+                        <li>Estudiantes matriculados: <b>{resetResult.skipped_enrolled}</b></li>
+                      )}
+                      {resetResult.skipped_not_from_admission > 0 && (
+                        <li>Estudiantes de otros procesos: <b>{resetResult.skipped_not_from_admission}</b></li>
+                      )}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </div>
