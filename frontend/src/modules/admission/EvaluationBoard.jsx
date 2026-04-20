@@ -7,6 +7,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import api from "../../lib/api";
 import { AdmissionCalls, Evaluation } from "../../services/admission.service";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Input } from "../../components/ui/input";
@@ -113,6 +114,7 @@ export default function EvaluationBoard() {
     const [calls, setCalls] = useState([]);
     const [call, setCall] = useState(null);
     const [careerId, setCareerId] = useState("");
+    const [careers, setCareers] = useState([]);
     const [rows, setRows] = useState([]);
     const [scores, setScores] = useState({});
     const [searchDni, setSearchDni] = useState("");
@@ -140,6 +142,10 @@ export default function EvaluationBoard() {
             setCalls(list);
             if (list.length === 1) setCall(list[0]);
         });
+        api.get("/careers").then(({ data }) => {
+            const arr = Array.isArray(data) ? data : (data?.careers || data?.results || []);
+            setCareers(arr.filter(c => c?.id != null));
+        }).catch(() => setCareers([]));
     }, []);
 
     const load = async () => {
@@ -328,7 +334,7 @@ export default function EvaluationBoard() {
                                     <SelectValue placeholder="Seleccione" />
                                 </div>
                             </SelectTrigger>
-                            <SelectContent>{calls.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent>
+                            <SelectContent>{calls.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.title || c.name || `Convocatoria #${c.id}`}</SelectItem>)}</SelectContent>
                         </Select>
                     </div>
                     <div>
@@ -341,7 +347,9 @@ export default function EvaluationBoard() {
                                 </div>
                             </SelectTrigger>
                             <SelectContent>
-                                {(call?.careers || []).map(k => <SelectItem key={k.id} value={k.id.toString()}>{k.name}</SelectItem>)}
+                                {(call?.careers && call.careers.length > 0 ? call.careers : careers).map(k => (
+                                    <SelectItem key={k.id} value={k.id.toString()}>{k.name}</SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                     </div>

@@ -1,5 +1,6 @@
 // src/modules/admission/ResultsPublication.jsx
 import React, { useEffect, useState } from "react";
+import api from "../../lib/api";
 import { AdmissionCalls, Results } from "../../services/admission.service";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
@@ -11,6 +12,7 @@ export default function ResultsPublication() {
     const [calls, setCalls] = useState([]);
     const [call, setCall] = useState(null);
     const [careerId, setCareerId] = useState("");
+    const [careers, setCareers] = useState([]);
     const [rows, setRows] = useState([]);
     const [published, setPublished] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -24,6 +26,13 @@ export default function ResultsPublication() {
                 setCall(list[0] || null);
             } catch {
                 toast.error("Error al cargar convocatorias");
+            }
+            try {
+                const { data } = await api.get("/careers");
+                const arr = Array.isArray(data) ? data : (data?.careers || data?.results || []);
+                setCareers(arr.filter(c => c?.id != null));
+            } catch {
+                setCareers([]);
             } finally {
                 setLoading(false);
             }
@@ -99,7 +108,11 @@ export default function ResultsPublication() {
     <Select value={call?.id?.toString()} onValueChange={(v) => setCall(calls.find(x => x.id.toString() === v))}>
       <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
       <SelectContent>
-        {calls.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
+        {calls.map(c => (
+          <SelectItem key={c.id} value={c.id.toString()}>
+            {c.title || c.name || `Convocatoria #${c.id}`}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   </div>
@@ -109,7 +122,9 @@ export default function ResultsPublication() {
     <Select value={careerId} onValueChange={setCareerId}>
       <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
       <SelectContent>
-        {call?.careers?.map(k => <SelectItem key={k.id} value={k.id.toString()}>{k.name}</SelectItem>)}
+        {(call?.careers && call.careers.length > 0 ? call.careers : careers).map(k => (
+          <SelectItem key={k.id} value={k.id.toString()}>{k.name}</SelectItem>
+        ))}
       </SelectContent>
     </Select>
   </div>
