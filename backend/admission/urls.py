@@ -105,6 +105,12 @@ urlpatterns = [
     path("admission/ingresantes/regenerate-credentials", v.ingresantes_regenerate_credentials),
 
     # ══════════════════════════════════════════════════════════
+    # Backup y reset de admisión
+    # ══════════════════════════════════════════════════════════
+    path("admission/backup.zip", v.admission_backup_zip),
+    path("admission/reset", v.admission_reset),
+
+    # ══════════════════════════════════════════════════════════
     # Modalidades de admisión
     # ══════════════════════════════════════════════════════════
     path("admission/modalities", v.modalities_collection),

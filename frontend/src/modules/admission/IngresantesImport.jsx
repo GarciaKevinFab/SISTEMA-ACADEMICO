@@ -19,7 +19,9 @@ import { toast } from "sonner";
 import {
   Upload, Download, Users, CheckCircle2, AlertCircle, FileSpreadsheet,
   Calendar, Loader2, X, Copy, Info, KeyRound, RefreshCw,
+  Archive, Trash2, ShieldAlert,
 } from "lucide-react";
+import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
 
 function formatApiError(err, fallback = "Ocurrió un error") {
@@ -45,6 +47,13 @@ export default function IngresantesImport() {
   const [regenCallId, setRegenCallId] = useState("");
   const [regenerating, setRegenerating] = useState(false);
   const [regenResult, setRegenResult] = useState(null);
+
+  // Backup / reset
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState("");
+  const [resetIncludeStudents, setResetIncludeStudents] = useState(false);
+  const [resetResult, setResetResult] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -264,6 +273,59 @@ export default function IngresantesImport() {
       .join("\n");
     navigator.clipboard?.writeText(text);
     toast.success("Credenciales copiadas al portapapeles");
+  };
+
+  const downloadBackup = async () => {
+    setBackupLoading(true);
+    try {
+      const resp = await api.get("/admission/backup.zip", {
+        responseType: "blob",
+        timeout: 600000, // 10 min para backups grandes
+      });
+      const blob = new Blob([resp.data], { type: "application/zip" });
+      if (blob.size < 500) {
+        toast.error("El backup está vacío o falló");
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      a.download = `backup_admision_${ts}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Backup descargado (${(blob.size / (1024 * 1024)).toFixed(1)} MB)`);
+    } catch (e) {
+      toast.error(formatApiError(e, "Error al generar el backup"));
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const resetAdmission = async () => {
+    if (resetConfirmText.trim().toUpperCase() !== "BORRAR ADMISION") {
+      toast.error('Debes escribir exactamente "BORRAR ADMISION" para confirmar');
+      return;
+    }
+    if (!window.confirm(
+      "¿Estás seguro? Esta acción borrará todos los postulantes, convocatorias y datos relacionados. No se puede deshacer."
+    )) return;
+
+    setResetLoading(true);
+    setResetResult(null);
+    try {
+      const { data } = await api.post("/admission/reset", {
+        confirm: "BORRAR ADMISION",
+        include_students: resetIncludeStudents,
+      });
+      setResetResult(data);
+      setResetConfirmText("");
+      toast.success("Datos de admisión borrados correctamente");
+    } catch (e) {
+      toast.error(formatApiError(e, "Error al resetear"));
+    } finally {
+      setResetLoading(false);
+    }
   };
 
   const summary = result?.summary || {};
@@ -612,6 +674,112 @@ export default function IngresantesImport() {
               )}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* ── Backup + Reset ── */}
+      <Card className="border-slate-300">
+        <CardContent className="p-5 space-y-5">
+          <div className="flex items-start gap-3">
+            <div className="h-9 w-9 rounded-xl bg-slate-800/10 grid place-items-center shrink-0">
+              <Archive size={18} className="text-slate-700" />
+            </div>
+            <div className="flex-1">
+              <p className="font-extrabold text-slate-900">Backup y reinicio de admisión</p>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Descarga todo el proceso de admisión en un ZIP organizado por postulante
+                (fotos, DNIs, vouchers, evaluaciones, pagos). Luego puedes borrar todo para
+                empezar un proceso nuevo.
+              </p>
+            </div>
+          </div>
+
+          {/* Descargar backup */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-bold text-slate-800">1. Descargar backup completo</p>
+            <p className="text-xs text-slate-500 mt-0.5 mb-3">
+              Genera un ZIP con <code>postulantes/&lt;DNI&gt;_&lt;NOMBRE&gt;/</code> carpeta por
+              cada postulante, conteniendo <code>perfil.json</code> + todos sus documentos subidos.
+            </p>
+            <Button
+              onClick={downloadBackup}
+              disabled={backupLoading}
+              className="rounded-lg font-extrabold bg-slate-800 hover:bg-slate-900 gap-2"
+            >
+              {backupLoading ? (
+                <><Loader2 size={14} className="animate-spin" /> Generando ZIP…</>
+              ) : (
+                <><Download size={14} /> Descargar ZIP</>
+              )}
+            </Button>
+          </div>
+
+          {/* Resetear */}
+          <div className="rounded-xl border-2 border-red-200 bg-red-50/50 p-4 space-y-3">
+            <div className="flex items-start gap-2">
+              <ShieldAlert size={18} className="text-red-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-bold text-red-700">2. Borrar todos los datos de admisión</p>
+                <p className="text-xs text-red-600/80 mt-0.5">
+                  <b>Irreversible.</b> Elimina convocatorias, postulantes, postulaciones, pagos,
+                  documentos, evaluaciones y resultados. Asegúrate de haber descargado el backup arriba.
+                </p>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={resetIncludeStudents}
+                onChange={e => setResetIncludeStudents(e.target.checked)}
+                className="h-4 w-4 accent-red-600"
+              />
+              También borrar Estudiantes y Usuarios creados (solo los NO matriculados)
+            </label>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-red-700">
+                Para confirmar escribe exactamente: <code className="bg-white px-1.5 py-0.5 rounded">BORRAR ADMISION</code>
+              </Label>
+              <Input
+                value={resetConfirmText}
+                onChange={e => setResetConfirmText(e.target.value)}
+                placeholder="BORRAR ADMISION"
+                className="h-10 rounded-lg font-mono bg-white border-red-300 focus-visible:ring-red-500"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                onClick={resetAdmission}
+                disabled={resetLoading || resetConfirmText.trim().toUpperCase() !== "BORRAR ADMISION"}
+                className="rounded-lg font-extrabold bg-red-600 hover:bg-red-700 gap-2"
+              >
+                {resetLoading ? (
+                  <><Loader2 size={14} className="animate-spin" /> Borrando…</>
+                ) : (
+                  <><Trash2 size={14} /> Borrar admisión</>
+                )}
+              </Button>
+            </div>
+
+            {resetResult && (
+              <div className="rounded-lg bg-white border border-emerald-200 p-3 text-xs">
+                <p className="font-bold text-emerald-700 mb-1">✓ Borrado completado:</p>
+                <ul className="text-slate-700 space-y-0.5">
+                  {Object.entries(resetResult.deleted || {}).map(([k, v]) => (
+                    <li key={k}><span className="font-mono">{k}</span>: {v}</li>
+                  ))}
+                  {resetResult.students_deleted > 0 && (
+                    <li><span className="font-mono">students</span>: {resetResult.students_deleted}</li>
+                  )}
+                  {resetResult.users_deleted > 0 && (
+                    <li><span className="font-mono">users</span>: {resetResult.users_deleted}</li>
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

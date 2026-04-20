@@ -103,6 +103,12 @@ from .ingresantes_import import (
     ingresantes_regenerate_credentials,
 )
 
+# Backup y reset de admisión
+from .admission_backup import (
+    admission_backup_zip,
+    admission_reset,
+)
+
 __all__ = [
     # Calls
     'calls_list_public',
@@ -167,4 +173,7 @@ __all__ = [
     # Ingresantes
     'ingresantes_import',
     'ingresantes_regenerate_credentials',
+    # Backup / reset
+    'admission_backup_zip',
+    'admission_reset',
 ]
