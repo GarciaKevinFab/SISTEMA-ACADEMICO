@@ -163,15 +163,23 @@ def _upsert_student(dni, nombres, ap_pat, ap_mat, career_name, discapacidad_si):
     return st, created
 
 
-def _ensure_user_with_dni_password(student):
-    """Crea un User con username=DNI y contraseña=DNI (si aún no tiene).
-    Retorna (user, temp_password or None, was_created)."""
+def _generate_temp_password(length=10):
+    """Contraseña temporal: 8 alfanuméricos + 1 dígito + '!'."""
+    from django.utils.crypto import get_random_string
+    import string
+    body = get_random_string(length - 2, allowed_chars=string.ascii_letters + string.digits)
+    tail = get_random_string(1, allowed_chars=string.digits) + "!"
+    return body + tail
+
+
+def _ensure_user_with_temp_password(student):
+    """Crea un User con username=DNI y contraseña temporal aleatoria
+    (si aún no tiene). Retorna (user, temp_password or None, was_created)."""
     if student.user_id:
         # Ya tiene usuario: aseguramos rol STUDENT sin resetear password
         user, _ = _create_user_for_student(student)
         return user, None, False
 
-    # Crear usuario con contraseña = DNI
     from django.contrib.auth import get_user_model
     from acl.models import Role, UserRole
     User = get_user_model()
@@ -188,7 +196,7 @@ def _ensure_user_with_dni_password(student):
 
     # Email sintético si no hay
     try:
-        email_field = User._meta.get_field("email")
+        User._meta.get_field("email")
         user.email = (student.email or "").strip().lower() or f"{uname}@no-email.local"
     except Exception:
         pass
@@ -198,9 +206,9 @@ def _ensure_user_with_dni_password(student):
     elif hasattr(user, "first_name"):
         user.first_name = full_name[:150]
 
-    # Contraseña inicial = DNI (usuario la cambia al entrar)
-    initial_password = student.num_documento
-    user.set_password(initial_password)
+    # Contraseña temporal aleatoria
+    temp_password = _generate_temp_password()
+    user.set_password(temp_password)
     user.save()
 
     # Asignar rol STUDENT
@@ -212,7 +220,7 @@ def _ensure_user_with_dni_password(student):
     student.user = user
     student.save(update_fields=["user"])
 
-    return user, initial_password, True
+    return user, temp_password, True
 
 
 @api_view(["POST"])
@@ -380,7 +388,7 @@ def ingresantes_import(request):
                     counts["updated_students"] += 1
 
                 # 4. User
-                user, password, user_created = _ensure_user_with_dni_password(student)
+                user, password, user_created = _ensure_user_with_temp_password(student)
                 if user_created:
                     counts["created_users"] += 1
                     credentials.append({

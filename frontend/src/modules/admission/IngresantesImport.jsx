@@ -149,7 +149,8 @@ export default function IngresantesImport() {
             <ul className="list-disc pl-5 text-slate-600">
               <li>Actualiza su postulación a <b>ADMITTED</b>.</li>
               <li>Crea o actualiza su ficha de <b>Estudiante</b>.</li>
-              <li>Crea su <b>usuario</b> con rol STUDENT — contraseña inicial = DNI.</li>
+              <li>Crea su <b>usuario</b> con <code>usuario = DNI</code> y una <b>contraseña temporal</b> aleatoria.</li>
+              <li>Descarga el CSV de credenciales para entregárselas al estudiante.</li>
             </ul>
           </div>
         </CardContent>
@@ -188,10 +189,16 @@ export default function IngresantesImport() {
                   <SelectValue placeholder="Modalidad" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ORDINARIO">ORDINARIO</SelectItem>
-                  {modalidades.map(m => (
-                    <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>
-                  ))}
+                  {(() => {
+                    const names = modalidades.map(m => m.name).filter(Boolean);
+                    if (!names.some(n => n.toUpperCase() === "ORDINARIO")) {
+                      names.unshift("ORDINARIO");
+                    }
+                    const seen = new Set();
+                    return names
+                      .filter(n => { const k = n.toUpperCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+                      .map(n => <SelectItem key={n} value={n}>{n}</SelectItem>);
+                  })()}
                 </SelectContent>
               </Select>
             </div>
