@@ -149,43 +149,49 @@ def _get_or_create_applicant(dni, nombres, ap_pat, ap_mat, email=""):
 
 def _get_or_create_application(applicant, call, career, career_name_raw,
                                modalidad="ORDINARIO", status="CREATED",
-                               discapacidad_si=False):
+                               discapacidad_si=False,
+                               nombres="", ap_pat="", ap_mat=""):
     """Busca Application por (applicant, call), crea si no existe.
     Actualiza el status al valor pedido."""
     app = Application.objects.filter(applicant=applicant, call=call).first()
     created = False
     career_display = (career.name if career else career_name_raw) or ""
 
+    # Campos MINEDU separados para que la UI los muestre correctamente
+    base_profile = {
+        "nombres": nombres or (applicant.names.split(" ")[0] if applicant.names else ""),
+        "apellido_paterno": ap_pat or "",
+        "apellido_materno": ap_mat or "",
+        "dni": applicant.dni,
+        "modalidad_admision": modalidad,
+    }
+    if discapacidad_si:
+        base_profile["discapacidad"] = "SI"
+
     if not app:
-        profile = {
-            "nombres": applicant.names.split(" ")[0] if applicant.names else "",
-            "dni": applicant.dni,
-            "modalidad_admision": modalidad,
-        }
-        if discapacidad_si:
-            profile["discapacidad"] = "SI"
         app = Application.objects.create(
             applicant=applicant,
             call=call,
             career_name=career_display,
             status=status,
-            data={"profile": profile, "source": "IMPORT_INGRESANTES"},
+            data={"profile": base_profile, "source": "IMPORT_INGRESANTES"},
         )
         created = True
     else:
         app.status = status
         if career and not app.career_name:
             app.career_name = career.name
-        # Actualizar discapacidad en data.profile si vino en Excel
+        # Fusionar profile existente con los campos MINEDU separados
+        data = app.data if isinstance(app.data, dict) else {}
+        profile = data.get("profile") or {}
+        for k, v in base_profile.items():
+            if v and not profile.get(k):
+                profile[k] = v
         if discapacidad_si:
-            data = app.data if isinstance(app.data, dict) else {}
-            profile = data.get("profile") or {}
             profile["discapacidad"] = "SI"
-            data["profile"] = profile
-            app.data = data
-            app.save(update_fields=["status", "career_name", "data"])
-        else:
-            app.save(update_fields=["status", "career_name"])
+        data["profile"] = profile
+        app.data = data
+        app.save(update_fields=["status", "career_name", "data"])
 
     # Asegurar preferencia con la carrera
     if career:
@@ -477,6 +483,9 @@ def ingresantes_import(request):
                     modalidad=modalidad,
                     status=status,
                     discapacidad_si=r["discapacidad_si"],
+                    nombres=r["nombres"],
+                    ap_pat=r["ap_pat"],
+                    ap_mat=r["ap_mat"],
                 )
                 if app_created:
                     counts["created_applications"] += 1
