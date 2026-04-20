@@ -89,7 +89,7 @@ export default function IngresantesImport() {
 
       const s = data?.summary || {};
       if (dryRun) {
-        toast.success(`Simulación: ${s.admitted || 0} ingresantes detectados`);
+        toast.success(`Vista previa: ${s.admitted || 0} ingresantes detectados`);
       } else {
         toast.success(
           `Importados: ${s.created_students || 0} nuevos, ${s.updated_students || 0} actualizados, ${s.created_users || 0} usuarios creados`
@@ -318,9 +318,20 @@ export default function IngresantesImport() {
             </div>
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input type="checkbox" checked={dryRun} onChange={e => setDryRun(e.target.checked)} />
-            Simular (dry run) — cuenta sin crear nada
+          <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 cursor-pointer hover:bg-slate-100/70 transition-colors">
+            <input
+              type="checkbox"
+              checked={dryRun}
+              onChange={e => setDryRun(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-blue-600"
+            />
+            <div className="flex-1 text-sm">
+              <p className="font-semibold text-slate-800">Modo vista previa</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Solo cuenta cuántos ingresantes hay en el archivo, sin crear estudiantes ni usuarios.
+                Útil para revisar antes de la importación real.
+              </p>
+            </div>
           </label>
 
           <div className="flex gap-2 pt-2 border-t">
@@ -332,7 +343,7 @@ export default function IngresantesImport() {
               {uploading ? (
                 <><Loader2 size={14} className="animate-spin" /> Procesando…</>
               ) : (
-                <><Upload size={14} /> {dryRun ? "Simular" : "Importar"}</>
+                <><Upload size={14} /> {dryRun ? "Vista previa" : "Importar ingresantes"}</>
               )}
             </Button>
           </div>
@@ -347,7 +358,7 @@ export default function IngresantesImport() {
               <div className="flex items-center gap-2 mb-3">
                 <CheckCircle2 size={16} className="text-emerald-600" />
                 <h3 className="font-extrabold text-slate-900">
-                  Resultado {result.dry_run ? "(simulación)" : ""}
+                  Resultado {result.dry_run ? "(vista previa)" : ""}
                 </h3>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
