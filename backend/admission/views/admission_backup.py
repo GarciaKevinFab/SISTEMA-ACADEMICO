@@ -21,8 +21,10 @@ El ZIP tiene esta estructura:
 """
 import io
 import json
+import logging
 import os
 import re
+import traceback
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -36,6 +38,8 @@ from django.contrib.auth import get_user_model
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+
+logger = logging.getLogger("admission.backup")
 
 from admission.models import (
     AdmissionCall,
@@ -86,6 +90,14 @@ def _build_backup_zip_bytes(call_id=None, only_with_applications=True) -> bytes:
       only_with_applications: si True (default), excluye Applicants
         huérfanos (sin ninguna Application).
     """
+    # Normalizar call_id a int o None
+    call_id_int = None
+    if call_id not in (None, "", "__all__"):
+        try:
+            call_id_int = int(call_id)
+        except (TypeError, ValueError):
+            call_id_int = None
+
     now = datetime.now()
     media_root = Path(getattr(settings, "MEDIA_ROOT", ""))
 
@@ -94,13 +106,19 @@ def _build_backup_zip_bytes(call_id=None, only_with_applications=True) -> bytes:
 
         # ── 1. Convocatorias ──
         calls_qs = AdmissionCall.objects.all()
-        if call_id:
-            calls_qs = calls_qs.filter(pk=call_id)
+        if call_id_int is not None:
+            calls_qs = calls_qs.filter(pk=call_id_int)
         calls_data = [_serialize_obj(c) for c in calls_qs]
-        schedule_data = [_serialize_obj(s) for s in AdmissionScheduleItem.objects.all()
-                         if (not call_id) or s.call_id == int(call_id)]
-        result_pubs = [_serialize_obj(r) for r in ResultPublication.objects.all()
-                       if (not call_id) or r.call_id == int(call_id)]
+
+        sched_qs = AdmissionScheduleItem.objects.all()
+        if call_id_int is not None:
+            sched_qs = sched_qs.filter(call_id=call_id_int)
+        schedule_data = [_serialize_obj(s) for s in sched_qs]
+
+        rp_qs = ResultPublication.objects.all()
+        if call_id_int is not None:
+            rp_qs = rp_qs.filter(call_id=call_id_int)
+        result_pubs = [_serialize_obj(r) for r in rp_qs]
         zf.writestr(
             "convocatorias.json",
             json.dumps({
@@ -119,11 +137,9 @@ def _build_backup_zip_bytes(call_id=None, only_with_applications=True) -> bytes:
         )
 
         # Filtros para evitar datos de prueba/huérfanos
-        if call_id:
-            # Solo postulantes con al menos una Application en esta convocatoria
-            applicants_qs = applicants_qs.filter(applications__call_id=call_id).distinct()
+        if call_id_int is not None:
+            applicants_qs = applicants_qs.filter(applications__call_id=call_id_int).distinct()
         elif only_with_applications:
-            # Excluir huérfanos (sin ninguna postulación)
             applicants_qs = applicants_qs.filter(applications__isnull=False).distinct()
 
         applicants = list(applicants_qs)
@@ -133,85 +149,106 @@ def _build_backup_zip_bytes(call_id=None, only_with_applications=True) -> bytes:
             '"DNI","Apellidos Nombres","Email","Telefono","Convocatorias","Estados","Carpeta"'
         ]
 
+        def _safe_payment(app):
+            """OneToOneField puede lanzar RelatedObjectDoesNotExist."""
+            try:
+                return getattr(app, "payment", None)
+            except Exception:
+                return None
+
         total_files = 0
+        processed = 0
+        skipped_applicants = 0
         for ap in applicants:
-            dni = ap.dni or "sin-dni"
-            names_slug = _slug(ap.names or "sin-nombre")
-            folder = f"postulantes/{dni}_{names_slug}"
+            try:
+                dni = ap.dni or f"sin-dni-{ap.id}"
+                names_slug = _slug(ap.names or "sin-nombre")
+                if not names_slug:
+                    names_slug = f"id{ap.id}"
+                folder = f"postulantes/{dni}_{names_slug}"
 
-            # perfil.json con aplicaciones, documentos, pagos
-            apps_data = []
-            estados = []
-            convos = []
-            for app in ap.applications.all():
-                career_pref = []
-                for p in app.preferences.all().order_by("rank"):
-                    career_pref.append({
-                        "rank": p.rank,
-                        "career_id": p.career_id,
-                        "career_name": p.career.name if p.career else "",
-                    })
+                apps_data = []
+                estados = []
+                convos = []
+                for app in ap.applications.all():
+                    try:
+                        career_pref = []
+                        for p in app.preferences.all().order_by("rank"):
+                            career_pref.append({
+                                "rank": p.rank,
+                                "career_id": p.career_id,
+                                "career_name": p.career.name if p.career else "",
+                            })
 
-                pay = getattr(app, "payment", None)
-                pay_data = _serialize_obj(pay) if pay else None
+                        pay = _safe_payment(app)
+                        pay_data = _serialize_obj(pay) if pay else None
 
-                docs_data = []
-                for d in app.documents.all():
-                    docs_data.append(_serialize_obj(d))
+                        docs_data = [_serialize_obj(d) for d in app.documents.all()]
+                        scores_data = [_serialize_obj(s) for s in app.scores.all()]
 
-                scores_data = [_serialize_obj(s) for s in app.scores.all()]
+                        apps_data.append({
+                            **_serialize_obj(app),
+                            "call_title": app.call.title if app.call else "",
+                            "call_period": app.call.period if app.call else "",
+                            "career_preferences": career_pref,
+                            "payment": pay_data,
+                            "documents": docs_data,
+                            "evaluation_scores": scores_data,
+                        })
+                        estados.append(app.status or "")
+                        if app.call:
+                            convos.append(app.call.title or "")
+                    except Exception as exc_app:
+                        logger.warning("Error serializando application %s: %s", app.id, exc_app)
 
-                apps_data.append({
-                    **_serialize_obj(app),
-                    "call_title": app.call.title if app.call else "",
-                    "call_period": app.call.period if app.call else "",
-                    "career_preferences": career_pref,
-                    "payment": pay_data,
-                    "documents": docs_data,
-                    "evaluation_scores": scores_data,
-                })
-                estados.append(app.status or "")
-                if app.call:
-                    convos.append(app.call.title or "")
+                perfil = {
+                    "applicant": _serialize_obj(ap),
+                    "applications": apps_data,
+                }
+                zf.writestr(
+                    f"{folder}/perfil.json",
+                    json.dumps(perfil, cls=DjangoJSONEncoder, ensure_ascii=False, indent=2),
+                )
 
-            perfil = {
-                "applicant": _serialize_obj(ap),
-                "applications": apps_data,
-            }
-            zf.writestr(f"{folder}/perfil.json",
-                        json.dumps(perfil, cls=DjangoJSONEncoder, ensure_ascii=False, indent=2))
-
-            # Copiar documentos físicos de cada postulante
-            for app in ap.applications.all():
-                for d in app.documents.all():
-                    if d.file and d.file.name:
-                        file_path = media_root / d.file.name
+                # Copiar documentos físicos
+                for app in ap.applications.all():
+                    for d in app.documents.all():
+                        if d.file and d.file.name:
+                            file_path = media_root / d.file.name
+                            if file_path.exists():
+                                try:
+                                    ext = Path(d.file.name).suffix or ""
+                                    orig = _slug(d.original_name or d.document_type or "doc")[:50] or "doc"
+                                    doc_arc = f"{folder}/documentos/{d.document_type or 'DOC'}_{orig}{ext}"
+                                    zf.write(file_path, doc_arc)
+                                    total_files += 1
+                                except Exception as exc_f:
+                                    logger.warning("No se pudo copiar %s: %s", file_path, exc_f)
+                    pay = _safe_payment(app)
+                    if pay and pay.voucher and pay.voucher.name:
+                        file_path = media_root / pay.voucher.name
                         if file_path.exists():
                             try:
-                                ext = Path(d.file.name).suffix or ""
-                                orig = _slug(d.original_name or d.document_type or "doc")[:50]
-                                doc_arc = f"{folder}/documentos/{d.document_type or 'DOC'}_{orig}{ext}"
-                                zf.write(file_path, doc_arc)
+                                ext = Path(pay.voucher.name).suffix or ""
+                                zf.write(file_path, f"{folder}/documentos/VOUCHER_PAGO{ext}")
                                 total_files += 1
-                            except Exception:
-                                pass
-                # Voucher del pago
-                pay = getattr(app, "payment", None)
-                if pay and pay.voucher and pay.voucher.name:
-                    file_path = media_root / pay.voucher.name
-                    if file_path.exists():
-                        try:
-                            ext = Path(pay.voucher.name).suffix or ""
-                            zf.write(file_path, f"{folder}/documentos/VOUCHER_PAGO{ext}")
-                            total_files += 1
-                        except Exception:
-                            pass
+                            except Exception as exc_v:
+                                logger.warning("No se pudo copiar voucher %s: %s", file_path, exc_v)
 
-            # Línea del CSV
-            csv_lines.append(
-                f'"{dni}","{ap.names or ""}","{ap.email or ""}","{ap.phone or ""}",'
-                f'"{" | ".join(convos)}","{" | ".join(estados)}","{folder}"'
-            )
+                # CSV (escapar comillas)
+                def _q(s):
+                    return str(s or "").replace('"', "'")
+                csv_lines.append(
+                    '"{}","{}","{}","{}","{}","{}","{}"'.format(
+                        _q(dni), _q(ap.names), _q(ap.email), _q(ap.phone),
+                        _q(" | ".join(convos)), _q(" | ".join(estados)), _q(folder),
+                    )
+                )
+                processed += 1
+            except Exception as exc_ap:
+                logger.warning("Error procesando applicant %s (DNI %s): %s",
+                               getattr(ap, "id", "?"), getattr(ap, "dni", "?"), exc_ap)
+                skipped_applicants += 1
 
         # Resumen
         zf.writestr("resumen.csv", "\ufeff" + "\n".join(csv_lines))
@@ -229,12 +266,13 @@ ESTRUCTURA:
           (FOTO_CARNET_, DNI_, VOUCHER_PAGO_, etc.)
 
 CONTEOS:
-  Convocatorias:     {len(calls_data)}
-  Postulantes:       {applicants.count()}
-  Postulaciones:     {Application.objects.count()}
-  Pagos:             {Payment.objects.count()}
-  Documentos:        {ApplicationDocument.objects.count()}
-  Archivos copiados: {total_files}
+  Convocatorias:       {len(calls_data)}
+  Postulantes:         {processed}
+  Postulantes saltados: {skipped_applicants}
+  Postulaciones:       {Application.objects.count()}
+  Pagos:               {Payment.objects.count()}
+  Documentos (meta):   {ApplicationDocument.objects.count()}
+  Archivos copiados:   {total_files}
 
 Para restaurar manualmente, los JSON tienen todos los IDs originales.
 """
@@ -257,10 +295,19 @@ def admission_backup_zip(request):
     call_id = request.query_params.get("call_id")
     include_orphans = str(request.query_params.get("include_orphans", "")).lower() in ("1", "true", "yes")
 
-    zip_bytes = _build_backup_zip_bytes(
-        call_id=call_id if call_id else None,
-        only_with_applications=not include_orphans,
-    )
+    try:
+        zip_bytes = _build_backup_zip_bytes(
+            call_id=call_id if call_id else None,
+            only_with_applications=not include_orphans,
+        )
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("Error generando backup: %s\n%s", exc, tb)
+        return Response(
+            {"detail": "Error generando backup: {}".format(str(exc))},
+            status=500,
+        )
+
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     resp = HttpResponse(zip_bytes, content_type="application/zip")
     resp["Content-Disposition"] = f'attachment; filename="backup_admision_{ts}.zip"'
