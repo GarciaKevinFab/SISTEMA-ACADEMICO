@@ -485,16 +485,73 @@ def ingresantes_regenerate_credentials(request):
         "errors": 0,
     }
 
+    counts["created_students"] = 0
+
     for dni in dnis:
         try:
             student = Student.objects.filter(num_documento=dni).first()
-            if not student:
-                counts["not_found"] += 1
-                errors.append({"dni": dni, "reason": "Estudiante no encontrado"})
-                continue
-            counts["found"] += 1
 
-            # Obtener carrera
+            # Si no hay Student, intentar crearlo desde Applicant + Application ADMITTED
+            if not student:
+                applicant = Applicant.objects.filter(dni=dni).first()
+                if not applicant:
+                    counts["not_found"] += 1
+                    errors.append({"dni": dni, "reason": "No existe como postulante ni estudiante"})
+                    continue
+
+                # Buscar la Application más reciente (preferencia: ADMITTED)
+                app = (
+                    Application.objects
+                    .filter(applicant=applicant)
+                    .select_related("call")
+                    .prefetch_related("preferences__career")
+                    .order_by("-id")
+                    .first()
+                )
+                # Extraer nombres
+                full = applicant.names or ""
+                parts = full.split()
+                if len(parts) >= 3:
+                    ap_pat, ap_mat = parts[0], parts[1]
+                    nombres_only = " ".join(parts[2:])
+                elif len(parts) == 2:
+                    ap_pat, ap_mat, nombres_only = parts[0], "", parts[1]
+                else:
+                    ap_pat, ap_mat, nombres_only = "", "", full
+
+                # Carrera del Application
+                career_name = ""
+                if app:
+                    career_name = app.career_name or ""
+                    if not career_name:
+                        fp = app.preferences.order_by("rank").first()
+                        if fp and fp.career:
+                            career_name = fp.career.name
+
+                # Discapacidad del profile JSON
+                discap_flag = False
+                if app and isinstance(app.data, dict):
+                    prof = app.data.get("profile") or {}
+                    dv = str(prof.get("discapacidad", "")).strip().upper()
+                    discap_flag = dv in ("SI", "YES", "TRUE", "1")
+
+                student, _ = _upsert_student(
+                    dni=dni,
+                    nombres=nombres_only,
+                    ap_pat=ap_pat,
+                    ap_mat=ap_mat,
+                    career_name=career_name,
+                    discapacidad_si=discap_flag,
+                )
+                counts["created_students"] += 1
+
+                # Marcar Application como ADMITTED si no lo estaba (ya que el admin está
+                # regenerando credenciales → se asume ingresante)
+                if app and app.status != "ADMITTED":
+                    app.status = "ADMITTED"
+                    app.save(update_fields=["status"])
+
+            counts["found"] += 1
             career_display = student.programa_carrera or ""
 
             user, password, was_created = _ensure_user_with_temp_password(student)

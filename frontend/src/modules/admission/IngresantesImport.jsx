@@ -592,9 +592,10 @@ export default function IngresantesImport() {
                 <CheckCircle2 size={14} className="text-emerald-600" />
                 <p className="text-sm font-extrabold">Resultado de regeneración</p>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-xs">
                 <StatCell label="Solicitados" value={regenResult.summary?.total_requested} />
                 <StatCell label="Encontrados" value={regenResult.summary?.found} color="emerald" />
+                <StatCell label="Estudiantes creados" value={regenResult.summary?.created_students} color="blue" />
                 <StatCell label="Reseteadas" value={regenResult.summary?.reset_users} color="amber" />
                 <StatCell label="No encontrados" value={regenResult.summary?.not_found} color="red" />
                 <StatCell label="Errores" value={regenResult.summary?.errors} color="red" />
