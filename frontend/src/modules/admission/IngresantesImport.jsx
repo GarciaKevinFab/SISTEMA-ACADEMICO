@@ -119,7 +119,7 @@ export default function IngresantesImport() {
       [`Generado: ${new Date().toLocaleString("es-PE")}`],
       [`Total: ${credentials.length}`],
       [],
-      ["N°", "DNI", "Apellido Paterno", "Apellido Materno", "Nombres", "Carrera", "Usuario", "Contraseña temporal"],
+      ["N°", "DNI", "Apellido Paterno", "Apellido Materno", "Nombres", "Carrera", "Usuario", "Contraseña temporal", "Estado"],
     ];
 
     credentials.forEach((c, i) => {
@@ -137,17 +137,18 @@ export default function IngresantesImport() {
       } else {
         nombres = fullName;
       }
-      rows.push([i + 1, c.dni, ap_pat, ap_mat, nombres, c.carrera || "", c.username, c.password]);
+      const estado = c.is_new ? "Nuevo" : "Contraseña reseteada";
+      rows.push([i + 1, c.dni, ap_pat, ap_mat, nombres, c.carrera || "", c.username, c.password, estado]);
     });
 
     const ws = XLSX.utils.aoa_to_sheet(rows);
 
     // Merges para el título y metadata
     ws["!merges"] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } },
-      { s: { r: 2, c: 0 }, e: { r: 2, c: 7 } },
-      { s: { r: 3, c: 0 }, e: { r: 3, c: 7 } },
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: 8 } },
+      { s: { r: 3, c: 0 }, e: { r: 3, c: 8 } },
     ];
 
     // Anchos de columna
@@ -160,12 +161,13 @@ export default function IngresantesImport() {
       { wch: 35 },  // Carrera
       { wch: 14 },  // Usuario
       { wch: 18 },  // Contraseña
+      { wch: 22 },  // Estado
     ];
 
     // Estilos básicos (SheetJS community no soporta estilos avanzados,
     // pero podemos marcar la fila de header)
     const headerRowIdx = 5; // fila 6 (0-indexed)
-    const headers = ["N°", "DNI", "Apellido Paterno", "Apellido Materno", "Nombres", "Carrera", "Usuario", "Contraseña temporal"];
+    const headers = ["N°", "DNI", "Apellido Paterno", "Apellido Materno", "Nombres", "Carrera", "Usuario", "Contraseña temporal", "Estado"];
     headers.forEach((_, c) => {
       const cellRef = XLSX.utils.encode_cell({ r: headerRowIdx, c });
       if (ws[cellRef]) ws[cellRef].s = { font: { bold: true } };
@@ -186,14 +188,15 @@ export default function IngresantesImport() {
 
   const downloadCredentialsCsv = () => {
     if (!result?.credentials?.length) return;
-    const header = ["N°", "DNI", "Ap. Paterno", "Ap. Materno", "Nombres", "Carrera", "Usuario", "Contraseña"];
+    const header = ["N°", "DNI", "Ap. Paterno", "Ap. Materno", "Nombres", "Carrera", "Usuario", "Contraseña", "Estado"];
     const rows = result.credentials.map((c, i) => {
       const parts = (c.nombres || "").trim().split(/\s+/).filter(Boolean);
       let ap_pat = "", ap_mat = "", nombres = "";
       if (parts.length >= 3) { ap_pat = parts[0]; ap_mat = parts[1]; nombres = parts.slice(2).join(" "); }
       else if (parts.length === 2) { ap_pat = parts[0]; nombres = parts[1]; }
       else { nombres = c.nombres || ""; }
-      return [i + 1, c.dni, ap_pat, ap_mat, nombres, c.carrera || "", c.username, c.password];
+      const estado = c.is_new ? "Nuevo" : "Contraseña reseteada";
+      return [i + 1, c.dni, ap_pat, ap_mat, nombres, c.carrera || "", c.username, c.password, estado];
     });
     const csv = "\uFEFF" + [header, ...rows]
       .map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))
@@ -367,6 +370,7 @@ export default function IngresantesImport() {
                 <StatCell label="Estudiantes nuevos" value={summary.created_students} color="blue" />
                 <StatCell label="Estudiantes actualizados" value={summary.updated_students} />
                 <StatCell label="Usuarios creados" value={summary.created_users} color="blue" />
+                <StatCell label="Contraseñas reseteadas" value={summary.reset_users} color="amber" />
                 <StatCell label="Postulaciones nuevas" value={summary.created_applications} />
                 <StatCell label="Postulaciones actualizadas" value={summary.updated_applications} />
                 <StatCell label="Errores" value={summary.errors} color="red" />
@@ -405,6 +409,7 @@ export default function IngresantesImport() {
                         <th className="p-2 text-left font-bold text-slate-600">Carrera</th>
                         <th className="p-2 text-left font-bold text-slate-600">Usuario</th>
                         <th className="p-2 text-left font-bold text-slate-600">Contraseña</th>
+                        <th className="p-2 text-left font-bold text-slate-600">Estado</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -415,6 +420,13 @@ export default function IngresantesImport() {
                           <td className="p-2 text-slate-600">{c.carrera}</td>
                           <td className="p-2 font-mono text-blue-700">{c.username}</td>
                           <td className="p-2 font-mono text-emerald-700">{c.password}</td>
+                          <td className="p-2">
+                            {c.is_new ? (
+                              <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">Nuevo</span>
+                            ) : (
+                              <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">Reseteada</span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -466,6 +478,7 @@ function StatCell({ label, value, color = "slate" }) {
     blue: "text-blue-700",
     emerald: "text-emerald-700",
     red: "text-red-700",
+    amber: "text-amber-700",
   };
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3">

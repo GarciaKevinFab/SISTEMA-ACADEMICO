@@ -173,16 +173,26 @@ def _generate_temp_password(length=10):
 
 
 def _ensure_user_with_temp_password(student):
-    """Crea un User con username=DNI y contraseña temporal aleatoria
-    (si aún no tiene). Retorna (user, temp_password or None, was_created)."""
-    if student.user_id:
-        # Ya tiene usuario: aseguramos rol STUDENT sin resetear password
-        user, _ = _create_user_for_student(student)
-        return user, None, False
-
+    """Crea un User con username=DNI y contraseña temporal aleatoria.
+    Si ya tenía usuario, RESETEA su contraseña a una nueva temporal.
+    Retorna (user, temp_password, was_created)."""
     from django.contrib.auth import get_user_model
     from acl.models import Role, UserRole
     User = get_user_model()
+
+    if student.user_id:
+        # Ya tiene usuario → resetear contraseña y asegurar rol STUDENT
+        user = student.user
+        temp_password = _generate_temp_password()
+        user.set_password(temp_password)
+        user.is_active = True
+        user.save(update_fields=["password", "is_active"])
+
+        student_role = Role.objects.filter(name__iexact="STUDENT").first()
+        if student_role:
+            UserRole.objects.get_or_create(user_id=user.id, role_id=student_role.id)
+
+        return user, temp_password, False
 
     username = student.num_documento
     k = 1
@@ -387,17 +397,20 @@ def ingresantes_import(request):
                 else:
                     counts["updated_students"] += 1
 
-                # 4. User
+                # 4. User (siempre incluir en credenciales, aunque ya existiera)
                 user, password, user_created = _ensure_user_with_temp_password(student)
                 if user_created:
                     counts["created_users"] += 1
-                    credentials.append({
-                        "dni": r["dni"],
-                        "nombres": f"{r['ap_pat']} {r['ap_mat']} {r['nombres']}".strip(),
-                        "carrera": career_display,
-                        "username": user.username,
-                        "password": password,
-                    })
+                else:
+                    counts["reset_users"] = counts.get("reset_users", 0) + 1
+                credentials.append({
+                    "dni": r["dni"],
+                    "nombres": f"{r['ap_pat']} {r['ap_mat']} {r['nombres']}".strip(),
+                    "carrera": career_display,
+                    "username": user.username,
+                    "password": password,
+                    "is_new": user_created,
+                })
         except Exception as exc:
             logger.exception("Error importando ingresante fila %s: %s", r["row_idx"], exc)
             counts["errors"] += 1
