@@ -100,6 +100,7 @@ from .modalities import (
 # Importador de ingresantes
 from .ingresantes_import import (
     ingresantes_import,
+    ingresantes_regenerate_credentials,
 )
 
 __all__ = [
@@ -165,4 +166,5 @@ __all__ = [
     'modality_detail',
     # Ingresantes
     'ingresantes_import',
+    'ingresantes_regenerate_credentials',
 ]

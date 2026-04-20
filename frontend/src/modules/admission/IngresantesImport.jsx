@@ -18,8 +18,9 @@ import {
 import { toast } from "sonner";
 import {
   Upload, Download, Users, CheckCircle2, AlertCircle, FileSpreadsheet,
-  Calendar, Loader2, X, Copy, Info,
+  Calendar, Loader2, X, Copy, Info, KeyRound, RefreshCw,
 } from "lucide-react";
+import { Textarea } from "../../components/ui/textarea";
 
 function formatApiError(err, fallback = "Ocurrió un error") {
   const data = err?.response?.data;
@@ -38,6 +39,12 @@ export default function IngresantesImport() {
   const [dryRun, setDryRun] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
+
+  // Regenerar credenciales
+  const [regenDnis, setRegenDnis] = useState("");
+  const [regenCallId, setRegenCallId] = useState("");
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenResult, setRegenResult] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -184,6 +191,46 @@ export default function IngresantesImport() {
     const wb = buildCredentialsXlsx(creds);
     const fname = `credenciales_ingresantes_${new Date().toISOString().slice(0, 10)}.xlsx`;
     XLSX.writeFile(wb, fname);
+  };
+
+  const regenerateCredentials = async () => {
+    const dnisList = regenDnis
+      .split(/[\s,;\n]+/)
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    if (!dnisList.length && !regenCallId) {
+      toast.error("Ingresa los DNIs o selecciona una convocatoria");
+      return;
+    }
+
+    setRegenerating(true);
+    setRegenResult(null);
+    try {
+      const body = {};
+      if (dnisList.length) body.dnis = dnisList;
+      if (regenCallId) body.call_id = regenCallId;
+
+      const { data } = await api.post("/admission/ingresantes/regenerate-credentials", body);
+      setRegenResult(data);
+
+      const s = data?.summary || {};
+      toast.success(
+        `Regeneradas: ${(s.reset_users || 0) + (s.created_users || 0)} credenciales${s.not_found ? ` (${s.not_found} no encontrados)` : ""}`
+      );
+
+      if (data?.credentials?.length) {
+        try {
+          downloadCredentialsXlsx(data.credentials);
+        } catch (err) {
+          console.error("Error auto-descargando Excel:", err);
+        }
+      }
+    } catch (e) {
+      toast.error(formatApiError(e, "No se pudieron regenerar las credenciales"));
+    } finally {
+      setRegenerating(false);
+    }
   };
 
   const downloadCredentialsCsv = () => {
@@ -468,6 +515,104 @@ export default function IngresantesImport() {
           )}
         </>
       )}
+
+      {/* ── Regenerar credenciales ── */}
+      <Card className="border-amber-200 bg-amber-50/30">
+        <CardContent className="p-5 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="h-9 w-9 rounded-xl bg-amber-500/10 grid place-items-center shrink-0">
+              <KeyRound size={18} className="text-amber-700" />
+            </div>
+            <div className="flex-1">
+              <p className="font-extrabold text-slate-900">Regenerar credenciales</p>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Resetea la contraseña temporal de estudiantes ya registrados y descarga el Excel.
+                Útil si perdiste las credenciales de algunos o necesitas copias.
+                <span className="font-bold text-amber-700"> Las contraseñas anteriores dejarán de funcionar.</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700">DNIs (uno por línea o separados por coma)</Label>
+              <Textarea
+                rows={5}
+                placeholder="12345678&#10;87654321&#10;..."
+                value={regenDnis}
+                onChange={e => setRegenDnis(e.target.value)}
+                className="font-mono text-xs"
+              />
+              <p className="text-[10px] text-slate-500">
+                {regenDnis.split(/[\s,;\n]+/).filter(Boolean).length} DNIs ingresados
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700">O toda una convocatoria (opcional)</Label>
+              <Select value={regenCallId || "__none__"} onValueChange={v => setRegenCallId(v === "__none__" ? "" : v)}>
+                <SelectTrigger className="h-10 rounded-lg">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Calendar size={14} className="text-slate-400" />
+                    <SelectValue placeholder="Ninguna (usar DNIs)" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Ninguna (usar DNIs)</SelectItem>
+                  {calls.filter(c => c?.id != null).map(c => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.title || c.name || `Convocatoria #${c.id}`} {c.period ? `(${c.period})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-slate-500">
+                Si seleccionas una convocatoria, regenera credenciales para TODOS los admitidos de esa convocatoria.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              onClick={regenerateCredentials}
+              disabled={regenerating || (!regenDnis.trim() && !regenCallId)}
+              className="rounded-lg font-extrabold bg-amber-600 hover:bg-amber-700 gap-2"
+            >
+              {regenerating ? (
+                <><Loader2 size={14} className="animate-spin" /> Regenerando…</>
+              ) : (
+                <><RefreshCw size={14} /> Regenerar y descargar Excel</>
+              )}
+            </Button>
+          </div>
+
+          {regenResult && (
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle2 size={14} className="text-emerald-600" />
+                <p className="text-sm font-extrabold">Resultado de regeneración</p>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                <StatCell label="Solicitados" value={regenResult.summary?.total_requested} />
+                <StatCell label="Encontrados" value={regenResult.summary?.found} color="emerald" />
+                <StatCell label="Reseteadas" value={regenResult.summary?.reset_users} color="amber" />
+                <StatCell label="No encontrados" value={regenResult.summary?.not_found} color="red" />
+                <StatCell label="Errores" value={regenResult.summary?.errors} color="red" />
+              </div>
+              {regenResult.errors?.length > 0 && (
+                <div className="mt-3 text-xs">
+                  <p className="font-bold text-red-600 mb-1">DNIs con problemas:</p>
+                  <ul className="list-disc pl-5 text-slate-600">
+                    {regenResult.errors.slice(0, 20).map((e, i) => (
+                      <li key={i}><span className="font-mono">{e.dni}</span> — {e.reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

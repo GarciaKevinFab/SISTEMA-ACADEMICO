@@ -102,6 +102,7 @@ urlpatterns = [
     # Importador de ingresantes (Excel)
     # ══════════════════════════════════════════════════════════
     path("admission/ingresantes/import", v.ingresantes_import),
+    path("admission/ingresantes/regenerate-credentials", v.ingresantes_regenerate_credentials),
 
     # ══════════════════════════════════════════════════════════
     # Modalidades de admisión

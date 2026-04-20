@@ -426,3 +426,102 @@ def ingresantes_import(request):
         "errors": errors,
         "dry_run": dry_run,
     })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def ingresantes_regenerate_credentials(request):
+    """
+    POST /admission/ingresantes/regenerate-credentials
+
+    Regenera las credenciales (resetea contraseñas temporales) de los
+    estudiantes cuyos DNIs se envíen, y retorna el archivo con usuarios
+    y contraseñas nuevas.
+
+    Body (JSON):
+      {
+        "dnis": ["12345678", "87654321", ...]   # lista de DNIs (opcional)
+        "call_id": 23                            # o una convocatoria entera
+      }
+
+    Si se envía `call_id` sin `dnis`, procesa TODOS los estudiantes con
+    Application ADMITTED en esa convocatoria.
+    """
+    data = request.data or {}
+    dnis = data.get("dnis") or []
+    call_id = data.get("call_id")
+
+    if not dnis and not call_id:
+        return Response(
+            {"detail": "Envía 'dnis' (lista) o 'call_id' (convocatoria)"},
+            status=400,
+        )
+
+    # Normalizar DNIs
+    if isinstance(dnis, str):
+        dnis = [d.strip() for d in dnis.replace(",", "\n").split("\n") if d.strip()]
+    dnis = [str(d).strip() for d in dnis if str(d).strip()]
+
+    # Si viene call_id, obtener los DNIs de los admitidos de esa convocatoria
+    if call_id and not dnis:
+        admitted_apps = (
+            Application.objects
+            .filter(call_id=call_id, status="ADMITTED")
+            .select_related("applicant")
+        )
+        dnis = list({app.applicant.dni for app in admitted_apps if app.applicant and app.applicant.dni})
+
+    if not dnis:
+        return Response({"detail": "No hay DNIs para procesar"}, status=400)
+
+    credentials = []
+    errors = []
+    counts = {
+        "total_requested": len(dnis),
+        "found": 0,
+        "created_users": 0,
+        "reset_users": 0,
+        "not_found": 0,
+        "errors": 0,
+    }
+
+    for dni in dnis:
+        try:
+            student = Student.objects.filter(num_documento=dni).first()
+            if not student:
+                counts["not_found"] += 1
+                errors.append({"dni": dni, "reason": "Estudiante no encontrado"})
+                continue
+            counts["found"] += 1
+
+            # Obtener carrera
+            career_display = student.programa_carrera or ""
+
+            user, password, was_created = _ensure_user_with_temp_password(student)
+            if was_created:
+                counts["created_users"] += 1
+            else:
+                counts["reset_users"] += 1
+
+            full_name = " ".join(x for x in [
+                student.apellido_paterno, student.apellido_materno, student.nombres
+            ] if x).strip()
+
+            credentials.append({
+                "dni": dni,
+                "nombres": full_name,
+                "carrera": career_display,
+                "username": user.username,
+                "password": password,
+                "is_new": was_created,
+            })
+        except Exception as exc:
+            logger.exception("Error regenerando credencial DNI %s: %s", dni, exc)
+            counts["errors"] += 1
+            errors.append({"dni": dni, "reason": str(exc)})
+
+    return Response({
+        "summary": counts,
+        "credentials": credentials,
+        "errors": errors,
+    })
