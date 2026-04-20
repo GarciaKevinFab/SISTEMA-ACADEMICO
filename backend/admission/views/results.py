@@ -8,6 +8,8 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
+from django.db.models import Q
+
 from admission.models import (
     AdmissionCall,
     Application,
@@ -16,6 +18,7 @@ from admission.models import (
     EvaluationScore,
     ResultPublication,
 )
+from catalogs.models import Career
 from admission.serializers import ApplicationSerializer
 from .utils import _ensure_media_tmp, _write_stub_pdf, compute_phase_totals
 
@@ -37,9 +40,18 @@ def results_list(request):
     if call_id:
         qs = qs.filter(call_id=call_id)
 
-    # FIX: filtrar por carrera a través de preferencias
+    # FIX: filtrar por carrera — usa preferencias O career_name como fallback
+    # (el importador de ingresantes guarda el nombre en career_name incluso
+    # cuando la preferencia aún no se creó)
     if career_id:
-        qs = qs.filter(preferences__career_id=career_id).distinct()
+        career_obj = Career.objects.filter(pk=career_id).first()
+        if career_obj:
+            qs = qs.filter(
+                Q(preferences__career_id=career_id) |
+                Q(career_name__iexact=career_obj.name)
+            ).distinct()
+        else:
+            qs = qs.filter(preferences__career_id=career_id).distinct()
 
     # Construir respuesta con scores
     results = []

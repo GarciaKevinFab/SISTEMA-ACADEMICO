@@ -10,12 +10,14 @@ FIXES aplicados:
 4. eval_import_scores separa fase1 y fase2 en scores separados.
 """
 from django.db import transaction
+from django.db.models import Q
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from admission.models import Application, EvaluationScore, ApplicationPreference
 from admission.serializers import ApplicationSerializer
+from catalogs.models import Career
 from .utils import _normalize_rubric, _compute_total, compute_phase_totals
 
 
@@ -37,7 +39,14 @@ def eval_list_for_scoring(request):
         qs = qs.filter(call_id=call_id)
 
     if career_id:
-        qs = qs.filter(preferences__career_id=career_id).distinct()
+        career_obj = Career.objects.filter(pk=career_id).first()
+        if career_obj:
+            qs = qs.filter(
+                Q(preferences__career_id=career_id) |
+                Q(career_name__iexact=career_obj.name)
+            ).distinct()
+        else:
+            qs = qs.filter(preferences__career_id=career_id).distinct()
 
     results = []
     for app in qs:
