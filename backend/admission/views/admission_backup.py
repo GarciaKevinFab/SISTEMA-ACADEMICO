@@ -78,8 +78,14 @@ def _serialize_obj(obj, extra=None):
     return data
 
 
-def _build_backup_zip_bytes() -> bytes:
-    """Genera el ZIP completo en memoria y retorna los bytes."""
+def _build_backup_zip_bytes(call_id=None, only_with_applications=True) -> bytes:
+    """Genera el ZIP completo en memoria y retorna los bytes.
+
+    Args:
+      call_id: si se pasa, solo incluye postulantes de esa convocatoria.
+      only_with_applications: si True (default), excluye Applicants
+        huérfanos (sin ninguna Application).
+    """
     now = datetime.now()
     media_root = Path(getattr(settings, "MEDIA_ROOT", ""))
 
@@ -87,9 +93,14 @@ def _build_backup_zip_bytes() -> bytes:
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
 
         # ── 1. Convocatorias ──
-        calls_data = [_serialize_obj(c) for c in AdmissionCall.objects.all()]
-        schedule_data = [_serialize_obj(s) for s in AdmissionScheduleItem.objects.all()]
-        result_pubs = [_serialize_obj(r) for r in ResultPublication.objects.all()]
+        calls_qs = AdmissionCall.objects.all()
+        if call_id:
+            calls_qs = calls_qs.filter(pk=call_id)
+        calls_data = [_serialize_obj(c) for c in calls_qs]
+        schedule_data = [_serialize_obj(s) for s in AdmissionScheduleItem.objects.all()
+                         if (not call_id) or s.call_id == int(call_id)]
+        result_pubs = [_serialize_obj(r) for r in ResultPublication.objects.all()
+                       if (not call_id) or r.call_id == int(call_id)]
         zf.writestr(
             "convocatorias.json",
             json.dumps({
@@ -100,14 +111,22 @@ def _build_backup_zip_bytes() -> bytes:
             }, cls=DjangoJSONEncoder, ensure_ascii=False, indent=2)
         )
 
-        # ── 2. Por postulante ──
-        applicants = (
-            Applicant.objects
-            .prefetch_related("applications__call", "applications__preferences__career",
-                              "applications__documents", "applications__payment",
-                              "applications__scores")
-            .all()
+        # ── 2. Postulantes ──
+        applicants_qs = Applicant.objects.prefetch_related(
+            "applications__call", "applications__preferences__career",
+            "applications__documents", "applications__payment",
+            "applications__scores",
         )
+
+        # Filtros para evitar datos de prueba/huérfanos
+        if call_id:
+            # Solo postulantes con al menos una Application en esta convocatoria
+            applicants_qs = applicants_qs.filter(applications__call_id=call_id).distinct()
+        elif only_with_applications:
+            # Excluir huérfanos (sin ninguna postulación)
+            applicants_qs = applicants_qs.filter(applications__isnull=False).distinct()
+
+        applicants = list(applicants_qs)
 
         # Resumen CSV
         csv_lines = [
@@ -230,9 +249,18 @@ def admission_backup_zip(request):
     """
     GET /admission/backup.zip
 
-    Genera el backup completo en memoria y lo descarga.
+    Query params:
+      - call_id (opcional): solo postulantes de esa convocatoria
+      - include_orphans (opcional): "1" para incluir postulantes sin
+        postulación (datos de prueba). Por default se excluyen.
     """
-    zip_bytes = _build_backup_zip_bytes()
+    call_id = request.query_params.get("call_id")
+    include_orphans = str(request.query_params.get("include_orphans", "")).lower() in ("1", "true", "yes")
+
+    zip_bytes = _build_backup_zip_bytes(
+        call_id=call_id if call_id else None,
+        only_with_applications=not include_orphans,
+    )
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     resp = HttpResponse(zip_bytes, content_type="application/zip")
     resp["Content-Disposition"] = f'attachment; filename="backup_admision_{ts}.zip"'

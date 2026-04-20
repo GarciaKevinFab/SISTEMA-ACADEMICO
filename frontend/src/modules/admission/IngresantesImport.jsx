@@ -50,6 +50,8 @@ export default function IngresantesImport() {
 
   // Backup / reset
   const [backupLoading, setBackupLoading] = useState(false);
+  const [backupCallId, setBackupCallId] = useState("");
+  const [backupIncludeOrphans, setBackupIncludeOrphans] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState("");
   const [resetIncludeStudents, setResetIncludeStudents] = useState(false);
@@ -278,7 +280,12 @@ export default function IngresantesImport() {
   const downloadBackup = async () => {
     setBackupLoading(true);
     try {
-      const resp = await api.get("/admission/backup.zip", {
+      const params = new URLSearchParams();
+      if (backupCallId) params.set("call_id", backupCallId);
+      if (backupIncludeOrphans) params.set("include_orphans", "1");
+      const query = params.toString() ? `?${params.toString()}` : "";
+
+      const resp = await api.get(`/admission/backup.zip${query}`, {
         responseType: "blob",
         timeout: 600000, // 10 min para backups grandes
       });
@@ -695,12 +702,49 @@ export default function IngresantesImport() {
           </div>
 
           {/* Descargar backup */}
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-bold text-slate-800">1. Descargar backup completo</p>
-            <p className="text-xs text-slate-500 mt-0.5 mb-3">
-              Genera un ZIP con <code>postulantes/&lt;DNI&gt;_&lt;NOMBRE&gt;/</code> carpeta por
-              cada postulante, conteniendo <code>perfil.json</code> + todos sus documentos subidos.
-            </p>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <div>
+              <p className="text-sm font-bold text-slate-800">1. Descargar backup completo</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Genera un ZIP con <code>postulantes/&lt;DNI&gt;_&lt;NOMBRE&gt;/</code> carpeta por
+                cada postulante, conteniendo <code>perfil.json</code> + todos sus documentos subidos.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700">Filtrar por convocatoria (recomendado)</Label>
+              <Select value={backupCallId || "__all__"} onValueChange={v => setBackupCallId(v === "__all__" ? "" : v)}>
+                <SelectTrigger className="h-10 rounded-lg bg-white">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Calendar size={14} className="text-slate-400" />
+                    <SelectValue placeholder="Todas las convocatorias" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todas (solo postulantes con postulación)</SelectItem>
+                  {calls.filter(c => c?.id != null).map(c => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.title || c.name || `Convocatoria #${c.id}`} {c.period ? `(${c.period})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <label className="flex items-start gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={backupIncludeOrphans}
+                onChange={e => setBackupIncludeOrphans(e.target.checked)}
+                disabled={!!backupCallId}
+                className="h-3.5 w-3.5 mt-0.5 accent-slate-700 disabled:opacity-50"
+              />
+              <span>
+                Incluir postulantes sin postulación (datos de prueba).{" "}
+                <span className="text-slate-400">Por default se excluyen.</span>
+              </span>
+            </label>
+
             <Button
               onClick={downloadBackup}
               disabled={backupLoading}
