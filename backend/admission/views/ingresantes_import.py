@@ -202,13 +202,47 @@ def _get_or_create_application(applicant, call, career, career_name_raw,
 
 
 def _upsert_score(application, phase, promedio):
-    """Crea o actualiza EvaluationScore para una fase."""
+    """Crea o actualiza EvaluationScore para una fase.
+
+    El Excel MINEDU trae un "promedio" en escala 0-20. La rúbrica del
+    sistema tiene 3 componentes que suman 50 (20+20+10). Distribuimos
+    el promedio proporcionalmente para que total = promedio × 2.5:
+      - componentes de 20 puntos → reciben el promedio tal cual
+      - componente de 10 puntos → recibe la mitad del promedio
+
+    Marcamos `_imported_from_excel: True` para que se sepa que vino del
+    import masivo y no de evaluación individual manual.
+    """
     if promedio is None:
         return
+    try:
+        p = float(promedio)
+    except (TypeError, ValueError):
+        return
+
+    if phase == "WRITTEN":
+        rubric = {
+            "comunicacion": round(p, 2),
+            "resolucion_problemas": round(p, 2),
+            "convivencia": round(p * 0.5, 2),
+            "_imported_from_excel": True,
+            "_promedio_excel": round(p, 2),
+        }
+    else:  # FINAL / INTERVIEW
+        rubric = {
+            "pensamiento_critico": round(p, 2),
+            "trabajo_colaborativo": round(p, 2),
+            "tic": round(p * 0.5, 2),
+            "_imported_from_excel": True,
+            "_promedio_excel": round(p, 2),
+        }
+
+    total = round(p * 2.5, 2)  # 0-20 → 0-50
+
     EvaluationScore.objects.update_or_create(
         application=application,
         phase=phase,
-        defaults={"total": promedio, "rubric": {"promedio": str(promedio)}},
+        defaults={"total": total, "rubric": rubric},
     )
 
 
@@ -451,7 +485,7 @@ def ingresantes_import(request):
                 else:
                     status = "NOT_ADMITTED"
                     counts["not_admitted"] += 1
-                score_phase = "FINAL"
+                score_phase = "INTERVIEW"
 
             # Match de carrera
             carrera_raw = r["carrera_raw"] or ""
@@ -535,6 +569,26 @@ def ingresantes_import(request):
                 "dni": r["dni"],
                 "reason": str(exc),
             })
+
+    # ── Recalcular totales en Application.data (para Resultados) ──
+    if not dry_run:
+        computed_totals = 0
+        apps_in_call = Application.objects.filter(call=call)
+        for app in apps_in_call:
+            written = EvaluationScore.objects.filter(application=app, phase="WRITTEN").first()
+            interview = EvaluationScore.objects.filter(application=app, phase="INTERVIEW").first()
+            if written or interview:
+                w_total = float(written.total) if written else 0
+                i_total = float(interview.total) if interview else 0
+                final = round(w_total + i_total, 2)
+                app_data = app.data if isinstance(app.data, dict) else {}
+                app_data["written_total"] = w_total
+                app_data["interview_total"] = i_total
+                app_data["final_score"] = final
+                app.data = app_data
+                app.save(update_fields=["data"])
+                computed_totals += 1
+        counts["computed_totals"] = computed_totals
 
     return Response({
         "summary": counts,
