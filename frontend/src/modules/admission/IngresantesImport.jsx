@@ -38,6 +38,7 @@ export default function IngresantesImport() {
   const [modalidad, setModalidad] = useState("ORDINARIO");
   const [modalidades, setModalidades] = useState([]);
   const [file, setFile] = useState(null);
+  const [phase, setPhase] = useState("auto");
   const [dryRun, setDryRun] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
@@ -97,6 +98,7 @@ export default function IngresantesImport() {
       fd.append("file", file);
       if (callId) fd.append("call_id", callId);
       fd.append("modalidad", modalidad || "ORDINARIO");
+      fd.append("phase", phase || "auto");
       if (dryRun) fd.append("dry_run", "1");
 
       const { data } = await api.post("/admission/ingresantes/import", fd, {
@@ -106,13 +108,24 @@ export default function IngresantesImport() {
       setResult(data);
 
       const s = data?.summary || {};
+      const phaseLabel = s.phase === 1 ? "Fase 1" : s.phase === 2 ? "Fase 2 (final)" : "?";
       if (dryRun) {
-        toast.success(`Vista previa: ${s.admitted || 0} ingresantes detectados`);
+        if (s.phase === 1) {
+          toast.success(`Vista previa ${phaseLabel}: ${s.phase1_approved || 0} aprobados, ${s.phase1_failed || 0} reprobados`);
+        } else {
+          toast.success(`Vista previa ${phaseLabel}: ${s.admitted || 0} ingresantes, ${s.not_admitted || 0} no admitidos`);
+        }
       } else {
-        toast.success(
-          `Importados: ${s.created_students || 0} nuevos, ${s.updated_students || 0} actualizados, ${s.created_users || 0} usuarios creados`
-        );
-        // Auto-descarga del Excel con credenciales si hay credenciales nuevas
+        if (s.phase === 1) {
+          toast.success(
+            `${phaseLabel}: ${s.phase1_approved || 0} aprobados, ${s.phase1_failed || 0} reprobados guardados`
+          );
+        } else {
+          toast.success(
+            `${phaseLabel}: ${s.admitted || 0} ingresantes, ${s.created_users || 0} usuarios creados`
+          );
+        }
+        // Auto-descarga del Excel con credenciales solo en fase 2
         if (data?.credentials?.length) {
           try {
             downloadCredentialsXlsx(data.credentials);
@@ -348,17 +361,27 @@ export default function IngresantesImport() {
             <Info size={18} className="text-blue-700" />
           </div>
           <div className="text-sm text-slate-700 space-y-1">
-            <p className="font-extrabold text-slate-900">Importador de ingresantes</p>
-            <p>
-              Carga el Excel oficial del proceso de admisión (con columnas Carrera, DNI,
-              Apellidos, Nombres, Condición). Para cada postulante que <b>alcanzó vacante</b> el sistema:
+            <p className="font-extrabold text-slate-900">Importador de ingresantes por fases</p>
+            <p className="text-slate-600">
+              Carga los Excel oficiales del proceso de admisión. El sistema detecta la fase
+              automáticamente del encabezado.
             </p>
-            <ul className="list-disc pl-5 text-slate-600">
-              <li>Actualiza su postulación a <b>ADMITTED</b>.</li>
-              <li>Crea o actualiza su ficha de <b>Estudiante</b>.</li>
-              <li>Crea su <b>usuario</b> con <code>usuario = DNI</code> y una <b>contraseña temporal</b> aleatoria.</li>
-              <li>Descarga el CSV de credenciales para entregárselas al estudiante.</li>
-            </ul>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+              <div className="rounded-lg bg-white/60 border border-slate-200 p-2.5">
+                <p className="font-bold text-slate-800 text-xs">Fase 1 — Examen general</p>
+                <p className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                  APROBADO → pasa a fase 2 · REPROBADO → se registra pero no crea usuario.
+                  Aparecen en <b>Postulantes</b>.
+                </p>
+              </div>
+              <div className="rounded-lg bg-white/60 border border-emerald-200 p-2.5">
+                <p className="font-bold text-emerald-800 text-xs">Fase 2 — Resultado final</p>
+                <p className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                  ALCANZÓ VACANTE → ADMITIDO, crea Estudiante + Usuario con contraseña
+                  temporal (descarga Excel con credenciales).
+                </p>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -366,6 +389,36 @@ export default function IngresantesImport() {
       {/* Form */}
       <Card>
         <CardContent className="p-5 space-y-4">
+          {/* Selector de fase */}
+          <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-4 space-y-2">
+            <Label className="text-xs font-bold text-slate-700">
+              Fase del proceso
+            </Label>
+            <div className="grid grid-cols-3 gap-2 text-sm">
+              {[
+                { v: "auto", label: "Auto", desc: "Detecta del Excel" },
+                { v: "1", label: "Fase 1", desc: "Examen general (APROBADO/REPROBADO)" },
+                { v: "2", label: "Fase 2", desc: "Final (ALCANZÓ VACANTE, crea usuarios)" },
+              ].map(opt => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setPhase(opt.v)}
+                  className={`rounded-lg border-2 p-2.5 text-left transition-all ${
+                    phase === opt.v
+                      ? "border-blue-600 bg-white shadow-sm"
+                      : "border-slate-200 bg-white/60 hover:border-slate-300"
+                  }`}
+                >
+                  <p className={`text-sm font-bold ${phase === opt.v ? "text-blue-700" : "text-slate-700"}`}>
+                    {opt.label}
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">{opt.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700">
@@ -474,19 +527,40 @@ export default function IngresantesImport() {
         <>
           <Card>
             <CardContent className="p-5">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <CheckCircle2 size={16} className="text-emerald-600" />
                 <h3 className="font-extrabold text-slate-900">
                   Resultado {result.dry_run ? "(vista previa)" : ""}
                 </h3>
+                {summary.phase && (
+                  <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold ${
+                    summary.phase === 2 ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700"
+                  }`}>
+                    {summary.phase === 1 ? "FASE 1 · Examen general" : "FASE 2 · Resultado final"}
+                  </span>
+                )}
+                {summary.call_title && (
+                  <span className="text-xs text-slate-500">· {summary.call_title}</span>
+                )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <StatCell label="Filas leídas" value={summary.total_rows} />
-                <StatCell label="Ingresantes" value={summary.admitted} color="emerald" />
-                <StatCell label="Estudiantes nuevos" value={summary.created_students} color="blue" />
-                <StatCell label="Estudiantes actualizados" value={summary.updated_students} />
-                <StatCell label="Usuarios creados" value={summary.created_users} color="blue" />
-                <StatCell label="Contraseñas reseteadas" value={summary.reset_users} color="amber" />
+                {summary.phase === 1 ? (
+                  <>
+                    <StatCell label="Aprobados" value={summary.phase1_approved} color="emerald" />
+                    <StatCell label="Reprobados" value={summary.phase1_failed} color="red" />
+                    <StatCell label="Notas guardadas" value={summary.scores_saved} color="blue" />
+                  </>
+                ) : (
+                  <>
+                    <StatCell label="Ingresantes" value={summary.admitted} color="emerald" />
+                    <StatCell label="No admitidos" value={summary.not_admitted} color="red" />
+                    <StatCell label="Notas guardadas" value={summary.scores_saved} color="blue" />
+                    <StatCell label="Usuarios creados" value={summary.created_users} color="blue" />
+                    <StatCell label="Contraseñas reseteadas" value={summary.reset_users} color="amber" />
+                  </>
+                )}
+                <StatCell label="Postulantes nuevos" value={summary.created_applicants} />
                 <StatCell label="Postulaciones nuevas" value={summary.created_applications} />
                 <StatCell label="Postulaciones actualizadas" value={summary.updated_applications} />
                 <StatCell label="Errores" value={summary.errors} color="red" />

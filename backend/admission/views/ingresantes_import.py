@@ -1,23 +1,24 @@
 """
 admission/views/ingresantes_import.py
 
-Importador de ingresantes desde Excel oficial del proceso de admisión.
+Importador de ingresantes POR FASES desde Excel del proceso de admisión.
 
-Flujo:
-  1. Lee un Excel con columnas: Carrera, DNI, Ap.Paterno, Ap.Materno, Nombres,
-     Promedio Final, Condición, Fecha Registro, Discapacidad
-  2. Para cada fila con "ALCANZÓ VACANTE":
-     - Busca/crea Applicant (admission) por DNI
-     - Busca/crea Application (admission) asociada a la convocatoria (call_id)
-       y marca status=ADMITTED
-     - Crea/actualiza Student (students) con los datos
-     - Crea un User con rol STUDENT y contraseña = DNI (el usuario la cambia
-       al entrar por primera vez)
-  3. Retorna reporte con creados / actualizados / errores + credenciales
+FASE 1 — Examen general (Promedio Primera Fase / APROBADO|REPROBADO)
+  → crea Applicant + Application, status = PHASE1_PASSED / PHASE1_FAILED,
+    guarda nota como EvaluationScore(phase="WRITTEN"). NO crea Users.
+
+FASE 2 — Resultados finales (Promedio Final / ALCANZÓ VACANTE | NO)
+  → actualiza Application, status = ADMITTED / NOT_ADMITTED, guarda nota
+    como EvaluationScore(phase="FINAL"). SOLO ADMITTED crea Student +
+    User + credencial temporal.
+
+La fase se detecta automáticamente del encabezado.
 """
 import io
 import logging
+import unicodedata
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 from openpyxl import load_workbook
@@ -26,7 +27,10 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from admission.models import AdmissionCall, Applicant, Application, ApplicationPreference
+from admission.models import (
+    AdmissionCall, Applicant, Application, ApplicationPreference,
+    EvaluationScore,
+)
 from students.models import Student
 from students.views import _create_user_for_student
 from catalogs.models import Career
@@ -57,12 +61,64 @@ COL_FECHA = 7
 COL_DISCAPACIDAD = 8
 
 
+def _norm_upper(s) -> str:
+    s = (str(s) if s is not None else "").upper()
+    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+
+
 def _is_admitted(condicion: str) -> bool:
-    """True si la fila indica que alcanzó vacante."""
-    s = (str(condicion) if condicion is not None else "").upper()
-    import unicodedata
-    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+    """Fase 2: alcanzó vacante."""
+    s = _norm_upper(condicion)
     return ("ALCANZO" in s and "VACANTE" in s) or "INGRESANTE" in s or "ADMITIDO" in s
+
+
+def _is_phase1_approved(condicion: str) -> bool:
+    """Fase 1: aprobado."""
+    s = _norm_upper(condicion)
+    return "APROBADO" in s and "REPROBADO" not in s
+
+
+def _to_decimal(v):
+    """Convierte a Decimal, retorna None si no es número."""
+    if v is None or v == "":
+        return None
+    try:
+        return Decimal(str(v))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+
+
+def _detect_phase_from_header(header_row) -> int:
+    """
+    Detecta la fase del Excel por el encabezado.
+    Retorna 1 (primera fase), 2 (segunda/final), o 0 si no se pudo detectar.
+    """
+    if not header_row:
+        return 0
+    joined = " ".join(_norm_upper(c) for c in header_row if c)
+    if "PROMEDIO PRIMERA FASE" in joined:
+        return 1
+    if "PROMEDIO FINAL" in joined or "ALCANZO VACANTE" in joined or "DISCAPACIDAD" in joined:
+        return 2
+    return 0
+
+
+def _get_or_create_default_call():
+    """Crea/recupera una convocatoria por default para el año actual."""
+    year = datetime.now().year
+    title = f"ADMISIÓN {year} - I"
+    period = f"{year}-I"
+    call = AdmissionCall.objects.filter(period=period).order_by("-id").first()
+    if not call:
+        call = AdmissionCall.objects.filter(title__iexact=title).first()
+    if not call:
+        call = AdmissionCall.objects.create(
+            title=title,
+            period=period,
+            published=True,
+            meta={"source": "auto-ingresantes-import"},
+        )
+    return call
 
 
 def _clean_str(v, default="") -> str:
@@ -91,31 +147,45 @@ def _get_or_create_applicant(dni, nombres, ap_pat, ap_mat, email=""):
     return app, created
 
 
-def _get_or_create_application(applicant, call, career, career_name_raw, modalidad="ORDINARIO"):
-    """Busca Application por (applicant, call), crea si no existe. Setea ADMITTED."""
+def _get_or_create_application(applicant, call, career, career_name_raw,
+                               modalidad="ORDINARIO", status="CREATED",
+                               discapacidad_si=False):
+    """Busca Application por (applicant, call), crea si no existe.
+    Actualiza el status al valor pedido."""
     app = Application.objects.filter(applicant=applicant, call=call).first()
     created = False
+    career_display = (career.name if career else career_name_raw) or ""
+
     if not app:
+        profile = {
+            "nombres": applicant.names.split(" ")[0] if applicant.names else "",
+            "dni": applicant.dni,
+            "modalidad_admision": modalidad,
+        }
+        if discapacidad_si:
+            profile["discapacidad"] = "SI"
         app = Application.objects.create(
             applicant=applicant,
             call=call,
-            career_name=(career.name if career else career_name_raw) or "",
-            status="ADMITTED",
-            data={
-                "profile": {
-                    "nombres": applicant.names.split(" ")[0] if applicant.names else "",
-                    "dni": applicant.dni,
-                    "modalidad_admision": modalidad,
-                },
-                "source": "IMPORT_INGRESANTES",
-            },
+            career_name=career_display,
+            status=status,
+            data={"profile": profile, "source": "IMPORT_INGRESANTES"},
         )
         created = True
     else:
-        app.status = "ADMITTED"
+        app.status = status
         if career and not app.career_name:
             app.career_name = career.name
-        app.save(update_fields=["status", "career_name"])
+        # Actualizar discapacidad en data.profile si vino en Excel
+        if discapacidad_si:
+            data = app.data if isinstance(app.data, dict) else {}
+            profile = data.get("profile") or {}
+            profile["discapacidad"] = "SI"
+            data["profile"] = profile
+            app.data = data
+            app.save(update_fields=["status", "career_name", "data"])
+        else:
+            app.save(update_fields=["status", "career_name"])
 
     # Asegurar preferencia con la carrera
     if career:
@@ -123,6 +193,17 @@ def _get_or_create_application(applicant, call, career, career_name_raw, modalid
             application=app, career=career, defaults={"rank": 1}
         )
     return app, created
+
+
+def _upsert_score(application, phase, promedio):
+    """Crea o actualiza EvaluationScore para una fase."""
+    if promedio is None:
+        return
+    EvaluationScore.objects.update_or_create(
+        application=application,
+        phase=phase,
+        defaults={"total": promedio, "rubric": {"promedio": str(promedio)}},
+    )
 
 
 def _upsert_student(dni, nombres, ap_pat, ap_mat, career_name, discapacidad_si):
@@ -241,18 +322,10 @@ def ingresantes_import(request):
     POST /admission/ingresantes/import
     Body (multipart):
       - file: archivo .xlsx
-      - call_id: id de la convocatoria (opcional — si no viene, se usa la
-                 más reciente; si no hay ninguna, se crea una automática)
+      - phase: "1", "2" o "auto" (default "auto" — detecta del encabezado)
+      - call_id: id de la convocatoria (opcional — auto si no viene)
       - modalidad: modalidad de admisión (opcional, default ORDINARIO)
       - dry_run: "1" para simular sin guardar (opcional)
-
-    Respuesta:
-      {
-        "summary": {"total_rows": N, "admitted": X, "created_students": Y,
-                    "updated_students": Z, "created_users": W, "errors": E},
-        "credentials": [{"dni": "...", "username": "...", "password": "..."}],
-        "errors": [{"row": N, "dni": "...", "reason": "..."}]
-      }
     """
     file = request.FILES.get("file")
     if not file:
@@ -266,16 +339,9 @@ def ingresantes_import(request):
         except AdmissionCall.DoesNotExist:
             return Response({"detail": "Convocatoria no encontrada"}, status=404)
     else:
-        # Usar la más reciente; si no existe, crear una automática
-        call = AdmissionCall.objects.order_by("-id").first()
-        if not call:
-            call = AdmissionCall.objects.create(
-                title="Proceso de Admisión (auto)",
-                period="",
-                published=False,
-                meta={"source": "auto-ingresantes-import"},
-            )
+        call = _get_or_create_default_call()
 
+    phase_param = _clean_str(request.data.get("phase"), "auto").lower()
     modalidad = _clean_str(request.data.get("modalidad"), "ORDINARIO")
     dry_run = str(request.data.get("dry_run", "")).lower() in ("1", "true", "yes")
 
@@ -286,18 +352,16 @@ def ingresantes_import(request):
     except Exception as exc:
         return Response({"detail": f"No se pudo leer el Excel: {exc}"}, status=400)
 
-    # Recolectar filas (con forward-fill de la carrera)
+    # Detectar fase y encabezado
     rows = []
     current_career_name = None
     header_seen = False
+    detected_phase = 0
     for row_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
-        # Detectar encabezado "Carrera / Especialidad"
         if not header_seen:
-            if row and any("CARRERA" in str(c).upper() for c in row if c):
+            if row and any("CARRERA" in _norm_upper(c) for c in row if c):
                 header_seen = True
-                continue
-            if row and any(c for c in row):
-                # Puede ser primera fila ya con datos, pero típicamente es vacía
+                detected_phase = _detect_phase_from_header(row)
                 continue
             continue
 
@@ -327,30 +391,62 @@ def ingresantes_import(request):
             "discapacidad_si": _clean_str(row[COL_DISCAPACIDAD] if len(row) > COL_DISCAPACIDAD else "").upper() == "SI",
         })
 
-    # Procesar filas admitidas
+    # Resolver fase efectiva
+    if phase_param in ("1", "2"):
+        phase = int(phase_param)
+    else:
+        phase = detected_phase
+    if phase not in (1, 2):
+        return Response({
+            "detail": "No se pudo detectar la fase del Excel. "
+                      "Envía phase=1 o phase=2 manualmente."
+        }, status=400)
+
+    # Procesar filas
     credentials = []
     errors = []
     counts = {
         "total_rows": len(rows),
+        "phase": phase,
+        "phase1_approved": 0,
+        "phase1_failed": 0,
         "admitted": 0,
+        "not_admitted": 0,
         "created_students": 0,
         "updated_students": 0,
         "created_users": 0,
+        "reset_users": 0,
+        "created_applicants": 0,
         "created_applications": 0,
         "updated_applications": 0,
-        "skipped_not_admitted": 0,
+        "scores_saved": 0,
         "errors": 0,
+        "call_id": call.id,
+        "call_title": call.title,
     }
 
-    # Cache de carreras por nombre crudo
     career_cache = {}
-    for r in rows:
-        if not _is_admitted(r["condicion"]):
-            counts["skipped_not_admitted"] += 1
-            continue
-        counts["admitted"] += 1
 
+    for r in rows:
         try:
+            # Determinar el estado según fase + condición
+            if phase == 1:
+                if _is_phase1_approved(r["condicion"]):
+                    status = "PHASE1_PASSED"
+                    counts["phase1_approved"] += 1
+                else:
+                    status = "PHASE1_FAILED"
+                    counts["phase1_failed"] += 1
+                score_phase = "WRITTEN"
+            else:  # phase == 2
+                if _is_admitted(r["condicion"]):
+                    status = "ADMITTED"
+                    counts["admitted"] += 1
+                else:
+                    status = "NOT_ADMITTED"
+                    counts["not_admitted"] += 1
+                score_phase = "FINAL"
+
             # Match de carrera
             carrera_raw = r["carrera_raw"] or ""
             if carrera_raw not in career_cache:
@@ -363,56 +459,67 @@ def ingresantes_import(request):
 
             with transaction.atomic():
                 # 1. Applicant
-                applicant, _ = _get_or_create_applicant(
+                applicant, ap_created = _get_or_create_applicant(
                     dni=r["dni"],
                     nombres=r["nombres"],
                     ap_pat=r["ap_pat"],
                     ap_mat=r["ap_mat"],
                 )
+                if ap_created:
+                    counts["created_applicants"] += 1
 
-                # 2. Application → ADMITTED
+                # 2. Application con status correcto según fase
                 app, app_created = _get_or_create_application(
                     applicant=applicant,
                     call=call,
                     career=career,
                     career_name_raw=career_display,
                     modalidad=modalidad,
+                    status=status,
+                    discapacidad_si=r["discapacidad_si"],
                 )
                 if app_created:
                     counts["created_applications"] += 1
                 else:
                     counts["updated_applications"] += 1
 
-                # 3. Student
-                student, st_created = _upsert_student(
-                    dni=r["dni"],
-                    nombres=r["nombres"],
-                    ap_pat=r["ap_pat"],
-                    ap_mat=r["ap_mat"],
-                    career_name=career_display,
-                    discapacidad_si=r["discapacidad_si"],
-                )
-                if st_created:
-                    counts["created_students"] += 1
-                else:
-                    counts["updated_students"] += 1
+                # 3. Guardar score en EvaluationScore
+                promedio = _to_decimal(r["promedio"])
+                if promedio is not None:
+                    _upsert_score(app, score_phase, promedio)
+                    counts["scores_saved"] += 1
 
-                # 4. User (siempre incluir en credenciales, aunque ya existiera)
-                user, password, user_created = _ensure_user_with_temp_password(student)
-                if user_created:
-                    counts["created_users"] += 1
-                else:
-                    counts["reset_users"] = counts.get("reset_users", 0) + 1
-                credentials.append({
-                    "dni": r["dni"],
-                    "nombres": f"{r['ap_pat']} {r['ap_mat']} {r['nombres']}".strip(),
-                    "carrera": career_display,
-                    "username": user.username,
-                    "password": password,
-                    "is_new": user_created,
-                })
+                # 4. Solo fase 2 + ADMITTED → Student + User + credencial
+                if phase == 2 and status == "ADMITTED":
+                    student, st_created = _upsert_student(
+                        dni=r["dni"],
+                        nombres=r["nombres"],
+                        ap_pat=r["ap_pat"],
+                        ap_mat=r["ap_mat"],
+                        career_name=career_display,
+                        discapacidad_si=r["discapacidad_si"],
+                    )
+                    if st_created:
+                        counts["created_students"] += 1
+                    else:
+                        counts["updated_students"] += 1
+
+                    user, password, user_created = _ensure_user_with_temp_password(student)
+                    if user_created:
+                        counts["created_users"] += 1
+                    else:
+                        counts["reset_users"] += 1
+
+                    credentials.append({
+                        "dni": r["dni"],
+                        "nombres": f"{r['ap_pat']} {r['ap_mat']} {r['nombres']}".strip(),
+                        "carrera": career_display,
+                        "username": user.username,
+                        "password": password,
+                        "is_new": user_created,
+                    })
         except Exception as exc:
-            logger.exception("Error importando ingresante fila %s: %s", r["row_idx"], exc)
+            logger.exception("Error importando fila %s: %s", r["row_idx"], exc)
             counts["errors"] += 1
             errors.append({
                 "row": r["row_idx"],
@@ -425,6 +532,7 @@ def ingresantes_import(request):
         "credentials": credentials,
         "errors": errors,
         "dry_run": dry_run,
+        "detected_phase": detected_phase,
     })
 
 
