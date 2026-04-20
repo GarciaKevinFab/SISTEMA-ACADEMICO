@@ -70,14 +70,13 @@ export default function IngresantesImport() {
 
   const submit = async () => {
     if (!file) return toast.error("Selecciona un archivo .xlsx");
-    if (!callId) return toast.error("Selecciona una convocatoria");
 
     setUploading(true);
     setResult(null);
     try {
       const fd = new FormData();
       fd.append("file", file);
-      fd.append("call_id", callId);
+      if (callId) fd.append("call_id", callId);
       fd.append("modalidad", modalidad || "ORDINARIO");
       if (dryRun) fd.append("dry_run", "1");
 
@@ -161,15 +160,18 @@ export default function IngresantesImport() {
         <CardContent className="p-5 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Convocatoria *</Label>
-              <Select value={callId || ""} onValueChange={setCallId}>
+              <Label className="text-xs font-bold text-slate-700">
+                Convocatoria <span className="text-slate-400 font-normal">(opcional)</span>
+              </Label>
+              <Select value={callId || "__auto__"} onValueChange={v => setCallId(v === "__auto__" ? "" : v)}>
                 <SelectTrigger className="h-10 rounded-lg">
                   <div className="flex items-center gap-2 min-w-0">
                     <Calendar size={14} className="text-slate-400" />
-                    <SelectValue placeholder="Selecciona convocatoria" />
+                    <SelectValue placeholder="Auto (última convocatoria)" />
                   </div>
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__auto__">Auto (última convocatoria)</SelectItem>
                   {calls.filter(c => c?.id != null).map(c => (
                     <SelectItem key={c.id} value={String(c.id)}>
                       {c.title || c.name || `Convocatoria #${c.id}`} {c.period ? `(${c.period})` : ""}
@@ -229,7 +231,7 @@ export default function IngresantesImport() {
           <div className="flex gap-2 pt-2 border-t">
             <Button
               onClick={submit}
-              disabled={uploading || !file || !callId}
+              disabled={uploading || !file}
               className="rounded-lg font-extrabold bg-blue-600 hover:bg-blue-700 gap-2"
             >
               {uploading ? (

@@ -223,7 +223,8 @@ def ingresantes_import(request):
     POST /admission/ingresantes/import
     Body (multipart):
       - file: archivo .xlsx
-      - call_id: id de la convocatoria (requerido)
+      - call_id: id de la convocatoria (opcional — si no viene, se usa la
+                 más reciente; si no hay ninguna, se crea una automática)
       - modalidad: modalidad de admisión (opcional, default ORDINARIO)
       - dry_run: "1" para simular sin guardar (opcional)
 
@@ -240,13 +241,22 @@ def ingresantes_import(request):
         return Response({"detail": "Falta archivo 'file'"}, status=400)
 
     call_id = request.data.get("call_id")
-    if not call_id:
-        return Response({"detail": "Falta 'call_id'"}, status=400)
-
-    try:
-        call = AdmissionCall.objects.get(pk=call_id)
-    except AdmissionCall.DoesNotExist:
-        return Response({"detail": "Convocatoria no encontrada"}, status=404)
+    call = None
+    if call_id:
+        try:
+            call = AdmissionCall.objects.get(pk=call_id)
+        except AdmissionCall.DoesNotExist:
+            return Response({"detail": "Convocatoria no encontrada"}, status=404)
+    else:
+        # Usar la más reciente; si no existe, crear una automática
+        call = AdmissionCall.objects.order_by("-id").first()
+        if not call:
+            call = AdmissionCall.objects.create(
+                title="Proceso de Admisión (auto)",
+                period="",
+                published=False,
+                meta={"source": "auto-ingresantes-import"},
+            )
 
     modalidad = _clean_str(request.data.get("modalidad"), "ORDINARIO")
     dry_run = str(request.data.get("dry_run", "")).lower() in ("1", "true", "yes")
