@@ -7,6 +7,7 @@
 // - Muestra reporte con credenciales generadas (se puede descargar CSV)
 //
 import React, { useEffect, useState, useMemo } from "react";
+import * as XLSX from "xlsx";
 import api from "../../lib/api";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -93,6 +94,15 @@ export default function IngresantesImport() {
         toast.success(
           `Importados: ${s.created_students || 0} nuevos, ${s.updated_students || 0} actualizados, ${s.created_users || 0} usuarios creados`
         );
+        // Auto-descarga del Excel con credenciales si hay credenciales nuevas
+        if (data?.credentials?.length) {
+          try {
+            downloadCredentialsXlsx(data.credentials);
+            toast.success(`Descargando Excel con ${data.credentials.length} credenciales`);
+          } catch (err) {
+            console.error("Error auto-descargando Excel:", err);
+          }
+        }
       }
     } catch (e) {
       toast.error(formatApiError(e, "Error al importar"));
@@ -101,12 +111,90 @@ export default function IngresantesImport() {
     }
   };
 
+  const buildCredentialsXlsx = (credentials) => {
+    // Cabecera con metadata + tabla de credenciales
+    const rows = [
+      ["CREDENCIALES DE INGRESANTES"],
+      [`Convocatoria: ${(calls.find(c => String(c.id) === String(callId))?.title) || "Auto (última convocatoria)"}`],
+      [`Generado: ${new Date().toLocaleString("es-PE")}`],
+      [`Total: ${credentials.length}`],
+      [],
+      ["N°", "DNI", "Apellido Paterno", "Apellido Materno", "Nombres", "Carrera", "Usuario", "Contraseña temporal"],
+    ];
+
+    credentials.forEach((c, i) => {
+      // Separar nombres completos: "AP_PAT AP_MAT NOMBRES"
+      const fullName = (c.nombres || "").trim();
+      const parts = fullName.split(/\s+/).filter(Boolean);
+      let ap_pat = "", ap_mat = "", nombres = "";
+      if (parts.length >= 3) {
+        ap_pat = parts[0];
+        ap_mat = parts[1];
+        nombres = parts.slice(2).join(" ");
+      } else if (parts.length === 2) {
+        ap_pat = parts[0];
+        nombres = parts[1];
+      } else {
+        nombres = fullName;
+      }
+      rows.push([i + 1, c.dni, ap_pat, ap_mat, nombres, c.carrera || "", c.username, c.password]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+
+    // Merges para el título y metadata
+    ws["!merges"] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: 7 } },
+      { s: { r: 3, c: 0 }, e: { r: 3, c: 7 } },
+    ];
+
+    // Anchos de columna
+    ws["!cols"] = [
+      { wch: 5 },   // N°
+      { wch: 12 },  // DNI
+      { wch: 20 },  // Ap. Paterno
+      { wch: 20 },  // Ap. Materno
+      { wch: 25 },  // Nombres
+      { wch: 35 },  // Carrera
+      { wch: 14 },  // Usuario
+      { wch: 18 },  // Contraseña
+    ];
+
+    // Estilos básicos (SheetJS community no soporta estilos avanzados,
+    // pero podemos marcar la fila de header)
+    const headerRowIdx = 5; // fila 6 (0-indexed)
+    const headers = ["N°", "DNI", "Apellido Paterno", "Apellido Materno", "Nombres", "Carrera", "Usuario", "Contraseña temporal"];
+    headers.forEach((_, c) => {
+      const cellRef = XLSX.utils.encode_cell({ r: headerRowIdx, c });
+      if (ws[cellRef]) ws[cellRef].s = { font: { bold: true } };
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Credenciales");
+    return wb;
+  };
+
+  const downloadCredentialsXlsx = (credentials = null) => {
+    const creds = credentials || result?.credentials;
+    if (!creds?.length) return;
+    const wb = buildCredentialsXlsx(creds);
+    const fname = `credenciales_ingresantes_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, fname);
+  };
+
   const downloadCredentialsCsv = () => {
     if (!result?.credentials?.length) return;
-    const header = ["DNI", "Nombres", "Carrera", "Usuario", "Contraseña"];
-    const rows = result.credentials.map(c => [
-      c.dni, c.nombres || "", c.carrera || "", c.username, c.password,
-    ]);
+    const header = ["N°", "DNI", "Ap. Paterno", "Ap. Materno", "Nombres", "Carrera", "Usuario", "Contraseña"];
+    const rows = result.credentials.map((c, i) => {
+      const parts = (c.nombres || "").trim().split(/\s+/).filter(Boolean);
+      let ap_pat = "", ap_mat = "", nombres = "";
+      if (parts.length >= 3) { ap_pat = parts[0]; ap_mat = parts[1]; nombres = parts.slice(2).join(" "); }
+      else if (parts.length === 2) { ap_pat = parts[0]; nombres = parts[1]; }
+      else { nombres = c.nombres || ""; }
+      return [i + 1, c.dni, ap_pat, ap_mat, nombres, c.carrera || "", c.username, c.password];
+    });
     const csv = "\uFEFF" + [header, ...rows]
       .map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))
       .join("\r\n");
@@ -285,12 +373,15 @@ export default function IngresantesImport() {
                       Credenciales generadas ({creds.length})
                     </h3>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Button variant="outline" size="sm" onClick={copyCreds} className="rounded-lg gap-1.5">
                       <Copy size={13} /> Copiar
                     </Button>
-                    <Button size="sm" onClick={downloadCredentialsCsv} className="rounded-lg gap-1.5 bg-blue-600 hover:bg-blue-700">
-                      <Download size={13} /> Descargar CSV
+                    <Button variant="outline" size="sm" onClick={downloadCredentialsCsv} className="rounded-lg gap-1.5">
+                      <Download size={13} /> CSV
+                    </Button>
+                    <Button size="sm" onClick={() => downloadCredentialsXlsx()} className="rounded-lg gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+                      <FileSpreadsheet size={13} /> Descargar Excel
                     </Button>
                   </div>
                 </div>
