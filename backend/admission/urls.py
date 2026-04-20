@@ -99,6 +99,11 @@ urlpatterns = [
     path("reports/admission/aulas.pdf", v.reports_aulas_pdf),
 
     # ══════════════════════════════════════════════════════════
+    # Importador de ingresantes (Excel)
+    # ══════════════════════════════════════════════════════════
+    path("admission/ingresantes/import", v.ingresantes_import),
+
+    # ══════════════════════════════════════════════════════════
     # Modalidades de admisión
     # ══════════════════════════════════════════════════════════
     path("admission/modalities", v.modalities_collection),

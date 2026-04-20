@@ -37,6 +37,7 @@ import AdmissionScheduleModule from "./AdmissionSchedule";
 import AdmissionCertificates from "./AdmissionCertificates";
 import AdmissionModalitiesManagement from "./AdmissionModalities";
 import ApplicantsManagement from "./ApplicantsManagement"; // ← FIX: ahora viene de archivo separado
+import IngresantesImport from "./IngresantesImport";
 
 /* ─── Helpers ────────────────────────────────────────────── */
 function formatApiError(err, fallback = "Ocurrió un error") {
@@ -503,6 +504,7 @@ const TABS = [
   { val: "doc-review", label: "Revisión Docs" },
   { val: "eval", label: "Evaluación" },
   { val: "results", label: "Resultados" },
+  { val: "ingresantes", label: "Ingresantes" },
   { val: "schedule", label: "Cronograma" },
   { val: "certificates", label: "Constancias" },
   { val: "reports", label: "Reportes" },
@@ -569,6 +571,7 @@ export default function CompleteAdmissionModule() {
               <TabsContent value="apply" className="mt-0"><ApplicationWizard /></TabsContent>
               <TabsContent value="eval" className="mt-0"><EvaluationBoard /></TabsContent>
               <TabsContent value="results" className="mt-0"><ResultsPublication /></TabsContent>
+              <TabsContent value="ingresantes" className="mt-0"><IngresantesImport /></TabsContent>
               <TabsContent value="schedule" className="mt-0"><AdmissionScheduleModule /></TabsContent>
               <TabsContent value="certificates" className="mt-0"><AdmissionCertificates /></TabsContent>
               <TabsContent value="reports" className="mt-0"><AdmissionReportsModule /></TabsContent>

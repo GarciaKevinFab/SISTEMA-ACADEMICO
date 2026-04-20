@@ -97,6 +97,11 @@ from .modalities import (
     modality_detail,
 )
 
+# Importador de ingresantes
+from .ingresantes_import import (
+    ingresantes_import,
+)
+
 __all__ = [
     # Calls
     'calls_list_public',
@@ -158,4 +163,6 @@ __all__ = [
     # Modalities
     'modalities_collection',
     'modality_detail',
+    # Ingresantes
+    'ingresantes_import',
 ]
