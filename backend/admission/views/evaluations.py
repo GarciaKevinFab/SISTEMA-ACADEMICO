@@ -19,6 +19,7 @@ from admission.models import Application, EvaluationScore, ApplicationPreference
 from admission.serializers import ApplicationSerializer
 from catalogs.models import Career
 from .utils import _normalize_rubric, _compute_total, compute_phase_totals
+from .results import _applications_matching_career
 
 
 @api_view(["GET"])
@@ -39,14 +40,8 @@ def eval_list_for_scoring(request):
         qs = qs.filter(call_id=call_id)
 
     if career_id:
-        career_obj = Career.objects.filter(pk=career_id).first()
-        if career_obj:
-            qs = qs.filter(
-                Q(preferences__career_id=career_id) |
-                Q(career_name__iexact=career_obj.name)
-            ).distinct()
-        else:
-            qs = qs.filter(preferences__career_id=career_id).distinct()
+        matching_ids = _applications_matching_career(qs, career_id)
+        qs = qs.filter(id__in=matching_ids)
 
     results = []
     for app in qs:

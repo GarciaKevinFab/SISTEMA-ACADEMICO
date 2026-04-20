@@ -19,6 +19,48 @@ from admission.models import (
     ResultPublication,
 )
 from catalogs.models import Career
+
+try:
+    from catalogs.helpers import _norm_key
+except ImportError:
+    import re
+    import unicodedata
+    def _norm_key(s):
+        s = (s or "").strip()
+        s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+        s = re.sub(r"[.\-/_ ]", "", s).lower()
+        return s
+
+
+def _applications_matching_career(call_qs, career_id):
+    """Retorna set de Application IDs que corresponden a la carrera, usando
+    ApplicationPreference o career_name normalizado (tildes/espacios)."""
+    career_obj = Career.objects.filter(pk=career_id).first()
+    if not career_obj:
+        pref_ids = set(
+            ApplicationPreference.objects.filter(
+                application__in=call_qs, career_id=career_id
+            ).values_list("application_id", flat=True)
+        )
+        return pref_ids
+
+    # 1. Por preferencias
+    pref_ids = set(
+        ApplicationPreference.objects.filter(
+            application__in=call_qs, career_id=career_id
+        ).values_list("application_id", flat=True)
+    )
+
+    # 2. Por career_name normalizado (match por tildes/espacios)
+    target = _norm_key(career_obj.name)
+    name_ids = []
+    if target:
+        for app_id, cname in call_qs.values_list("id", "career_name"):
+            cname_n = _norm_key(cname or "")
+            if cname_n and (cname_n == target or target in cname_n or cname_n in target):
+                name_ids.append(app_id)
+
+    return pref_ids | set(name_ids)
 from admission.serializers import ApplicationSerializer
 from .utils import _ensure_media_tmp, _write_stub_pdf, compute_phase_totals
 
@@ -40,18 +82,10 @@ def results_list(request):
     if call_id:
         qs = qs.filter(call_id=call_id)
 
-    # FIX: filtrar por carrera — usa preferencias O career_name como fallback
-    # (el importador de ingresantes guarda el nombre en career_name incluso
-    # cuando la preferencia aún no se creó)
+    # FIX: filtrar por carrera usando match normalizado (tildes/espacios)
     if career_id:
-        career_obj = Career.objects.filter(pk=career_id).first()
-        if career_obj:
-            qs = qs.filter(
-                Q(preferences__career_id=career_id) |
-                Q(career_name__iexact=career_obj.name)
-            ).distinct()
-        else:
-            qs = qs.filter(preferences__career_id=career_id).distinct()
+        matching_ids = _applications_matching_career(qs, career_id)
+        qs = qs.filter(id__in=matching_ids)
 
     # Construir respuesta con scores
     results = []
