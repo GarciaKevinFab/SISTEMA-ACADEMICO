@@ -1,6 +1,8 @@
 """
 reset_admission — borra datos de admisión para volver a empezar limpio.
 
+POR DEFAULT genera un backup ZIP antes de borrar nada.
+
 Uso:
     # Solo admisión (convocatorias, postulaciones, pagos, documentos, etc.)
     python manage.py reset_admission --yes
@@ -11,7 +13,11 @@ Uso:
 
     # Dry-run: muestra qué se borraría sin borrar nada
     python manage.py reset_admission --dry-run
+
+    # Saltar el backup (no recomendado)
+    python manage.py reset_admission --yes --no-backup
 """
+from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.contrib.auth import get_user_model
@@ -41,11 +47,14 @@ class Command(BaseCommand):
                             help="Solo muestra qué se borraría, no borra nada")
         parser.add_argument("--include-students", action="store_true",
                             help="También borra Students sin matrícula e Users asociados")
+        parser.add_argument("--no-backup", action="store_true",
+                            help="NO hacer backup antes de borrar (no recomendado)")
 
     def handle(self, *args, **opts):
         confirmed = opts["yes"]
         dry_run = opts["dry_run"]
         include_students = opts["include_students"]
+        no_backup = opts["no_backup"]
 
         if not confirmed and not dry_run:
             raise CommandError(
@@ -89,6 +98,17 @@ class Command(BaseCommand):
         if dry_run:
             self.stdout.write(self.style.SUCCESS("\n[DRY-RUN] No se borró nada."))
             return
+
+        # ── Backup automático antes de borrar ──
+        if not no_backup:
+            self.stdout.write(self.style.WARNING("\n→ Generando backup antes de borrar…"))
+            try:
+                call_command("backup_admission")
+            except Exception as exc:
+                raise CommandError(
+                    f"Falló el backup: {exc}. Se abortó el borrado. "
+                    f"Corre con --no-backup si quieres saltarte el backup."
+                )
 
         # ── Borrar ──
         with transaction.atomic():
