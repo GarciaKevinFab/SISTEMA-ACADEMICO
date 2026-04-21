@@ -24,15 +24,21 @@ from .utils import _is_active_call, _fe_to_call, _call_to_fe, _calls_to_fe_list
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def calls_list_public(request):
-    """Lista convocatorias activas para el portal público"""
+    """Lista convocatorias visibles al público.
+
+    Incluye:
+      - Convocatorias activas (dentro del rango de inscripción)
+      - Convocatorias publicadas (published=True) — aunque estén
+        cerradas, para que los postulantes puedan consultar sus
+        resultados del proceso ya terminado.
+    """
     qs = (
         AdmissionCall.objects.all()
-        .order_by("id")
+        .order_by("-id")
         .annotate(applications_count=models.Count("applications"))
     )
-    active = [c for c in qs if _is_active_call(c)]
-    # FIX: usar _calls_to_fe_list para evitar N+1 queries
-    return Response(_calls_to_fe_list(active))
+    visible = [c for c in qs if _is_active_call(c) or c.published]
+    return Response(_calls_to_fe_list(visible))
 
 
 @api_view(["GET"])
@@ -46,7 +52,7 @@ def call_detail_public(request, call_id: int):
     except AdmissionCall.DoesNotExist:
         return Response({"detail": "Not found"}, status=404)
 
-    if not _is_active_call(obj):
+    if not (_is_active_call(obj) or obj.published):
         return Response({"detail": "Not found"}, status=404)
 
     return Response(_call_to_fe(obj))
