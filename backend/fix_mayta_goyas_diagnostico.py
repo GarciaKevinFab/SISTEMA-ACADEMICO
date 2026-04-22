@@ -28,7 +28,7 @@ except Exception:
     pass
 
 from students.models import Student
-from academic.models import Enrollment, EnrollmentItem, PlanCourse, Section
+from academic.models import Enrollment, EnrollmentItem, PlanCourse, Section, AcademicGradeRecord
 
 DNI = "60317830"
 
@@ -85,17 +85,42 @@ else:
                         break
             print(f"    - Section#{sec.id} | Ciclo: {ciclo_sec} | Curso: {course_name[:60]}")
 
+print(f"\n─── ACADEMIC GRADE RECORDS (historial de notas) ───")
+print("Si hay registros del ciclo 2 APROBADOS (>=11), el sistema calcula")
+print("que la alumna está en ciclo 3 (el siguiente). Esto puede ser el bug.")
+print()
+grs = AcademicGradeRecord.objects.filter(student=st).select_related("plan_course__course").order_by("term")
+if not grs:
+    print("  [sin registros — no es este el problema]")
+else:
+    print(f"  {'Term':<15} {'Sem':>3} {'Nota':>6} {'Curso':<50}")
+    print(f"  {'-'*15:<15} {'-'*3:>3} {'-'*6:>6} {'-'*50:<50}")
+    for gr in grs:
+        pc = gr.plan_course
+        course_name = ""
+        sem = ""
+        if pc:
+            c = getattr(pc, "course", None)
+            course_name = getattr(c, "name", "") or getattr(c, "nombre", "") if c else ""
+            sem = getattr(pc, "semester", "") or getattr(pc, "ciclo", "") or ""
+        grade = gr.final_grade if gr.final_grade is not None else "—"
+        aprobado = " ✓" if (gr.final_grade is not None and float(gr.final_grade) >= 11) else ""
+        print(f"  {gr.term or '—':<15} {str(sem):>3} {str(grade):>6}{aprobado} {course_name[:50]}")
+
 print()
 print("=" * 70)
 print("ANÁLISIS:")
 print("=" * 70)
 print("""
-Si las secciones matriculadas son del ciclo 3 (III), la matrícula está
-mal y hay que borrarla. Una vez borrada, el estudiante puede matricularse
-de nuevo en las secciones del ciclo 2 (II) desde la interfaz.
+La alumna NO tiene matrículas. El ciclo que ve en sus cursos se calcula
+así (academic/views/enrollment.py:_current_semester):
+  ciclo_actual = max(student.ciclo, max_semestre_aprobado + 1)
 
-Para BORRAR las matrículas actuales, descomenta las líneas al final de
-este script y vuelve a ejecutarlo.
+Si tiene AcademicGradeRecord con notas >=11 del ciclo 2, el sistema cree
+que ya aprobó el ciclo 2 y le toca el 3. Revisa la tabla de arriba.
+
+Si es así, los registros del ciclo 2 deben borrarse (no debería haber
+tenido notas previas ya que es una ingresante nueva del 2026-I).
 """)
 
 # ═══════════════════════════════════════════════════════════════════
@@ -106,10 +131,20 @@ este script y vuelve a ejecutarlo.
 # deleted_enrs = Enrollment.objects.filter(student=st).delete()[0]
 # print(f"  EnrollmentItems borrados: {deleted_items}")
 # print(f"  Enrollments borrados:    {deleted_enrs}")
+
+# ═══════════════════════════════════════════════════════════════════
+# BORRAR NOTAS PREVIAS — Descomenta para limpiar AcademicGradeRecord
+# Si la alumna es ingresante nueva y tiene registros de notas, esos
+# están mal y deben borrarse para que el sistema no la "adelante" al
+# ciclo siguiente.
+# ═══════════════════════════════════════════════════════════════════
+# print("\n─── BORRANDO ACADEMIC GRADE RECORDS ───")
+# deleted_grs = AcademicGradeRecord.objects.filter(student=st).delete()[0]
+# print(f"  AcademicGradeRecords borrados: {deleted_grs}")
 #
-# # También asegurar que el ciclo del Student esté en 2
+# # Asegurar ciclo=2
 # if st.ciclo != 2:
 #     st.ciclo = 2
 #     st.save(update_fields=["ciclo"])
 #     print(f"  Student.ciclo actualizado a 2")
-# print("  ✓ Listo. El estudiante ahora puede matricularse en el ciclo II.")
+# print("  ✓ Listo. El sistema ahora debería mostrar cursos del ciclo II.")
