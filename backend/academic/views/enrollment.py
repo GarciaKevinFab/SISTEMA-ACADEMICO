@@ -150,10 +150,22 @@ def _resolve_student_from_request(request, dni=None, student_id=None):
 # ══════════════════════════════════════════════════════════════
 
 def _approved_info(student: StudentProfile):
+    """Retorna (approved_ids, approved_names) considerando SOLO el stint
+    activo (reingreso). Si un alumno abandonó y reingresó, los cursos
+    aprobados de stints anteriores no cuentan para calcular su ciclo
+    actual."""
+    from .kardex import _detect_active_stint_periods
+
+    all_terms = set(
+        AcademicGradeRecord.objects.filter(student=student)
+        .values_list("term", flat=True).distinct()
+    )
+    active_periods = _detect_active_stint_periods(all_terms) or all_terms
+
     recs = (
         AcademicGradeRecord.objects
         .select_related("course")
-        .filter(student=student)
+        .filter(student=student, term__in=active_periods)
         .values_list("course_id", "final_grade", "course__name")
     )
 
