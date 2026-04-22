@@ -51,13 +51,20 @@ print(f"  Plan:             {st.plan_id} ({st.plan.name if st.plan else '—'})"
 print(f"  User:             {st.user_id} ({st.user.username if st.user else '—'})")
 
 print(f"\n─── ENROLLMENTS (matrículas) ───")
-enrs = Enrollment.objects.filter(student=st).select_related("period").order_by("-id")
+enrs = Enrollment.objects.filter(student=st).order_by("-id")
 if not enrs:
     print("  [sin matrículas]")
 else:
     for enr in enrs:
-        period_code = getattr(enr.period, "code", None) or getattr(enr.period, "name", None) or f"Period#{enr.period_id}"
-        print(f"\n  Enrollment #{enr.id} — Periodo: {period_code}")
+        # period puede ser FK o CharField dependiendo del modelo
+        p = getattr(enr, "period", None)
+        if hasattr(p, "code"):
+            period_code = p.code
+        elif hasattr(p, "name"):
+            period_code = p.name
+        else:
+            period_code = str(p) if p else f"Enrollment#{enr.id}"
+        print(f"\n  Enrollment #{enr.id} — Periodo: {period_code} — Status: {getattr(enr, 'status', '—')}")
         items = EnrollmentItem.objects.filter(enrollment=enr).select_related("section__plan_course__course")
         if not items:
             print(f"    [sin items]")
