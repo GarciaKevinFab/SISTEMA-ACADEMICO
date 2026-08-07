@@ -12,6 +12,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Stats, Exports, Validation, Codes, Catalog, Mapping, Jobs,
+  MineduCareers,
 } from "../../services/minedu.service";
 
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,8 @@ const DATA_TYPES = [
 const EXPORT_FORMATS = [
   { value: "XLSX", label: "Excel (.xlsx)", icon: FileSpreadsheet },
   { value: "CSV", label: "CSV (.csv)", icon: FileText },
+  // PDF: certificado individual por estudiante (solo Certificado de Estudios)
+  { value: "PDF", label: "PDF (.pdf) — por estudiante", icon: FileCheck, only: ["CERTIFICADO"] },
 ];
 
 const CATALOG_TYPES = [
@@ -436,7 +439,11 @@ function ExportTab() {
             return (
               <button
                 key={dt.value}
-                onClick={() => setForm({ ...form, data_type: dt.value })}
+                onClick={() => setForm(f => {
+                  const fmt = EXPORT_FORMATS.find(x => x.value === f.export_format);
+                  const ok = !fmt?.only || fmt.only.includes(dt.value);
+                  return { ...f, data_type: dt.value, export_format: ok ? f.export_format : "XLSX" };
+                })}
                 className={`
                   group text-left rounded-xl border-2 p-3.5 transition-all
                   ${on
@@ -471,11 +478,13 @@ function ExportTab() {
             <Select value={form.export_format} onValueChange={v => setForm({ ...form, export_format: v })}>
               <SelectTrigger className="bg-slate-50 border-slate-200 hover:bg-white transition-colors"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {EXPORT_FORMATS.map(f => (
-                  <SelectItem key={f.value} value={f.value}>
-                    <span className="flex items-center gap-2"><f.icon className="h-3.5 w-3.5 text-slate-400" />{f.label}</span>
-                  </SelectItem>
-                ))}
+                {EXPORT_FORMATS
+                  .filter(f => !f.only || f.only.includes(form.data_type))
+                  .map(f => (
+                    <SelectItem key={f.value} value={f.value}>
+                      <span className="flex items-center gap-2"><f.icon className="h-3.5 w-3.5 text-slate-400" />{f.label}</span>
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </Field>
@@ -541,9 +550,482 @@ function ExportTab() {
         />
       )}
       {error && <FeedbackBanner icon={XCircle} title="Error al generar" detail={error} />}
+
+      {/* ────────────────────────────────────────────────────────
+          REPORTE SIA-MINEDU (plantilla oficial)
+          ──────────────────────────────────────────────────────── */}
+      <ReporteSiaCard />
+
+      {/* ────────────────────────────────────────────────────────
+          OFICIO DE MATRICULADOS (PDF con membrete)
+          ──────────────────────────────────────────────────────── */}
+      <OficioMatriculadosCard />
     </div>
   );
 }
+
+
+/* ================================================================
+   REPORTE SIA-MINEDU
+   ================================================================ */
+
+function ReporteSiaCard() {
+  const yr = new Date().getFullYear();
+  const periodOptions = useMemo(() => {
+    const opts = [];
+    for (let y = yr + 1; y >= yr - 2; y--) {
+      opts.push(`${y}-II`);
+      opts.push(`${y}-I`);
+    }
+    return opts;
+  }, [yr]);
+
+  const [careers, setCareers] = useState([]);
+  const [loadingCareers, setLoadingCareers] = useState(false);
+  const [filters, setFilters] = useState({
+    career_id: "",
+    semester: "1",
+    period: `${yr}-I`,
+  });
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoadingCareers(true);
+      try {
+        const list = await MineduCareers.list();
+        if (!alive) return;
+        const norm = (Array.isArray(list) ? list : [])
+          .map((c) => ({
+            id: c?.id ?? c?.career_id ?? c?.value,
+            name: c?.name ?? c?.label ?? c?.career_name ?? `Carrera ${c?.id ?? ""}`,
+          }))
+          .filter((c) => c.id != null);
+        setCareers(norm);
+      } catch {
+        setCareers([]);
+      } finally {
+        if (alive) setLoadingCareers(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const onF = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
+
+  const selectedCareerName = useMemo(() => {
+    const c = careers.find((x) => String(x.id) === String(filters.career_id));
+    return c?.name || "";
+  }, [careers, filters.career_id]);
+
+  const semesterRoman = useMemo(() => {
+    const map = ["I","II","III","IV","V","VI","VII","VIII","IX","X"];
+    const n = parseInt(filters.semester, 10);
+    return Number.isFinite(n) && n >= 1 && n <= 10 ? map[n-1] : "";
+  }, [filters.semester]);
+
+  const download = async () => {
+    if (!filters.career_id) { toast.error("Selecciona una carrera"); return; }
+    if (!filters.period) { toast.error("Selecciona un periodo"); return; }
+    setBusy(true);
+    try {
+      const r = await Exports.reporteSia({
+        ...filters,
+        seccion: "A",
+        turno: "MAÑANA",
+      });
+      const ct = r?.headers?.["content-type"] || "";
+      const cd = r?.headers?.["content-disposition"] || "";
+      const blob = r.data instanceof Blob
+        ? r.data
+        : new Blob([r.data], { type: ct || "application/octet-stream" });
+
+      if (ct.includes("application/json")) {
+        const txt = await blob.text();
+        let msg = "No se pudo generar";
+        try { const j = JSON.parse(txt); msg = j.detail || j.message || msg; } catch { }
+        toast.error(msg);
+        return;
+      }
+
+      const fileName = /filename="?([^"]+)"?/i.exec(cd)?.[1]
+        || `reporte_sia_${filters.period}.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = fileName;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      toast.success("Reporte SIA generado");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "No se pudo generar");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border-2 border-violet-200 overflow-hidden shadow-sm bg-white">
+      {/* Banner */}
+      <div className="relative bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-5 py-4 text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18),transparent_60%)]" />
+        <div className="relative flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-xl bg-white/15 backdrop-blur grid place-items-center shrink-0 ring-1 ring-white/20">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-extrabold tracking-tight">
+                Reporte de Matrícula — Plantilla Oficial SIA
+              </h3>
+              <p className="text-xs text-white/85 mt-0.5">
+                Excel con la plantilla MINEDU lista para subir al SIA.
+                Incluye 41 columnas + hojas-catálogo (-AYUDA-, -MAESTRO GENERAL-,
+                -PERIODO ACADÉMICO-, -LENGUA MATERNA-, etc.)
+              </p>
+            </div>
+          </div>
+          <div className="hidden md:flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-[10px] font-bold uppercase tracking-wider ring-1 ring-white/20">
+            <Zap className="w-3 h-3" /> Carga oficial
+          </div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="p-5 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Field label="Carrera">
+            <Select
+              value={filters.career_id || "0"}
+              onValueChange={(v) => onF("career_id", v === "0" ? "" : v)}
+              disabled={loadingCareers}
+            >
+              <SelectTrigger className="bg-slate-50 border-slate-200 hover:bg-white transition-colors">
+                <SelectValue placeholder={loadingCareers ? "Cargando..." : "Seleccionar"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">— Seleccionar —</SelectItem>
+                {careers.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <Field label="Ciclo">
+            <Select value={filters.semester} onValueChange={(v) => onF("semester", v)}>
+              <SelectTrigger className="bg-slate-50 border-slate-200 hover:bg-white transition-colors">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                  <SelectItem key={n} value={String(n)}>
+                    Ciclo {["I","II","III","IV","V","VI","VII","VIII","IX","X"][n-1]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <Field label="Periodo">
+            <Select value={filters.period} onValueChange={(v) => onF("period", v)}>
+              <SelectTrigger className="bg-slate-50 border-slate-200 hover:bg-white transition-colors">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {periodOptions.map((p) => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+
+        {filters.career_id && (
+          <div className="rounded-xl bg-violet-50/60 border border-violet-200/70 px-4 py-2.5 flex items-center gap-2 text-xs text-violet-900">
+            <CheckCircle2 className="w-4 h-4 text-violet-600 shrink-0" />
+            <span>
+              Listo: <b>{selectedCareerName}</b> · <b>Ciclo {semesterRoman}</b> · <b>{filters.period}</b>
+            </span>
+          </div>
+        )}
+
+        <div className="flex justify-end pt-1">
+          <Button
+            onClick={download}
+            disabled={busy || !filters.career_id}
+            className="bg-violet-600 hover:bg-violet-700 text-white font-bold h-10 min-w-[200px] gap-2 shadow-sm"
+          >
+            {busy ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Generando…</>
+            ) : (
+              <><Download className="w-4 h-4" /> Descargar Reporte SIA</>
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ================================================================
+   OFICIO DE MATRICULADOS (PDF con membrete)
+   ================================================================ */
+
+function OficioMatriculadosCard() {
+  const yr = new Date().getFullYear();
+  const periodOptions = useMemo(() => {
+    const opts = [];
+    for (let y = yr + 1; y >= yr - 2; y--) {
+      opts.push(`${y}-II`);
+      opts.push(`${y}-I`);
+    }
+    return opts;
+  }, [yr]);
+
+  const [form, setForm] = useState({
+    oficio_number: "258",
+    oficio_year: String(yr),
+    period: `${yr}-I`,
+    recipient_treatment: "Señor:",
+    recipient_name: "Mg. MANUEL ARMAS REAÑO",
+    recipient_position:
+      "DIRECTOR DE LA DIRECCIÓN DE FORMACIÓN INICIAL DOCENTE - DIFOID\nMINISTERIO DE EDUCACIÓN",
+    recipient_city: "LIMA",
+    asunto: `REPORTE DE ESTUDIANTES MATRICULADOS ${yr}-I`,
+    atencion_name: "JHON SUAREZ ROJAS",
+    atencion_position: "INGENIERO ENCARGADO DEL SISTEMA SIA",
+    lema: '"AÑO DE LA RECUPERACIÓN Y CONSOLIDACIÓN DE LA ECONOMIA PERUANA"',
+    body: "",
+  });
+  const [busy, setBusy] = useState(false);
+
+  const onF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Sincronizar asunto cuando cambia el periodo
+  const onPeriodChange = (v) => {
+    setForm((f) => ({
+      ...f,
+      period: v,
+      asunto: f.asunto.replace(/\d{4}-(I{1,3}|EXTRAORDINARIO)/i, v),
+    }));
+  };
+
+  const download = async () => {
+    if (!form.oficio_number) { toast.error("Indica el número de oficio"); return; }
+    if (!form.recipient_name) { toast.error("Indica el destinatario"); return; }
+    setBusy(true);
+    try {
+      const r = await Exports.oficioMatriculados(form);
+      const ct = r?.headers?.["content-type"] || "";
+      const cd = r?.headers?.["content-disposition"] || "";
+      const blob = r.data instanceof Blob
+        ? r.data
+        : new Blob([r.data], { type: ct || "application/pdf" });
+
+      if (ct.includes("application/json")) {
+        const txt = await blob.text();
+        let msg = "No se pudo generar";
+        try { const j = JSON.parse(txt); msg = j.detail || j.message || msg; } catch { }
+        toast.error(msg);
+        return;
+      }
+
+      const fileName = /filename="?([^"]+)"?/i.exec(cd)?.[1]
+        || `Oficio_${form.oficio_number}_${form.oficio_year}.pdf`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = fileName;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      toast.success("Oficio generado");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "No se pudo generar");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border-2 border-amber-200 overflow-hidden shadow-sm bg-white">
+      {/* Banner */}
+      <div className="relative bg-gradient-to-r from-amber-600 via-orange-600 to-rose-600 px-5 py-4 text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18),transparent_60%)]" />
+        <div className="relative flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-xl bg-white/15 backdrop-blur grid place-items-center shrink-0 ring-1 ring-white/20">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-extrabold tracking-tight">
+                Oficio de Matriculados — Hoja Membretada
+              </h3>
+              <p className="text-xs text-white/85 mt-0.5">
+                PDF con membrete institucional (logo, cinta lateral, marca de
+                agua) y firma del director, listo para envío al MINEDU.
+              </p>
+            </div>
+          </div>
+          <div className="hidden md:flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-[10px] font-bold uppercase tracking-wider ring-1 ring-white/20">
+            <Award className="w-3 h-3" /> Documento oficial
+          </div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="p-5 space-y-4">
+        {/* Línea 1: número, año, periodo */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <Field label="N° Oficio">
+            <Input
+              value={form.oficio_number}
+              onChange={(e) => onF("oficio_number", e.target.value)}
+              placeholder="258"
+              className="bg-slate-50 border-slate-200"
+            />
+          </Field>
+          <Field label="Año">
+            <Input
+              value={form.oficio_year}
+              onChange={(e) => onF("oficio_year", e.target.value)}
+              placeholder={String(yr)}
+              className="bg-slate-50 border-slate-200"
+            />
+          </Field>
+          <Field label="Periodo">
+            <Select value={form.period} onValueChange={onPeriodChange}>
+              <SelectTrigger className="bg-slate-50 border-slate-200 hover:bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {periodOptions.map((p) => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Trato">
+            <Select
+              value={form.recipient_treatment}
+              onValueChange={(v) => onF("recipient_treatment", v)}
+            >
+              <SelectTrigger className="bg-slate-50 border-slate-200 hover:bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Señor:">Señor:</SelectItem>
+                <SelectItem value="Señora:">Señora:</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+
+        {/* Destinatario */}
+        <Field label="Destinatario (nombre)">
+          <Input
+            value={form.recipient_name}
+            onChange={(e) => onF("recipient_name", e.target.value)}
+            placeholder="Mg. MANUEL ARMAS REAÑO"
+            className="bg-slate-50 border-slate-200"
+          />
+        </Field>
+
+        <Field label="Cargo / Institución del destinatario (separa líneas con Enter)">
+          <textarea
+            value={form.recipient_position}
+            onChange={(e) => onF("recipient_position", e.target.value)}
+            rows={2}
+            placeholder="DIRECTOR DE LA DIRECCIÓN DE FORMACIÓN INICIAL DOCENTE - DIFOID&#10;MINISTERIO DE EDUCACIÓN"
+            className="w-full text-sm rounded-md border border-slate-200 bg-slate-50 hover:bg-white px-3 py-2 transition-colors resize-y"
+          />
+        </Field>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Field label="Ciudad destinataria">
+            <Input
+              value={form.recipient_city}
+              onChange={(e) => onF("recipient_city", e.target.value)}
+              placeholder="LIMA"
+              className="bg-slate-50 border-slate-200"
+            />
+          </Field>
+          <Field label="Atención: Nombre">
+            <Input
+              value={form.atencion_name}
+              onChange={(e) => onF("atencion_name", e.target.value)}
+              placeholder="JHON SUAREZ ROJAS"
+              className="bg-slate-50 border-slate-200"
+            />
+          </Field>
+          <Field label="Atención: Cargo">
+            <Input
+              value={form.atencion_position}
+              onChange={(e) => onF("atencion_position", e.target.value)}
+              placeholder="INGENIERO ENCARGADO DEL SISTEMA SIA"
+              className="bg-slate-50 border-slate-200"
+            />
+          </Field>
+        </div>
+
+        {/* Asunto */}
+        <Field label="Asunto">
+          <Input
+            value={form.asunto}
+            onChange={(e) => onF("asunto", e.target.value)}
+            placeholder="REPORTE DE ESTUDIANTES MATRICULADOS 2026-I"
+            className="bg-slate-50 border-slate-200"
+          />
+        </Field>
+
+        {/* Lema */}
+        <Field label="Lema del año (opcional)">
+          <Input
+            value={form.lema}
+            onChange={(e) => onF("lema", e.target.value)}
+            placeholder='"AÑO DE LA RECUPERACIÓN..."'
+            className="bg-slate-50 border-slate-200"
+          />
+        </Field>
+
+        {/* Cuerpo personalizado */}
+        <Field label="Cuerpo personalizado (opcional · separa párrafos con ||)">
+          <textarea
+            value={form.body}
+            onChange={(e) => onF("body", e.target.value)}
+            rows={3}
+            placeholder="Si lo dejas vacío se usa el texto estándar de envío de matriculados."
+            className="w-full text-sm rounded-md border border-slate-200 bg-slate-50 hover:bg-white px-3 py-2 transition-colors resize-y"
+          />
+        </Field>
+
+        <div className="rounded-xl bg-amber-50/60 border border-amber-200/70 px-4 py-2.5 flex items-start gap-2 text-xs text-amber-900">
+          <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <span>
+            La <b>fecha</b>, <b>logo</b>, <b>nombre del director</b> y la
+            <b> firma</b> se toman automáticamente de la configuración
+            institucional (Catálogos → Institución).
+          </span>
+        </div>
+
+        <div className="flex justify-end pt-1">
+          <Button
+            onClick={download}
+            disabled={busy}
+            className="bg-amber-600 hover:bg-amber-700 text-white font-bold h-10 min-w-[200px] gap-2 shadow-sm"
+          >
+            {busy ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Generando…</>
+            ) : (
+              <><Download className="w-4 h-4" /> Descargar Oficio PDF</>
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function StepLabel({ n, text }) {
   return (

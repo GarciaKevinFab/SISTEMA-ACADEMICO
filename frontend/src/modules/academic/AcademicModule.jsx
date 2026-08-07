@@ -6,7 +6,6 @@ import { pageStyle } from "./styles";
 import { useAuth } from "@/context/AuthContext";
 import { PERMS } from "@/auth/permissions";
 import IfPerm from "@/components/auth/IfPerm";
-import LoadAndSchedules from "./LoadAndSchedules";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,13 +37,21 @@ import {
 import { Teachers as CatalogTeachers, Classrooms as CatalogClassrooms } from "@/services/catalogs.service";
 import EnrollmentComponent from "./EnrollmentComponent";
 import EnrollmentWindowManager from "./EnrollmentWindowManager";
+import { useActivePeriod } from "@/hooks/useActivePeriod";
 import GradesAttendanceComponent from "./GradesAttendanceComponent";
 import SectionSyllabusEvaluation from "./SectionSyllabusEvaluation";
 import AcademicReportsPage from "./AcademicReports";
 import AcademicProcesses from "./AcademicProcesses";
 import StudentHistoricalGrades from "./StudentHistoricalGrades";
 import TransferManagement from "./TransferManagement";
+import AdminAttendanceMonitor from "./AdminAttendanceMonitor";
+import EvaluationCenter from "./EvaluationCenter";
+import TeacherProfile from "./TeacherProfile";
+import StudentSemesterPanel from "../student/StudentSemesterPanel";
+import TeacherSchedule from "./TeacherSchedule";
+import apiClient from "@/lib/api";
 import { PeriodsSection, TeachersSection, CredentialsSection, ImportersSection, InjectCatalogStyles } from "./AcademicCatalogs";
+import PersonalAsignacion from "./PersonalAsignacion";
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle,
@@ -75,7 +82,7 @@ function generatePeriodOptions() {
 function guessPeriod() {
     const now = new Date();
     const y = now.getFullYear();
-    return now.getMonth() < 6 ? `${y}-I` : `${y}-II`;
+    return now.getMonth() < 7 ? `${y}-I` : `${y}-II`;
 }
 
 /* ─────────────────────────── ESTILOS BASE ─────────────────────────── */
@@ -217,7 +224,7 @@ function AcademicQuickActions({ go }) {
 
     const actions = [
         { key: "enroll", label: "Matrícula", Icon: GraduationCap, color: "#1565C0", bg: "#EFF8FF" },
-        { key: "load", label: "Carga & Horarios", Icon: Calendar, color: "#2E7D32", bg: "#F0FDF4" },
+        { key: "load", label: "Ventanas Matrícula", Icon: Calendar, color: "#2E7D32", bg: "#F0FDF4" },
         { key: "plans", label: "Mallas/Planes", Icon: BookOpen, color: "#6A1B9A", bg: "#FAF5FF" },
         { key: "grades", label: "Notas/Asistencia", Icon: CheckCircle, color: "#B45309", bg: "#FFFBEB" },
         { key: "syllabus", label: "Sílabos", Icon: FileText, color: "#0F766E", bg: "#F0FDFA" },
@@ -902,37 +909,46 @@ function PlansAndCurricula() {
     );
 }
 
-/* ─────────────────────────── CARGA Y HORARIOS + VENTANA MATRÍCULA ─────────────────────────── */
-/* ✅ Sin selector de período duplicado — el banner azul de LoadAndSchedules es el único control */
+/* ─────────────────────────── VENTANAS DE MATRÍCULA ─────────────────────────── */
+/* ✅ La creación de secciones y horarios ahora vive en Docentes → Asignación de
+   Personal (estilo SIAGIE). Esta pestaña solo administra las ventanas de matrícula. */
 function LoadSchedulesAndWindow() {
-    const { hasAny } = useAuth();
-    const isAdmin = hasAny([PERMS["academic.sections.create"]] || []);
+    // Período VIGENTE del sistema (Académico → Periodos), no el del calendario
+    const { period: activePeriod, setPeriod: setActivePeriod } = useActivePeriod();
 
-    // Estado compartido — lo actualiza el banner dentro de LoadAndSchedules vía onPeriodChange
-    const [activePeriod, setActivePeriod] = useState(guessPeriod);
+    const periodOpts = useMemo(() => {
+        const y = new Date().getFullYear();
+        const out = [];
+        for (let yy = y + 1; yy >= y - 4; yy--) out.push(`${yy}-II`, `${yy}-I`);
+        return out;
+    }, []);
 
     return (
         <div className="space-y-6 fade-in">
-            {isAdmin ? (
-                <div className="grid xl:grid-cols-3 gap-6">
-                    <div className="xl:col-span-2">
-                        {/* El banner del período vive aquí dentro */}
-                        <LoadAndSchedules
-                            externalPeriod={activePeriod}
-                            onPeriodChange={setActivePeriod}
-                        />
-                    </div>
-                    <div className="xl:col-span-1">
-                        {/* Recibe el período sincronizado desde el banner */}
-                        <EnrollmentWindowManager activePeriod={activePeriod} />
-                    </div>
+            {/* Banner de período */}
+            <div className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-blue-700 to-blue-600 px-5 py-4 shadow">
+                <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center">
+                    <CalendarDays className="h-5 w-5 text-white" />
                 </div>
-            ) : (
-                <LoadAndSchedules
-                    externalPeriod={activePeriod}
-                    onPeriodChange={setActivePeriod}
-                />
-            )}
+                <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-blue-100 uppercase tracking-widest">Período activo</p>
+                    <p className="text-lg font-bold text-white leading-tight">{activePeriod}</p>
+                </div>
+                <div className="shrink-0 w-28">
+                    <Select value={activePeriod} onValueChange={setActivePeriod}>
+                        <SelectTrigger className="h-9 px-3 rounded-xl border-0 bg-white/20 text-white text-sm focus:ring-0 focus:ring-offset-0 w-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                            {periodOpts.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
+            <div className="max-w-3xl">
+                <EnrollmentWindowManager activePeriod={activePeriod} />
+            </div>
         </div>
     );
 }
@@ -1115,29 +1131,171 @@ function KardexAndCertificates() {
     );
 }
 
+/* ────────────── DASHBOARD PROPIO DEL DOCENTE (sin datos globales) ────────────── */
+function TeacherOwnDashboard({ go }) {
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let cancel = false;
+        (async () => {
+            try {
+                const { data: d } = await apiClient.get("/academic/teacher/dashboard");
+                if (!cancel) setData(d);
+            } catch {
+                if (!cancel) setData(null);
+            } finally {
+                if (!cancel) setLoading(false);
+            }
+        })();
+        return () => { cancel = true; };
+    }, []);
+
+    const secciones = data?.sections || [];
+    const kpis = [
+        { label: "Mis cursos", value: data?.total_sections ?? 0, tone: "bg-blue-50 border-blue-200 text-blue-700", go: "grades" },
+        { label: "Mis alumnos", value: data?.total_students ?? 0, tone: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+        { label: "Actas por cerrar", value: data?.acts_pending ?? 0, tone: (data?.acts_pending ?? 0) > 0 ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-slate-50 border-slate-200 text-slate-600", go: "grades" },
+        { label: "Sílabos subidos", value: `${data?.syllabus_uploaded ?? 0}/${data?.syllabus_total ?? 0}`, tone: "bg-violet-50 border-violet-200 text-violet-700", go: "syllabus" },
+    ];
+
+    return (
+        <div className="space-y-5">
+            {/* Acceso rápido del docente */}
+            <div>
+                <p className="text-xs font-700 uppercase tracking-wider text-slate-400 mb-2">Acceso rápido</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                        { key: "grades", label: "Evaluación", Icon: ClipboardList, color: "#B45309", bg: "#FFFBEB" },
+                        { key: "attendance", label: "Asistencia", Icon: CheckCircle, color: "#1565C0", bg: "#EFF8FF" },
+                        { key: "schedule", label: "Mi Horario", Icon: CalendarDays, color: "#B45309", bg: "#FEF3C7" },
+                        { key: "syllabus", label: "Sílabos", Icon: FileText, color: "#0F766E", bg: "#F0FDFA" },
+                    ].map(({ key, label, Icon, color, bg }) => (
+                        <button key={key} type="button" onClick={() => go(key)}
+                            className="qa-btn flex flex-col items-center justify-center gap-2.5 min-h-[88px] p-3 rounded-2xl bg-white w-full cursor-pointer">
+                            <div className="flex items-center justify-center w-9 h-9 rounded-xl" style={{ background: bg, color }}>
+                                <Icon size={17} />
+                            </div>
+                            <span className="text-[11px] font-600 text-slate-700 text-center">{label}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* KPIs propios */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {kpis.map((k) => (
+                    <button key={k.label} type="button" disabled={!k.go}
+                        onClick={() => k.go && go(k.go)}
+                        className={`text-left rounded-2xl border px-4 py-3 ${k.tone} ${k.go ? "hover:shadow-md transition-shadow" : ""}`}>
+                        <p className="text-[10px] font-bold uppercase tracking-wider opacity-70">{k.label}</p>
+                        <p className="text-2xl font-black mt-0.5">{loading ? "…" : k.value}</p>
+                    </button>
+                ))}
+            </div>
+
+            {/* Avance por curso */}
+            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+                <div className="px-5 py-3 border-b border-slate-100">
+                    <p className="text-sm font-extrabold text-slate-800">Avance de mis cursos</p>
+                    <p className="text-[11px] text-slate-400">Notas cargadas y estado del acta de cada curso</p>
+                </div>
+                <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {loading ? (
+                        <p className="text-sm text-slate-400 col-span-full text-center py-6">Cargando…</p>
+                    ) : secciones.length === 0 ? (
+                        <p className="text-sm text-slate-400 col-span-full text-center py-6">
+                            No tienes cursos asignados en el período actual
+                        </p>
+                    ) : secciones.map((s) => {
+                        const pct = Math.min(100, Number(s.grades_pct) || 0);
+                        return (
+                            <button key={s.id} type="button" onClick={() => go("grades")}
+                                className="text-left rounded-xl border border-slate-200 hover:border-blue-300 hover:shadow-md transition-all p-3.5 space-y-2">
+                                <div className="flex items-start justify-between gap-2">
+                                    <p className="text-[13px] font-bold text-slate-800 leading-snug line-clamp-2">{s.course_name}</p>
+                                    <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${s.submitted ? "bg-slate-100 text-slate-500 border-slate-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                                        {s.submitted ? "CERRADA" : "ABIERTA"}
+                                    </span>
+                                </div>
+                                <p className="text-[10px] text-slate-400">
+                                    {s.career_name}{s.semester ? ` · Ciclo ${s.semester}` : ""} · Sec. {s.label} · {s.students} alumnos
+                                </p>
+                                <div>
+                                    <div className="flex items-center justify-between text-[10px] mb-1">
+                                        <span className="font-semibold uppercase tracking-wider text-slate-400">Notas</span>
+                                        <span className={`font-black ${pct >= 100 ? "text-emerald-600" : pct > 0 ? "text-blue-600" : "text-rose-500"}`}>
+                                            {s.grades_loaded}/{s.students} · {pct}%
+                                        </span>
+                                    </div>
+                                    <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                                        <div className={`h-full rounded-full ${pct >= 100 ? "bg-emerald-500" : pct > 0 ? "bg-blue-500" : "bg-rose-300"}`}
+                                            style={{ width: `${Math.max(pct, 2)}%` }} />
+                                    </div>
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 /* ─────────────────────────── MÓDULO PRINCIPAL ─────────────────────────── */
 export default function AcademicModule() {
-    const { hasAny } = useAuth();
+    const { hasAny, user, roles: authRoles } = useAuth();
     const [tab, setTab] = useState("dashboard");
+
+    // Docente = registra directo en "Notas"; administración usa los
+    // monitoreos (Notas Admin / Asist. Admin) con plantillas y carga Excel.
+    const isTeacher = useMemo(() => {
+        const rs = authRoles || user?.roles || [];
+        return rs.some((r) => String(r).toUpperCase().includes("TEACHER")) ||
+            String(user?.role || "").toUpperCase().includes("TEACHER");
+    }, [authRoles, user]);
+
+    // Estudiante: vista propia (sus cursos), nunca datos institucionales
+    const isStudent = useMemo(() => {
+        const rs = authRoles || user?.roles || [];
+        return rs.some((r) => String(r).toUpperCase().includes("STUDENT")) ||
+            String(user?.role || "").toUpperCase().includes("STUDENT");
+    }, [authRoles, user]);
 
     const tabs = useMemo(() =>
         [
-            { key: "dashboard", label: "Dashboard", need: [] },
-            { key: "plans", label: "Mallas", need: REQS.plans },
-            { key: "load", label: "Carga & Horarios", need: REQS.load },
-            { key: "enroll", label: "Matrícula", need: REQS.enroll },
-            { key: "grades", label: "Notas", need: REQS.grades },
-            { key: "syllabus", label: "Sílabos", need: REQS.syllabus },
-            { key: "kardex", label: "Kárdex", need: REQS.kardex },
-            { key: "reports", label: "Reportes", need: REQS.reports },
-            { key: "processes", label: "Procesos", need: REQS.processes },
-            { key: "transfers", label: "Alumnos / Traslados", need: REQS.transfers },
-            { key: "periods", label: "Periodos", need: REQS.periods },
-            { key: "teachers", label: "Docentes", need: REQS.teachers },
-            { key: "credentials", label: "Credenciales", need: REQS.credentials },
-            { key: "importers", label: "Importadores", need: REQS.importers },
-        ].filter((t) => t.need.length === 0 || hasAny(t.need)),
-        [hasAny]
+            { key: "dashboard", label: isStudent ? "Mi Semestre" : "Dashboard", need: [], group: "inicio" },
+            // ── Docente ──
+            { key: "grades", label: "Evaluación", need: REQS.grades, teacherOnly: true, group: "docencia" },
+            { key: "attendance", label: "Asistencia", need: REQS.grades, teacherOnly: true, group: "docencia" },
+            { key: "schedule", label: "Horario", need: [], teacherOnly: true, group: "docencia" },
+            { key: "profile", label: "Mi Perfil", need: [], teacherOnly: true, group: "docencia" },
+            // ── Estudiante / común ──
+            { key: "enroll", label: "Matrícula", need: REQS.enroll, group: "academico" },
+            { key: "syllabus", label: "Sílabos", need: REQS.syllabus, group: "academico" },
+            // Kárdex: consulta por DNI de cualquier alumno → solo personal
+            // autorizado. El estudiante ve lo suyo en "Mi Semestre".
+            { key: "kardex", label: "Kárdex", need: REQS.kardex, notStudent: true, group: "academico" },
+            { key: "processes", label: "Procesos", need: REQS.processes, group: "academico" },
+            // ── Solo administración ──
+            { key: "evaluation", label: "Evaluación", need: REQS.grades, staffOnly: true, group: "gestion" },
+            { key: "attendance_admin", label: "Asist. Admin", need: REQS.grades, staffOnly: true, group: "gestion" },
+            { key: "reports", label: "Reportes", need: REQS.reports, staffOnly: true, group: "gestion" },
+            { key: "plans", label: "Mallas", need: REQS.plans, staffOnly: true, group: "config" },
+            { key: "load", label: "Ventanas Matrícula", need: REQS.load, staffOnly: true, group: "config" },
+            { key: "transfers", label: "Alumnos / Traslados", need: REQS.transfers, staffOnly: true, group: "config" },
+            { key: "periods", label: "Periodos", need: REQS.periods, staffOnly: true, group: "config" },
+            { key: "teachers", label: "Docentes", need: REQS.teachers, staffOnly: true, group: "config" },
+            { key: "credentials", label: "Credenciales", need: REQS.credentials, staffOnly: true, group: "config" },
+            { key: "importers", label: "Importadores", need: REQS.importers, staffOnly: true, group: "config" },
+        ]
+            .filter((t) => t.need.length === 0 || hasAny(t.need))
+            .filter((t) => !t.teacherOnly || isTeacher)
+            .filter((t) => !t.studentOnly || isStudent)
+            .filter((t) => !t.notStudent || !isStudent)
+            // staffOnly: ni docentes ni estudiantes
+            .filter((t) => !t.staffOnly || (!isTeacher && !isStudent)),
+        [hasAny, isTeacher, isStudent]
     );
 
     useEffect(() => {
@@ -1195,29 +1353,57 @@ export default function AcademicModule() {
                             </div>
                         </div>
 
-                        {/* Desktop: todas las pestañas */}
+                        {/* Desktop: pestañas agrupadas por bloque de trabajo */}
                         <div className="hidden sm:block">
                             <TabsList className="flex flex-wrap h-auto p-1.5 gap-1 bg-slate-50 border border-slate-200 rounded-xl">
-                                {tabs.map((t) => <IconTab key={t.key} value={t.key} label={t.label} Icon={tabIcon(t.key)} />)}
+                                {tabs.map((t, i) => {
+                                    const prev = tabs[i - 1];
+                                    const nuevoGrupo = prev && prev.group !== t.group;
+                                    return (
+                                        <React.Fragment key={t.key}>
+                                            {nuevoGrupo && (
+                                                <span className="self-stretch w-px my-1 bg-slate-200 mx-1" aria-hidden />
+                                            )}
+                                            <IconTab value={t.key} label={t.label} Icon={tabIcon(t.key)} />
+                                        </React.Fragment>
+                                    );
+                                })}
                             </TabsList>
                         </div>
 
                         {/* Contenidos */}
                         <TabsContent value="dashboard" className="mt-0 space-y-5">
-                            <AcademicQuickActions go={setTab} />
-                            <SmallAcademicDashboard />
+                            {isStudent ? (
+                                /* El alumno ve SU semestre en curso (notas + asistencia);
+                                   el histórico oficial está en Kárdex */
+                                <StudentSemesterPanel />
+                            ) : isTeacher ? (
+                                /* El docente ve SU carga (cursos, avance de notas y
+                                   horario), nunca estadísticas institucionales */
+                                <TeacherOwnDashboard go={setTab} />
+                            ) : (
+                                <>
+                                    <AcademicQuickActions go={setTab} />
+                                    <SmallAcademicDashboard />
+                                </>
+                            )}
                         </TabsContent>
+                        <TabsContent value="evaluation"><EvaluationCenter /></TabsContent>
+                        <TabsContent value="attendance_admin"><AdminAttendanceMonitor /></TabsContent>
                         <TabsContent value="plans"><PlansAndCurricula /></TabsContent>
                         <TabsContent value="load"><LoadSchedulesAndWindow /></TabsContent>
                         <TabsContent value="enroll"><EnrollmentComponent /></TabsContent>
                         <TabsContent value="grades"><GradesAttendanceComponent /></TabsContent>
+                        <TabsContent value="attendance"><GradesAttendanceComponent initialTab="attendance" /></TabsContent>
+                        <TabsContent value="schedule"><TeacherSchedule /></TabsContent>
+                        <TabsContent value="profile"><TeacherProfile /></TabsContent>
                         <TabsContent value="syllabus"><SectionSyllabusEvaluation /></TabsContent>
                         <TabsContent value="kardex"><KardexAndCertificates /></TabsContent>
                         <TabsContent value="reports"><AcademicReportsPage /></TabsContent>
                         <TabsContent value="processes"><AcademicProcesses /></TabsContent>
                         <TabsContent value="transfers"><TransferManagement /></TabsContent>
                         <TabsContent value="periods"><InjectCatalogStyles /><PeriodsSection /></TabsContent>
-                        <TabsContent value="teachers"><InjectCatalogStyles /><TeachersSection /></TabsContent>
+                        <TabsContent value="teachers"><InjectCatalogStyles /><PersonalAsignacion /></TabsContent>
                         <TabsContent value="credentials"><InjectCatalogStyles /><CredentialsSection /></TabsContent>
                         <TabsContent value="importers"><InjectCatalogStyles /><ImportersSection /></TabsContent>
                     </Tabs>
@@ -1240,7 +1426,9 @@ function IconTab({ value, label, Icon }) {
 function tabIcon(key) {
     const map = {
         dashboard: LayoutGrid, plans: BookOpen, load: Calendar, enroll: GraduationCap,
-        grades: CheckCircle, syllabus: FileText, kardex: Users, reports: BarChart3, processes: Clock,
+        grades: CheckCircle, attendance: Users, syllabus: FileText, kardex: Users, reports: BarChart3, processes: Clock,
+        evaluation: ClipboardList, attendance_admin: CheckCircle, profile: Users,
+        schedule: CalendarDays,
         transfers: Inbox, periods: CalendarDays, teachers: Users, credentials: KeyRound, importers: FileSpreadsheet,
     };
     return map[key] || LayoutGrid;

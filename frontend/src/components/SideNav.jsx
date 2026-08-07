@@ -6,7 +6,7 @@ import {
   LayoutDashboard, ShieldCheck, Settings, BookOpenCheck, UserPlus,
   ClipboardList, Wallet, HardDrive, Microscope, LogOut,
   ChevronLeft, ChevronRight, UserCircle, Menu, X, GraduationCap,
-  Award,
+  Award, Wrench,
 } from "lucide-react";
 import { PERMS, PERM_ALIASES } from "../auth/permissions";
 
@@ -64,6 +64,21 @@ const SideNav = () => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   useEffect(() => setIsMobileOpen(false), [location.pathname]);
+
+  /* Pantallas amplias (acta de calificación, registro mensual…) piden colapsar
+     el menú para ganar espacio: emiten "ui:collapse-nav" y al cerrar lo
+     restauran. El menú recuerda si el usuario ya lo tenía colapsado. */
+  useEffect(() => {
+    let previo = null;
+    const onCollapse = () => setIsCollapsed((c) => { previo = c; return true; });
+    const onRestore = () => setIsCollapsed(() => (previo === null ? false : previo));
+    window.addEventListener("ui:collapse-nav", onCollapse);
+    window.addEventListener("ui:restore-nav", onRestore);
+    return () => {
+      window.removeEventListener("ui:collapse-nav", onCollapse);
+      window.removeEventListener("ui:restore-nav", onRestore);
+    };
+  }, []);
 
   useEffect(() => {
     if (isMobileOpen) {
@@ -138,6 +153,10 @@ const SideNav = () => {
         {
           id: "academic", title: "Académico", path: "/dashboard/academic", icon: BookOpenCheck,
           show: canAny(PERMS["academic.view"], PERMS["academic.sections.view"], PERMS["academic.plans.view"], PERMS["academic.enrollment.view"], PERMS["academic.reports.view"], PERMS["academic.grades.edit"], PERMS["academic.attendance.view"]),
+        },
+        {
+          id: "mesa-control", title: "Mesa de Control", path: "/dashboard/mesa-control", icon: Wrench,
+          show: canAny(PERMS["academic.enrollment.commit"], PERMS["academic.enrollment.view"]),
         },
         { id: "student", title: "Estudiante", path: "/dashboard/student", icon: GraduationCap, show: canSeeStudentModule },
         {

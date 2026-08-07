@@ -1,5 +1,5 @@
 // src/pages/academic/GradesAttendanceComponent.jsx
-import React, { useState, useEffect, useContext, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useContext, useMemo, useCallback, useRef } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -13,7 +13,7 @@ import {
   Upload, Save, Send, Lock, Unlock, FileText, Users, Calendar,
   ChevronLeft, ChevronRight, Loader2, ShieldAlert, FileSpreadsheet,
   KeyRound, X, CheckCircle2, Check, AlertCircle, ClipboardList,
-  BookOpen, Clock,
+  BookOpen, Clock, Download,
 } from "lucide-react";
 import {
   AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader,
@@ -23,7 +23,13 @@ import {
 
 import { UsersService } from "../../services/users.service";
 import { generatePDFWithPolling, generateQRWithPolling, downloadFile } from "../../utils/pdfQrPolling";
-import { Attendance, Teacher, SectionStudents, Grades, AttendanceImport } from "../../services/academic.service";
+import { Attendance, Teacher, SectionStudents, Grades, AttendanceImport, ActaExcel, Sections } from "../../services/academic.service";
+import ActaCalificacionModal, {
+  vigesimalDe, califCursoDe, condicionDe, escalaDe as escalaOficial,
+  nivelDeValor, valorEnRango, NIVEL_POR_CODE, NIVELES,
+} from "./ActaCalificacionModal";
+import AttendanceMonthGrid from "./AttendanceMonthGrid";
+import GradesWindowBanner from "./GradesWindowBanner";
 import { Imports } from "../../services/catalogs.service";
 
 /* ─── Pagination ─────────────────────────────────────────────── */
@@ -106,13 +112,18 @@ const ATT_STATUS = {
 };
 
 /* ─── Grade badge ────────────────────────────────────────────── */
+/* Calificación del curso/módulo con el color oficial de su nivel
+   (RVM 123-2022, Anexo 5). Aprobado: En proceso, Logrado, Destacado. */
 const GradeBadge = ({ estado }) => {
   if (!estado) return <span className="text-slate-400 text-xs">—</span>;
-  const ok = estado === "Logrado";
+  const info = NIVELES.find((n) => n.label.toLowerCase() === String(estado).toLowerCase());
+  const aprobado = ["En proceso", "Logrado", "Destacado"].includes(estado);
   return (
-    <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${ok ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"
-      }`}>
-      {ok && <Check size={9} className="mr-1" />}{estado}
+    <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border"
+      style={info
+        ? { color: info.color, background: info.bg, borderColor: info.color }
+        : { color: "#B45309", background: "#FFFBEB", borderColor: "#FDE68A" }}>
+      {aprobado && <Check size={9} className="mr-1" />}{estado}
     </span>
   );
 };
@@ -138,15 +149,22 @@ const STRENGTH_CLS = ["bg-slate-200", "bg-red-500", "bg-orange-400", "bg-yellow-
 /* ═══════════════════════════════════════════════════════════════
    MAIN COMPONENT
 ══════════════════════════════════════════════════════════════ */
-export default function GradesAttendanceComponent() {
+export default function GradesAttendanceComponent({ initialTab = "grades" }) {
   const { user, refreshMe } = useContext(AuthContext);
 
   const [sections, setSections] = useState([]);
   const [selectedSection, setSelectedSection] = useState(null);
+  // Acta de Calificación oficial (RVM 123-2022) — modal compartido con admin
+  const [actaOficialOpen, setActaOficialOpen] = useState(false);
+  // Asistencia: registro mensual (default) o por sesión
+  const [modoSesion, setModoSesion] = useState(false);
+  // Ventana de carga de notas (habilitada / cerrada) de la sección elegida
+  const [gradesWindow, setGradesWindow] = useState(null);
+  const puedeEditarNotas = !gradesWindow || gradesWindow.can_edit !== false;
   const [students, setStudents] = useState([]);
   const [grades, setGrades] = useState({});
   const [attendanceSessions, setAttendanceSessions] = useState([]);
-  const [activeTab, setActiveTab] = useState("grades");
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -176,7 +194,10 @@ export default function GradesAttendanceComponent() {
     roles.some(r => String(r).toUpperCase().includes("TEACHER")) ||
     String(user?.role || "").toUpperCase().includes("TEACHER");
   const mustChangePassword = isTeacherRole && !!user?.must_change_password;
-  const canImportMasterData = !!user?.is_staff || isTeacherRole;
+  // Importar ALUMNOS es tarea administrativa (staff, no docentes);
+  // importar NOTAS sí lo puede hacer el docente (su propia acta Excel)
+  const canImportStudents = !!user?.is_staff && !isTeacherRole;
+  const canImportGrades = !!user?.is_staff || isTeacherRole;
 
   // Bulk import
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
@@ -204,26 +225,26 @@ export default function GradesAttendanceComponent() {
   };
 
   /* ── Grade calculations ── */
-  const LEVELS = ["PI", "I", "P", "L", "D"];
   const LEVEL_TO_NUM = { PI: 1, I: 2, P: 3, L: 4, D: 5 };
 
+  // Cálculos oficiales RVM 123-2022: promedia SOLO las competencias
+  // registradas (1, 2 o 3 — p. ej. Inglés tiene una sola), con decimales
   const calcEscala05 = useCallback((sg) => {
-    const vals = [Number(sg?.C1), Number(sg?.C2), Number(sg?.C3)].filter(n => !Number.isNaN(n) && n >= 1 && n <= 5);
-    if (vals.length !== 3) return "";
-    return Math.round(vals.reduce((a, b) => a + b, 0) / 3 * 10) / 10;
+    const e = escalaOficial(sg?.C1, sg?.C2, sg?.C3);
+    return e == null ? "" : e;
   }, []);
 
   const calcPromFinal20 = useCallback((sg) => {
     const e = calcEscala05(sg);
     if (e === "") return "";
-    return Math.round(((Number(e) - 1) / 4) * 20);
+    return vigesimalDe(Number(e));
   }, [calcEscala05]);
 
   const calcEstado = useCallback((sg) => {
-    const pf = calcPromFinal20(sg);
-    if (pf === "") return "";
-    return Number(pf) >= 11 ? "Logrado" : "En proceso";
-  }, [calcPromFinal20]);
+    const e = calcEscala05(sg);
+    if (e === "") return "";
+    return califCursoDe(Number(e));
+  }, [calcEscala05]);
 
   /* ── Effects ── */
   useEffect(() => { if (user?.id) fetchTeacherSections(); }, [user?.id]);
@@ -239,8 +260,20 @@ export default function GradesAttendanceComponent() {
   /* ── Fetch functions ── */
   const fetchTeacherSections = async () => {
     try {
-      const data = await Teacher.sectionsMe();
-      const secs = data?.sections || [];
+      let secs = [];
+      if (isTeacherRole) {
+        // Docente: solo SUS secciones asignadas
+        const data = await Teacher.sectionsMe();
+        secs = data?.sections || [];
+      } else {
+        // Administración: TODAS las secciones del sistema (para revisar
+        // actas, cargar Excel, asistencia, etc. de cualquier curso)
+        const data = await Sections.list({});
+        secs = (data?.sections || []).slice().sort((a, b) =>
+          String(b.period || "").localeCompare(String(a.period || "")) ||
+          String(a.course_name || "").localeCompare(String(b.course_name || ""))
+        );
+      }
       setSections(secs);
       setSelectedSection(prev => {
         if (!prev?.id) return prev;
@@ -303,39 +336,162 @@ export default function GradesAttendanceComponent() {
     } catch (e) { showToast("error", e.message || "Error al cerrar sesión"); }
   };
 
-  /* ── Grades CRUD ── */
+  /* ── Grades CRUD ──
+     El resultado de cada competencia se guarda TAL CUAL lo escribe el docente
+     (texto), para poder tipear decimales como "2.4": convertirlo a Number en
+     cada tecla hacía imposible escribir el punto. La validación de rango se
+     hace al pintar la celda y antes de guardar. */
   const updateGrade = (studentId, field, value) => {
     setGrades(prev => {
       const current = prev[studentId] || {};
       const next = { ...current, [field]: value ?? "" };
-      if (field === "C1_LEVEL") next.C1 = LEVEL_TO_NUM[value] ?? next.C1 ?? "";
-      if (field === "C2_LEVEL") next.C2 = LEVEL_TO_NUM[value] ?? next.C2 ?? "";
-      if (field === "C3_LEVEL") next.C3 = LEVEL_TO_NUM[value] ?? next.C3 ?? "";
-      if (["C1", "C2", "C3"].includes(field)) {
-        if (value === "") return { ...prev, [studentId]: { ...next, [field]: "" } };
-        const n = Number(value);
-        if (Number.isNaN(n) || n < 1 || n > 5) return prev;
-        next[field] = n;
+
+      // El número escrito manda: el nivel de desempeño se deduce de su rango
+      for (const i of [1, 2, 3]) {
+        if (field !== `C${i}`) continue;
+        const txt = String(value ?? "").replace(",", ".").trimStart();
+        const f = parseFloat(txt);
+        next[field] = txt;
+        next[`C${i}_LEVEL`] = Number.isFinite(f) ? nivelDeValor(f) : "";
+      }
+
+      // Al elegir un nivel se propone el mínimo de su rango (PI=1, I=2, …),
+      // pero se respeta el valor ya escrito si cae dentro de ese rango.
+      for (const i of [1, 2, 3]) {
+        if (field !== `C${i}_LEVEL`) continue;
+        if (!value) next[`C${i}`] = "";
+        else if (!valorEnRango(current[`C${i}`], value)) {
+          next[`C${i}`] = String(NIVEL_POR_CODE[value]?.min ?? LEVEL_TO_NUM[value] ?? "");
+        }
       }
       return { ...prev, [studentId]: next };
     });
   };
 
+  /* El docente escribe el resultado con decimales DENTRO de la columna del
+     nivel que quiere asignar (p. ej. 2.4 en la columna I). El valor vive en
+     una sola columna: escribirlo en otra lo mueve allí. */
+  const setValorNivel = (studentId, comp, code, value) => {
+    const txt = String(value ?? "").replace(",", ".").trimStart();
+    setGrades(prev => {
+      const e = { ...(prev[studentId] || {}) };
+      if (txt === "") { e[`C${comp}`] = ""; e[`C${comp}_LEVEL`] = ""; }
+      else { e[`C${comp}`] = txt; e[`C${comp}_LEVEL`] = code; }
+      return { ...prev, [studentId]: e };
+    });
+  };
+
+  /* Al salir de la celda el SISTEMA ubica el resultado en el nivel que le
+     corresponde según la tabla de rangos (RVM 123-2022, Anexo 5): si se
+     escribió 2.2 en la columna PI, se mueve solo a la columna I. */
+  const normalizarNivel = (studentId, comp, code, nombre) => {
+    const sg = grades[studentId] || {};
+    if (sg[`C${comp}_LEVEL`] !== code) return;
+    const raw = sg[`C${comp}`];
+    if (raw === "" || raw == null) return;
+
+    const f = parseFloat(raw);
+    if (!Number.isFinite(f) || f < 1 || f > 5) {
+      return showToast("error",
+        `${nombre} · Competencia ${comp}: "${raw}" no es válido. ` +
+        "El resultado debe ser un número entre 1.0 y 5.0.");
+    }
+    const destino = nivelDeValor(f);
+    if (!destino || destino === code) return;
+
+    setGrades(prev => ({
+      ...prev,
+      [studentId]: { ...(prev[studentId] || {}), [`C${comp}_LEVEL`]: destino },
+    }));
+    const n = NIVEL_POR_CODE[destino];
+    showToast("info",
+      `${nombre} · Competencia ${comp}: ${f} corresponde a ${n.label} (${n.rango}) — se registró en esa columna.`);
+  };
+
+  /* Construye el payload: cada competencia va con su resultado decimal y el
+     nivel de la columna donde se escribió (RVM 123-2022, Anexo 5). Devuelve
+     null y avisa si algún valor no cae en el rango de su nivel. */
+  const buildGradesPayload = () => {
+    const payload = {};
+    const fuera = [];
+    for (const st of students) {
+      // Un alumno con LICENCIA no se califica (RVM 123-2022: en el acta va
+      // aparte, en el resumen "Con licencia"). La grilla ya bloquea su fila.
+      if (st.estado_academico === "LICENCIA") continue;
+      const sg = grades[st.id];
+      if (!sg) continue;
+      const nombre = `${st.last_name || ""} ${st.first_name || ""}`.trim();
+      const datos = {};
+      let n = 0;
+      let malo = false;
+      for (const i of [1, 2, 3]) {
+        const raw = sg[`C${i}`];
+        const lv = sg[`C${i}_LEVEL`] || "";
+        datos[`C${i}_REC`] = sg[`C${i}_REC`] || "";
+        if (raw === "" || raw == null) {
+          if (lv) { datos[`C${i}_LEVEL`] = lv; n += 1; }
+          continue;
+        }
+        const f = parseFloat(raw);
+        if (!Number.isFinite(f) || f < 1 || f > 5) {
+          fuera.push(`${nombre} · Comp. ${i}: "${raw}"`);
+          malo = true;
+          continue;
+        }
+        // el nivel lo determina el sistema a partir del rango oficial
+        datos[`C${i}`] = Math.round(f * 10) / 10;
+        datos[`C${i}_LEVEL`] = nivelDeValor(f);
+        n += 1;
+      }
+      if (malo || !n) continue;
+      payload[String(st.id)] = datos;
+    }
+    if (fuera.length) {
+      showToast("error",
+        `${fuera.length} resultado(s) inválido(s) — deben ser números entre 1.0 y 5.0: ${fuera[0]}` +
+        (fuera.length > 1 ? ` y ${fuera.length - 1} más` : ""));
+      return null;
+    }
+    if (!Object.keys(payload).length) {
+      showToast("error", "No hay competencias registradas para guardar");
+      return null;
+    }
+    return payload;
+  };
+
   const saveGrades = async () => {
     if (!selectedSection) return showToast("error", "Seleccione una sección");
+    const payload = buildGradesPayload();
+    if (!payload) return;
     setIsSaving(true);
-    try { await Grades.save(selectedSection.id, grades); showToast("success", "Acta guardada"); }
+    try { await Grades.save(selectedSection.id, payload); showToast("success", "Acta guardada"); await fetchGrades(); }
     catch (e) { showToast("error", e.message || "Error al guardar acta"); }
     finally { setIsSaving(false); }
   };
 
   const submitGrades = async () => {
     if (!selectedSection) return showToast("error", "Seleccione una sección");
-    const req = ["C1_LEVEL", "C2_LEVEL", "C3_LEVEL", "C1", "C2", "C3"];
-    if (students.some(st => req.some(f => (grades[st.id] || {})[f] === undefined || (grades[st.id] || {})[f] === null || (grades[st.id] || {})[f] === "")))
-      return showToast("error", "Complete niveles PI/I/P/L/D y C1-C3 (1..5) antes de enviar");
+    const payload = buildGradesPayload();
+    if (!payload) return;
+    // Cada alumno debe tener al menos una competencia registrada (un curso
+    // puede tener 1, 2 o 3 — p. ej. Inglés tiene una sola). Los que están
+    // con LICENCIA no se califican, así que no se exigen.
+    const sinNota = students.filter(
+      (st) => st.estado_academico !== "LICENCIA" && !payload[String(st.id)]);
+    if (sinNota.length) {
+      return showToast("error",
+        `Falta registrar el resultado de ${sinNota.length} estudiante(s), ` +
+        `empezando por ${sinNota[0].last_name || ""} ${sinNota[0].first_name || ""}`.trim());
+    }
+    const conLicencia = students.filter((st) => st.estado_academico === "LICENCIA");
     setIsSubmitting(true);
-    try { await Grades.submit(selectedSection.id, grades); showToast("success", "Acta enviada y cerrada"); await generateActaPDF(); }
+    try {
+      await Grades.submit(selectedSection.id, payload);
+      showToast("success", conLicencia.length
+        ? `Acta enviada y cerrada · ${conLicencia.length} estudiante(s) con licencia no se califican`
+        : "Acta enviada y cerrada");
+      await generateActaPDF();
+    }
     catch (e) { showToast("error", e.message || "Error al enviar acta"); }
     finally { setIsSubmitting(false); }
   };
@@ -394,6 +550,102 @@ export default function GradesAttendanceComponent() {
     finally { setTimeout(() => { setIsImportingAttendance(false); setAttendanceImportProgress(0); }, 1000); }
   };
 
+  /* ── Registro por Excel estilo SIAGIE ── */
+  const gradesXlsxRef = useRef(null);
+  const attXlsxRef = useRef(null);
+  const mesActual = () => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+  };
+  const [notasTplOpen, setNotasTplOpen] = useState(false);
+  const [notasTplScope, setNotasTplScope] = useState("ciclo"); // ciclo | seccion
+  const [asisTplOpen, setAsisTplOpen] = useState(false);
+  const [asisMes, setAsisMes] = useState(mesActual());
+  const [tplBusy, setTplBusy] = useState(false);
+
+  const _descargarBlob = (res, fallback) => {
+    const cd = res?.headers?.["content-disposition"] || "";
+    const m = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(cd);
+    const filename = m?.[1]?.replace(/['"]/g, "").trim() || fallback;
+    const blob = res?.data instanceof Blob ? res.data : new Blob([res.data]);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+  };
+
+  // Los errores de blob llegan como Blob JSON → extraer detail legible
+  const _blobError = async (e, fallback) => {
+    try {
+      if (e?.response?.data instanceof Blob) {
+        const txt = await e.response.data.text();
+        return JSON.parse(txt)?.detail || fallback;
+      }
+    } catch { /* ignore */ }
+    return e?.response?.data?.detail || e?.message || fallback;
+  };
+
+  const generarPlantillaNotas = async () => {
+    if (!selectedSection) return;
+    setTplBusy(true);
+    try {
+      let res;
+      if (notasTplScope === "ciclo" && selectedSection.plan_id && selectedSection.semester) {
+        res = await ActaExcel.cicloTemplate({
+          plan_id: selectedSection.plan_id,
+          semester: selectedSection.semester,
+          period: selectedSection.period,
+        });
+      } else {
+        res = await ActaExcel.gradesTemplate(selectedSection.id);
+      }
+      _descargarBlob(res, "plantilla_notas.xlsx");
+      toast.success("Plantilla generada con los alumnos matriculados");
+      setNotasTplOpen(false);
+    } catch (e) {
+      toast.error(await _blobError(e, "No se pudo generar la plantilla"), { duration: 9000 });
+    } finally { setTplBusy(false); }
+  };
+
+  const cargarNotasExcel = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = "";
+    if (!file) return;
+    try {
+      const r = await ActaExcel.importNotas(file);
+      toast.success(r?.message || "Notas importadas");
+      if (Array.isArray(r?.errores) && r.errores.length) {
+        toast.warning(`${r.errores.length} error(es) — 1ro: ${r.errores[0]}`, { duration: 10000 });
+      }
+      await fetchGrades();
+    } catch (er) { toast.error(await _blobError(er, "Error al importar notas"), { duration: 9000 }); }
+  };
+
+  const generarPlantillaAsistencia = async () => {
+    if (!selectedSection) return;
+    if (!/^\d{4}-\d{2}$/.test(asisMes)) return toast.error("Mes inválido — usa el selector");
+    setTplBusy(true);
+    try {
+      const res = await ActaExcel.attendanceTemplate(selectedSection.id, asisMes);
+      _descargarBlob(res, "plantilla_asistencia.xlsx");
+      toast.success(`Plantilla de asistencia de ${asisMes} generada`);
+      setAsisTplOpen(false);
+    } catch (e) {
+      toast.error(await _blobError(e, "No se pudo generar la plantilla"), { duration: 9000 });
+    } finally { setTplBusy(false); }
+  };
+
+  const cargarAsistenciaExcel = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = "";
+    if (!file || !selectedSection) return;
+    try {
+      const r = await ActaExcel.attendanceImport(selectedSection.id, file);
+      toast.success(r?.message || "Asistencia importada");
+      if (Array.isArray(r?.errores) && r.errores.length) {
+        toast.warning(`${r.errores.length} error(es) — 1ro: ${r.errores[0]}`, { duration: 10000 });
+      }
+      await fetchAttendanceSessions();
+    } catch (er) { toast.error(await _blobError(er, "Error al importar asistencia"), { duration: 9000 }); }
+  };
+
   /* ── Bulk import ── */
   const downloadBulkTemplate = async () => {
     try {
@@ -405,7 +657,7 @@ export default function GradesAttendanceComponent() {
       const blob = res?.data instanceof Blob ? res.data : new Blob([res.data], { type: contentType });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = filename;
-      document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => window.URL.revokeObjectURL(url), 60000);
       toast.success("Plantilla descargada");
     } catch (e) { toast.error(e?.response?.data?.detail || e?.message || "No se pudo descargar la plantilla"); }
   };
@@ -607,30 +859,133 @@ export default function GradesAttendanceComponent() {
                 <SelectValue placeholder="Seleccionar sección…" />
               </SelectTrigger>
               <SelectContent>
-                {sections.map(sec => (
-                  <SelectItem key={sec.id} value={String(sec.id)}>
-                    {(sec.course_name || sec.course_code || "Curso")} — {(sec.section_code || sec.label || `SEC-${sec.id}`)}
-                  </SelectItem>
-                ))}
-                {sections.length === 0 && <div className="p-3 text-sm text-slate-500">No tienes secciones asignadas</div>}
+                {[...sections]
+                  .sort((a, b) => (a.semester || 0) - (b.semester || 0) ||
+                    String(a.course_name || "").localeCompare(String(b.course_name || "")))
+                  .map(sec => (
+                    <SelectItem key={sec.id} value={String(sec.id)}>
+                      {`Ciclo ${sec.semester ?? "?"} · ${(sec.course_name || sec.course_code || "Curso")} — Sec. ${(sec.section_code || sec.label || "A")}`}
+                      {!isTeacherRole && sec.period ? ` · ${sec.period}` : ""}
+                      {!isTeacherRole && sec.teacher_name ? ` · ${sec.teacher_name}` : ""}
+                    </SelectItem>
+                  ))}
+                {sections.length === 0 && (
+                  <div className="p-3 text-sm text-slate-500">
+                    {isTeacherRole
+                      ? "No tienes secciones asignadas"
+                      : "No hay secciones creadas — asígnalas en Docentes → Asignación de Áreas"}
+                  </div>
+                )}
               </SelectContent>
             </Select>
 
             {/* Bulk import buttons */}
-            {canImportMasterData && (
+            {canImportStudents && (
+              <Button variant="outline" className="rounded-xl h-11 gap-2 font-semibold"
+                onClick={() => { setBulkType("students"); setBulkFile(null); setBulkJobId(null); setBulkStatus(null); setBulkProgress(0); setBulkImportOpen(true); }}>
+                <FileSpreadsheet size={16} /> Importar Alumnos
+              </Button>
+            )}
+            {canImportGrades && (
+              <Button variant="outline" className="rounded-xl h-11 gap-2 font-semibold"
+                onClick={() => { setBulkType("grades"); setBulkFile(null); setBulkJobId(null); setBulkStatus(null); setBulkProgress(0); setBulkImportOpen(true); }}>
+                <FileSpreadsheet size={16} /> Importar Notas
+              </Button>
+            )}
+
+            {/* Registro por Excel estilo SIAGIE (por sección) — administración */}
+            {!isTeacherRole && selectedSection && (
               <>
-                <Button variant="outline" className="rounded-xl h-11 gap-2 font-semibold"
-                  onClick={() => { setBulkType("students"); setBulkFile(null); setBulkJobId(null); setBulkStatus(null); setBulkProgress(0); setBulkImportOpen(true); }}>
-                  <FileSpreadsheet size={16} /> Importar Alumnos
+                <Button variant="outline" className="rounded-xl h-11 gap-2 font-semibold border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                  onClick={() => setNotasTplOpen(true)} title="Genera el Excel con los alumnos matriculados">
+                  <Download size={16} /> Plantilla Notas
                 </Button>
-                <Button variant="outline" className="rounded-xl h-11 gap-2 font-semibold"
-                  onClick={() => { setBulkType("grades"); setBulkFile(null); setBulkJobId(null); setBulkStatus(null); setBulkProgress(0); setBulkImportOpen(true); }}>
-                  <FileSpreadsheet size={16} /> Importar Notas
+                <Button variant="outline" className="rounded-xl h-11 gap-2 font-semibold border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                  onClick={() => gradesXlsxRef.current?.click()} title="Carga el Excel de notas llenado (una sección o ciclo completo)">
+                  <Upload size={16} /> Cargar Notas
                 </Button>
+                <Button variant="outline" className="rounded-xl h-11 gap-2 font-semibold border-sky-200 text-sky-700 hover:bg-sky-50"
+                  onClick={() => { setAsisMes(mesActual()); setAsisTplOpen(true); }} title="Genera el Excel mensual de asistencia (P/T/F/J)">
+                  <Download size={16} /> Plantilla Asist.
+                </Button>
+                <Button variant="outline" className="rounded-xl h-11 gap-2 font-semibold border-sky-200 text-sky-700 hover:bg-sky-50"
+                  onClick={() => attXlsxRef.current?.click()} title="Carga el Excel de asistencia llenado">
+                  <Upload size={16} /> Cargar Asist.
+                </Button>
+                <input ref={gradesXlsxRef} type="file" accept=".xlsx" className="hidden" onChange={cargarNotasExcel} />
+                <input ref={attXlsxRef} type="file" accept=".xlsx" className="hidden" onChange={cargarAsistenciaExcel} />
               </>
             )}
           </div>
         </div>
+
+        {/* ── Modal: Plantilla de Notas (Excel estilo SIAGIE) ── */}
+        <Dialog open={notasTplOpen} onOpenChange={setNotasTplOpen}>
+          <DialogContent className="max-w-md rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="font-extrabold flex items-center gap-2">
+                <Download size={18} className="text-emerald-600" /> Generar plantilla de Notas
+              </DialogTitle>
+              <DialogDescription>
+                El Excel sale prellenado con los alumnos matriculados y desplegables de niveles (PI, I, P, L, D).
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={() => setNotasTplScope("ciclo")}
+                className={`w-full text-left rounded-xl border-2 p-3.5 transition-all ${notasTplScope === "ciclo" ? "border-emerald-400 bg-emerald-50" : "border-slate-200 hover:border-slate-300"}`}
+              >
+                <p className="text-sm font-bold text-slate-800">Todos los cursos del ciclo</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Un solo Excel con una hoja por curso — Ciclo {selectedSection?.semester ?? "—"} · {selectedSection?.period}
+                </p>
+              </button>
+              <button
+                onClick={() => setNotasTplScope("seccion")}
+                className={`w-full text-left rounded-xl border-2 p-3.5 transition-all ${notasTplScope === "seccion" ? "border-emerald-400 bg-emerald-50" : "border-slate-200 hover:border-slate-300"}`}
+              >
+                <p className="text-sm font-bold text-slate-800">Solo esta sección</p>
+                <p className="text-xs text-slate-500 mt-0.5 truncate">
+                  {selectedSection?.course_name} — {selectedSection?.label || selectedSection?.section_code || "A"}
+                </p>
+              </button>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" className="rounded-xl" onClick={() => setNotasTplOpen(false)}>Cancelar</Button>
+                <Button className="rounded-xl gap-2" onClick={generarPlantillaNotas} disabled={tplBusy}>
+                  {tplBusy ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                  Generar Excel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Modal: Plantilla de Asistencia mensual ── */}
+        <Dialog open={asisTplOpen} onOpenChange={setAsisTplOpen}>
+          <DialogContent className="max-w-md rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="font-extrabold flex items-center gap-2">
+                <Download size={18} className="text-sky-600" /> Plantilla de Asistencia mensual
+              </DialogTitle>
+              <DialogDescription>
+                Cuadro alumnos × días del mes con marcas P (presente), T (tardanza), F (falta), J (justificado).
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 pt-1">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Mes</Label>
+                <Input type="month" value={asisMes} onChange={(e) => setAsisMes(e.target.value)} className="rounded-xl" />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" className="rounded-xl" onClick={() => setAsisTplOpen(false)}>Cancelar</Button>
+                <Button className="rounded-xl gap-2" onClick={generarPlantillaAsistencia} disabled={tplBusy}>
+                  {tplBusy ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                  Generar Excel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* ── Bulk import dialog ── */}
         <Dialog open={bulkImportOpen} onOpenChange={v => { setBulkImportOpen(v); if (!v) { setBulkFile(null); setBulkJobId(null); setBulkStatus(null); } }}>
@@ -719,7 +1074,12 @@ export default function GradesAttendanceComponent() {
             </TabsList>
 
             {/* ══════════ TAB: ACTA ══════════ */}
-            <TabsContent value="grades" className="mt-4">
+            <TabsContent value="grades" className="mt-4 space-y-3">
+              {/* Estado del registro de notas (abierto / cerrado) */}
+              <GradesWindowBanner
+                sectionId={selectedSection?.id}
+                onState={setGradesWindow}
+              />
               <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
                 {/* Header */}
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50/60 to-white">
@@ -730,14 +1090,22 @@ export default function GradesAttendanceComponent() {
                     <p className="text-xs text-slate-400 mt-0.5">{sectionLabel}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <Button
+                      className="rounded-xl font-extrabold gap-2 h-10 bg-yellow-400 hover:bg-yellow-500 text-slate-900"
+                      onClick={() => setActaOficialOpen(true)}
+                      disabled={!selectedSection}>
+                      <ClipboardList size={14} /> Acta de Calificación (RVM 123-2022)
+                    </Button>
                     <Button data-testid="grade-save" variant="outline"
                       className="rounded-xl font-semibold gap-2 h-10"
-                      onClick={saveGrades} disabled={isSaving}>
+                      onClick={saveGrades} disabled={isSaving || !puedeEditarNotas}
+                      title={puedeEditarNotas ? "" : "El registro de calificaciones está cerrado"}>
                       {isSaving ? <><Loader2 size={14} className="animate-spin" /> Guardando…</> : <><Save size={14} /> Guardar Acta</>}
                     </Button>
                     <Button data-testid="grade-submit"
                       className="rounded-xl font-extrabold gap-2 h-10 bg-blue-600 hover:bg-blue-700"
-                      onClick={submitGrades} disabled={isSubmitting}>
+                      onClick={submitGrades} disabled={isSubmitting || !puedeEditarNotas}
+                      title={puedeEditarNotas ? "" : "El registro de calificaciones está cerrado"}>
                       {isSubmitting ? <><Loader2 size={14} className="animate-spin" /> Enviando…</> : <><Send size={14} /> Enviar y Cerrar</>}
                     </Button>
                     {(user?.role === "REGISTRAR" || user?.role === "ADMIN_ACADEMIC") && (
@@ -768,23 +1136,61 @@ export default function GradesAttendanceComponent() {
 
                 {/* Table */}
                 <div className="p-5 space-y-4">
+                  {/* Leyenda oficial de rangos (RVM 123-2022, Anexo 5) */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Escala:</span>
+                    {NIVELES.map((n) => (
+                      <span key={n.code}
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded border"
+                        style={{ color: n.color, background: n.bg, borderColor: n.color }}>
+                        <b>{n.rango}</b> = {n.label} ({n.code})
+                      </span>
+                    ))}
+                    <span className="text-[10px] text-slate-400">
+                      Escribe solo el resultado con decimales (ej. 2.4): el sistema lo ubica en su
+                      nivel y determina automáticamente el resultado obtenido, la calificación
+                      vigesimal, la calificación del curso y la condición (RVM 123-2022, Anexo 5).
+                    </span>
+                  </div>
                   <div className="overflow-x-auto rounded-xl border border-slate-100">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-100">
-                          <th className="p-3 text-left font-bold text-slate-600 whitespace-nowrap">Estudiante</th>
-                          <th className="p-3 text-center font-bold text-slate-600 whitespace-nowrap">Comp 1 (Nivel)</th>
-                          <th className="p-3 text-left font-bold text-slate-600 min-w-[200px]">Recomendación 1</th>
-                          <th className="p-3 text-center font-bold text-slate-600 whitespace-nowrap">Comp 2 (Nivel)</th>
-                          <th className="p-3 text-left font-bold text-slate-600 min-w-[200px]">Recomendación 2</th>
-                          <th className="p-3 text-center font-bold text-slate-600 whitespace-nowrap">Comp 3 (Nivel)</th>
-                          <th className="p-3 text-left font-bold text-slate-600 min-w-[200px]">Recomendación 3</th>
-                          <th className="p-3 text-center font-bold text-slate-600">C1</th>
-                          <th className="p-3 text-center font-bold text-slate-600">C2</th>
-                          <th className="p-3 text-center font-bold text-slate-600">C3</th>
-                          <th className="p-3 text-center font-bold text-slate-600 whitespace-nowrap">Escala 0–5</th>
-                          <th className="p-3 text-center font-bold text-slate-600 whitespace-nowrap">Prom. final</th>
-                          <th className="p-3 text-center font-bold text-slate-600">Estado</th>
+                          <th rowSpan={2} className="p-3 text-left font-bold text-slate-600 whitespace-nowrap border-r border-slate-200">
+                            Apellidos y Nombres del Estudiante
+                          </th>
+                          {[1, 2, 3].map((i) => (
+                            <React.Fragment key={i}>
+                              <th colSpan={6} className="p-2 text-center font-bold text-slate-600 whitespace-nowrap border-x border-slate-200">
+                                COMPETENCIA {i}<br />
+                                <span className="font-normal">Nivel de desempeño</span>
+                              </th>
+                              <th rowSpan={2} className="p-3 text-left font-bold text-slate-600 min-w-[160px] border-r border-slate-200">
+                                Recomendación / Comentario
+                              </th>
+                            </React.Fragment>
+                          ))}
+                          <th rowSpan={2} className="p-3 text-center font-bold text-slate-600 whitespace-nowrap bg-yellow-50/70">Resultado<br /><span className="font-normal">obtenido (1–5)</span></th>
+                          <th rowSpan={2} className="p-3 text-center font-bold text-slate-600 whitespace-nowrap bg-yellow-50/70">Calif.<br />vigesimal</th>
+                          <th rowSpan={2} className="p-3 text-center font-bold text-slate-600 whitespace-nowrap bg-yellow-50/70">Calificación<br />del curso</th>
+                          <th rowSpan={2} className="p-3 text-center font-bold text-slate-600 whitespace-nowrap bg-yellow-50/70">Condición</th>
+                        </tr>
+                        <tr className="bg-slate-50 border-b border-slate-100">
+                          {[1, 2, 3].map((i) => (
+                            <React.Fragment key={i}>
+                              {NIVELES.map((n) => (
+                                <th key={`${i}${n.code}`} className="px-1 pb-2 text-center font-bold w-[52px]"
+                                  style={{ color: n.color }} title={`${n.label}: ${n.rango}`}>
+                                  {n.code}<br />
+                                  <span className="font-normal text-[9px] whitespace-nowrap">{n.rango}</span>
+                                </th>
+                              ))}
+                              <th className="px-1 pb-2 text-center font-bold text-blue-700 w-[58px]"
+                                title="Resultado registrado (se escribe en la columna del nivel)">
+                                Resultado
+                              </th>
+                            </React.Fragment>
+                          ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -793,70 +1199,96 @@ export default function GradesAttendanceComponent() {
                           const escala05 = calcEscala05(sg);
                           const promFinal = calcPromFinal20(sg);
                           const estado = calcEstado(sg);
+                          const condicion = escala05 === "" ? "" : condicionDe(Number(escala05));
+                          // Con licencia no se califica (RVM 123-2022): la fila
+                          // queda bloqueada y no se le exige nota al enviar
+                          const lic = st.estado_academico === "LICENCIA";
+                          const nombreAlumno = `${(st.last_name || "").toUpperCase()} ${(st.first_name || "").toUpperCase()}`.trim();
                           return (
-                            <tr key={st.id} className={`hover:bg-blue-50/20 transition-colors ${rowIdx % 2 === 1 ? "bg-slate-50/30" : ""}`}>
-                              <td className="p-3 font-semibold text-slate-800 whitespace-nowrap">
-                                {st.first_name} {st.last_name}
+                            <tr key={st.id} className={`transition-colors ${lic ? "bg-rose-50/60" : `hover:bg-blue-50/20 ${rowIdx % 2 === 1 ? "bg-slate-50/30" : ""}`}`}>
+                              <td className="p-3 font-semibold text-slate-800 whitespace-nowrap border-r border-slate-100">
+                                {(st.last_name || "").toUpperCase()}{st.last_name && st.first_name ? ", " : ""}{(st.first_name || "").toUpperCase()}
+                                {lic && (
+                                  <span className="ml-2 text-[9px] font-bold px-1.5 py-0.5 rounded border bg-rose-100 text-rose-700 border-rose-300"
+                                    title={st.estado_rd ? `RD: ${st.estado_rd}` : "No se califica"}>
+                                    LICENCIA
+                                  </span>
+                                )}
                               </td>
 
-                              {/* C1 Level + Rec */}
-                              <td className="p-2 text-center">
-                                <Select value={sg.C1_LEVEL || ""} onValueChange={v => updateGrade(st.id, "C1_LEVEL", v)}>
-                                  <SelectTrigger className="w-[72px] h-9 rounded-lg justify-center"><SelectValue placeholder="—" /></SelectTrigger>
-                                  <SelectContent>{LEVELS.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
-                                </Select>
-                              </td>
-                              <td className="p-2">
-                                <Input className="h-9 rounded-lg text-xs" placeholder="Comentario…"
-                                  value={sg.C1_REC || ""} onChange={e => updateGrade(st.id, "C1_REC", e.target.value)} />
-                              </td>
+                              {/* Un campo por nivel: el resultado con decimales se escribe
+                                  en la columna del nivel que corresponde (RVM 123-2022) */}
+                              {[1, 2, 3].map((i) => {
+                                const sel = sg[`C${i}_LEVEL`] || "";
+                                const raw = sg[`C${i}`] ?? "";
+                                const f = parseFloat(raw);
+                                // solo es error un número inválido: si cae en otro nivel,
+                                // el sistema lo reubica al salir de la celda
+                                const err = raw !== "" && (!Number.isFinite(f) || f < 1 || f > 5);
+                                return (
+                                  <React.Fragment key={i}>
+                                    {NIVELES.map((n) => {
+                                      const active = sel === n.code;
+                                      const malo = active && err;
+                                      return (
+                                        <td key={n.code} className="p-0 text-center border-x border-slate-100"
+                                          style={malo
+                                            // el error va con recuadro rojo: el fondo rosado
+                                            // ya es el color propio del nivel PI
+                                            ? { background: "#FEE2E2", boxShadow: "inset 0 0 0 2px #DC2626" }
+                                            : active ? { background: n.bg } : undefined}>
+                                        <input
+                                          type="text"
+                                          inputMode="decimal"
+                                          data-testid={`grade-c${i}-${n.code}`}
+                                          disabled={!puedeEditarNotas || lic}
+                                          value={active ? raw : ""}
+                                          onChange={e => setValorNivel(st.id, i, n.code, e.target.value)}
+                                          onBlur={() => normalizarNivel(st.id, i, n.code, nombreAlumno)}
+                                          title={`${n.label}: escribe el resultado entre ${n.rango}`}
+                                          className="w-[52px] h-9 px-0.5 text-center text-xs font-black tabular-nums outline-none bg-transparent disabled:cursor-not-allowed"
+                                          style={{ color: malo ? "#B91C1C" : active ? n.color : "#334155" }} />
+                                        </td>
+                                      );
+                                    })}
+                                    {/* Resultado registrado (solo lectura) */}
+                                    <td className={`px-1 text-center font-black tabular-nums border-x border-slate-100
+                                      ${err ? "bg-rose-50 text-rose-700" : "bg-blue-50/40 text-blue-700"}`}
+                                      title={err ? "Fuera del rango de su nivel" : "Resultado registrado"}>
+                                      {raw === "" ? "—" : raw}
+                                    </td>
+                                    <td className="p-2">
+                                      <Input className="h-9 rounded-lg text-xs" placeholder="Comentario…"
+                                        value={sg[`C${i}_REC`] || ""} disabled={!puedeEditarNotas || lic}
+                                        onChange={e => updateGrade(st.id, `C${i}_REC`, e.target.value)} />
+                                    </td>
+                                  </React.Fragment>
+                                );
+                              })}
 
-                              {/* C2 Level + Rec */}
-                              <td className="p-2 text-center">
-                                <Select value={sg.C2_LEVEL || ""} onValueChange={v => updateGrade(st.id, "C2_LEVEL", v)}>
-                                  <SelectTrigger className="w-[72px] h-9 rounded-lg justify-center"><SelectValue placeholder="—" /></SelectTrigger>
-                                  <SelectContent>{LEVELS.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
-                                </Select>
-                              </td>
-                              <td className="p-2">
-                                <Input className="h-9 rounded-lg text-xs" placeholder="Comentario…"
-                                  value={sg.C2_REC || ""} onChange={e => updateGrade(st.id, "C2_REC", e.target.value)} />
-                              </td>
-
-                              {/* C3 Level + Rec */}
-                              <td className="p-2 text-center">
-                                <Select value={sg.C3_LEVEL || ""} onValueChange={v => updateGrade(st.id, "C3_LEVEL", v)}>
-                                  <SelectTrigger className="w-[72px] h-9 rounded-lg justify-center"><SelectValue placeholder="—" /></SelectTrigger>
-                                  <SelectContent>{LEVELS.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
-                                </Select>
-                              </td>
-                              <td className="p-2">
-                                <Input className="h-9 rounded-lg text-xs" placeholder="Comentario…"
-                                  value={sg.C3_REC || ""} onChange={e => updateGrade(st.id, "C3_REC", e.target.value)} />
-                              </td>
-
-                              {/* C1 C2 C3 numeric */}
-                              {["C1", "C2", "C3"].map(c => (
-                                <td key={c} className="p-2 text-center">
-                                  <Input type="number" min="1" max="5" step="1"
-                                    className="w-14 h-9 text-center rounded-lg font-semibold tabular-nums"
-                                    value={sg[c] ?? ""} onChange={e => updateGrade(st.id, c, e.target.value)} />
-                                </td>
-                              ))}
-
-                              <td className="p-3 text-center font-bold text-slate-700 tabular-nums">
+                              {/* Determinados automáticamente por el sistema (RVM 123-2022, Anexo 5) */}
+                              <td className="p-3 text-center font-bold text-slate-700 tabular-nums bg-yellow-50/40">
                                 {escala05 === "" ? "—" : escala05.toFixed(1)}
                               </td>
-                              <td className="p-3 text-center font-black text-slate-900 tabular-nums text-sm">
+                              <td className="p-3 text-center font-black text-slate-900 tabular-nums text-sm bg-yellow-50/40">
                                 {promFinal === "" ? "—" : promFinal}
                               </td>
-                              <td className="p-3 text-center"><GradeBadge estado={estado} /></td>
+                              <td className="p-3 text-center bg-yellow-50/40"><GradeBadge estado={estado} /></td>
+                              <td className="p-3 text-center bg-yellow-50/40">
+                                {condicion
+                                  ? <span className={`inline-flex text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${condicion === "Aprobado"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : "bg-rose-50 text-rose-700 border-rose-200"}`}>
+                                    {condicion.toUpperCase()}
+                                  </span>
+                                  : <span className="text-slate-400 text-xs">—</span>}
+                              </td>
                             </tr>
                           );
                         })}
                         {students.length === 0 && (
                           <tr>
-                            <td colSpan={13} className="py-12 text-center">
+                            <td colSpan={26} className="py-12 text-center">
                               <div className="flex flex-col items-center gap-2">
                                 <div className="h-10 w-10 rounded-2xl bg-slate-100 grid place-items-center">
                                   <Users size={18} className="text-slate-300" />
@@ -890,6 +1322,31 @@ export default function GradesAttendanceComponent() {
             {/* ══════════ TAB: ASISTENCIA ══════════ */}
             <TabsContent value="attendance" className="mt-4 space-y-5">
 
+              {/* ── Registro de Asistencia MENSUAL (estilo SIAGIE) ── */}
+              <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-emerald-50/60 to-white">
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                      <Users size={17} className="text-emerald-600" /> Registro de Asistencia mensual
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">{sectionLabel}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setModoSesion((v) => !v)}
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 self-start lg:self-center"
+                  >
+                    {modoSesion ? "← Volver al registro mensual" : "Registrar por sesión (día) →"}
+                  </button>
+                </div>
+                {!modoSesion && (
+                  <div className="p-4">
+                    <AttendanceMonthGrid sectionId={selectedSection?.id} sectionLabel={sectionLabel} />
+                  </div>
+                )}
+              </div>
+
+              {modoSesion && (<>
               {/* Controls */}
               <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50/60 to-white">
@@ -1094,7 +1551,7 @@ export default function GradesAttendanceComponent() {
                             const row = sessionRows.find(r => r.student_id === st.id) || { status: "PRESENT" };
                             return (
                               <tr key={st.id} className="hover:bg-blue-50/20 transition-colors">
-                                <td className="p-3 font-semibold text-slate-800">{st.first_name} {st.last_name}</td>
+                                <td className="p-3 font-semibold text-slate-800">{(st.last_name || "").toUpperCase()}{st.last_name && st.first_name ? ", " : ""}{(st.first_name || "").toUpperCase()}</td>
                                 <td className="p-3">
                                   <Select value={row.status} onValueChange={v => setRowStatus(st.id, v)}>
                                     <SelectTrigger className={`w-44 h-9 rounded-xl font-semibold transition-all ${ATT_STATUS[row.status]?.cls || ""}`}>
@@ -1159,6 +1616,7 @@ export default function GradesAttendanceComponent() {
                   </Button>
                 </div>
               )}
+              </>)}
             </TabsContent>
           </Tabs>
         )}
@@ -1186,6 +1644,21 @@ export default function GradesAttendanceComponent() {
         subtitle="Esto puede tardar; no cierres esta ventana."
         onCancel={stopBulkPolling}
         disableCancelAfter={70}
+      />
+
+      {/* Acta de Calificación oficial (RVM 123-2022) */}
+      <ActaCalificacionModal
+        open={actaOficialOpen}
+        onClose={() => setActaOficialOpen(false)}
+        section={selectedSection ? {
+          id: selectedSection.id,
+          course_name: selectedSection.course_name || selectedSection.name,
+          teacher_name: user?.full_name || "",
+          period: selectedSection.period,
+          semester: selectedSection.semester,
+          label: selectedSection.label,
+        } : null}
+        onSaved={() => { fetchGrades?.(); }}
       />
     </>
   );

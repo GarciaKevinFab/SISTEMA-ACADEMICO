@@ -11,38 +11,45 @@
         }
 
         body {
-            font-family: Arial, Helvetica, sans-serif;
+            font-family: "Segoe UI", Arial, Helvetica, sans-serif;
             font-size: 10px;
-            color: #111;
+            color: #000000;
         }
 
         .headerRow {
             display: grid;
-            grid-template-columns: 70px 1fr 70px;
-            gap: 10px;
+            grid-template-columns: 80px 1fr 80px;
+            gap: 12px;
             align-items: center;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #000000;
         }
 
         .logoBox {
-            width: 70px;
-            height: 70px;
+            width: 80px;
+            height: 80px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         .logoBox img {
-            width: 70px;
-            height: 70px;
+            width: 80px;
+            height: 80px;
             object-fit: contain;
         }
 
         .titleMain {
             text-align: center;
             font-weight: 800;
-            font-size: 12px;
-            letter-spacing: .2px;
+            font-size: 14px;
+            letter-spacing: 1.5px;
             text-transform: uppercase;
+            color: #000000;
+            padding: 6px 14px;
+            border-top: 1px solid #000000;
+            border-bottom: 1px solid #000000;
+            margin: 0 8px;
         }
 
         table {
@@ -53,19 +60,38 @@
 
         th,
         td {
-            border: 1px solid #111;
+            border: 1px solid #000000;
             padding: 4px 5px;
             vertical-align: middle;
+            color: #000000;
         }
 
+        /* Headers de tabla — sombra ploma baja para resaltar sin gastar mucha tinta */
         th {
             font-size: 9px;
             font-weight: 800;
             text-transform: uppercase;
+            background: #e8e8e8;
+            color: #000000;
+            letter-spacing: .2px;
+            border-bottom: 1.5px solid #000000;
+            line-height: 1.15;
+            vertical-align: middle !important;
+            text-align: center;
+            padding: 5px 4px;
         }
 
         .meta td {
             font-size: 9px;
+        }
+
+        .metaLabel {
+            font-weight: 700;
+            background: #e8e8e8;
+            color: #000000;
+            text-transform: uppercase;
+            font-size: 8.5px;
+            letter-spacing: .2px;
         }
 
         .bold {
@@ -84,13 +110,67 @@
             margin-top: 14px;
         }
 
+        /* Título de periodo — fondo blanco con borde negro */
         .periodTitle {
             margin-top: 12px;
             font-weight: 800;
-            font-size: 10px;
+            font-size: 10.5px;
             text-transform: uppercase;
-            border: 1px solid #111;
-            padding: 6px;
+            border: 1px solid #000000;
+            border-left: 4px solid #000000;
+            background: #ffffff;
+            color: #000000;
+            padding: 6px 10px;
+            letter-spacing: .8px;
+        }
+
+        /* Cuadro chico: Periodo Académico | Ciclo (compacto) */
+        .periodHeadTbl {
+            width: 210px;
+            margin-top: 12px;
+            border-collapse: collapse;
+        }
+
+        .periodHeadTbl th,
+        .periodHeadTbl td {
+            border: 1px solid #000000;
+            padding: 3px 6px;
+            font-size: 9px;
+        }
+
+        .periodHeadTbl th {
+            font-weight: 800;
+            background: #e8e8e8;
+            color: #000000;
+            text-transform: none;
+            letter-spacing: 0;
+            text-align: center;
+        }
+
+        .avgRow td {
+            background: #ffffff;
+        }
+
+        .avgRow td.bold {
+            color: #000000;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .3px;
+        }
+
+        /* Líneas y nombres en firmas también en negro */
+        .sigLine {
+            border-top: 1px solid #000000;
+        }
+
+        .sigLabel,
+        .sigSubLabel,
+        .sigName {
+            color: #000000;
+        }
+
+        .footerNote {
+            color: #000000;
         }
 
         .num {
@@ -106,19 +186,139 @@
             font-size: 9px;
         }
 
+        /* Cursos: mismo estilo que las celdas de notas (bold + center font) */
+        .courseCell {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #000000;
+            text-align: left;
+            padding: 5px 8px;
+            line-height: 1.25;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            word-break: normal;
+            white-space: normal;
+            vertical-align: middle;
+        }
+
+        /* Las celdas de notas alineadas al medio para no "volar" cuando
+           el nombre del curso ocupa varias líneas */
+        .centerCell {
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        /* Celda de Observación — espacio para escribir a mano (Número de R.D., etc.) */
+        .obsCell {
+            font-size: 8.5px;
+            color: #000000;
+            text-align: left;
+            padding: 6px 8px;
+            min-height: 18px;
+        }
+
+        /* Separación visual entre Cred. y Ptje. */
+        .ptjeHead {
+            padding-left: 8px;
+        }
+
+        .ptjeCell {
+            padding-left: 8px;
+        }
+
+        /* Fecha de emisión: alineada al margen DERECHO */
+        .issueDate {
+            margin-top: 6px;
+            margin-bottom: 14px;
+            font-size: 10px;
+            font-weight: 700;
+            color: #000000;
+            text-align: right;
+        }
+
         tr {
             page-break-inside: avoid;
             break-inside: avoid;
         }
 
-        .signWrap {
-            margin-top: 14px;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 60px;
-            align-items: end;
+        /* Bloque compacto: FOTO + V°B° SECRETARIO + DIRECTOR en una sola fila */
+        .footBlock {
+            width: 100%;
+            margin-top: 10px;
+            border-collapse: collapse;
+            table-layout: fixed;
             page-break-inside: avoid;
             break-inside: avoid;
+        }
+
+        .footBlock td {
+            border: none;
+            padding: 0 8px;
+            vertical-align: bottom;
+        }
+
+        .photoCell {
+            width: 110px;
+            text-align: center;
+            vertical-align: top;
+        }
+
+        .photoFrame {
+            display: inline-block;
+            width: 75px;
+            height: 95px;
+            border: 1px solid #000000;
+            background: #fafafa;
+            overflow: hidden;
+            vertical-align: top;
+        }
+
+        .photoFrame img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .photoPlaceholder {
+            color: #aaaaaa;
+            font-size: 7px;
+            font-weight: 700;
+            text-align: center;
+            line-height: 1.2;
+            padding-top: 38px;
+        }
+
+        .photoLabel {
+            margin-top: 2px;
+            font-size: 7px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .3px;
+            color: #000000;
+        }
+
+        .signCell {
+            text-align: center;
+            vertical-align: bottom;
+        }
+
+        .vbLabel {
+            font-size: 9px;
+            font-weight: 800;
+            color: #000000;
+            margin-bottom: 2px;
+            text-align: center;
+        }
+
+        /* Nota del documento — al inicio del bloque inferior (antes de las firmas), a la izquierda */
+        .docNote {
+            margin-top: 24px;
+            font-size: 9px;
+            font-weight: 700;
+            color: #000000;
+            text-align: left;
         }
 
         .signCol {
@@ -130,7 +330,7 @@
         }
 
         .sigImgBox {
-            height: 70px;
+            height: 60px;
             display: flex;
             align-items: flex-end;
             justify-content: center;
@@ -138,30 +338,43 @@
         }
 
         .sigImg {
-            max-height: 70px;
-            max-width: 240px;
+            max-height: 60px;
+            max-width: 200px;
             object-fit: contain;
         }
 
+        /* Línea de firma más delgada y corta — al costado va el sello redondo */
         .sigLine {
-            width: 100%;
-            border-top: 1px solid #111;
+            width: 50%;
+            margin: 0 auto;
+            border-top: 0.5px solid #000000;
             height: 0;
         }
 
         .sigLabel {
             text-align: center;
-            margin-top: 4px;
-            font-weight: 700;
-            font-size: 9px;
+            margin-top: 3px;
+            font-weight: 900;
+            font-size: 8.5px;
             text-transform: uppercase;
+            letter-spacing: .3px;
+            color: #000000;
         }
 
         .sigSubLabel {
             text-align: center;
             margin-top: 2px;
+            font-size: 7.5px;
+            font-weight: 700;
+            color: #000000;
+        }
+
+        .sigName {
+            text-align: center;
+            margin-top: 1px;
             font-size: 8px;
             font-weight: 700;
+            color: #000000;
         }
 
         .footerNote {
@@ -193,27 +406,23 @@
         <table class="meta">
             <tbody>
                 <tr>
-                    <td class="bold">Nombre de la Institución</td>
-                    <td class="center bold">{{ institution_name }}</td>
-                    <td class="bold">Fecha de Emisión</td>
-                    <td class="center bold">{{ issue_date }}</td>
+                    <td class="metaLabel">Nombre de la Institución</td>
+                    <td class="center bold" colspan="3">{{ institution_name }}</td>
                 </tr>
                 <tr>
-                    <td class="bold">Programa de Estudios</td>
-                    <td class="bold">{{ program_name }}</td>
-                    <td class="bold">Modalidad</td>
+                    <td class="metaLabel">Programa de Estudios</td>
+                    <td class="bold" colspan="3">{{ program_name }}</td>
+                </tr>
+                <tr>
+                    <td class="metaLabel">Apellidos y Nombres</td>
+                    <td class="bold">{{ student_name }}</td>
+                    <td class="metaLabel">Modalidad</td>
                     <td class="center bold">{{ modality }}</td>
                 </tr>
                 <tr>
-                    <td class="bold">Apellidos y Nombres</td>
-                    <td class="bold">{{ student_name }}</td>
-                    <td class="bold">Turno</td>
-                    <td class="center bold">{{ shift }}</td>
-                </tr>
-                <tr>
-                    <td class="bold">Código / Matrícula</td>
+                    <td class="metaLabel">Código / Matrícula</td>
                     <td class="center bold">{{ enrollment_code }}</td>
-                    <td class="bold">DNI</td>
+                    <td class="metaLabel">DNI</td>
                     <td class="center bold">{{ num_documento }}</td>
                 </tr>
             </tbody>
@@ -226,27 +435,43 @@
     <div class="mt14"></div>
     {% endif %}
 
-    <div class="periodTitle">PERIODO ACADÉMICO: {{ p.term }}</div>
+    <!-- Cuadro Periodo Académico + Ciclo -->
+    <table class="periodHeadTbl">
+        <thead>
+            <tr>
+                <th>Periodo Académico</th>
+                <th>Ciclo</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="center bold">{{ p.term }}</td>
+                <td class="center bold">{{ p.ciclo_roman|default:"—" }}</td>
+            </tr>
+        </tbody>
+    </table>
 
     <div class="mt10">
         <table>
             <colgroup>
-                <col style="width:28px;">
+                <col style="width:22px;">
                 <col>
-                <col style="width:105px;">
-                <col style="width:95px;">
-                <col style="width:55px;">
-                <col style="width:60px;">
+                <col style="width:78px;">
+                <col style="width:38px;">
+                <col style="width:38px;">
+                <col style="width:54px;">
+                <col style="width:155px;">
             </colgroup>
 
             <thead>
                 <tr>
                     <th>N°</th>
-                    <th>Cursos</th>
-                    <th>Calificación<br />del curso</th>
-                    <th>Calificación<br />S.E.S.</th>
-                    <th>Créditos</th>
-                    <th>Puntaje</th>
+                    <th>CURSOS</th>
+                    <th>CALIFICACIÓN<br />CUALITATIVA</th>
+                    <th>NOTA</th>
+                    <th>CRED.</th>
+                    <th class="ptjeHead">PUNTAJE</th>
+                    <th>OBSERVACIÓN</th>
                 </tr>
             </thead>
 
@@ -254,11 +479,12 @@
                 {% for r in p.rows %}
                 <tr>
                     <td class="num">{{ r.n }}</td>
-                    <td class="small">{{ r.course_name }}</td>
+                    <td class="courseCell">{{ r.course_name|upper }}</td>
                     <td class="centerCell bold">{{ r.status_text }}</td>
                     <td class="centerCell bold">{{ r.grade }}</td>
                     <td class="centerCell bold">{{ r.credits }}</td>
-                    <td class="centerCell bold">{{ r.points }}</td>
+                    <td class="centerCell bold ptjeCell">{{ r.points }}</td>
+                    <td class="obsCell">{{ r.observation|default:"" }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -266,9 +492,9 @@
     </div>
 
     <div class="mt10">
-        <table style="width:70%;">
+        <table style="width:55%;">
             <tbody>
-                <tr>
+                <tr class="avgRow">
                     <td class="bold">PROMEDIO DEL PERIODO</td>
                     <td class="center bold" style="width:90px;">{{ p.avg }}</td>
                 </tr>
@@ -277,32 +503,54 @@
     </div>
     {% endfor %}
 
-    <!-- FIRMAS: SECRETARIO (con firma) + ESTUDIANTE (sin firma) -->
-    <div class="signWrap">
-        <div class="signCol">
-            {% if secretary_signature_url %}
-            <div class="sigImgBox">
-                <img class="sigImg" src="{{ secretary_signature_url }}" alt="firma secretario" />
-            </div>
-            {% else %}
-            <div style="height:70px;"></div>
-            {% endif %}
-            <div class="sigLine"></div>
-            <div class="sigLabel">SECRETARIO ACADÉMICO</div>
-            <div class="sigSubLabel">Firma, Postfirma y Sello</div>
-        </div>
-
-        <div class="signCol">
-            <div style="height:70px;"></div>
-            <div class="sigLine"></div>
-            <div class="sigLabel">ESTUDIANTE</div>
-            <div class="sigSubLabel">Firma</div>
-        </div>
+    <!-- NOTA DEL DOCUMENTO (arriba, a la izquierda, antes de fecha y firmas) -->
+    <div class="docNote">
+        Este documento es conforme consta en las actas de evaluación.
     </div>
 
-    <div class="footerNote">
-        Este documento se emite a solicitud del interesado. Sin enmendaduras ni tachaduras.
-    </div>
+    <!-- FECHA DE EMISIÓN (sin caja, alineada al margen DERECHO) -->
+    <div class="issueDate">Fecha de emisión: {{ issue_date }}</div>
+
+    <!-- FOTO + FIRMAS (todo en una sola fila compacta, no se separa de página) -->
+    <table class="footBlock">
+        <tr>
+            <!-- Foto del estudiante (carnet, izquierda) -->
+            <td class="photoCell">
+                <div class="photoFrame">
+                    {% if student_photo_url %}
+                    <img src="{{ student_photo_url }}" alt="Foto del estudiante" />
+                    {% else %}
+                    <div class="photoPlaceholder">FOTO<br />ESTUDIANTE</div>
+                    {% endif %}
+                </div>
+                <div class="photoLabel">Foto del estudiante</div>
+            </td>
+
+            <!-- SECRETARIO(A) ACADÉMICO -->
+            <td class="signCell">
+                {% if secretary_signature_url %}
+                <div class="sigImgBox">
+                    <img class="sigImg" src="{{ secretary_signature_url }}" alt="firma secretario" />
+                </div>
+                {% else %}
+                <div style="height:60px;"></div>
+                {% endif %}
+                <div class="sigLine"></div>
+                <div class="sigLabel">SECRETARIO(A) ACADÉMICO</div>
+                {% if secretary_name %}<div class="sigName">{{ secretary_name }}</div>{% endif %}
+                <div class="sigSubLabel">Firma, Postfirma y Sello</div>
+            </td>
+
+            <!-- DIRECTOR(A) GENERAL -->
+            <td class="signCell">
+                <div style="height:60px;"></div>
+                <div class="sigLine"></div>
+                <div class="sigLabel">DIRECTOR(A) GENERAL</div>
+                {% if director_name %}<div class="sigName">{{ director_name }}</div>{% endif %}
+                <div class="sigSubLabel">Firma, Postfirma y Sello</div>
+            </td>
+        </tr>
+    </table>
 
 </body>
 

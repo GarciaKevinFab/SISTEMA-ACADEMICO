@@ -257,6 +257,234 @@ def student_grades_summary(request):
 # ─────────────────────────────────────────────
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+def student_courses_detail(request):
+    """
+    GET /api/academic/student/me/cursos[?period=2026-I]
+    Notas (acta en vivo + kárdex) y asistencia del alumno POR CURSO, más su
+    promedio ponderado del período. Para la boleta del alumno y su dashboard.
+    """
+    from academic.models import (
+        EnrollmentItem, Enrollment, Section, SectionGrades,
+        AttendanceSession, AttendanceRow,
+    )
+
+    student = _student_of(request.user)
+    if not student:
+        return Response({"detail": "No se encontró perfil de estudiante."}, status=404)
+
+    period_q = (request.query_params.get("period") or "").strip().upper()
+    if not period_q:
+        per = _current_period()
+        period_q = (getattr(per, "code", None) or "").strip() or ""
+    if not period_q:
+        return Response({"detail": "No hay período activo"}, status=400)
+
+    keys = [k for k in (student.user_id, student.id) if k is not None]
+
+    items = (EnrollmentItem.objects
+             .filter(enrollment__student=student, enrollment__period=period_q)
+             .exclude(enrollment__status=Enrollment.STATUS_CANCELLED)
+             .select_related("plan_course__course", "section"))
+
+    cursos = []
+    ptos, creds = 0.0, 0
+    for item in items:
+        pc = item.plan_course
+        if not pc:
+            continue
+        sec = item.section or (Section.objects
+                               .filter(plan_course=pc, period=period_q)
+                               .order_by("label", "id").first())
+        teacher_name = ""
+        entry = {}
+        sesiones = faltas = tardanzas = 0
+        if sec:
+            if sec.teacher and sec.teacher.user:
+                teacher_name = (getattr(sec.teacher.user, "full_name", "")
+                                or sec.teacher.user.username or "")
+            bundle = SectionGrades.objects.filter(section=sec).first()
+            grades = (bundle.grades or {}) if bundle else {}
+            for k in keys:
+                e = grades.get(str(k))
+                if isinstance(e, dict):
+                    entry = e
+                    break
+            sess_ids = list(AttendanceSession.objects
+                            .filter(section=sec).values_list("id", flat=True))
+            sesiones = len(sess_ids)
+            if sess_ids:
+                rows = AttendanceRow.objects.filter(
+                    session_id__in=sess_ids, student_id__in=keys)
+                for r in rows.values_list("status", flat=True):
+                    s = (r or "").upper()
+                    if s == "ABSENT":
+                        faltas += 1
+                    elif s == "LATE":
+                        tardanzas += 1
+
+        # nota: acta en vivo → si ya fue procesada, kárdex manda
+        kardex = AcademicGradeRecord.objects.filter(
+            student=student, course=pc.course, term=period_q).first()
+        promedio = None
+        if kardex is not None and kardex.final_grade is not None:
+            promedio = round(float(kardex.final_grade))
+        else:
+            for k in ("final_grade", "PROMEDIO_FINAL"):
+                try:
+                    v = float(entry.get(k))
+                    if 0 <= v <= 20:
+                        promedio = round(v)
+                        break
+                except (TypeError, ValueError):
+                    continue
+
+        credits = int(getattr(pc, "credits", 0) or 0)
+        if promedio is not None:
+            ptos += promedio * (credits or 1)
+            creds += (credits or 1)
+
+        pct = round(faltas / sesiones * 100) if sesiones else 0
+        calif = ""
+        if (entry.get("status") or "").upper() == "DPI":
+            calif = "DPI"
+        elif promedio is not None:
+            calif = ("Destacado" if promedio >= 20 else
+                     "Logrado" if promedio >= 15 else
+                     "En proceso" if promedio >= 11 else
+                     "Inicio" if promedio >= 6 else "Previo al inicio")
+
+        cursos.append({
+            "section_id": sec.id if sec else None,
+            "code": pc.effective_code,
+            "name": pc.effective_name,
+            "teacher": teacher_name,
+            "seccion": sec.label if sec else "",
+            "credits": credits,
+            "c1": entry.get("C1"), "c2": entry.get("C2"), "c3": entry.get("C3"),
+            "c1_level": entry.get("C1_LEVEL", ""),
+            "c2_level": entry.get("C2_LEVEL", ""),
+            "c3_level": entry.get("C3_LEVEL", ""),
+            "promedio": promedio,
+            "calificacion": calif,
+            "procesado": kardex is not None,
+            "sesiones": sesiones,
+            "faltas": faltas,
+            "tardanzas": tardanzas,
+            "pct_faltas": pct,
+            "en_riesgo": sesiones > 0 and (faltas / sesiones) > 0.30,
+        })
+
+    cursos.sort(key=lambda c: c["name"])
+    pga = round(ptos / creds, 2) if creds else None
+    return Response({"period": period_q, "pga": pga, "cursos": cursos})
+
+
+# ─────────────────────────────────────────────
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def student_course_detail(request, section_id: int):
+    """
+    GET /api/academic/student/me/curso/<section_id>/detalle
+    Detalle de UN curso para el alumno: asistencia sesión por sesión,
+    su acta completa (niveles + recomendaciones) e historial del curso.
+    """
+    from academic.models import (
+        EnrollmentItem, Enrollment, Section, SectionGrades,
+        AttendanceSession, AttendanceRow,
+    )
+
+    student = _student_of(request.user)
+    if not student:
+        return Response({"detail": "No se encontró perfil de estudiante."}, status=404)
+
+    sec = Section.objects.select_related(
+        "plan_course__course", "teacher__user", "classroom").filter(id=section_id).first()
+    if not sec:
+        return Response({"detail": "Sección no encontrada"}, status=404)
+
+    # Debe estar matriculado en esa sección (o en el curso del período)
+    enrolled = (EnrollmentItem.objects
+                .filter(enrollment__student=student,
+                        enrollment__period=sec.period)
+                .exclude(enrollment__status=Enrollment.STATUS_CANCELLED)
+                .filter(models_q_section_or_pc(sec))
+                .exists())
+    if not enrolled:
+        return Response({"detail": "No estás matriculado en este curso."}, status=403)
+
+    keys = [k for k in (student.user_id, student.id) if k is not None]
+
+    # ── Asistencia por sesión ──
+    MARK = {"PRESENT": "P", "LATE": "T", "ABSENT": "F", "EXCUSED": "J", "HOLIDAY": "0"}
+    sesiones = []
+    for sess in (AttendanceSession.objects.filter(section=sec)
+                 .prefetch_related("rows").order_by("date")):
+        mark = ""
+        for row in sess.rows.all():
+            if row.student_id in keys:
+                mark = MARK.get((row.status or "").upper(), "")
+                break
+        sesiones.append({"date": sess.date.isoformat(), "mark": mark,
+                         "closed": bool(sess.closed)})
+
+    # ── Acta completa del alumno ──
+    bundle = SectionGrades.objects.filter(section=sec).first()
+    grades = (bundle.grades or {}) if bundle else {}
+    entry = {}
+    for k in keys:
+        e = grades.get(str(k))
+        if isinstance(e, dict):
+            entry = e
+            break
+    acta = {
+        "c1_level": entry.get("C1_LEVEL", ""), "c1_rec": entry.get("C1_REC", ""),
+        "c2_level": entry.get("C2_LEVEL", ""), "c2_rec": entry.get("C2_REC", ""),
+        "c3_level": entry.get("C3_LEVEL", ""), "c3_rec": entry.get("C3_REC", ""),
+        "c1": entry.get("C1"), "c2": entry.get("C2"), "c3": entry.get("C3"),
+        "promedio": entry.get("PROMEDIO_FINAL"),
+        "estado": entry.get("ESTADO", ""),
+        "dpi": (entry.get("status") or "").upper() == "DPI",
+        "acta_cerrada": bool(bundle and bundle.submitted),
+    }
+
+    # ── Historial del curso en todos los períodos ──
+    historial = []
+    if sec.plan_course and sec.plan_course.course_id:
+        for rec in (AcademicGradeRecord.objects
+                    .filter(student=student, course_id=sec.plan_course.course_id)
+                    .order_by("term")):
+            try:
+                g = round(float(rec.final_grade))
+            except (TypeError, ValueError):
+                g = None
+            historial.append({"term": rec.term, "final": g,
+                              "aprobado": g is not None and g >= PASSING_GRADE})
+
+    teacher_name = ""
+    if sec.teacher and sec.teacher.user:
+        teacher_name = (getattr(sec.teacher.user, "full_name", "")
+                        or sec.teacher.user.username or "")
+    return Response({
+        "section_id": sec.id,
+        "period": sec.period,
+        "code": sec.plan_course.effective_code if sec.plan_course else "",
+        "name": sec.plan_course.effective_name if sec.plan_course else "",
+        "teacher": teacher_name,
+        "room": sec.classroom.code if sec.classroom else "",
+        "sesiones": sesiones,
+        "acta": acta,
+        "historial": historial,
+    })
+
+
+def models_q_section_or_pc(sec):
+    from django.db.models import Q
+    return Q(section=sec) | Q(plan_course=sec.plan_course, section__isnull=True) | Q(plan_course=sec.plan_course)
+
+
+# ─────────────────────────────────────────────
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def student_schedule(request):
     """GET /api/academic/student/schedule"""
     student = _student_of(request.user)

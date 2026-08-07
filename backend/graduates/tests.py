@@ -30,19 +30,24 @@ class GraduateModelTest(TestCase):
 
 class GraduateSearchAPITest(TestCase):
     def setUp(self):
+        from datetime import date
         self.client = APIClient()
+        # La búsqueda pública solo muestra egresados que YA sustentaron
+        # (views.py: filtro fecha_sustentacion__isnull=False)
         Graduate.objects.create(
             dni="72611344",
             apellidos_nombres="ADAMA CHAGUA, MARYORI ALESSANDRA",
             especialidad="EDUCACIÓN INICIAL",
             anio_ingreso="2018",
             anio_egreso="2022",
+            fecha_sustentacion=date(2023, 3, 15),
         )
         Graduate.objects.create(
             apellidos_nombres="ALEJO CORNEJO, GUDEN ALEX",
             especialidad="EDUCACIÓN PRIMARIA",
             anio_ingreso="2015-II",
             anio_egreso="2019-I",
+            fecha_sustentacion=date(2020, 12, 10),
         )
 
     def test_search_by_dni(self):

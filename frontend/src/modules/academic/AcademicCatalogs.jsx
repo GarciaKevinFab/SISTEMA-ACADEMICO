@@ -22,8 +22,10 @@ import {
 import {
     CalendarDays, Users, FileSpreadsheet, Plus, AlertCircle, Save, Trash2,
     Edit3, UserPlus, Mail, Phone, CreditCard, Loader2, UploadCloud, Download,
-    KeyRound, GraduationCap, ChevronDown, Search, BookOpen,
+    KeyRound, GraduationCap, ChevronDown, Search, BookOpen, UserX, Copy,
 } from "lucide-react";
+import { UsersService } from "../../services/users.service";
+import { invalidateActivePeriod } from "@/hooks/useActivePeriod";
 import { Periods, Teachers, Imports, Credentials } from "@/services/catalogs.service";
 import { StudentsService } from "@/services/students.service";
 
@@ -205,7 +207,13 @@ export const PeriodsSection = () => {
     };
 
     const remove = async (id) => { try { await Periods.remove(id); toast.success("Periodo eliminado"); load(); } catch (e) { toast.error(formatApiError(e)); } };
-    const toggleActive = async (r) => { try { await Periods.setActive(r.id, !r.is_active); load(); } catch (e) { toast.error(formatApiError(e)); } };
+    const toggleActive = async (r) => {
+        try {
+            await Periods.setActive(r.id, !r.is_active);
+            invalidateActivePeriod();   // el resto de la app tomará el nuevo vigente
+            load();
+        } catch (e) { toast.error(formatApiError(e)); }
+    };
 
     return (
         <SectionCard
@@ -363,15 +371,112 @@ export const TeachersSection = () => {
 
     const save = async () => {
         try {
-            if (!form.document?.trim()) return toast.error("Documento es requerido");
-            if (!form.full_name?.trim()) return toast.error("Nombre completo es requerido");
-            if (editing) { await Teachers.update(editing.id, form); toast.success("Docente actualizado"); }
-            else { await Teachers.create(form); toast.success("Docente creado"); }
+            // El documento se vuelve el nombre de usuario → limpiar y validar
+            const doc = (form.document || "").replace(/\s+/g, "").trim();
+            const payload = {
+                ...form,
+                document: doc,
+                full_name: (form.full_name || "").trim(),
+                email: (form.email || "").trim().toLowerCase(),
+                phone: (form.phone || "").trim(),
+                specialization: (form.specialization || "").trim(),
+            };
+            if (!payload.document) return toast.error("Documento es requerido");
+            if (payload.document.length < 8) return toast.error("El documento debe tener al menos 8 caracteres (DNI/CE)");
+            if (!payload.full_name) return toast.error("Nombre completo es requerido");
+            if (payload.email && !/^\S+@\S+\.\S+$/.test(payload.email)) return toast.error("Correo inválido");
+            if (editing) {
+                await Teachers.update(editing.id, payload);
+                toast.success("Docente actualizado");
+            } else {
+                // El backend crea también la cuenta de usuario con rol TEACHER
+                // y devuelve las credenciales temporales → mostrarlas al admin.
+                const res = await Teachers.create(payload);
+                toast.success("Docente creado con su cuenta de acceso");
+                if (res?.temporary_password) {
+                    setTempPwd({
+                        name: res?.full_name || payload.full_name,
+                        username: res?.username || payload.document,
+                        password: res.temporary_password,
+                    });
+                } else if (res?.username) {
+                    toast.info(`Se reutilizó la cuenta existente: ${res.username}`, { duration: 8000 });
+                }
+            }
             setOpen(false); resetForm(); load();
         } catch (e) { toast.error(formatApiError(e)); }
     };
 
     const remove = async (id) => { try { await Teachers.remove(id); toast.success("Docente eliminado"); load(); } catch (e) { toast.error(formatApiError(e)); } };
+
+    /* ── Administración de cuentas de docentes (solo rol TEACHER) ── */
+    const [tempPwd, setTempPwd] = useState(null);        // {name, password}
+    const [userEdit, setUserEdit] = useState(null);      // {id, full_name, email}
+    const [userSaving, setUserSaving] = useState(false);
+
+    /* ── Eliminación masiva ── */
+    const [selDocentes, setSelDocentes] = useState(new Set());
+    const [bulkBusy, setBulkBusy] = useState(false);
+
+    const toggleDocente = (id) => {
+        setSelDocentes((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+
+    const eliminarMasivo = async () => {
+        setBulkBusy(true);
+        let ok = 0, fail = 0;
+        for (const key of selDocentes) {
+            const r = rows.find((x) => String(x.id) === String(key));
+            if (!r) continue;
+            try {
+                if (r.source === "user") await UsersService.delete(r.user);
+                else await Teachers.remove(r.id);
+                ok++;
+            } catch { fail++; }
+        }
+        setBulkBusy(false);
+        setSelDocentes(new Set());
+        toast[fail ? "warning" : "success"](
+            `${ok} docente(s) eliminado(s)` + (fail ? ` · ${fail} no se pudieron eliminar` : "")
+        );
+        load();
+    };
+
+    const resetPwd = async (r) => {
+        try {
+            const res = await UsersService.resetPassword(r.user);
+            setTempPwd({ name: r.full_name, password: res?.temporary_password || "(generada)" });
+        } catch (e) { toast.error(formatApiError(e)); }
+    };
+
+    const saveUserEdit = async () => {
+        if (!userEdit?.full_name?.trim()) return toast.error("Nombre requerido");
+        setUserSaving(true);
+        try {
+            await UsersService.update(userEdit.id, {
+                full_name: userEdit.full_name.trim(),
+                email: (userEdit.email || "").trim(),
+            });
+            toast.success("Docente actualizado");
+            setUserEdit(null);
+            load();
+        } catch (e) { toast.error(formatApiError(e)); }
+        finally { setUserSaving(false); }
+    };
+
+    const bajaUsuario = async (r) => {
+        try { await UsersService.deactivate(r.user); toast.success(`${r.full_name}: cuenta dada de baja`); load(); }
+        catch (e) { toast.error(formatApiError(e)); }
+    };
+
+    const eliminarUsuario = async (r) => {
+        try { await UsersService.delete(r.user); toast.success(`${r.full_name}: cuenta eliminada`); load(); }
+        catch (e) { toast.error(formatApiError(e)); }
+    };
 
 
     const filtered = useMemo(() => {
@@ -387,6 +492,20 @@ export const TeachersSection = () => {
             icon={Users} title="Directorio de Docentes" desc="Registro de profesores e información de contacto"
             action={
                 <div className="flex items-center gap-2">
+                {selDocentes.size > 0 && (
+                    <DeleteConfirm
+                        trigger={
+                            <Button variant="outline" disabled={bulkBusy}
+                                className="h-9 px-3.5 rounded-xl text-sm font-700 gap-1.5 border-red-200 text-red-600 hover:bg-red-50">
+                                {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                Eliminar ({selDocentes.size})
+                            </Button>
+                        }
+                        title={`¿Eliminar ${selDocentes.size} docente(s)?`}
+                        description={<>Se eliminarán permanentemente las fichas y/o cuentas de acceso seleccionadas. Esta acción no se puede deshacer.</>}
+                        onConfirm={eliminarMasivo}
+                    />
+                )}
                 <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
                     <DialogTrigger asChild>
                         <Button className="h-9 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-700 gap-1.5 shadow-sm">
@@ -402,7 +521,9 @@ export const TeachersSection = () => {
                                     {editing ? "Editar docente" : "Registrar docente"}
                                 </DialogTitle>
                                 <DialogDescription>
-                                    {editing ? `Editando: ${editing.full_name}` : "Complete la ficha del profesor."}
+                                    {editing
+                                        ? `Editando: ${editing.full_name}`
+                                        : "Se creará la ficha del profesor y su cuenta de acceso al sistema."}
                                 </DialogDescription>
                             </DialogHeader>
                             <div className="space-y-4">
@@ -430,10 +551,21 @@ export const TeachersSection = () => {
                                     <Input className="h-9 rounded-xl border-slate-200 text-sm" placeholder="Ej. Matemáticas, Ciencias…"
                                         value={form.specialization} onChange={(e) => setForm({ ...form, specialization: e.target.value })} />
                                 </Field>
+                                {!editing && (
+                                    <div className="rounded-xl bg-blue-50 border border-blue-100 px-3.5 py-2.5 flex items-start gap-2">
+                                        <KeyRound className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                                        <p className="text-xs text-blue-700 leading-relaxed">
+                                            Al guardar se creará su <b>cuenta de acceso</b> con rol docente:
+                                            usuario = <b>documento</b> y una <b>contraseña temporal</b> que se
+                                            mostrará al finalizar (deberá cambiarla en su primer ingreso).
+                                            Si el correo o documento ya tiene cuenta, se reutiliza sin duplicar.
+                                        </p>
+                                    </div>
+                                )}
                                 <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                                     <Button variant="outline" className="h-9 rounded-xl text-sm border-slate-200" onClick={() => setOpen(false)}>Cancelar</Button>
                                     <Button className="h-9 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-sm font-700 shadow-sm gap-1.5" onClick={save}>
-                                        <Save className="w-4 h-4" /> {editing ? "Guardar cambios" : "Guardar ficha"}
+                                        <Save className="w-4 h-4" /> {editing ? "Guardar cambios" : "Crear docente y cuenta"}
                                     </Button>
                                 </div>
                             </div>
@@ -456,6 +588,16 @@ export const TeachersSection = () => {
                     <table className="w-full border-collapse">
                         <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                             <tr>
+                                <th className="cfg-th w-8 text-center">
+                                    <input type="checkbox" className="accent-blue-600 cursor-pointer"
+                                        checked={filtered.length > 0 && selDocentes.size === filtered.length}
+                                        onChange={() => setSelDocentes(
+                                            selDocentes.size === filtered.length
+                                                ? new Set()
+                                                : new Set(filtered.map((x) => x.id))
+                                        )}
+                                        title="Seleccionar todos" />
+                                </th>
                                 {["Docente", "Contacto", "Especialidad", "Acciones"].map((h, i) => (
                                     <th key={i} className={`cfg-th ${i === 3 ? "text-right" : ""}`}>{h}</th>
                                 ))}
@@ -463,9 +605,13 @@ export const TeachersSection = () => {
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={4} className="py-10"><LoadingCenter text="Cargando directorio…" /></td></tr>
+                                <tr><td colSpan={5} className="py-10"><LoadingCenter text="Cargando directorio…" /></td></tr>
                             ) : filtered.map((r) => (
-                                <tr key={r.id} className="cfg-tr group">
+                                <tr key={r.id} className={`cfg-tr group ${selDocentes.has(r.id) ? "bg-blue-50/60" : ""}`}>
+                                    <td className="cfg-td text-center">
+                                        <input type="checkbox" className="accent-blue-600 cursor-pointer"
+                                            checked={selDocentes.has(r.id)} onChange={() => toggleDocente(r.id)} />
+                                    </td>
                                     <td className="cfg-td">
                                         <div className="flex items-center gap-3">
                                             <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-800 text-xs border border-blue-100 shrink-0">
@@ -489,35 +635,69 @@ export const TeachersSection = () => {
                                             : <span className="text-slate-300 text-xs">—</span>}
                                     </td>
                                     <td className="cfg-td text-right">
-                                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button
-                                                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                                onClick={() => {
-                                                    setEditing(r);
-                                                    setForm({
-                                                        document: r.document || "",
-                                                        full_name: r.full_name || "",
-                                                        email: r.email || "",
-                                                        phone: r.phone || "",
-                                                        specialization: r.specialization || "",
-                                                    });
-                                                    setOpen(true);
-                                                }}
-                                            >
-                                                <Edit3 className="w-3.5 h-3.5" />
-                                            </button>
-                                            <DeleteConfirm
-                                                trigger={<button className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>}
-                                                title="¿Eliminar docente?"
-                                                description={<>Se eliminará permanentemente a <strong>{r.full_name}</strong> del sistema.</>}
-                                                onConfirm={() => remove(r.id)}
-                                            />
-                                        </div>
+                                        {r.source === "user" ? (
+                                            <div className="flex items-center justify-end gap-1">
+                                                <button title="Resetear contraseña (genera temporal)"
+                                                    className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                                    onClick={() => resetPwd(r)}>
+                                                    <KeyRound className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button title="Editar nombre / correo"
+                                                    className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                    onClick={() => setUserEdit({ id: r.user, full_name: r.full_name || "", email: r.email || "" })}>
+                                                    <Edit3 className="w-3.5 h-3.5" />
+                                                </button>
+                                                <DeleteConfirm
+                                                    trigger={<button title="Dar de baja (desactivar cuenta)" className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"><UserX className="w-3.5 h-3.5" /></button>}
+                                                    title="¿Dar de baja al docente?"
+                                                    description={<>La cuenta de <strong>{r.full_name}</strong> quedará desactivada (no podrá iniciar sesión). Podrás reactivarla desde Administración → Usuarios.</>}
+                                                    onConfirm={() => bajaUsuario(r)}
+                                                />
+                                                <DeleteConfirm
+                                                    trigger={<button title="Eliminar cuenta permanentemente" className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>}
+                                                    title="¿Eliminar la cuenta del docente?"
+                                                    description={<>Se eliminará permanentemente la cuenta de <strong>{r.full_name}</strong>.</>}
+                                                    onConfirm={() => eliminarUsuario(r)}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                {r.user && (
+                                                    <button title="Resetear contraseña (genera temporal)"
+                                                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                                        onClick={() => resetPwd(r)}>
+                                                        <KeyRound className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                                <button
+                                                    className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                    onClick={() => {
+                                                        setEditing(r);
+                                                        setForm({
+                                                            document: r.document || "",
+                                                            full_name: r.full_name || "",
+                                                            email: r.email || "",
+                                                            phone: r.phone || "",
+                                                            specialization: r.specialization || "",
+                                                        });
+                                                        setOpen(true);
+                                                    }}
+                                                >
+                                                    <Edit3 className="w-3.5 h-3.5" />
+                                                </button>
+                                                <DeleteConfirm
+                                                    trigger={<button className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>}
+                                                    title="¿Eliminar docente?"
+                                                    description={<>Se eliminará permanentemente a <strong>{r.full_name}</strong> del sistema.</>}
+                                                    onConfirm={() => remove(r.id)}
+                                                />
+                                            </div>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
                             {!loading && filtered.length === 0 && (
-                                <tr><td colSpan={4} className="py-10">
+                                <tr><td colSpan={5} className="py-10">
                                     <EmptyState icon={Users}
                                         title={search ? "Sin resultados" : "Sin docentes registrados"}
                                         subtitle={search ? "Prueba con otro término de búsqueda" : "Agrega uno nuevo para comenzar"} />
@@ -527,6 +707,78 @@ export const TeachersSection = () => {
                     </table>
                 </div>
             </div>
+
+            {/* ── Modal: contraseña temporal generada ── */}
+            <Dialog open={!!tempPwd} onOpenChange={(v) => { if (!v) setTempPwd(null); }}>
+                <DialogContent className="rounded-2xl sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="font-800 text-slate-800 flex items-center gap-2">
+                            <KeyRound className="w-5 h-5 text-amber-500" /> Credenciales de acceso
+                        </DialogTitle>
+                        <DialogDescription>
+                            Entrégalas a <strong>{tempPwd?.name}</strong> — el sistema le pedirá cambiar la contraseña al iniciar sesión.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 pt-1">
+                        {tempPwd?.username && (
+                            <div>
+                                <p className="text-[10px] font-800 uppercase tracking-wider text-slate-400 mb-1">Usuario</p>
+                                <code className="block text-base font-mono font-bold text-slate-800 bg-slate-100 border border-slate-200 rounded-xl px-4 py-2 text-center">
+                                    {tempPwd.username}
+                                </code>
+                            </div>
+                        )}
+                        <div>
+                            <p className="text-[10px] font-800 uppercase tracking-wider text-slate-400 mb-1">Contraseña temporal</p>
+                            <div className="flex items-center gap-2">
+                                <code className="flex-1 text-lg font-mono font-bold text-slate-800 bg-slate-100 border border-slate-200 rounded-xl px-4 py-2.5 text-center tracking-wider">
+                                    {tempPwd?.password}
+                                </code>
+                                <Button variant="outline" className="h-11 rounded-xl gap-1.5"
+                                    onClick={() => {
+                                        const txt = tempPwd?.username
+                                            ? `Usuario: ${tempPwd.username}\nContraseña: ${tempPwd?.password}`
+                                            : (tempPwd?.password || "");
+                                        navigator.clipboard?.writeText(txt);
+                                        toast.success("Credenciales copiadas");
+                                    }}>
+                                    <Copy className="w-4 h-4" /> Copiar
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Modal: editar cuenta del docente ── */}
+            <Dialog open={!!userEdit} onOpenChange={(v) => { if (!v) setUserEdit(null); }}>
+                <DialogContent className="rounded-2xl sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="font-800 text-slate-800">Editar cuenta del docente</DialogTitle>
+                        <DialogDescription>Nombre y correo de la cuenta de usuario (rol TEACHER).</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-1">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-700 text-slate-600">Nombre completo *</Label>
+                            <Input className="h-9 rounded-xl border-slate-200 text-sm"
+                                value={userEdit?.full_name || ""}
+                                onChange={(e) => setUserEdit((p) => ({ ...p, full_name: e.target.value }))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-700 text-slate-600">Correo</Label>
+                            <Input type="email" className="h-9 rounded-xl border-slate-200 text-sm"
+                                value={userEdit?.email || ""}
+                                onChange={(e) => setUserEdit((p) => ({ ...p, email: e.target.value }))} />
+                        </div>
+                        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                            <Button variant="outline" className="h-9 rounded-xl text-sm" onClick={() => setUserEdit(null)}>Cancelar</Button>
+                            <Button className="h-9 px-5 rounded-xl text-sm font-700" onClick={saveUserEdit} disabled={userSaving}>
+                                {userSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </SectionCard>
     );
 };

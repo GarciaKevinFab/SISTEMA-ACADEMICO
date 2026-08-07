@@ -160,6 +160,19 @@ def register_generator(kind):
 # ═══════════════════════════════════════════════════════════════
 
 def _get_institution():
+    """Lee la configuración institucional desde InstitutionSetting (catalog JSON).
+
+    El UI de Administración guarda con claves nuevas (Spanish) como
+    `codigo_modular`, `gestion`, `ds_creacion`, `provincia`, `distrito`,
+    `director_resolution`, etc. Aquí también las exponemos bajo las claves
+    legacy (English) que los generadores ya usan, para no romperlos:
+       codigo_modular     → modular_code
+       gestion            → management
+       ds_creacion        → ds_creation
+       provincia (nombre) → province  (sobreescribe el código de ubigeo)
+       distrito  (nombre) → district  (sobreescribe el código de ubigeo)
+       director_resolution→ resolution
+    """
     data = dict(_DEFAULT_INST)
     if not InstitutionSetting:
         return data
@@ -169,6 +182,27 @@ def _get_institution():
             for k, v in obj.data.items():
                 if v:
                     data[k] = v
+
+            # Aliases UI (es) → legacy (en)
+            ALIASES = (
+                ("codigo_modular", "modular_code"),
+                ("gestion", "management"),
+                ("ds_creacion", "ds_creation"),
+                ("director_resolution", "resolution"),
+            )
+            for src, dst in ALIASES:
+                v = obj.data.get(src)
+                if v and not data.get(dst):
+                    data[dst] = v
+
+            # provincia/distrito (nombres) deben SOBREESCRIBIR a province/
+            # district (que en el UI guarda el código de ubigeo).
+            if obj.data.get("provincia"):
+                data["province"] = obj.data["provincia"]
+            if obj.data.get("distrito"):
+                data["district"] = obj.data["distrito"]
+            if obj.data.get("region"):
+                data["region"] = obj.data["region"]
     except Exception as e:
         logger.warning(f"Error leyendo InstitutionSetting: {e}")
     return data
@@ -1334,23 +1368,19 @@ def generate_process_document(process, document_type=None):
         generate_tercio_superior_weasyprint,
         HAS_WEASYPRINT as _WP_TERCIO,
     )
-    from .certificado_egresado_generator import (
-        generate_certificado_egresado_weasyprint,
-        HAS_WEASYPRINT as _WP_CERT,
-    )
+    from .certificado_egresado_reportlab import generate_certificado_egresado_pdf
 
     doc_type = (document_type or process.kind or "").upper().strip()
 
-    # ── CERTIFICADO_EGRESADO → HTML + WeasyPrint (landscape, fiel al SIA) ──
+    # ── CERTIFICADO_EGRESADO → ReportLab canvas (diseño profesional + QR) ──
+    # Se usa siempre ReportLab (disponible en todos los entornos) para que
+    # el diseño sea idéntico en desarrollo y producción.
     if doc_type == "CERTIFICADO_EGRESADO":
-        if _WP_CERT:
-            logger.info(f"Proceso {process.id}: generando CERTIFICADO_EGRESADO con WeasyPrint")
-            inst    = _get_institution()
-            student = _get_student(process.student_id)
-            extra   = _get_extra_data(process)
-            return generate_certificado_egresado_weasyprint(process, student, extra, inst)
-        else:
-            logger.warning("WeasyPrint no instalado → usando ReportLab para CERTIFICADO_EGRESADO")
+        logger.info(f"Proceso {process.id}: generando CERTIFICADO_EGRESADO (diseño profesional + QR)")
+        inst    = _get_institution()
+        student = _get_student(process.student_id)
+        extra   = _get_extra_data(process)
+        return generate_certificado_egresado_pdf(process, student, extra, inst)
 
     # ── CONSTANCIA_TERCIO → HTML + WeasyPrint (cálculo automático) ──
     if doc_type == "CONSTANCIA_TERCIO":
@@ -1481,7 +1511,6 @@ class ProcessGenerateDocumentView(APIView):
 
         process = get_object_or_404(AcademicProcess, id=pid)
         body    = request.data or {}
-        force   = body.get("force", False)
 
         doc_type = (body.get("document_type") or process.kind or "").upper().strip()
 
@@ -1494,18 +1523,13 @@ class ProcessGenerateDocumentView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # ¿Ya existe?
+        # Siempre regenerar los PDFs auto-generados: así el documento sale
+        # con el diseño vigente aunque exista una versión guardada antigua.
+        # (Los archivos subidos manualmente no se tocan.)
         existing = ProcessFile.objects.filter(process_id=pid).order_by("-id")
         for f in existing:
             note = getattr(f, "note", "") or ""
             if "generado" in note.lower() or "auto" in note.lower():
-                if not force:
-                    return ok(
-                        file=self._ser(f, request),
-                        preview_url=self._abs(f, request),
-                        already_exists=True,
-                        message="Documento ya generado. Usa force=true para regenerar.",
-                    )
                 try:
                     if f.file:
                         f.file.delete(save=False)
@@ -1541,17 +1565,25 @@ class ProcessGenerateDocumentView(APIView):
             message=f"{label} generado exitosamente",
         )
 
+    @staticmethod
+    def _https(url):
+        # Detrás de Cloudflare/Nginx el esquema puede llegar como http;
+        # forzar https (salvo desarrollo local) para evitar Mixed Content.
+        if url.startswith("http://") and "localhost" not in url and "127.0.0.1" not in url:
+            return "https://" + url[len("http://"):]
+        return url
+
     def _ser(self, f, request=None):
         url = f.file.url if f.file else ""
         return {
             "id":           f.id,
             "name":         (f.file.name or "").split("/")[-1] if f.file else "",
             "url":          url,
-            "absolute_url": request.build_absolute_uri(url) if request and url else url,
+            "absolute_url": self._https(request.build_absolute_uri(url)) if request and url else url,
             "size":         getattr(f.file, "size", 0),
             "note":         getattr(f, "note", "") or "",
         }
 
     def _abs(self, f, request=None):
         url = f.file.url if f.file else ""
-        return request.build_absolute_uri(url) if request and url else url
+        return self._https(request.build_absolute_uri(url)) if request and url else url

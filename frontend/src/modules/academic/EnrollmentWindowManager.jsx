@@ -93,6 +93,17 @@ const STATUS_CONFIG = {
         iconColor: "text-red-600",
         desc: "Fuera de toda ventana. Los estudiantes no pueden matricularse.",
     },
+    /* El backend devuelve CLOSED tanto si la ventana ya pasó como si TODAVÍA
+       NO EMPIEZA. Bloquear está bien en los dos casos, pero decir "cerrada"
+       cuando en realidad falta para que abra hace pensar que se configuró mal.
+       Se distingue con `not_yet_open` / `opens_at`. */
+    SCHEDULED: {
+        label: "Matrícula PROGRAMADA",
+        color: "bg-blue-100 text-blue-700 border-blue-200",
+        Icon: Calendar,
+        iconColor: "text-blue-600",
+        desc: "Las fechas están configuradas pero la ventana todavía no abre.",
+    },
 };
 
 export default function EnrollmentWindowManager({ activePeriod }) {
@@ -196,7 +207,15 @@ export default function EnrollmentWindowManager({ activePeriod }) {
         });
     };
 
-    const cfg = STATUS_CONFIG[currentStatus] || STATUS_CONFIG.FREE;
+    // Si está cerrada solo porque aún no abre, se muestra como PROGRAMADA
+    const cfg = (serverData?.not_yet_open && currentStatus === "CLOSED")
+        ? {
+            ...STATUS_CONFIG.SCHEDULED,
+            desc: serverData.opens_at
+                ? `Las fechas están configuradas. La matrícula abre el ${formatDisplay(serverData.opens_at)}.`
+                : STATUS_CONFIG.SCHEDULED.desc,
+        }
+        : (STATUS_CONFIG[currentStatus] || STATUS_CONFIG.FREE);
     const StatusIcon = cfg.Icon;
 
     return (

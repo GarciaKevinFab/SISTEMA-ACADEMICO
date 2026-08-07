@@ -1,4 +1,5 @@
 from django.urls import re_path
+from academic.views import ReporteMineduXlsxView, OficioMatriculadosPDFView
 from .views import (
     DashboardStatsView,
     # Exportaciones
@@ -37,6 +38,11 @@ urlpatterns = [
     re_path(r"^exports/?$", ExportBatchListView.as_view()),
     re_path(r"^exports/(?P<pk>\d+)/retry/?$", ExportBatchRetryView.as_view()),
     re_path(r"^exports/(?P<pk>\d+)/download/?$", ExportBatchDownloadView.as_view()),
+
+    # Reporte SIA-MINEDU (plantilla oficial de matrícula)
+    re_path(r"^reporte-sia\.xlsx/?$", ReporteMineduXlsxView.as_view()),
+    # Oficio de Matriculados (PDF con membrete institucional)
+    re_path(r"^oficio-matriculados\.pdf/?$", OficioMatriculadosPDFView.as_view()),
 
     # Validación
     re_path(r"^validation/data-integrity/?$", DataIntegrityValidationView.as_view()),

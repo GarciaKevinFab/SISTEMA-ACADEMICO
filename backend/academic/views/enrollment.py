@@ -96,16 +96,30 @@ def _guess_default_period_code() -> str:
         pass
     from datetime import date
     year = date.today().year
-    sem  = "I" if date.today().month <= 6 else "II"
+    sem  = "I" if date.today().month <= 7 else "II"
     return f"{year}-{sem}"
 
 
 def _window_info_for_period(per: AcademicPeriod) -> dict:
     status    = per.enrollment_status()
     surcharge = float(per.extemporary_surcharge or 0)
+    ahora     = timezone.now()
+
+    # `enrollment_status()` devuelve CLOSED tanto si la ventana ya pasó como si
+    # TODAVÍA NO EMPIEZA, y el bloqueo es correcto en los dos casos. Pero para
+    # la pantalla no es lo mismo: decir "matrícula cerrada" cuando en realidad
+    # está programada para dentro de unos días hace pensar que se configuró mal.
+    proxima = None
+    if status == "CLOSED":
+        candidatas = [d for d in (per.enrollment_start, per.extemporary_start)
+                      if d and d > ahora]
+        proxima = min(candidatas) if candidatas else None
+
     return {
         "status":                status,
         "is_open":               status != "CLOSED",
+        "not_yet_open":          bool(proxima),
+        "opens_at":              proxima.isoformat() if proxima else None,
         "start":                 per.enrollment_start.isoformat()    if per.enrollment_start    else None,
         "end":                   per.enrollment_end.isoformat()      if per.enrollment_end      else None,
         "extemporary_start":     per.extemporary_start.isoformat()   if per.extemporary_start   else None,
@@ -149,23 +163,104 @@ def _resolve_student_from_request(request, dni=None, student_id=None):
 #  HELPERS DE VALIDACIÓN
 # ══════════════════════════════════════════════════════════════
 
-def _approved_info(student: StudentProfile):
-    """Retorna (approved_ids, approved_names) considerando SOLO el stint
-    activo (reingreso). Si un alumno abandonó y reingresó, los cursos
-    aprobados de stints anteriores no cuentan para calcular su ciclo
-    actual."""
-    from .kardex import _detect_active_stint_periods
+def _detect_restart_term(student: StudentProfile, base_qs):
+    """Detecta el término en el que el alumno REINICIÓ su carrera.
 
-    all_terms = set(
-        AcademicGradeRecord.objects.filter(student=student)
-        .values_list("term", flat=True).distinct()
+    Señal: si el alumno tiene una nota APROBADA de un curso en término T1, y
+    luego volvió a tomar ese mismo curso en un término T2 > T1, eso solo se
+    explica por reinicio (cambio de plan con reseteo, repechaje, etc.).
+    En ese caso, el restart_term es el T2 más temprano detectado.
+
+    Retorna el término de reinicio (str) o None si no hay restart.
+    """
+    from .kardex import _period_to_num
+
+    # Pares (course_id, term, grade) ordenados por término
+    recs = list(
+        base_qs.values_list("course_id", "term", "final_grade")
     )
+    if not recs:
+        return None
+
+    # Por cada curso, encontrar el primer término donde fue aprobado
+    earliest_approved_num = {}  # course_id → (term_num, term_str)
+    for cid, term, fg in recs:
+        try:
+            g = float(fg) if fg is not None else None
+        except Exception:
+            g = None
+        if g is None or g < PASSING_GRADE:
+            continue
+        tnum = _period_to_num(term)
+        if tnum is None:
+            continue
+        prev = earliest_approved_num.get(cid)
+        if prev is None or tnum < prev[0]:
+            earliest_approved_num[cid] = (tnum, term)
+
+    if not earliest_approved_num:
+        return None
+
+    # Buscar el T2 más temprano donde se retomó un curso ya aprobado antes
+    restart_num = None
+    restart_term = None
+    for cid, term, fg in recs:
+        approved_at = earliest_approved_num.get(cid)
+        if approved_at is None:
+            continue
+        approved_num = approved_at[0]
+        tnum = _period_to_num(term)
+        if tnum is None:
+            continue
+        if tnum > approved_num:
+            if restart_num is None or tnum < restart_num:
+                restart_num = tnum
+                restart_term = term
+
+    return restart_term
+
+
+def _approved_info(student: StudentProfile):
+    """Retorna (approved_ids, approved_names) considerando:
+      1) SOLO el stint activo (reingreso). Si abandonó y reingresó, lo viejo
+         no cuenta.
+      2) SOLO notas cuyo plan_course pertenece al plan actual del estudiante.
+         Esto evita que cursos aprobados en un plan anterior (e.g., 2015)
+         cuenten como aprobados en el plan nuevo (e.g., 2020) cuando el
+         alumno cambió de plan. Notas con plan_course=NULL se incluyen
+         (datos legacy sin vínculo a plan).
+      3) Si se detecta un REINICIO (alumno retoma curso ya aprobado en
+         término posterior), las notas anteriores al reinicio se descartan."""
+    from .kardex import _detect_active_stint_periods, _period_to_num
+
+    base_qs = AcademicGradeRecord.objects.filter(student=student)
+
+    # (2) Filtrar por plan actual del estudiante (si tiene plan asignado)
+    if getattr(student, "plan_id", None):
+        base_qs = base_qs.filter(
+            Q(plan_course__isnull=True) |
+            Q(plan_course__plan_id=student.plan_id)
+        )
+
+    # (3) Detectar reinicio y filtrar notas previas
+    restart_term = _detect_restart_term(student, base_qs)
+    if restart_term:
+        restart_num = _period_to_num(restart_term)
+        if restart_num is not None:
+            keep_terms = []
+            for t in base_qs.values_list("term", flat=True).distinct():
+                tnum = _period_to_num(t)
+                if tnum is not None and tnum >= restart_num:
+                    keep_terms.append(t)
+            base_qs = base_qs.filter(term__in=keep_terms)
+
+    all_terms = set(base_qs.values_list("term", flat=True).distinct())
     active_periods = _detect_active_stint_periods(all_terms) or all_terms
 
     recs = (
-        AcademicGradeRecord.objects
+        base_qs
         .select_related("course")
-        .filter(student=student, term__in=active_periods)
+        .filter(term__in=active_periods)
         .values_list("course_id", "final_grade", "course__name")
     )
 
@@ -558,6 +653,23 @@ class StudentsOverviewView(APIView):
             except (ValueError, TypeError):
                 pass
 
+        # Filtro por ciclo del alumno (1-10)
+        ciclo = request.query_params.get("ciclo")
+        if ciclo:
+            try:
+                qs = qs.filter(ciclo=int(ciclo))
+            except (ValueError, TypeError):
+                pass
+
+        # Filtro por año académico (1°=ciclos 1-2, 2°=3-4, … 5°=9-10)
+        anio = request.query_params.get("anio")
+        if anio:
+            try:
+                n = int(anio)
+                qs = qs.filter(ciclo__in=[2 * n - 1, 2 * n])
+            except (ValueError, TypeError):
+                pass
+
         if search:
             qs = qs.filter(
                 Q(num_documento__icontains=search)
@@ -751,6 +863,8 @@ class StudentsOverviewView(APIView):
                 "enrollment_id":          st._enrollment_id,
                 "enrolled_courses_count": st._enrolled_courses,
                 "enrolled_credits":       st._enrolled_credits,
+                "estado_academico":       getattr(st, "estado_academico", "") or "",
+                "estado_rd":              getattr(st, "estado_rd", "") or "",
             })
 
         return ok(
@@ -1381,11 +1495,28 @@ class EnrollmentCommitView(APIView):
             enrollment.total_credits = total_credits
             enrollment.save(update_fields=["total_credits"])
 
+            # ── Actualización AUTOMÁTICA del ciclo y período del alumno ──
+            # El ciclo del estudiante se deriva de su matrícula (semestre más
+            # alto de los cursos confirmados); no se edita a mano.
+            semestres = [int(pc.semester) for pc in pcs if pc.semester]
+            campos = []
+            if semestres:
+                nuevo_ciclo = max(semestres)
+                if (st.ciclo or 0) != nuevo_ciclo:
+                    st.ciclo = nuevo_ciclo
+                    campos.append("ciclo")
+            if (st.periodo or "") != academic_period:
+                st.periodo = academic_period
+                campos.append("periodo")
+            if campos:
+                st.save(update_fields=campos)
+
         return ok(
             success=True,
             enrollment_id=enrollment.id,
             academic_period=academic_period,
             total_credits=total_credits,
+            ciclo_actualizado=st.ciclo,
         )
 
 
@@ -1663,6 +1794,17 @@ class ScheduleExportPDFView(APIView):
             ).prefetch_related("section__schedule_slots").all():
                 pc  = item.plan_course
                 sec = item.section
+                # Fallback: matrículas sin sección en el item → resolver la
+                # sección del curso en este período (docente/aula/horario)
+                if sec is None and pc is not None:
+                    sec = (
+                        Section.objects
+                        .select_related("teacher__user", "classroom")
+                        .prefetch_related("schedule_slots")
+                        .filter(plan_course=pc, period=period)
+                        .order_by("label", "id")
+                        .first()
+                    )
                 course_name   = (getattr(pc, "display_name", "") or getattr(pc.course, "name", "") or "") if pc else ""
                 course_code   = (getattr(pc, "display_code", "") or getattr(pc.course, "code", "") or "") if pc else ""
                 credits       = int(getattr(pc, "credits", 0) or 0) if pc else 0

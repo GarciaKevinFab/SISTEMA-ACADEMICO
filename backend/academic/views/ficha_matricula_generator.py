@@ -104,7 +104,8 @@ def _build_html(
     nombres    = student.get("nombres", "")
     apellidos  = student.get("apellidos", "")
     nombre_ficha = f"{apellidos.upper()} {nombres}".strip() if apellidos else student.get("nombre_completo", "")
-    codigo     = student.get("codigo", "") or student.get("dni", "")
+    dni        = student.get("dni", "") or student.get("num_documento", "")
+    codigo     = student.get("codigo", "") or dni
     resolucion = extra.get("resolucion", "")
 
     # ── Institución ──
@@ -602,7 +603,7 @@ def _build_html(
     <td class="val-bold" style="width:30%">{carrera.upper() if carrera else ""}</td>
     <td class="lbl" style="width:16%; text-align:center">Per&iacute;odo Acad&eacute;mico</td>
     <td class="val-bold" style="text-align:center">{period}</td>
-    {f'<td class="photo-cell" rowspan="3"><img src="{photo_src}" class="student-photo" alt="Foto"></td>' if photo_src else '<td class="photo-cell" rowspan="3" style="color:#aaa; font-size:7pt;">Sin foto</td>'}
+    {f'<td class="photo-cell" rowspan="4"><img src="{photo_src}" class="student-photo" alt="Foto"></td>' if photo_src else '<td class="photo-cell" rowspan="4" style="color:#aaa; font-size:7pt;">Sin foto</td>'}
   </tr>
   <tr>
     <td class="lbl">Resoluci&oacute;n de Autorizaci&oacute;n</td>
@@ -615,6 +616,12 @@ def _build_html(
     <td class="val-bold">{nombre_ficha}</td>
     <td class="lbl" style="text-align:center">C&Oacute;DIGO</td>
     <td class="val-bold" style="text-align:center">{codigo}</td>
+  </tr>
+  <tr>
+    <td class="lbl">DNI</td>
+    <td class="val-bold">{dni}</td>
+    <td class="lbl" style="text-align:center">Modalidad</td>
+    <td class="val-bold" style="text-align:center">Presencial</td>
   </tr>
 </table>
 
@@ -795,7 +802,8 @@ def generate_ficha_matricula_reportlab(
     nombres    = student.get("nombres", "")
     apellidos  = student.get("apellidos", "")
     nombre_ficha = f"{apellidos.upper()} {nombres}".strip() if apellidos else student.get("nombre_completo", "")
-    codigo     = student.get("codigo", "") or student.get("dni", "")
+    dni        = student.get("dni", "") or student.get("num_documento", "")
+    codigo     = student.get("codigo", "") or dni
     resolucion = extra.get("resolucion", "") or inst.get("resolution", "")
 
     short_name  = inst.get("short_name", "I.E.S.P.P.")
@@ -965,6 +973,7 @@ def generate_ficha_matricula_reportlab(
         ("Programa de Estudios", carrera, "Período Académico", period),
         ("Resolución de Autorización", resolucion, "Ciclo - Sección", ciclo_seccion),
         ("Nombres y Apellidos", nombre_ficha, "CÓDIGO", codigo),
+        ("DNI", dni, "Modalidad", "Presencial"),
     ]
 
     # Detectar si hay foto para ajustar layout

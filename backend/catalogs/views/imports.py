@@ -353,6 +353,21 @@ def _read_calificaciones_xlsx(file):
 
 LEVEL_TO_NUM_IMPORT = {"PI": 1, "I": 2, "P": 3, "L": 4, "D": 5}
 
+
+def _nombre_oficial_de_partes(nombres, ap_pat, ap_mat) -> str:
+    """"APELLIDOS, NOMBRES" a partir de las tres columnas del Excel.
+
+    Mismo formato que students.name_utils.nombre_oficial (que trabaja sobre un
+    Student ya construido). Antes los importadores guardaban el nombre
+    invertido en User.full_name.
+    """
+    from students.name_utils import normalizar
+    ap = normalizar(f"{ap_pat or ''} {ap_mat or ''}")
+    no = normalizar(nombres)
+    if ap and no:
+        return f"{ap}, {no}"
+    return ap or no
+
 def _calc_escala_import(c1, c2, c3):
     if c1 is None or c2 is None or c3 is None:
         return None
@@ -892,6 +907,8 @@ def _run_import_job(job_id: int, raw: bytes, safe_name: str, type: str, mapping:
 
                     def _ensure_user_for_student(st: Student, username: str, email: str, full_name: str, r):
                         if getattr(st, "user_id", None):
+                            # M2M directa (User.roles) — es la que lee /auth/me
+                            st.user.roles.add(student_role)
                             UserRole.objects.get_or_create(user_id=st.user_id, role_id=student_role.id)
                             return st.user, None
 
@@ -951,6 +968,8 @@ def _run_import_job(job_id: int, raw: bytes, safe_name: str, type: str, mapping:
                                 except IntegrityError:
                                     add_error_local(r, "email", "Update email falló")
 
+                        # M2M directa (User.roles) — es la que lee /auth/me
+                        user.roles.add(student_role)
                         UserRole.objects.get_or_create(user_id=user.id, role_id=student_role.id)
                         st.user = user
                         st.save(update_fields=["user"])
@@ -1025,7 +1044,8 @@ def _run_import_job(job_id: int, raw: bytes, safe_name: str, type: str, mapping:
                         st.plan = plan_obj
 
                         username = num_documento
-                        full_name = f"{nombres} {ap_pat} {ap_mat}".strip()
+                        # Formato oficial "APELLIDOS, NOMBRES" (students/name_utils.py)
+                        full_name = _nombre_oficial_de_partes(nombres, ap_pat, ap_mat)
                         user, temp_password = _ensure_user_for_student(st, username, st.email, full_name, r)
 
                         st.save()
@@ -1603,7 +1623,8 @@ def _run_import_job(job_id: int, raw: bytes, safe_name: str, type: str, mapping:
 
                     # Crear usuario
                     username = doc
-                    full_name = f"{nombres} {ap_pat} {ap_mat}".strip()
+                    # Formato oficial "APELLIDOS, NOMBRES" (students/name_utils.py)
+                    full_name = _nombre_oficial_de_partes(nombres, ap_pat, ap_mat)
 
                     if not getattr(st, "user_id", None):
                         user = User.objects.filter(username=username).first()
@@ -1645,6 +1666,8 @@ def _run_import_job(job_id: int, raw: bytes, safe_name: str, type: str, mapping:
                                     user.email = f"{uname}-x@no-email.local"
                                     user.save()
 
+                                # M2M directa (User.roles) — es la que lee /auth/me
+                                user.roles.add(student_role)
                                 UserRole.objects.get_or_create(user_id=user.id, role_id=student_role.id)
 
                                 if temp_password:
@@ -1655,6 +1678,8 @@ def _run_import_job(job_id: int, raw: bytes, safe_name: str, type: str, mapping:
                                         "password": temp_password,
                                     })
                             else:
+                                # M2M directa (User.roles) — es la que lee /auth/me
+                                user.roles.add(student_role)
                                 UserRole.objects.get_or_create(user_id=user.id, role_id=student_role.id)
 
                             if user:

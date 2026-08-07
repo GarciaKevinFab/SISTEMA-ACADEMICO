@@ -41,7 +41,7 @@ const CHANNEL_LABELS = {
 function guessPeriod() {
     const now = new Date();
     const y = now.getFullYear();
-    return now.getMonth() < 6 ? `${y}-I` : `${y}-II`;
+    return now.getMonth() < 7 ? `${y}-I` : `${y}-II`;
 }
 
 function generatePeriodOptions() {

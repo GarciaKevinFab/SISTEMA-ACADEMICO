@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 12mm 12mm 14mm 14mm;
+        }
+
+        body {
+            font-family: "Times New Roman", Times, Georgia, serif;
+            font-size: 10px;
+            color: #111;
+            line-height: 1.25;
+        }
+
+        /* ── Header institucional ── */
+        .topBar {
+            width: 100%;
+            display: table;
+            margin-bottom: 6px;
+            border-bottom: 1.5px solid #111;
+            padding-bottom: 8px;
+        }
+
+        .topBar .left {
+            display: table-cell;
+            vertical-align: middle;
+            width: 78%;
+            padding: 2px 0;
+        }
+
+        .topBar .right {
+            display: table-cell;
+            vertical-align: middle;
+            width: 22%;
+            text-align: right;
+            padding-right: 4px;
+        }
+
+        .topBar .right img {
+            max-width: 95px;
+            max-height: 95px;
+            object-fit: contain;
+        }
+
+        .instLine1 {
+            font-size: 12px;
+            font-weight: 700;
+            font-style: italic;
+            color: #1a3a6c;
+            letter-spacing: .2px;
+        }
+
+        /* Nombre institucional en estilo "manuscrito" */
+        .instLine2 {
+            font-family: "Edwardian Script ITC", "Monotype Corsiva",
+                "Brush Script MT", "Lucida Handwriting", "Apple Chancery", cursive;
+            font-size: 36px;
+            font-weight: 400;
+            margin-top: 2px;
+            color: #0f2a52;
+            line-height: 1.05;
+            letter-spacing: 1px;
+        }
+
+        .instLine3 {
+            font-size: 11px;
+            font-weight: 700;
+            margin-top: 4px;
+            color: #1a3a6c;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+
+        .titleMain {
+            text-align: center;
+            font-size: 19px;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            margin: 14px auto 12px auto;
+            padding: 6px 24px 4px 24px;
+            color: #0f2a52;
+            display: inline-block;
+            position: relative;
+            width: 60%;
+            text-transform: uppercase;
+        }
+
+        .titleMain::before,
+        .titleMain::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #0f2a52;
+        }
+
+        .titleMain::before {
+            top: 0;
+        }
+
+        .titleMain::after {
+            bottom: 0;
+        }
+
+        .titleWrap {
+            text-align: center;
+        }
+
+        .intro {
+            text-align: justify;
+            font-size: 10px;
+            line-height: 1.45;
+            margin-bottom: 8px;
+        }
+
+        .intro .label {
+            font-weight: 700;
+        }
+
+        .intro .underline {
+            border-bottom: 1px solid #111;
+            display: inline-block;
+            min-width: 220px;
+            padding: 0 4px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        /* ── Tabla principal ── */
+        table.grades {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        table.grades th,
+        table.grades td {
+            border: 1px solid #111;
+            padding: 2px 3px;
+            vertical-align: middle;
+            font-size: 9px;
+        }
+
+        table.grades th {
+            font-weight: 800;
+            text-transform: uppercase;
+            text-align: center;
+            background: #f4f4f4;
+            font-size: 8.5px;
+            line-height: 1.1;
+        }
+
+        .semCell {
+            text-align: center;
+            font-weight: 800;
+            text-transform: uppercase;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            white-space: nowrap;
+            font-size: 10px;
+            letter-spacing: 1px;
+            padding: 2px;
+        }
+
+        .courseName {
+            text-align: left;
+            padding-left: 5px;
+            font-size: 9px;
+        }
+
+        .center {
+            text-align: center;
+        }
+
+        .right {
+            text-align: right;
+        }
+
+        .bold {
+            font-weight: 700;
+        }
+
+        /* ── Fecha vertical en celda combinada ── */
+        .dateCell {
+            text-align: center;
+            font-weight: 700;
+            white-space: nowrap;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            font-size: 9.5px;
+            padding: 2px;
+        }
+
+        .obsText {
+            font-size: 8px;
+            text-align: center;
+            line-height: 1.1;
+        }
+
+        /* ── Página 2: cierre + firmas + foto ── */
+        .closingWrap {
+            margin-top: 16px;
+        }
+
+        .closingText {
+            text-align: justify;
+            font-size: 10px;
+            margin-bottom: 6px;
+        }
+
+        .dateLine {
+            text-align: right;
+            font-size: 10px;
+            margin: 14px 0 28px 0;
+        }
+
+        .signRow {
+            width: 100%;
+            display: table;
+            margin-top: 18px;
+        }
+
+        .signCol {
+            display: table-cell;
+            width: 50%;
+            text-align: center;
+            vertical-align: bottom;
+            padding: 0 16px;
+        }
+
+        .sigImg {
+            max-height: 70px;
+            max-width: 220px;
+            object-fit: contain;
+        }
+
+        .sigBox {
+            height: 70px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+        .sigLine {
+            border-top: 1px solid #111;
+            margin-top: 4px;
+        }
+
+        .sigLabel {
+            margin-top: 4px;
+            font-weight: 800;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+
+        .sigName {
+            margin-top: 2px;
+            font-size: 9.5px;
+            font-weight: 700;
+        }
+
+        .photoSection {
+            page-break-inside: avoid;
+            break-inside: avoid;
+            margin: 12px 0 6px 0;
+            text-align: center;
+        }
+
+        .photoSection .photoTitle {
+            font-weight: 800;
+            font-size: 10px;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            color: #555;
+        }
+
+        .photoFrame {
+            display: inline-block;
+            border: 1.5px solid #111;
+            padding: 3px;
+            background: #fafafa;
+        }
+
+        .photoFrame img {
+            display: block;
+            width: 100px;
+            height: 125px;
+            object-fit: cover;
+        }
+
+        .photoFrame .placeholder {
+            width: 100px;
+            height: 125px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #eee;
+            color: #999;
+            font-size: 9px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .photoCaption {
+            margin-top: 4px;
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ── ENCABEZADO INSTITUCIONAL ── -->
+    <div class="topBar">
+        <div class="left">
+            <div class="instLine1">Instituto de Educación Superior Pedagógico Público</div>
+            <div class="instLine2">&ldquo;{{ institution_short_name }}&rdquo;</div>
+            <div class="instLine3">{{ city }}</div>
+        </div>
+        <div class="right">
+            {% if logo_url %}<img src="{{ logo_url }}" alt="logo" />{% endif %}
+        </div>
+    </div>
+
+    <!-- ── TÍTULO ── -->
+    <div class="titleWrap">
+        <div class="titleMain">Ficha de Rendimiento Académico</div>
+    </div>
+
+    <!-- ── INTRODUCCIÓN ── -->
+    <p class="intro">
+        <span class="label">A DON (ÑA)</span>
+        <span class="underline">{{ student_name }}</span>
+        QUIEN HA CURSADO ESTUDIOS SUPERIORES EN ESTA CASA DE FORMACIÓN MAGISTERIAL
+        EN EL PROGRAMA DE ESTUDIOS DE:
+        <span class="label">{{ program_name }}</span>
+        {% if rvm %}<span>({{ rvm }})</span>{% endif %}
+        <br />
+        <span class="label">COD. DE MATRICULA:</span>
+        <span class="underline" style="min-width:140px;">{{ enrollment_code }}</span>
+        HABIENDO OBTENIDO LOS SIGUIENTES RESULTADOS.
+    </p>
+
+    <!-- ── TABLA DE CALIFICACIONES ── -->
+    <table class="grades">
+        <colgroup>
+            <col style="width:5%;">
+            <col style="width:4%;">
+            <col style="width:36%;">
+            <col style="width:7%;">
+            <col style="width:5%;">
+            <col style="width:6%;">
+            <col style="width:6%;">
+            <col style="width:7%;">
+            <col style="width:14%;">
+            <col style="width:10%;">
+        </colgroup>
+        <thead>
+            <tr>
+                <th>SEM</th>
+                <th>N°</th>
+                <th>AREAS / ASIGNATURAS</th>
+                <th>CALIF.<br />CUAL.</th>
+                <th>NOTA</th>
+                <th>CRED.</th>
+                <th>PTJE.</th>
+                <th>FECHA</th>
+                <th>OBSERVACIÓN</th>
+                <th>PUNT.</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for grp in semester_groups %}
+                {% for r in grp.rows %}
+                <tr>
+                    {% if forloop.first %}
+                    <td class="semCell" rowspan="{{ grp.rowspan }}">{{ grp.sem_label }}</td>
+                    {% endif %}
+                    <td class="center">{{ r.n }}</td>
+                    <td class="courseName">{{ r.course_name }}</td>
+                    <td class="center bold">{{ r.calif_cual }}</td>
+                    <td class="center bold">{{ r.nota }}</td>
+                    <td class="center">{{ r.credits }}</td>
+                    <td class="center">{{ r.points }}</td>
+                    {% if forloop.first %}
+                    <td class="dateCell" rowspan="{{ grp.rowspan }}">{{ grp.date_display }}</td>
+                    {% endif %}
+                    <td class="obsText">{{ r.observation }}</td>
+                    {% if forloop.first %}
+                    <td class="center bold" rowspan="{{ grp.rowspan }}">
+                        <div>{{ grp.total_points }}</div>
+                        <div style="margin-top:4px;">{{ grp.total_credits }}</div>
+                        <div style="margin-top:4px;">{{ grp.avg_display }}</div>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            {% endfor %}
+            {% if not semester_groups %}
+            <tr>
+                <td colspan="10" class="center" style="padding:14px;">Sin registros académicos.</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <!-- ── CIERRE / FOTO / FIRMAS ── -->
+    <div class="closingWrap">
+        <p class="closingText">
+            CONFORME CONSTA EN LAS ACTAS DE EVALUACIÓN A LAS QUE REMITO EN CASO NECESARIO.
+        </p>
+        <div class="dateLine">{{ closing_city }}, {{ closing_day }} de {{ closing_month }} del {{ closing_year }}</div>
+
+        <!-- ── FOTO DEL ESTUDIANTE (antes de las firmas) ── -->
+        <div class="photoSection">
+            <div class="photoTitle">Foto del estudiante</div>
+            <div class="photoFrame">
+                {% if student_photo_url %}
+                <img src="{{ student_photo_url }}" alt="Foto estudiante" />
+                {% else %}
+                <div class="placeholder">SIN FOTO</div>
+                {% endif %}
+            </div>
+            <div class="photoCaption">{{ student_name }}</div>
+            {% if num_documento %}<div class="photoCaption" style="font-weight:600;">DNI: {{ num_documento }}</div>{% endif %}
+        </div>
+
+        <!-- ── FIRMAS (al final, debajo de la foto) ── -->
+        <div class="signRow">
+            <div class="signCol">
+                <div class="sigBox">
+                    {% if secretary_signature_url %}
+                    <img class="sigImg" src="{{ secretary_signature_url }}" alt="firma secretario" />
+                    {% endif %}
+                </div>
+                <div class="sigLine"></div>
+                <div class="sigLabel">V° B°</div>
+                <div class="sigLabel">SECRETARIO(A) ACADÉMICO</div>
+                {% if secretary_name %}<div class="sigName">{{ secretary_name }}</div>{% endif %}
+            </div>
+            <div class="signCol">
+                <div class="sigBox">
+                    {% if director_signature_url %}
+                    <img class="sigImg" src="{{ director_signature_url }}" alt="firma director" />
+                    {% endif %}
+                </div>
+                <div class="sigLine"></div>
+                <div class="sigLabel">DIRECTOR(A) GENERAL</div>
+                {% if director_name %}<div class="sigName">{{ director_name }}</div>{% endif %}
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>

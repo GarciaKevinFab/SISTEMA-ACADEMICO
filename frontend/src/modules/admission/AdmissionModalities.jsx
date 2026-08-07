@@ -4,10 +4,12 @@ import { Input } from "../../components/ui/input";
 import { toast } from "sonner";
 import { Plus, Trash2, Edit, Check, X, Loader2, GripVertical } from "lucide-react";
 import { AdmissionModalities } from "../../services/admission.service";
+import ConfirmModal from "../../components/ConfirmModal";
 
 export default function AdmissionModalitiesManagement() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [confirmData, setConfirmData] = useState(null);
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -43,8 +45,16 @@ export default function AdmissionModalitiesManagement() {
     }
   };
 
-  const handleDelete = async (id, name) => {
-    if (!window.confirm(`¿Eliminar "${name}"?`)) return;
+  const handleDelete = (id, name) => {
+    setConfirmData({
+      title: "¿Eliminar modalidad?",
+      message: `Se eliminará "${name}" permanentemente.`,
+      confirmLabel: "Eliminar",
+      onConfirm: () => doDelete(id),
+    });
+  };
+
+  const doDelete = async (id) => {
     try {
       await AdmissionModalities.remove(id);
       toast.success("Modalidad eliminada");
@@ -153,6 +163,7 @@ export default function AdmissionModalitiesManagement() {
           ))}
         </div>
       )}
+      <ConfirmModal data={confirmData} onClose={() => setConfirmData(null)} />
     </div>
   );
 }

@@ -267,7 +267,7 @@
                 <tr>
                     <th>N°</th>
                     <th>CURSOS</th>
-                    <th>CALIFICACIÓN<br />DEL CURSO</th>
+                    <th>CALIFICACIÓN<br />CUALITATIVA</th>
                     <th>CALIFICACIÓN PARA<br />EL SISTEMA DE EDUCACIÓN SUPERIOR</th>
                     <th>CRÉDITOS</th>
                     <th>PUNTAJE</th>
@@ -277,7 +277,7 @@
                 {% for r in rows %}
                 <tr>
                     <td class="num">{{ r.n }}</td>
-                    <td class="small">{{ r.course_name }}</td>
+                    <td class="small" style="text-transform: uppercase;">{{ r.course_name|upper }}</td>
                     <td class="centerCell bold">{{ r.status_text }}</td>
                     <td class="centerCell bold">{{ r.grade }}</td>
                     <td class="centerCell bold">{{ r.credits }}</td>
@@ -345,7 +345,7 @@
             <div style="height:62px;"></div>
             {% endif %}
             <div class="sigLine"></div>
-            <div class="sigLabel">SECRETARIO ACADÉMICO</div>
+            <div class="sigLabel">SECRETARIO(A) ACADÉMICO</div>
             <div class="sigSubLabel">Firma, Postfirma y Sello</div>
         </div>
 

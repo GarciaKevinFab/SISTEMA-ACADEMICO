@@ -131,7 +131,7 @@ class ExportGenerateView(APIView):
         academic_year = int(academic_year)
         period_code = f"{academic_year}-{academic_period}"
 
-        if export_format not in ("XLSX", "CSV"):
+        if export_format not in ("XLSX", "CSV", "PDF"):
             export_format = "XLSX"
 
         batch = MineduExportBatch.objects.create(
@@ -243,6 +243,7 @@ class ExportBatchDownloadView(APIView):
         content_types = {
             "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "csv": "text/csv",
+            "pdf": "application/pdf",
         }
         ct = content_types.get(ext, "application/octet-stream")
         filename = (batch.record_data or {}).get(

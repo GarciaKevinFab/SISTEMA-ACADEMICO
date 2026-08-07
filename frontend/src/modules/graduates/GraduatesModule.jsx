@@ -281,6 +281,7 @@ function GradosTitulosTab() {
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState(null);
     const [form, setForm] = useState(INITIAL_GT_FORM);
+    const [confirmData, setConfirmData] = useState(null);
 
     const resetForm = () => { setForm(INITIAL_GT_FORM); setEditing(null); };
 
@@ -379,7 +380,7 @@ function GradosTitulosTab() {
                                                 onMouseOut={(e) => e.currentTarget.style.background = "transparent"}>
                                                 <Edit3 size={14} />
                                             </button>
-                                            <button onClick={() => { if (window.confirm(`¿Eliminar "${r.name}"?`)) remove(r.id); }}
+                                            <button onClick={() => setConfirmData({ title: "¿Eliminar tipo?", message: `Se eliminará "${r.name}" permanentemente.`, confirmLabel: "Eliminar", onConfirm: () => remove(r.id) })}
                                                 style={{ padding: "4px 8px", borderRadius: 6, color: "#64748B", background: "transparent" }}
                                                 onMouseOver={(e) => e.currentTarget.style.background = "#FEE2E2"}
                                                 onMouseOut={(e) => e.currentTarget.style.background = "transparent"}>
@@ -398,6 +399,15 @@ function GradosTitulosTab() {
                     </table>
                 </div>
             )}
+
+            <ConfirmModal
+                open={!!confirmData}
+                danger
+                title={confirmData?.title}
+                message={confirmData?.message}
+                onCancel={() => setConfirmData(null)}
+                onConfirm={() => { const fn = confirmData?.onConfirm; setConfirmData(null); fn?.(); }}
+            />
 
             {/* Modal crear/editar */}
             {open && (

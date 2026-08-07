@@ -114,13 +114,22 @@ const Layout = ({ children }) => {
 
                   <div className="hidden md:block w-px h-6 bg-white/15" />
 
-                  {/* avatar */}
+                  {/* avatar (foto de perfil si existe, iniciales si no) */}
                   <div
-                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-white/12 border border-white/20 flex items-center justify-center text-sm font-800 text-white cursor-default select-none shadow-sm hover:bg-white/18 transition-colors duration-200"
+                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-white/12 border border-white/20 flex items-center justify-center text-sm font-800 text-white cursor-default select-none shadow-sm hover:bg-white/18 transition-colors duration-200 overflow-hidden"
                     title={user.full_name}
                     aria-label={`Perfil de ${user.full_name}`}
                   >
-                    {initials}
+                    {user.photo_url ? (
+                      <img
+                        src={user.photo_url}
+                        alt={user.full_name}
+                        className="h-full w-full object-cover"
+                        draggable="false"
+                      />
+                    ) : (
+                      initials
+                    )}
                   </div>
                 </div>
 

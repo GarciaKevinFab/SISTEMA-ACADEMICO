@@ -401,7 +401,7 @@ export const AdmissionPublic = {
      *
      * Si recibe objeto plano: se envía como JSON.
      */
-    apply: async (payload) => {
+    apply: async (payload, config = {}) => {
         const isFormData = payload instanceof FormData;
 
         const { data } = await axios.post(
@@ -411,6 +411,9 @@ export const AdmissionPublic = {
                 headers: isFormData
                     ? { "Content-Type": "multipart/form-data" }
                     : { "Content-Type": "application/json" },
+                // Uploads móviles con datos pueden tardar; permitir override
+                timeout: 120000,
+                ...config,
             }
         );
         return data;

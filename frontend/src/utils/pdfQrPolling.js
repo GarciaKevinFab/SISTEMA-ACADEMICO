@@ -125,7 +125,7 @@ export async function downloadFile(url, filename = "download") {
   a.download = filename;
   document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(a.href);
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
   a.remove();
 }
 

@@ -190,7 +190,11 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
     const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
 
     const isAdmin = mode === "admin";
-    const canEdit = () => true;
+    /* El ALUMNO solo puede actualizar sus datos de contacto; el resto de datos
+       personales y académicos los gestiona la institución. El ciclo se
+       actualiza automáticamente al confirmar su matrícula. */
+    const EDITABLES_ALUMNO = new Set(["email", "celular"]);
+    const canEdit = (key) => isAdmin || EDITABLES_ALUMNO.has(key);
     const busy = loading || saving;
 
     /* load student */
@@ -246,16 +250,22 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
         if (!student && isAdmin) { toast.error("Selecciona un estudiante primero."); return; }
         try {
             setSaving(true);
-            const payload = { ...form };
-            payload.ciclo = payload.ciclo === "" ? null : Number(payload.ciclo);
-            // Limpiar campos que no son del serializer
-            delete payload.photoUrl;
-            delete payload.id;
-            delete payload.userId;
-            delete payload.planId;
-            delete payload.planName;
-            delete payload.createdAt;
-            delete payload.updatedAt;
+            let payload;
+            if (isAdmin) {
+                payload = { ...form };
+                payload.ciclo = payload.ciclo === "" ? null : Number(payload.ciclo);
+                // Limpiar campos que no son del serializer
+                delete payload.photoUrl;
+                delete payload.id;
+                delete payload.userId;
+                delete payload.planId;
+                delete payload.planName;
+                delete payload.createdAt;
+                delete payload.updatedAt;
+            } else {
+                // Alumno: solo envía lo que tiene permitido editar
+                payload = { email: form.email ?? "", celular: form.celular ?? "" };
+            }
             await onSave(payload);
             if (photoFile) { await onUploadPhoto(photoFile); setPhotoFile(null); }
             toast.success("Datos guardados correctamente");
@@ -302,7 +312,7 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
                             <div>
                                 <h2 className="text-xl font-900 text-slate-800 tracking-tight">Perfil del Estudiante</h2>
                                 <p className="text-xs text-slate-400 mt-0.5 font-500">
-                                    {isAdmin ? "Edición completa de datos del estudiante" : "Actualiza tu información personal y académica"}
+                                    {isAdmin ? "Edición completa de datos del estudiante" : "Consulta tus datos y mantén actualizado tu contacto"}
                                 </p>
                             </div>
                         </div>
@@ -310,6 +320,19 @@ export default function StudentProfileForm({ mode, student, loading, onSave, onU
 
                     {/* form body */}
                     <form onSubmit={submit} className="p-6 space-y-6">
+
+                        {/* Aviso de campos bloqueados (solo alumno) */}
+                        {!isAdmin && (
+                            <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                                <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                <p className="text-xs text-amber-800 leading-relaxed">
+                                    Los campos con candado los administra Secretaría Académica y no puedes modificarlos.
+                                    Tú solo actualizas tu <b>correo</b> y <b>celular</b>.
+                                    Tu <b>ciclo</b> se actualiza automáticamente al confirmar tu matrícula de cada período.
+                                    Si algún dato personal está equivocado, comunícalo a Secretaría Académica.
+                                </p>
+                            </div>
+                        )}
 
                         {/* ── photo section ── */}
                         <div className="pf-section flex flex-col sm:flex-row items-center gap-6">

@@ -115,7 +115,11 @@ class StudentUpdateSerializer(serializers.ModelSerializer):
     apellidoPaterno = serializers.CharField(source="apellido_paterno", required=False, allow_blank=True)
     apellidoMaterno = serializers.CharField(source="apellido_materno", required=False, allow_blank=True)
     fechaNac = serializers.DateField(source="fecha_nac", required=False, allow_null=True)
-    sexo = serializers.CharField(required=False, allow_blank=True)
+    sexo = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate_sexo(self, value):
+        # Modelo tiene sexo=CharField(blank=True, default="") sin null → normalizar None → ""
+        return (value or "").strip().upper()
 
     codigoModular = serializers.CharField(source="codigo_modular", required=False, allow_blank=True)
     nombreInstitucion = serializers.CharField(source="nombre_institucion", required=False, allow_blank=True)
@@ -138,6 +142,10 @@ class StudentUpdateSerializer(serializers.ModelSerializer):
     userId = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     planId = serializers.IntegerField(source="plan_id", required=False, allow_null=True)
 
+    # Estado académico especial (Licencia/Reincorporación/Traslado/Subsanación + RD)
+    estadoAcademico = serializers.CharField(source="estado_academico", required=False, allow_blank=True)
+    estadoRd = serializers.CharField(source="estado_rd", required=False, allow_blank=True)
+
     class Meta:
         model = Student
         fields = [
@@ -148,18 +156,35 @@ class StudentUpdateSerializer(serializers.ModelSerializer):
             "discapacidad", "tipoDiscapacidad",
             "email", "celular",
             "userId", "planId",
+            "estadoAcademico", "estadoRd",
         ]
+
+    def validate_estado_academico(self, v):
+        v = (v or "").strip().upper()
+        validos = {"", "LICENCIA", "REINCORPORACION", "TRASLADO", "SUBSANACION"}
+        if v not in validos:
+            raise serializers.ValidationError(
+                f"Estado inválido: {v!r}. Válidos: LICENCIA, REINCORPORACION, TRASLADO, SUBSANACION o vacío (normal).")
+        return v
 
     def validate_num_documento(self, v):
         v = (v or "").strip()
         if v and len(v) > 12:
             raise serializers.ValidationError("Documento demasiado largo (máx 12).")
-        # Verificar unicidad excluyendo instancia actual
-        if v and self.instance:
-            dup = Student.objects.filter(num_documento=v).exclude(pk=self.instance.pk).first()
+        # Verificar unicidad — funciona tanto en CREATE como en UPDATE
+        if v:
+            qs = Student.objects.filter(num_documento=v)
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            dup = qs.first()
             if dup:
+                full_name = (
+                    f"{dup.apellido_paterno or ''} {dup.apellido_materno or ''} "
+                    f"{dup.nombres or ''}"
+                ).strip()
                 raise serializers.ValidationError(
-                    f"Ya existe otro estudiante con documento {v}."
+                    f"Ya existe un estudiante con DNI {v}: {full_name}. "
+                    f"Búscalo en la lista para asignarle notas."
                 )
         return v
 
@@ -167,7 +192,27 @@ class StudentUpdateSerializer(serializers.ModelSerializer):
         ciclo = attrs.get("ciclo")
         if ciclo is not None and ciclo < 0:
             raise serializers.ValidationError({"ciclo": "No puede ser negativo."})
+
+        # Estado académico especial → RD obligatoria; volver a normal limpia la RD
+        estado = attrs.get("estado_academico")
+        if estado:
+            rd = (attrs.get("estado_rd")
+                  or (self.instance.estado_rd if self.instance else "")).strip()
+            if not rd:
+                raise serializers.ValidationError(
+                    {"estadoRd": "La Resolución Directoral (RD) es obligatoria para este estado."})
+        elif "estado_academico" in attrs:
+            attrs["estado_rd"] = ""
         return attrs
+
+    def create(self, validated_data):
+        # Quitar campos write-only que no van al modelo
+        user_id = validated_data.pop("userId", None)
+        instance = Student.objects.create(**validated_data)
+        if user_id is not None:
+            instance.user_id = user_id
+            instance.save(update_fields=["user"])
+        return instance
 
     def update(self, instance, validated_data):
         user_id = validated_data.pop("userId", None)
@@ -181,59 +226,25 @@ class StudentUpdateSerializer(serializers.ModelSerializer):
 
 
 class StudentMeUpdateSerializer(serializers.ModelSerializer):
-    """Todos los campos editables por el estudiante."""
-    numDocumento = serializers.CharField(
-        source="num_documento", required=False, allow_blank=True,
-    )
-    apellidoPaterno = serializers.CharField(
-        source="apellido_paterno", required=False, allow_blank=True,
-    )
-    apellidoMaterno = serializers.CharField(
-        source="apellido_materno", required=False, allow_blank=True,
-    )
-    fechaNac = serializers.DateField(source="fecha_nac", required=False, allow_null=True)
-    codigoModular = serializers.CharField(source="codigo_modular", required=False, allow_blank=True)
-    nombreInstitucion = serializers.CharField(source="nombre_institucion", required=False, allow_blank=True)
-    programaCarrera = serializers.CharField(source="programa_carrera", required=False, allow_blank=True)
-    tipoDiscapacidad = serializers.CharField(source="tipo_discapacidad", required=False, allow_blank=True)
+    """
+    Autoedición del ALUMNO: SOLO datos de contacto (email y celular).
 
-    nombres = serializers.CharField(required=False, allow_blank=True)
-    sexo = serializers.CharField(required=False, allow_blank=True)
-    region = serializers.CharField(required=False, allow_blank=True)
-    provincia = serializers.CharField(required=False, allow_blank=True)
-    distrito = serializers.CharField(required=False, allow_blank=True)
-    gestion = serializers.CharField(required=False, allow_blank=True)
-    tipo = serializers.CharField(required=False, allow_blank=True)
-    turno = serializers.CharField(required=False, allow_blank=True)
-    seccion = serializers.CharField(required=False, allow_blank=True)
-    periodo = serializers.CharField(required=False, allow_blank=True)
-    lengua = serializers.CharField(required=False, allow_blank=True)
-    discapacidad = serializers.CharField(required=False, allow_blank=True)
+    Los datos personales (nombres, apellidos, documento, fecha de nacimiento,
+    sexo, etc.) y académicos (ciclo, período, plan, sección…) están BLOQUEADOS:
+    los gestiona la institución. El ciclo se actualiza automáticamente al
+    confirmar la matrícula de cada período (no se edita a mano).
+    Cualquier otro campo enviado en el PATCH se ignora.
+    """
     email = serializers.CharField(required=False, allow_blank=True)
     celular = serializers.CharField(required=False, allow_blank=True)
-    ciclo = serializers.IntegerField(required=False, allow_null=True)
 
     class Meta:
         model = Student
-        fields = [
-            "numDocumento", "nombres", "apellidoPaterno", "apellidoMaterno",
-            "sexo", "fechaNac",
-            "email", "celular",
-            "region", "provincia", "distrito",
-            "codigoModular", "nombreInstitucion", "gestion", "tipo",
-            "programaCarrera", "ciclo", "turno", "seccion", "periodo", "lengua",
-            "discapacidad", "tipoDiscapacidad",
-        ]
+        fields = ["email", "celular"]
 
-    def validate_num_documento(self, v):
+    def validate_celular(self, v):
         v = (v or "").strip()
-        if v and len(v) > 12:
-            raise serializers.ValidationError("Documento demasiado largo (máx 12).")
-        if v and self.instance:
-            dup = Student.objects.filter(num_documento=v).exclude(pk=self.instance.pk).first()
-            if dup:
-                raise serializers.ValidationError(
-                    f"Ya existe otro estudiante con documento {v}."
-                )
+        if len(v) > 30:
+            raise serializers.ValidationError("Celular demasiado largo (máx 30).")
         return v
 

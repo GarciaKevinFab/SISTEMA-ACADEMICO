@@ -5,7 +5,24 @@ from django.conf.urls.static import static
 from django.http import JsonResponse
 
 def health(_):
-    return JsonResponse({"status": "healthy"})
+    # "build" permite verificar qué versión del código está cargada en memoria
+    info = {"status": "healthy", "build": "2026-07-22-directorio-v3"}
+    try:
+        from acl.models import UserRole
+        from django.contrib.auth import get_user_model
+        from catalogs.models import Teacher as CatTeacher
+        U = get_user_model()
+        names = ["TEACHER", "DOCENTE", "PROFESOR"]
+        info["dbg"] = {
+            "teacher_acl_userrole": UserRole.objects.filter(role__name__in=names)
+                                    .values("user_id").distinct().count(),
+            "teacher_user_roles_m2m": U.objects.filter(roles__name__in=names)
+                                      .distinct().count(),
+            "catalog_teachers": CatTeacher.objects.count(),
+        }
+    except Exception as exc:
+        info["dbg_error"] = f"{type(exc).__name__}: {exc}"[:300]
+    return JsonResponse(info)
 
 urlpatterns = [
     path("admin/", admin.site.urls),

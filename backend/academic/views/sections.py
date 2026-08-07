@@ -11,6 +11,7 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 
 from academic.models import (
@@ -86,6 +87,32 @@ def _check_and_save_slots(section: Section, slots_data: list, exclude_id=None):
         )
     _save_slots(section, slots_data)
     return None
+
+
+def _adoptar_matriculados_sin_seccion(sec) -> int:
+    """Al crear una sección, adopta a los alumnos del curso que ya estaban
+    matriculados sin sección asignada.
+
+    `EnrollmentItem.section` se llenaba solo en el momento de matricular: si la
+    sección se creaba después, el ítem quedaba en NULL para siempre y el alumno
+    no aparecía en el acta ni en el registro de asistencia. Solo se hace cuando
+    esta es la ÚNICA sección del curso en el período (si hay varias, la
+    asignación es una decisión de Secretaría, no automática).
+    """
+    from academic.models import EnrollmentItem
+
+    hermanas = (Section.objects
+                .filter(plan_course_id=sec.plan_course_id, period=sec.period)
+                .exclude(id=sec.id)
+                .count())
+    if hermanas:
+        return 0
+    return (EnrollmentItem.objects
+            .filter(plan_course_id=sec.plan_course_id,
+                    section__isnull=True,
+                    enrollment__status="CONFIRMED",
+                    enrollment__period=sec.period)
+            .update(section=sec))
 
 
 # ══════════════════════════════════════════════════════════════
@@ -169,9 +196,15 @@ class SectionsViewSet(viewsets.ModelViewSet):
             label=(data.get("label") or "A"),
         )
         _save_slots(sec, slots_data)
+        adoptados = _adoptar_matriculados_sin_seccion(sec)
 
         sec = self.get_queryset().get(id=sec.id)
         response_data = {"section": SectionOutSerializer(sec).data}
+        if adoptados:
+            response_data["adopted_students"] = adoptados
+            response_data["message"] = (
+                f"Sección creada. Se asignaron {adoptados} alumno(s) ya matriculados "
+                f"en el curso que habían quedado sin sección.")
 
         # Incluir warning si la ventana estaba cerrada
         if window_warning:
@@ -255,18 +288,35 @@ class SectionsViewSet(viewsets.ModelViewSet):
     # ── DESTROY ────────────────────────────────────────────────
 
     def destroy(self, request, pk=None, *args, **kwargs):
+        """Elimina la sección DESVINCULANDO las matrículas, sin borrarlas.
+
+        Antes hacía `EnrollmentItem.objects.filter(section=sec).delete()` "para
+        evitar el ProtectedError": eso borraba el curso de la matrícula de cada
+        alumno de la sección. El alumno quedaba con su matrícula CONFIRMADA y
+        sus créditos, pero sin cursos, así que seguía saliendo en la nómina y
+        desaparecía de todas las actas. `EnrollmentItem.section` es opcional
+        (null=True), así que basta ponerlo en NULL.
+        """
+        from academic.models import EnrollmentItem
+
         sec = get_object_or_404(Section, id=int(pk))
         try:
-            # Eliminar enrollment items vinculados para evitar ProtectedError
-            from academic.models import EnrollmentItem
-            EnrollmentItem.objects.filter(section=sec).delete()
-            sec.delete()
+            with transaction.atomic():
+                desvinculados = (EnrollmentItem.objects
+                                 .filter(section=sec)
+                                 .update(section=None))
+                sec.delete()
         except Exception as exc:
             return Response(
                 {"detail": f"No se puede eliminar: {exc}"},
                 status=400,
             )
-        return ok(success=True)
+
+        msg = "Sección eliminada."
+        if desvinculados:
+            msg += (f" {desvinculados} matrícula(s) quedaron sin sección asignada "
+                    f"(NO se borraron): asígnalas a otra sección desde Matrícula.")
+        return ok(success=True, unlinked_items=desvinculados, message=msg)
 
     # ── ACTION: schedule ───────────────────────────────────────
 

@@ -59,6 +59,33 @@ class Teacher(models.Model):
     phone = models.CharField(max_length=30, blank=True, default="")
     specialization = models.CharField(max_length=120, blank=True, default="")
 
+    # ── Perfil del docente (editable por el propio docente) ──
+    GRADOS_ACADEMICOS = [
+        ("PROFESOR", "Profesor (a)"),
+        ("BACHILLER", "Bachiller (a)"),
+        ("LICENCIADO", "Licenciado (a)"),
+        ("MAGISTER", "Magister (a)"),
+        ("DOCTOR", "Doctor (a)"),
+    ]
+    fecha_nac = models.DateField(null=True, blank=True)
+    grado_academico = models.CharField(
+        max_length=20, blank=True, default="", choices=GRADOS_ACADEMICOS)
+    photo = models.ImageField(upload_to="teachers/photos/", null=True, blank=True)
+
+    # ── Vínculo laboral (RD de nombramiento o contrato) ──
+    CONDICIONES = [
+        ("NOMBRADO", "Nombrado (a)"),
+        ("CONTRATADO", "Contratado (a)"),
+    ]
+    condicion_laboral = models.CharField(
+        max_length=20, blank=True, default="", choices=CONDICIONES,
+        help_text="Nombrado o contratado")
+    rd_nombramiento = models.CharField(
+        max_length=120, blank=True, default="",
+        help_text="N° de R.D. de nombramiento o contrato")
+    rd_fecha = models.DateField(
+        null=True, blank=True, help_text="Fecha de la R.D.")
+
     # ✅ cursos asignados al docente (existentes en academic)
     courses = models.ManyToManyField(
         "academic.Course",

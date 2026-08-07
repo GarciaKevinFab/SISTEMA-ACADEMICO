@@ -24,8 +24,11 @@ reales de tus modelos Django.
 
 import csv
 import io
+import logging
 from datetime import date, datetime
 from collections import defaultdict
+
+logger = logging.getLogger("minedu")
 
 from openpyxl import Workbook
 from openpyxl.styles import (
@@ -46,6 +49,45 @@ from academic.models import (
 )
 from students.models import Student
 from minedu.models import MineduCatalogMapping
+
+
+# ═══════════════════════════════════════════════════════════
+# Compatibility shims
+# Esta hoja fue escrita asumiendo `Enrollment.academic_year/_period` y
+# `AcademicGradeRecord.academic_year`, pero el modelo real usa `period`
+# (e.g. "2026-I") y `term`. Inyectamos propiedades para mantener el código
+# legacy funcional sin reescribirlo entero.
+# ═══════════════════════════════════════════════════════════
+
+def _split_period(p):
+    """'2026-I' → (2026, 'I')  ·  '2026' → (2026, '')  ·  '' → (None, '')"""
+    s = (p or "").strip()
+    if not s:
+        return None, ""
+    parts = s.split("-", 1)
+    try:
+        y = int(parts[0])
+    except (ValueError, TypeError):
+        return None, s
+    return y, parts[1] if len(parts) > 1 else ""
+
+
+if not hasattr(Enrollment, "academic_year"):
+    Enrollment.academic_year = property(
+        lambda self: _split_period(self.period)[0]
+    )
+if not hasattr(Enrollment, "academic_period"):
+    Enrollment.academic_period = property(
+        lambda self: _split_period(self.period)[1]
+    )
+if not hasattr(AcademicGradeRecord, "academic_year"):
+    AcademicGradeRecord.academic_year = property(
+        lambda self: _split_period(self.term)[0]
+    )
+
+# ── Compat: Enrollment.plan (no existe; viene del student) ──
+if not hasattr(Enrollment, "plan"):
+    Enrollment.plan = property(lambda self: getattr(self.student, "plan", None))
 
 
 # ═══════════════════════════════════════════════════════════
@@ -254,19 +296,86 @@ def _workbook_to_bytes(wb):
     return buf.read()
 
 
+class _KardexEnrollment:
+    """
+    Matrícula sintética para períodos históricos sin Enrollment:
+    estudiantes cuyas notas del término existen solo en el kardex
+    (AcademicGradeRecord). Expone la misma interfaz mínima que usa
+    el resto de generadores (student, plan, status, period).
+    """
+    def __init__(self, student, period):
+        self.student = student
+        self.student_id = student.id
+        self.period = period
+        self.status = "CONFIRMED"
+        self.total_credits = 0
+        self.confirmed_at = None
+        self.pk = None
+        self.id = None
+
+    @property
+    def plan(self):
+        return getattr(self.student, "plan", None)
+
+    @property
+    def academic_year(self):
+        return _split_period(self.period)[0]
+
+    @property
+    def academic_period(self):
+        return _split_period(self.period)[1]
+
+
+class _EnrollmentList(list):
+    """Lista de matrículas con la API mínima de QuerySet que usan los generadores."""
+    def count(self):
+        return len(self)
+
+    def values_list(self, field, flat=False):
+        vals = [getattr(e, field) for e in self]
+        return vals if flat else [(v,) for v in vals]
+
+
 def _get_enrollments(period_code):
-    """Obtiene matrículas confirmadas del período."""
-    year, period = _parse_period(period_code)
-    return (
+    """
+    Matrículas del período: reales (CONFIRMED) + sintéticas para los
+    estudiantes que solo tienen notas del término en el kardex histórico
+    (períodos anteriores al uso del sistema, p.ej. 2025).
+    """
+    real = list(
         Enrollment.objects
         .filter(
-            academic_year=year,
-            academic_period=period,     # AJUSTAR: campo de período en tu modelo
+            period=period_code,
             status="CONFIRMED",
         )
-        .select_related("student", "plan", "plan__career")
-        .order_by("student__apellido_paterno", "student__apellido_materno", "student__nombres")
+        .select_related("student")
+        .prefetch_related("student__plan", "student__plan__career")
+        .order_by(
+            "student__apellido_paterno",
+            "student__apellido_materno",
+            "student__nombres",
+        )
     )
+    enrolled_ids = {e.student_id for e in real}
+    kardex_ids = set(
+        AcademicGradeRecord.objects
+        .filter(term=period_code)
+        .exclude(student_id__in=enrolled_ids)
+        .values_list("student_id", flat=True)
+    )
+    if kardex_ids:
+        extra = (
+            Student.objects
+            .filter(id__in=kardex_ids)
+            .select_related("plan", "plan__career")
+        )
+        real.extend(_KardexEnrollment(s, period_code) for s in extra)
+        real.sort(key=lambda e: (
+            (e.student.apellido_paterno or "").upper(),
+            (e.student.apellido_materno or "").upper(),
+            (e.student.nombres or "").upper(),
+        ))
+    return _EnrollmentList(real)
 
 
 def _student_fullname(student):
@@ -282,6 +391,10 @@ def _get_grades_for_enrollment(enrollment):
     Retorna lista de dicts con la info de cada curso + nota del estudiante.
     AJUSTAR: según tus modelos reales (EnrollmentItem, AcademicGradeRecord, etc.)
     """
+    # Matrícula sintética (período histórico) → notas directo del kardex
+    if getattr(enrollment, "pk", None) is None:
+        return _get_grades_for_term(enrollment.student, enrollment.period)
+
     items = []
     try:
         enrollment_items = EnrollmentItem.objects.filter(
@@ -294,14 +407,13 @@ def _get_grades_for_enrollment(enrollment):
             course_name = course.name if course else "Sin nombre"
             course_code = course.code if course else ""
             credits = getattr(pc, "credits", 0) or 0
-            hours = getattr(pc, "hours_per_week", 0) or getattr(pc, "hours", 0) or 0
+            hours = getattr(pc, "weekly_hours", 0) or getattr(pc, "hours_per_week", 0) or 0
 
-            # Buscar nota
+            # Buscar nota (term coincide con period del enrollment)
             grade_record = AcademicGradeRecord.objects.filter(
                 student=enrollment.student,
-                # AJUSTAR: filtro correcto para vincular nota al item
                 plan_course=pc,
-                academic_year=enrollment.academic_year,
+                term=enrollment.period,
             ).first()
 
             nota = None
@@ -333,12 +445,12 @@ def _get_grades_for_enrollment(enrollment):
                 for pc in plan_courses:
                     course = pc.course
                     credits = getattr(pc, "credits", 0) or 0
-                    hours = getattr(pc, "hours_per_week", 0) or getattr(pc, "hours", 0) or 0
+                    hours = getattr(pc, "weekly_hours", 0) or getattr(pc, "hours_per_week", 0) or 0
 
                     grade_record = AcademicGradeRecord.objects.filter(
                         student=enrollment.student,
                         plan_course=pc,
-                        academic_year=enrollment.academic_year,
+                        term=enrollment.period,
                     ).first()
 
                     nota = grade_record.final_grade if grade_record else None
@@ -360,6 +472,109 @@ def _get_grades_for_enrollment(enrollment):
             pass
 
     return items
+
+
+# ═══════════════════════════════════════════════════════════
+# Helpers CERTIFICADO — combinan Enrollment (matrículas del
+# sistema) con AcademicGradeRecord (kardex histórico importado).
+# Los períodos antiguos (p.ej. 2025) no tienen Enrollment: sus
+# notas viven solo en AcademicGradeRecord con term="2025-I".
+# ═══════════════════════════════════════════════════════════
+
+def _get_certificado_students(period_code):
+    """
+    Estudiantes del período: matriculados confirmados + estudiantes con
+    notas del término en el kardex. Retorna lista ordenada de Student.
+    """
+    ids = set(
+        Enrollment.objects
+        .filter(period=period_code, status="CONFIRMED")
+        .values_list("student_id", flat=True)
+    )
+    ids |= set(
+        AcademicGradeRecord.objects
+        .filter(term=period_code)
+        .values_list("student_id", flat=True)
+    )
+    return list(
+        Student.objects
+        .filter(id__in=ids)
+        .select_related("plan", "plan__career")
+        .order_by("apellido_paterno", "apellido_materno", "nombres")
+    )
+
+
+def _get_certificado_periods(student):
+    """
+    Todos los períodos cursados por el alumno: matrículas confirmadas
+    + términos con notas en el kardex. Orden cronológico.
+    """
+    periods = set(
+        Enrollment.objects
+        .filter(student=student, status="CONFIRMED")
+        .values_list("period", flat=True)
+    )
+    periods |= set(
+        AcademicGradeRecord.objects
+        .filter(student=student)
+        .exclude(term__isnull=True)
+        .exclude(term="")
+        .values_list("term", flat=True)
+    )
+    return sorted(p for p in periods if p)
+
+
+def _get_grades_for_term(student, term):
+    """
+    Notas de un término directamente desde AcademicGradeRecord
+    (para períodos históricos sin Enrollment). Mismo shape de items
+    que _get_grades_for_enrollment.
+    """
+    items = []
+    try:
+        records = (
+            AcademicGradeRecord.objects
+            .filter(student=student, term=term)
+            .select_related("course", "plan_course", "plan_course__course")
+            .order_by("id")
+        )
+        for r in records:
+            pc = r.plan_course
+            course = (pc.course if pc and pc.course_id else None) or r.course
+            credits = (getattr(pc, "credits", 0) or 0) or (getattr(course, "credits", 0) or 0)
+            hours = getattr(pc, "weekly_hours", 0) or getattr(pc, "hours_per_week", 0) or 0
+            nota = r.final_grade
+            puntaje = (int(nota) * credits) if (nota is not None and credits) else 0
+            items.append({
+                "code": (course.code if course else "") or "",
+                "name": (course.name if course else "") or "Sin nombre",
+                "credits": credits,
+                "hours": hours,
+                "nota": nota,
+                "nota_int": int(nota) if nota is not None else None,
+                "nota_letra": _nota_letra(nota),
+                "estado": _nota_estado(nota),
+                "puntaje": puntaje,
+                "is_subsanacion": False,
+            })
+    except Exception as exc:
+        logger.warning(f"Error notas kardex alumno {student.pk} term {term}: {exc}")
+    return items
+
+
+def _get_student_period_grades(student, period):
+    """
+    Notas de un período: usa la matrícula si existe (incluye cursos aún
+    sin nota); si no hay matrícula o no tiene items, cae al kardex.
+    """
+    enr = Enrollment.objects.filter(
+        student=student, period=period, status="CONFIRMED"
+    ).first()
+    if enr:
+        items = _get_grades_for_enrollment(enr)
+        if items:
+            return items
+    return _get_grades_for_term(student, period)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -923,7 +1138,7 @@ def _generate_acta_xlsx(period_code):
             grade = AcademicGradeRecord.objects.filter(
                 student=s,
                 plan_course_id=course["id"],
-                academic_year=enr.academic_year,
+                term=enr.period,
             ).first()
 
             nota = grade.final_grade if grade else None
@@ -998,7 +1213,7 @@ def _generate_acta_csv(period_code):
         sum_p = sum_c = 0
         for pc in plan_courses:
             grade = AcademicGradeRecord.objects.filter(
-                student=s, plan_course=pc, academic_year=enr.academic_year
+                student=s, plan_course=pc, term=enr.period
             ).first()
             nota = int(grade.final_grade) if grade and grade.final_grade is not None else None
             credits = getattr(pc, "credits", 0) or 0
@@ -1062,21 +1277,13 @@ def _generate_reporte_xlsx(period_code):
             row += 1
         row += 1
 
-        # Obtener TODAS las matrículas del alumno
-        all_enrollments = (
-            Enrollment.objects
-            .filter(student=student, status="CONFIRMED")
-            .select_related("plan", "plan__career")
-            .order_by("academic_year", "academic_period")
-        )
+        # TODOS los períodos del alumno (matrículas + kardex histórico)
+        career = student.plan.career if getattr(student, "plan", None) else None
 
         grand_puntaje = 0
         grand_creditos = 0
 
-        for enr in all_enrollments:
-            career = enr.plan.career if enr.plan else None
-            per = f"{enr.academic_year}-{enr.academic_period}"
-
+        for per in _get_certificado_periods(student):
             # Título período
             ws.cell(row=row, column=1).value = f"Período: {per}"
             ws.cell(row=row, column=1).font = _FONT_SUBTITLE
@@ -1093,7 +1300,7 @@ def _generate_reporte_xlsx(period_code):
             h_row = row
             row += 1
 
-            items = _get_grades_for_enrollment(enr)
+            items = _get_student_period_grades(student, per)
             d_start = row
             per_puntaje = 0
             per_creditos = 0
@@ -1165,12 +1372,8 @@ def _generate_reporte_csv(period_code):
                      "Créditos", "Nota", "Nivel", "Puntaje", "Condición"])
     for sid in student_ids:
         student = Student.objects.get(pk=sid)
-        all_enr = Enrollment.objects.filter(
-            student=student, status="CONFIRMED"
-        ).select_related("plan").order_by("academic_year", "academic_period")
-        for enr in all_enr:
-            per = f"{enr.academic_year}-{enr.academic_period}"
-            items = _get_grades_for_enrollment(enr)
+        for per in _get_certificado_periods(student):
+            items = _get_student_period_grades(student, per)
             for item in items:
                 writer.writerow([
                     _student_fullname(student), student.num_documento or "", per,
@@ -1260,7 +1463,7 @@ def _generate_registro_aux_xlsx(period_code):
             grade = AcademicGradeRecord.objects.filter(
                 student=student,
                 plan_course=pc,
-                academic_year=year,
+                term=period_code,
             ).first()
 
             # Unidades (vacías si no hay datos parciales)
@@ -1312,7 +1515,7 @@ def _generate_registro_aux_csv(period_code):
         course = pc.course
         for idx, enr in enumerate(enrollments, 1):
             grade = AcademicGradeRecord.objects.filter(
-                student=enr.student, plan_course=pc, academic_year=enr.academic_year
+                student=enr.student, plan_course=pc, term=enr.period
             ).first()
             nota = int(grade.final_grade) if grade and grade.final_grade is not None else None
             writer.writerow([
@@ -1336,16 +1539,14 @@ def _generate_certificado_xlsx(period_code):
     apto para impresión como documento oficial.
     """
     inst = _get_institution()
-    enrollments = _get_enrollments(period_code)
-    student_ids = set(enrollments.values_list("student_id", flat=True))
-    total = len(student_ids)
+    students = _get_certificado_students(period_code)
+    total = len(students)
 
     wb = Workbook()
     if total > 0 and "Sheet" in wb.sheetnames:
         del wb["Sheet"]
 
-    for student_id in student_ids:
-        student = Student.objects.get(pk=student_id)
+    for student in students:
         safe_name = _student_fullname(student)[:28].replace("/", "-")
         ws = wb.create_sheet(title=safe_name)
         max_col = 8
@@ -1370,9 +1571,8 @@ def _generate_certificado_xlsx(period_code):
             row += 1
         row += 1
 
-        # Obtener matrícula del período actual + carrera
-        current_enr = enrollments.filter(student=student).first()
-        career = current_enr.plan.career if current_enr and current_enr.plan else None
+        # Carrera (del plan del estudiante)
+        career = student.plan.career if getattr(student, "plan", None) else None
 
         if career:
             ws.cell(row=row, column=1).value = f"Programa de Estudios: {career.name}"
@@ -1380,21 +1580,15 @@ def _generate_certificado_xlsx(period_code):
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=max_col)
             row += 2
 
-        # Historial por período
-        all_enr = (
-            Enrollment.objects
-            .filter(student=student, status="CONFIRMED")
-            .select_related("plan", "plan__career")
-            .order_by("academic_year", "academic_period")
-        )
-
+        # Historial por período (matrículas + kardex histórico)
         grand_credits = 0
         grand_puntaje = 0
         period_summaries = []
 
-        for enr in all_enr:
-            per_code = f"{enr.academic_year}-{enr.academic_period}"
-            items = _get_grades_for_enrollment(enr)
+        for per_code in _get_certificado_periods(student):
+            items = _get_student_period_grades(student, per_code)
+            if not items:
+                continue
             per_credits = sum(i["credits"] for i in items)
             per_puntaje = sum(i["puntaje"] for i in items)
             per_prom = round(per_puntaje / per_credits, 2) if per_credits > 0 else 0
@@ -1453,7 +1647,7 @@ def _generate_certificado_xlsx(period_code):
 
         _signature_rows(ws, inst, row + 1, max_col)
 
-    if not student_ids:
+    if not students:
         ws = wb.active
         ws.cell(row=1, column=1).value = "No hay datos."
 
@@ -1462,21 +1656,15 @@ def _generate_certificado_xlsx(period_code):
 
 
 def _generate_certificado_csv(period_code):
-    enrollments = _get_enrollments(period_code)
-    student_ids = set(enrollments.values_list("student_id", flat=True))
+    students = _get_certificado_students(period_code)
 
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(["Estudiante", "DNI", "Período", "Código", "Curso",
                      "Créditos", "Nota", "Nivel", "Condición"])
-    for sid in student_ids:
-        student = Student.objects.get(pk=sid)
-        all_enr = Enrollment.objects.filter(
-            student=student, status="CONFIRMED"
-        ).select_related("plan").order_by("academic_year", "academic_period")
-        for enr in all_enr:
-            per = f"{enr.academic_year}-{enr.academic_period}"
-            items = _get_grades_for_enrollment(enr)
+    for student in students:
+        for per in _get_certificado_periods(student):
+            items = _get_student_period_grades(student, per)
             for item in items:
                 writer.writerow([
                     _student_fullname(student), student.num_documento or "", per,
@@ -1486,12 +1674,18 @@ def _generate_certificado_csv(period_code):
                 ])
 
     content = buf.getvalue().encode("utf-8-sig")
-    return f"certificado_estudios_{period_code}.csv", content, len(student_ids)
+    return f"certificado_estudios_{period_code}.csv", content, len(students)
 
 
 # ═══════════════════════════════════════════════════════════
 # DISPATCHER — punto de entrada principal
 # ═══════════════════════════════════════════════════════════
+
+def _generate_certificado_pdf(period_code):
+    """Certificado de Estudios en PDF (un certificado por estudiante)."""
+    from .certificado_estudios_pdf import generate_certificado_estudios_pdf
+    return generate_certificado_estudios_pdf(period_code)
+
 
 # Mapa: (data_type, format) → función generadora
 # Cada función retorna: (filename, bytes_content, total_records)
@@ -1512,6 +1706,7 @@ GENERATORS = {
     ("REGISTRO_AUX", "CSV"):  _generate_registro_aux_csv,
     ("CERTIFICADO", "XLSX"):  _generate_certificado_xlsx,
     ("CERTIFICADO", "CSV"):   _generate_certificado_csv,
+    ("CERTIFICADO", "PDF"):   _generate_certificado_pdf,
 }
 
 # Aliases legacy → canónico
@@ -1549,7 +1744,7 @@ def generate_export(data_type, export_format, period_code):
         raise ValueError(
             f"Tipo '{data_type}' con formato '{export_format}' no soportado. "
             f"Tipos disponibles: {', '.join(supported)}. "
-            f"Formatos: XLSX, CSV."
+            f"Formatos: XLSX, CSV (PDF solo para CERTIFICADO)."
         )
 
     return generator(period_code)

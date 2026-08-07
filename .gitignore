@@ -56,3 +56,11 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+########################
+# INFORMES DE AUDITORÍA (datos personales de alumnos)
+########################
+# Salidas de `manage.py auditar_datos --csv`: nombres + DNI de estudiantes.
+# El repo es público — NUNCA versionar esto.
+backend/informe/
+*_nomina*.csv

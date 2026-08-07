@@ -231,6 +231,22 @@ def auth_me(request):
     except Exception:
         student_id = None
 
+    # Foto de perfil: docente (catalogs.Teacher) o alumno (Student)
+    photo_url = ""
+    try:
+        ct = u.catalog_teachers.exclude(photo="").exclude(photo__isnull=True).first()
+        if ct and ct.photo:
+            photo_url = request.build_absolute_uri(ct.photo.url)
+    except Exception:
+        pass
+    if not photo_url:
+        try:
+            st = u.student_profile
+            if st and st.photo:
+                photo_url = request.build_absolute_uri(st.photo.url)
+        except Exception:
+            pass
+
     return Response({
         "id": u.id,
         "username": u.username,
@@ -243,6 +259,7 @@ def auth_me(request):
         "permissions": perm_codes,
         "student_id": student_id,
         "must_change_password": getattr(u, "must_change_password", False),
+        "photo_url": photo_url,
     })
 
 

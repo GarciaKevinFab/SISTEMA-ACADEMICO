@@ -170,10 +170,11 @@ class PlanCourseOutSerializer(serializers.ModelSerializer):
     name          = serializers.SerializerMethodField()
     credits       = serializers.IntegerField(read_only=True)
     prerequisites = serializers.SerializerMethodField()
+    course_id     = serializers.IntegerField(read_only=True)
 
     class Meta:
         model  = PlanCourse
-        fields = ["id", "code", "name", "credits", "semester", "weekly_hours", "type", "prerequisites"]
+        fields = ["id", "course_id", "code", "name", "credits", "semester", "weekly_hours", "type", "prerequisites"]
 
     def get_code(self, obj):
         return (getattr(obj, "display_code", "") or "").strip() or obj.course.code
@@ -262,6 +263,8 @@ class SlotOutSerializer(serializers.ModelSerializer):
 class SectionOutSerializer(serializers.ModelSerializer):
     course_code  = serializers.SerializerMethodField()
     course_name  = serializers.SerializerMethodField()
+    plan_course_id = serializers.IntegerField(source="plan_course.id", read_only=True)
+    semester       = serializers.SerializerMethodField()
     plan_id      = serializers.IntegerField(source="plan_course.plan.id",         read_only=True)
     plan_name    = serializers.CharField(   source="plan_course.plan.name",        read_only=True)
     career_name  = serializers.CharField(   source="plan_course.plan.career.name", read_only=True)
@@ -281,6 +284,7 @@ class SectionOutSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "course_code", "course_name",
+            "plan_course_id", "semester",
             "plan_id", "plan_name", "career_name",
             "section_code",
             "teacher_id", "teacher_name",
@@ -289,6 +293,10 @@ class SectionOutSerializer(serializers.ModelSerializer):
             "label",
             "slots",
         ]
+
+    def get_semester(self, obj):
+        pc = getattr(obj, "plan_course", None)
+        return pc.semester if pc and pc.semester is not None else None
 
     def get_course_code(self, obj):
         pc = getattr(obj, "plan_course", None)

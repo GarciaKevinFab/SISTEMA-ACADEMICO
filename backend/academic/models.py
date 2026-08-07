@@ -183,6 +183,26 @@ class AcademicPeriod(models.Model):
         help_text="Recargo por matrícula extemporánea (soles)",
     )
 
+    # ── Ventana de carga de NOTAS (docentes) ───────────────────
+    # Si ambos están seteados, solo se aceptan saves/submits en ese
+    # rango (admins siempre pueden por encima de la ventana).
+    grades_start = models.DateTimeField(null=True, blank=True,
+        help_text="Inicio de la ventana de carga de notas para docentes")
+    grades_end   = models.DateTimeField(null=True, blank=True,
+        help_text="Fin de la ventana de carga de notas para docentes")
+
+    # ── Estado del proceso de evaluación (tipo SIAGIE) ─────────
+    # OPEN   → registro habilitado (docentes pueden cargar, sujeto a ventana)
+    # CLOSED → período cerrado (solo administradores pueden modificar)
+    GRADES_OPEN   = "OPEN"
+    GRADES_CLOSED = "CLOSED"
+    grades_state = models.CharField(
+        max_length=10, default=GRADES_OPEN,
+        choices=[(GRADES_OPEN, "En evaluación"), (GRADES_CLOSED, "Cerrado")],
+        help_text="Estado del registro de calificaciones del período",
+    )
+    grades_closed_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ["-code"]
 
@@ -212,6 +232,75 @@ class AcademicPeriod(models.Model):
     def is_enrollment_open(self, now=None) -> bool:
         """True si la matrícula está permitida (FREE, OPEN o EXTEMPORARY)."""
         return self.enrollment_status(now) != self.STATUS_CLOSED
+
+    # ── Ventana de NOTAS ──────────────────────────────────────
+    def grades_window_open(self, now=None) -> bool:
+        """True si la carga de notas está dentro de la ventana o no hay ventana.
+        Si el período está CERRADO (grades_state), la carga queda bloqueada
+        para docentes sin importar la ventana (admins tienen bypass aparte)."""
+        if self.grades_state == self.GRADES_CLOSED:
+            return False
+        if not self.grades_start or not self.grades_end:
+            return True   # sin restricción
+        now = now or timezone.now()
+        return self.grades_start <= now <= self.grades_end
+
+    # Estados del registro de notas (para docentes)
+    WIN_OPEN    = "OPEN"       # puede cargar
+    WIN_NOT_YET = "NOT_YET"    # la ventana aún no inicia
+    WIN_EXPIRED = "EXPIRED"    # la fecha de carga ya venció
+    WIN_CLOSED  = "CLOSED"     # el período fue cerrado por la institución
+
+    def grades_window_state(self, now=None) -> str:
+        if self.grades_state == self.GRADES_CLOSED:
+            return self.WIN_CLOSED
+        if not self.grades_start or not self.grades_end:
+            return self.WIN_OPEN
+        now = now or timezone.now()
+        if now < self.grades_start:
+            return self.WIN_NOT_YET
+        if now > self.grades_end:
+            return self.WIN_EXPIRED
+        return self.WIN_OPEN
+
+    def grades_window_message(self, now=None) -> str:
+        """Mensaje listo para mostrar al docente."""
+        def _f(dt):
+            if not dt:
+                return ""
+            local = timezone.localtime(dt) if timezone.is_aware(dt) else dt
+            return local.strftime("%d/%m/%Y %H:%M")
+
+        state = self.grades_window_state(now)
+        if state == self.WIN_CLOSED:
+            cerrado = _f(self.grades_closed_at)
+            return (f"El período {self.code} fue CERRADO por Secretaría Académica"
+                    + (f" el {cerrado}" if cerrado else "")
+                    + ". El registro de calificaciones ya no está habilitado.")
+        if state == self.WIN_NOT_YET:
+            return (f"El registro de calificaciones de {self.code} aún no está habilitado. "
+                    f"Se habilita el {_f(self.grades_start)}.")
+        if state == self.WIN_EXPIRED:
+            return (f"La fecha de carga de calificaciones de {self.code} se cerró "
+                    f"el {_f(self.grades_end)}. Si necesitas registrar o corregir notas, "
+                    f"solicita la reapertura a Secretaría Académica.")
+        if self.grades_start and self.grades_end:
+            return (f"Registro de calificaciones ABIERTO hasta el {_f(self.grades_end)}.")
+        return "Registro de calificaciones habilitado (sin restricción de fechas)."
+
+    def grades_window_info(self, now=None) -> dict:
+        now = now or timezone.now()
+        state = self.grades_window_state(now)
+        return {
+            "grades_start": self.grades_start.isoformat() if self.grades_start else None,
+            "grades_end":   self.grades_end.isoformat()   if self.grades_end   else None,
+            "is_open":      state == self.WIN_OPEN,
+            "has_window":   bool(self.grades_start and self.grades_end),
+            "grades_state": self.grades_state,
+            "window_state": state,
+            "message":      self.grades_window_message(now),
+            "grades_closed_at": self.grades_closed_at.isoformat() if self.grades_closed_at else None,
+        }
 
     def window_info(self, now=None) -> dict:
         """

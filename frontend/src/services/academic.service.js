@@ -256,6 +256,7 @@ export const Kardex = {
     exportConstanciaPdf: (studentKey) => asBlobGetSmart(`/academic/kardex/${studentKey}/constancia/pdf`),
     exportBoletaAnioPdf: (studentKey, period) => asBlobGetSmart(`/academic/kardex/${studentKey}/boleta/anio/pdf`, { period }),
     exportRecordNotasPdf: (studentKey) => asBlobGetSmart(`/academic/kardex/${studentKey}/record-notas/pdf`),
+    exportFichaRendimientoPdf: (studentKey) => asBlobGetSmart(`/academic/kardex/${studentKey}/ficha-rendimiento/pdf`),
 };
 
 
@@ -343,6 +344,14 @@ export const Attendance = {
 
     set: async (sectionId, sessionId, rows) =>
         requestJsonSmart("PUT", `/academic/sections/${sectionId}/attendance/sessions/${sessionId}`, { rows }),
+
+    // ── Admin: monitoreo global y detalle por sección (>30% = DPI) ──
+    adminOverview: async (params = {}) =>
+        requestJsonSmart("GET", "/academic/admin/attendance/overview", null, { params }),
+    adminSectionDetail: async (sectionId) =>
+        requestJsonSmart("GET", `/academic/admin/attendance/section/${sectionId}`),
+    applyDpi: async (sectionId, payload = {}) =>
+        requestJsonSmart("POST", `/academic/admin/attendance/section/${sectionId}/apply-dpi`, payload),
 };
 
 export const AttendanceImport = {
@@ -439,6 +448,18 @@ export const AcademicReports = {
         api.get("/academic/reports/performance.xlsx", { params, responseType: "blob" }),
     exportOccupancy: async (params) =>
         api.get("/academic/reports/occupancy.xlsx", { params, responseType: "blob" }),
+    exportNominaMinedu: async (params) =>
+        api.get("/academic/reports/nominas.xlsx", { params, responseType: "blob" }),
+    exportNominaMineduPdf: async (params) =>
+        api.get("/academic/reports/nominas.pdf", { params, responseType: "blob" }),
+    exportStudentsData: async (params) =>
+        api.get("/academic/reports/students-data.xlsx", { params, responseType: "blob" }),
+    exportReporteMinedu: async (params) =>
+        api.get("/academic/reports/reporte-minedu.xlsx", { params, responseType: "blob" }),
+    exportFichasRendimientoZip: async (params) =>
+        api.get("/academic/reports/fichas-rendimiento.zip", { params, responseType: "blob" }),
+    exportFichaRendimientoIndividual: async (studentKey) =>
+        api.get(`/academic/kardex/${studentKey}/ficha-rendimiento/pdf`, { responseType: "blob" }),
 };
 
 
@@ -454,6 +475,47 @@ export const Teacher = {
         requestJsonSmart("GET", "/academic/teachers/me/sections", null),
 };
 
+/* ── Registro por Excel estilo SIAGIE: plantilla prellenada + carga ── */
+export const ActaExcel = {
+    gradesTemplate: (sectionId) =>
+        api.get(`/academic/sections/${sectionId}/grades/plantilla`, { responseType: "blob" }),
+
+    gradesImport: (sectionId, file) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        return requestJsonSmart("POST", `/academic/sections/${sectionId}/grades/importar`, fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
+    },
+
+    attendanceTemplate: (sectionId, month) =>
+        api.get(`/academic/sections/${sectionId}/attendance/plantilla`, {
+            params: month ? { month } : {},
+            responseType: "blob",
+        }),
+
+    attendanceImport: (sectionId, file) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        return requestJsonSmart("POST", `/academic/sections/${sectionId}/attendance/importar`, fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
+    },
+
+    /** Plantilla del ciclo completo: una hoja por curso */
+    cicloTemplate: (params) =>
+        api.get("/academic/acta-excel/notas/plantilla", { params, responseType: "blob" }),
+
+    /** Importa notas de cualquier plantilla (una sección o ciclo completo) */
+    importNotas: (file) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        return requestJsonSmart("POST", "/academic/acta-excel/notas/importar", fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
+    },
+};
+
 export const SectionStudents = {
     list: async (sectionId) => {
         const data = await requestJsonSmart("GET", `/academic/sections/${sectionId}/students`, null);
@@ -467,6 +529,17 @@ export const Grades = {
     submit: async (sectionId, grades) => requestJsonSmart("POST", "/academic/grades/submit", { section_id: sectionId, grades }),
     reopen: async (sectionId) => requestJsonSmart("POST", "/academic/grades/reopen", { section_id: sectionId }),
 
+    // Admin: monitoreo global de notas
+    adminOverview: async (params = {}) =>
+        requestJsonSmart("GET", "/academic/admin/grades/overview", null, { params }),
+    adminSectionDetail: async (sectionId) =>
+        requestJsonSmart("GET", `/academic/admin/grades/section/${sectionId}`),
+    // Admin: ventana de carga de notas por periodo
+    getWindow: async (code) =>
+        requestJsonSmart("GET", `/academic/periods/${code}/grades-window`),
+    setWindow: async (code, payload) =>
+        requestJsonSmart("PUT", `/academic/periods/${code}/grades-window`, payload),
+
     // Notas históricas (admin)
     listHistorical: async (studentId) =>
         requestJsonSmart("GET", `/academic/grades/historical?student_id=${studentId}`, null),
@@ -474,6 +547,80 @@ export const Grades = {
         requestJsonSmart("POST", "/academic/grades/historical", payload),
     deleteHistorical: async (recordId) =>
         requestJsonSmart("DELETE", `/academic/grades/historical/${recordId}`, null),
+    /** Borrar todos los registros del alumno en los periodos indicados (reingreso/cachimbo) */
+    bulkDeleteHistorical: async (studentId, terms) =>
+        requestJsonSmart("POST", "/academic/grades/historical/bulk-delete", {
+            student_id: studentId,
+            terms,
+        }),
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   CENTRO DE EVALUACIÓN (admin, tipo SIAGIE)
+   ═══════════════════════════════════════════════════════════════ */
+export const EvaluationAdmin = {
+    /** Estado del período: grades_state, ventana y estadísticas globales */
+    state: async (period) =>
+        requestJsonSmart("GET", "/academic/admin/evaluation/state", null, { params: { period } }),
+    /** Habilitar ("open") o cerrar ("close") el registro de calificaciones */
+    setState: async (period, action) =>
+        requestJsonSmart("POST", "/academic/admin/evaluation/state", { period, action }),
+    /** Secciones del período con su estado de carga/acta/procesamiento */
+    sections: async (params = {}) =>
+        requestJsonSmart("GET", "/academic/admin/evaluation/sections", null, { params }),
+    /** Procesa actas → kárdex (todas, o section_ids seleccionadas) */
+    process: async (payload) =>
+        requestJsonSmart("POST", "/academic/admin/evaluation/process", payload),
+    /** ZIP masivo de boletas de calificaciones del período */
+    boletasZip: async (params = {}) =>
+        api.get("/academic/admin/evaluation/boletas.zip", { params, responseType: "blob" }),
+    /** Acta consolidada de evaluación: Excel con una hoja por sección */
+    actaConsolidada: async (params = {}) =>
+        api.get("/academic/admin/evaluation/actas.xlsx", { params, responseType: "blob" }),
+    /** ZIP de Actas de Evaluación de Área (un Excel por curso del filtro) */
+    actasAreaZip: async (params = {}) =>
+        api.get("/academic/admin/evaluation/actas-area.zip", { params, responseType: "blob" }),
+    /** Acta de Evaluación de Área de UNA sección */
+    actaArea: async (sectionId) =>
+        api.get(`/academic/sections/${sectionId}/acta-area.xlsx`, { responseType: "blob" }),
+    /** Reporte de rendimiento académico (resumen por curso + detalle por alumno) */
+    reporteRendimiento: async (params = {}) =>
+        api.get("/academic/admin/evaluation/rendimiento.xlsx", { params, responseType: "blob" }),
+
+    /* ── Versiones PDF ── */
+    actaConsolidadaPdf: async (params = {}) =>
+        api.get("/academic/admin/evaluation/actas.pdf", { params, responseType: "blob" }),
+    rendimientoPdf: async (params = {}) =>
+        api.get("/academic/admin/evaluation/rendimiento.pdf", { params, responseType: "blob" }),
+    actaAreaPdf: async (sectionId) =>
+        api.get(`/academic/sections/${sectionId}/acta-area.pdf`, { responseType: "blob" }),
+    /* ── Excel complementarios ── */
+    boletasXlsx: async (params = {}) =>
+        api.get("/academic/admin/evaluation/boletas.xlsx", { params, responseType: "blob" }),
+    fichasXlsx: async (params = {}) =>
+        api.get("/academic/admin/evaluation/fichas.xlsx", { params, responseType: "blob" }),
+    /* ── Méritos y becas ── */
+    primerosLugares: async (params = {}) =>
+        api.get("/academic/admin/evaluation/primeros-lugares", { params, responseType: "blob" }),
+    tercioQuinto: async (params = {}) =>
+        api.get("/academic/admin/evaluation/tercio-quinto", { params, responseType: "blob" }),
+    constanciasBeca: async (params = {}) =>
+        api.get("/academic/admin/evaluation/constancias-beca.zip", { params, responseType: "blob" }),
+    /* ── Reporte de asistencia ── */
+    asistenciaPdf: async (params = {}) =>
+        api.get("/academic/admin/evaluation/asistencia.pdf", { params, responseType: "blob" }),
+    asistenciaXlsx: async (params = {}) =>
+        api.get("/academic/admin/evaluation/asistencia.xlsx", { params, responseType: "blob" }),
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   EGRESADOS / CERTIFICADO DE EGRESADO
+   ═══════════════════════════════════════════════════════════════ */
+export const Graduates = {
+    listEligible: async (params = {}) =>
+        requestJsonSmart("GET", "/academic/graduates/eligible", null, { params }),
+    bulkEmit: async (student_ids, force = false) =>
+        requestJsonSmart("POST", "/academic/graduates/bulk-emit", { student_ids, force }),
 };
 
 

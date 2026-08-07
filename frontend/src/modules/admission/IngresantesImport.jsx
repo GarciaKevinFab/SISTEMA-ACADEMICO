@@ -22,6 +22,7 @@ import {
   Archive, Trash2, ShieldAlert,
 } from "lucide-react";
 import { Input } from "../../components/ui/input";
+import ConfirmModal from "../../components/ConfirmModal";
 import { Textarea } from "../../components/ui/textarea";
 
 function formatApiError(err, fallback = "Ocurrió un error") {
@@ -55,6 +56,7 @@ export default function IngresantesImport() {
   const [backupIncludeOrphans, setBackupIncludeOrphans] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState("");
+  const [resetConfirmData, setResetConfirmData] = useState(null);
   const [resetIncludeStudents, setResetIncludeStudents] = useState(false);
   const [resetResult, setResetResult] = useState(null);
 
@@ -322,15 +324,20 @@ export default function IngresantesImport() {
     }
   };
 
-  const resetAdmission = async () => {
+  const resetAdmission = () => {
     if (resetConfirmText.trim().toUpperCase() !== "BORRAR ADMISION") {
       toast.error('Debes escribir exactamente "BORRAR ADMISION" para confirmar');
       return;
     }
-    if (!window.confirm(
-      "¿Estás seguro? Esta acción borrará todos los postulantes, convocatorias y datos relacionados. No se puede deshacer."
-    )) return;
+    setResetConfirmData({
+      title: "¿Borrar TODA la admisión?",
+      message: "Esta acción borrará todos los postulantes, convocatorias y datos relacionados. No se puede deshacer.",
+      confirmLabel: "Sí, borrar todo",
+      onConfirm: doResetAdmission,
+    });
+  };
 
+  const doResetAdmission = async () => {
     setResetLoading(true);
     setResetResult(null);
     try {
@@ -887,6 +894,8 @@ export default function IngresantesImport() {
                 )}
               </Button>
             </div>
+
+            <ConfirmModal data={resetConfirmData} onClose={() => setResetConfirmData(null)} />
 
             {resetResult && (
               <div className="rounded-lg bg-white border border-emerald-200 p-3 text-xs space-y-2">

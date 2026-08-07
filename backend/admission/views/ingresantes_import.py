@@ -36,7 +36,7 @@ from students.views import _create_user_for_student
 from catalogs.models import Career
 
 try:
-    from catalogs.helpers import match_career_robust, career_base_name
+    from catalogs.helpers import match_career_robust, career_base_name, pick_plan_for_student
 except ImportError:
     def match_career_robust(name):
         return Career.objects.filter(name__iexact=(name or "").strip()).first()
@@ -45,6 +45,8 @@ except ImportError:
         s = (full_name or "").strip().upper()
         s = re.sub(r"\s*\([^)]*\)\s*", "", s).strip()
         return s
+    def pick_plan_for_student(career, period_code=None):
+        return None
 
 
 logger = logging.getLogger("admission.ingresantes")
@@ -246,11 +248,20 @@ def _upsert_score(application, phase, promedio):
     )
 
 
-def _upsert_student(dni, nombres, ap_pat, ap_mat, career_name, discapacidad_si):
-    """Crea o actualiza Student. Retorna (student, created)."""
+def _upsert_student(dni, nombres, ap_pat, ap_mat, career_name, discapacidad_si,
+                    career=None, period_code=""):
+    """Crea o actualiza Student. Retorna (student, created).
+
+    Si se pasa `career` (Career instance), también asigna:
+      - Student.plan (el plan vigente de la carrera, vía pick_plan_for_student)
+      - Student.ciclo = 1 (son cachimbos/ingresantes de primer semestre)
+      - Student.periodo = period_code (del call de admisión)
+    """
     st = Student.objects.filter(num_documento=dni).first()
     created = False
     discap = "SI" if discapacidad_si else "NO"
+
+    plan_for_student = pick_plan_for_student(career, period_code) if career else None
 
     if not st:
         st = Student.objects.create(
@@ -260,6 +271,9 @@ def _upsert_student(dni, nombres, ap_pat, ap_mat, career_name, discapacidad_si):
             apellido_materno=ap_mat,
             programa_carrera=career_name,
             discapacidad=discap,
+            plan=plan_for_student,
+            ciclo=1 if plan_for_student else None,
+            periodo=period_code or "",
         )
         created = True
     else:
@@ -279,6 +293,17 @@ def _upsert_student(dni, nombres, ap_pat, ap_mat, career_name, discapacidad_si):
         if st.discapacidad != discap:
             st.discapacidad = discap
             dirty.append("discapacidad")
+        # Asignar plan/ciclo/periodo solo si no los tenía (no sobreescribir
+        # estudiantes que ya avanzaron de ciclo)
+        if plan_for_student and not st.plan_id:
+            st.plan = plan_for_student
+            dirty.append("plan")
+        if plan_for_student and not st.ciclo:
+            st.ciclo = 1
+            dirty.append("ciclo")
+        if period_code and not st.periodo:
+            st.periodo = period_code
+            dirty.append("periodo")
         if dirty:
             st.save(update_fields=dirty)
     return st, created
@@ -311,6 +336,9 @@ def _ensure_user_with_temp_password(student):
 
         student_role = Role.objects.filter(name__iexact="STUDENT").first()
         if student_role:
+            # M2M directa (User.roles) — es la que lee /auth/me
+            user.roles.add(student_role)
+            # Y también el through explícito de acl por compatibilidad
             UserRole.objects.get_or_create(user_id=user.id, role_id=student_role.id)
 
         return user, temp_password, False
@@ -322,7 +350,11 @@ def _ensure_user_with_temp_password(student):
         k += 1
         uname = f"{username}-{k}"
 
-    full_name = " ".join(x for x in [student.nombres, student.apellido_paterno, student.apellido_materno] if x).strip()
+    # Formato oficial único "APELLIDOS, NOMBRES" (students/name_utils.py).
+    # Antes se guardaba invertido ("Nombres Apellidos") y quedaba desfasado
+    # respecto de la ficha en cuanto se corregía un apellido.
+    from students.name_utils import nombre_oficial
+    full_name = nombre_oficial(student)
     user = User(username=uname, is_active=True, is_staff=False)
 
     # Email sintético si no hay
@@ -333,9 +365,7 @@ def _ensure_user_with_temp_password(student):
         pass
 
     if hasattr(user, "full_name"):
-        user.full_name = full_name
-    elif hasattr(user, "first_name"):
-        user.first_name = full_name[:150]
+        user.full_name = full_name[:200]
 
     # Contraseña temporal aleatoria
     temp_password = _generate_temp_password()
@@ -345,6 +375,9 @@ def _ensure_user_with_temp_password(student):
     # Asignar rol STUDENT
     student_role = Role.objects.filter(name__iexact="STUDENT").first()
     if student_role:
+        # M2M directa (User.roles) — es la que lee /auth/me
+        user.roles.add(student_role)
+        # Y también el through explícito de acl por compatibilidad
         UserRole.objects.get_or_create(user_id=user.id, role_id=student_role.id)
 
     # Vincular al estudiante
@@ -541,6 +574,8 @@ def ingresantes_import(request):
                         ap_mat=r["ap_mat"],
                         career_name=career_display,
                         discapacidad_si=r["discapacidad_si"],
+                        career=career,
+                        period_code=(call.period or ""),
                     )
                     if st_created:
                         counts["created_students"] += 1
@@ -706,6 +741,11 @@ def ingresantes_regenerate_credentials(request):
                     dv = str(prof.get("discapacidad", "")).strip().upper()
                     discap_flag = dv in ("SI", "YES", "TRUE", "1")
 
+                # Resolver career + period_code para que también se asigne
+                # plan + ciclo=1 al crear el Student faltante
+                career_obj = match_career_robust(career_name) if career_name else None
+                period_code = (app.call.period if app and app.call else "") or ""
+
                 student, _ = _upsert_student(
                     dni=dni,
                     nombres=nombres_only,
@@ -713,6 +753,8 @@ def ingresantes_regenerate_credentials(request):
                     ap_mat=ap_mat,
                     career_name=career_name,
                     discapacidad_si=discap_flag,
+                    career=career_obj,
+                    period_code=period_code,
                 )
                 counts["created_students"] += 1
 

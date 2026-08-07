@@ -41,6 +41,8 @@ from .kardex import (
     KardexBoletaPeriodoPDFView,
     KardexBoletaAnioPDFView,
     KardexRecordNotasPDFView,
+    KardexFichaRendimientoPDFView,
+    FichaRendimientoBulkZipView,
 )
 
 # ── Docentes ───────────────────────────────────────────────────────────────
@@ -48,16 +50,22 @@ from .teachers import (
     TeachersViewSet,
     TeacherSectionsView,
     TeacherSectionsMeView,
+    TeacherSelfProfileView,
+    TeacherSelfPeriodsView,
+    SectionGradesWindowView,
     SectionStudentsView,
     SectionGradesView,
     GradesSaveView,
     GradesSubmitView,
     GradesReopenView,
+    AdminGradesOverviewView,
+    AdminGradesSectionDetailView,
+    AdminGradesWindowView,
     SectionActaView,
     SectionActaPDFView,
     SectionActaQRView,
     SectionActaQRPngView,
-    HistoricalGradesView,
+    HistoricalGradesView, HistoricalGradesBulkDeleteView,
 )
 
 # ── Reportes ───────────────────────────────────────────────────────────────
@@ -66,6 +74,15 @@ from .reports import (
     AcademicCareersListView,
     AcademicReportPerformanceXlsxView,
     AcademicReportOccupancyXlsxView,
+)
+
+# ── Nóminas y Data de Estudiantes ──────────────────────────────────────────
+from .nominas import (
+    NominasMatriculaXlsxView,
+    NominasMatriculaPDFView,
+    StudentsDataXlsxView,
+    ReporteMineduXlsxView,
+    OficioMatriculadosPDFView,
 )
 
 # ── Procesos académicos (17 tipos, 4 grupos) ───────────────────────────────
@@ -88,16 +105,27 @@ from .attendance import (
     AttendanceSessionsView,
     AttendanceSessionCloseView,
     AttendanceSessionSetView,
+    AttendanceMonthView,
     AttendanceImportPreviewView,
     AttendanceImportSaveView,
     SyllabusView, syllabus_download,
     StudentSyllabusesView,
     EvaluationConfigView,
+    AdminAttendanceOverviewView,
+    AdminAttendanceSectionDetailView,
+    AdminAttendanceApplyDpiView,
 )
 
 # ── Vistas simples ─────────────────────────────────────────────────────────
 from .classrooms import ClassroomsViewSet
 from .courses    import CoursesListView
+
+# ── Egresados / Certificado de Egresado ────────────────────────────────────
+from .graduates import (
+    GraduatesEligibleView,
+    GraduatesBulkEmitView,
+    maybe_auto_emit_certificate,
+)
 
 # ── Pago de Matrícula ─────────────────────────────────────────────────────
 from .enrollment_payment import (
@@ -116,6 +144,8 @@ from .dashboard_student import (
     student_dashboard,
     student_grades_summary,
     student_schedule,
+    student_courses_detail,
+    student_course_detail,
 )
 from .dashboard_teacher import (
     teacher_dashboard,
@@ -160,6 +190,8 @@ __all__ = [
     "KardexBoletaPeriodoPDFView",
     "KardexBoletaAnioPDFView",
     "KardexRecordNotasPDFView",
+    "KardexFichaRendimientoPDFView",
+    "FichaRendimientoBulkZipView",
     # Teachers
     "TeachersViewSet",
     "TeacherSectionsView",
@@ -174,6 +206,7 @@ __all__ = [
     "SectionActaQRView",
     "SectionActaQRPngView",
     "HistoricalGradesView",
+    "HistoricalGradesBulkDeleteView",
     # Reports
     "AcademicReportsSummaryView",
     "AcademicCareersListView",

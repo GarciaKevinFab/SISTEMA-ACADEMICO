@@ -141,8 +141,19 @@ const PublicGraduateVerifier = () => {
 
     const inputRef = useRef(null);
     const resultsRef = useRef(null);
+    const autoSearchRef = useRef(false);
 
     useEffect(() => { inputRef.current?.focus(); }, [mode]);
+
+    /* ── auto-búsqueda al llegar desde un QR (?dni=XXXXXXXX) ── */
+    useEffect(() => {
+        const qdni = (new URLSearchParams(window.location.search).get("dni") || "").replace(/\D/g, "");
+        if (/^\d{8}$/.test(qdni)) {
+            autoSearchRef.current = true;
+            setMode(MODES.DNI);
+            setDni(qdni);
+        }
+    }, []);
 
     useEffect(() => {
         if (results?.length > 0 && resultsRef.current) {
@@ -178,6 +189,14 @@ const PublicGraduateVerifier = () => {
             setLoading(false);
         }
     }, [mode, dni, fullName]);
+
+    /* dispara la búsqueda automática cuando el DNI del QR ya está en el estado */
+    useEffect(() => {
+        if (autoSearchRef.current && mode === MODES.DNI && /^\d{8}$/.test(dni)) {
+            autoSearchRef.current = false;
+            handleSearch();
+        }
+    }, [dni, mode, handleSearch]);
 
     /* ── clear ── */
     const handleClear = () => {

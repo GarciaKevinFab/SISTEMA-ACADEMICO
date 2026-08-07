@@ -55,7 +55,7 @@ function generatePeriodOptions() {
 }
 function getDefaultPeriod() {
     const now = new Date();
-    return `${now.getFullYear()}-${now.getMonth() < 6 ? "I" : "II"}`;
+    return `${now.getFullYear()}-${now.getMonth() < 7 ? "I" : "II"}`;
 }
 
 /* ─── FIX 1: label correcto para el aula ─────────────────────

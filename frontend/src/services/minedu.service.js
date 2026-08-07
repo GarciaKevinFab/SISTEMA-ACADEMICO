@@ -27,6 +27,30 @@ export const Exports = {
     /** URL directa de descarga (para <a href>) */
     downloadUrl: (exportId) =>
         `${api.defaults.baseURL}/minedu/exports/${exportId}/download`,
+
+    /**
+     * Genera Reporte de Matrícula con plantilla oficial SIA-MINEDU.
+     * @param {{ career_id, semester, period, seccion?, turno?, include_admitted? }} params
+     */
+    reporteSia: async (params) =>
+        api.get("/minedu/reporte-sia.xlsx", { params, responseType: "blob" }),
+
+    /**
+     * Genera Oficio de Matriculados (PDF con membrete + firma institucional).
+     * @param {{ oficio_number, oficio_year, recipient_name, recipient_position,
+     *           recipient_city, asunto, atencion_name, atencion_position,
+     *           period, lema?, body? }} params
+     */
+    oficioMatriculados: async (params) =>
+        api.get("/minedu/oficio-matriculados.pdf", { params, responseType: "blob" }),
+};
+
+/* ── Carreras (helper para los selectores) ── */
+export const MineduCareers = {
+    list: async () => {
+        const r = await api.get("/academic/careers");
+        return r?.data?.careers || r?.data || [];
+    },
 };
 
 /* ── Validación ── */

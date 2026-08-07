@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2, Save } from "lucide-react";
+import { Plus, Trash2, Loader2, Save, AlertTriangle, RotateCcw, Pencil, X, Check } from "lucide-react";
 import { Grades } from "@/services/academic.service";
 import { Plans } from "@/services/academic.service";
+import ConfirmModal from "@/components/ConfirmModal";
 
 /* ── Constantes de componentes (replica backend) ── */
 const ACTA_LEVELS = ["PI", "I", "P", "L", "D"];
@@ -29,6 +30,27 @@ function calcEstado(prom) {
     return prom >= 11 ? "Logrado" : "En proceso";
 }
 
+// Escala oficial MINEDU (RVM N° 123-2022) — 5 niveles
+function estadoMinedu(grade) {
+    const x = Number(grade);
+    if (!Number.isFinite(x)) return "";
+    if (x >= 20) return "Destacado";
+    if (x >= 15) return "Logrado";
+    if (x >= 11) return "En proceso";
+    if (x >= 6)  return "Inicio";
+    return "Previo al inicio";
+}
+function estadoBadgeClass(estado) {
+    switch (estado) {
+        case "Destacado":        return "bg-violet-100 text-violet-800 border-violet-200";
+        case "Logrado":          return "bg-emerald-100 text-emerald-800 border-emerald-200";
+        case "En proceso":       return "bg-amber-100 text-amber-800 border-amber-200";
+        case "Inicio":           return "bg-orange-100 text-orange-800 border-orange-200";
+        case "Previo al inicio": return "bg-rose-100 text-rose-800 border-rose-200";
+        default:                 return "bg-slate-100 text-slate-700 border-slate-200";
+    }
+}
+
 const EMPTY_RECORD = {
     term: "",
     course_id: "",
@@ -41,10 +63,74 @@ const EMPTY_RECORD = {
 
 export default function StudentHistoricalGrades({ studentId, studentName, planId }) {
     const [records, setRecords] = useState([]);
+    const [confirmData, setConfirmData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [planCourses, setPlanCourses] = useState([]);
     const [newRecord, setNewRecord] = useState({ ...EMPTY_RECORD });
+
+    // ── Eliminación masiva por periodo (reingreso / cachimbo) ──
+    const [selectedTerms, setSelectedTerms] = useState(new Set());
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [confirmText, setConfirmText] = useState("");
+    const [bulkDeleting, setBulkDeleting] = useState(false);
+
+    // ── Edición inline de nota en la tabla ──
+    const [editingId, setEditingId] = useState(null);
+    const [editValue, setEditValue] = useState("");
+    const [savingEdit, setSavingEdit] = useState(false);
+
+    const startEdit = (rec) => {
+        setEditingId(rec.id);
+        setEditValue(rec.final_grade != null ? String(rec.final_grade) : "");
+    };
+    const cancelEdit = () => {
+        setEditingId(null);
+        setEditValue("");
+    };
+    const saveEdit = async (rec) => {
+        const fg = parseFloat(editValue);
+        if (!Number.isFinite(fg) || fg < 0 || fg > 20) {
+            toast.error("Nota inválida (0 a 20)");
+            return;
+        }
+        if (fg === Number(rec.final_grade)) {
+            cancelEdit();
+            return;
+        }
+        setSavingEdit(true);
+        try {
+            // Limpiamos C1/C2/C3 al editar el final_grade directo para que el
+            // backend no auto-recalcule el promedio desde los componentes y
+            // sobreescriba lo que el admin acaba de poner.
+            const comp = { ...(rec.components || {}) };
+            ["C1","C2","C3","C1_LEVEL","C2_LEVEL","C3_LEVEL",
+             "ESCALA_0_5","PROMEDIO_FINAL","ESTADO"].forEach(k => delete comp[k]);
+
+            const res = await Grades.saveHistorical({
+                student_id: studentId,
+                records: [{
+                    course_id: rec.course_id,
+                    term: rec.term,
+                    final_grade: fg,
+                    components: comp,
+                }],
+            });
+            if (res?.error) {
+                toast.error(res.error);
+            } else if ((res?.errors || []).length) {
+                res.errors.forEach((e) => toast.error(e));
+            } else {
+                toast.success(`Nota actualizada: ${rec.final_grade ?? "-"} → ${fg}`);
+                cancelEdit();
+                loadRecords();
+            }
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || "Error guardando nota");
+        } finally {
+            setSavingEdit(false);
+        }
+    };
 
     // Cargar notas históricas
     const loadRecords = useCallback(async () => {
@@ -167,14 +253,78 @@ export default function StudentHistoricalGrades({ studentId, studentName, planId
     };
 
     // Eliminar nota
-    const handleDelete = async (recordId) => {
-        if (!window.confirm("¿Eliminar esta nota histórica?")) return;
+    const handleDelete = (recordId) => {
+        setConfirmData({
+            title: "¿Eliminar nota histórica?",
+            message: "Esta acción no se puede deshacer.",
+            confirmLabel: "Eliminar",
+            onConfirm: async () => {
+                try {
+                    await Grades.deleteHistorical(recordId);
+                    toast.success("Nota eliminada");
+                    loadRecords();
+                } catch (e) {
+                    toast.error("Error eliminando nota");
+                }
+            },
+        });
+    };
+
+    // Resumen de periodos (para eliminación masiva)
+    const periodSummary = useMemo(() => {
+        const by = new Map();
+        for (const r of records) {
+            const t = (r.term || "").trim();
+            if (!t) continue;
+            const item = by.get(t) || { term: t, count: 0, courses: [] };
+            item.count += 1;
+            item.courses.push(r.course_name || `Curso #${r.course_id}`);
+            by.set(t, item);
+        }
+        // Ordenar por periodo descendente (más recientes primero)
+        return Array.from(by.values()).sort((a, b) => b.term.localeCompare(a.term));
+    }, [records]);
+
+    const toggleTerm = (term) => {
+        setSelectedTerms((prev) => {
+            const next = new Set(prev);
+            if (next.has(term)) next.delete(term);
+            else next.add(term);
+            return next;
+        });
+    };
+    const toggleAllTerms = () => {
+        if (selectedTerms.size === periodSummary.length) {
+            setSelectedTerms(new Set());
+        } else {
+            setSelectedTerms(new Set(periodSummary.map((p) => p.term)));
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (confirmText !== "ELIMINAR") {
+            toast.error('Escribe "ELIMINAR" para confirmar');
+            return;
+        }
+        if (selectedTerms.size === 0) return;
+        setBulkDeleting(true);
         try {
-            await Grades.deleteHistorical(recordId);
-            toast.success("Nota eliminada");
-            loadRecords();
+            const terms = Array.from(selectedTerms);
+            const res = await Grades.bulkDeleteHistorical(studentId, terms);
+            if (res?.error) {
+                toast.error(res.error);
+            } else {
+                const n = res?.deleted ?? 0;
+                toast.success(`${n} registro(s) eliminado(s) de ${terms.length} periodo(s)`);
+            }
+            setShowDeleteConfirm(false);
+            setConfirmText("");
+            setSelectedTerms(new Set());
+            await loadRecords();
         } catch (e) {
-            toast.error("Error eliminando nota");
+            toast.error("Error eliminando periodos");
+        } finally {
+            setBulkDeleting(false);
         }
     };
 
@@ -319,6 +469,71 @@ export default function StudentHistoricalGrades({ studentId, studentName, planId
                     </Button>
                 </div>
 
+                {/* ── Eliminación masiva de periodos (reingreso/cachimbo) ── */}
+                {!loading && periodSummary.length > 0 && (
+                    <div className="border border-rose-200 bg-rose-50/40 rounded-lg p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div>
+                                <h4 className="font-semibold text-sm text-rose-900 flex items-center gap-1.5">
+                                    <RotateCcw className="h-4 w-4" />
+                                    Limpiar historial por periodo
+                                </h4>
+                                <p className="text-xs text-rose-700/80 mt-0.5">
+                                    Útil si el alumno <strong>reingresa como cachimbo</strong> y debe
+                                    eliminarse data antigua. Selecciona los periodos a borrar.
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-xs h-7 text-rose-700"
+                                    onClick={toggleAllTerms}
+                                >
+                                    {selectedTerms.size === periodSummary.length ? "Quitar todos" : "Seleccionar todos"}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    className="h-7 bg-rose-600 hover:bg-rose-700 text-white text-xs gap-1.5"
+                                    disabled={selectedTerms.size === 0}
+                                    onClick={() => setShowDeleteConfirm(true)}
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    Eliminar {selectedTerms.size > 0 && `(${selectedTerms.size})`}
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5">
+                            {periodSummary.map((p) => {
+                                const isSel = selectedTerms.has(p.term);
+                                return (
+                                    <button
+                                        key={p.term}
+                                        type="button"
+                                        onClick={() => toggleTerm(p.term)}
+                                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border transition-all ${isSel
+                                            ? "bg-rose-100 border-rose-400 text-rose-900 ring-2 ring-rose-300 ring-offset-1"
+                                            : "bg-white border-slate-200 text-slate-700 hover:border-rose-300"}`}
+                                        title={`${p.count} curso(s) en ${p.term}`}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={isSel}
+                                            readOnly
+                                            className="accent-rose-600 w-3 h-3"
+                                        />
+                                        {p.term}
+                                        <span className="text-[10px] opacity-70">({p.count})</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
                 {/* ── Tabla de notas existentes ── */}
                 {loading ? (
                     <div className="flex items-center justify-center py-8">
@@ -346,9 +561,15 @@ export default function StudentHistoricalGrades({ studentId, studentName, planId
                             <tbody>
                                 {records.map((rec) => {
                                     const comp = rec.components || {};
-                                    const estado = comp.ESTADO || (rec.final_grade >= 11 ? "Logrado" : "En proceso");
+                                    const isEditing = editingId === rec.id;
+                                    // Estado: usa el valor en edición si existe, sino el de la BD,
+                                    // siempre con la escala oficial MINEDU (5 niveles).
+                                    const gradeForEstado = isEditing
+                                        ? (editValue === "" ? null : Number(editValue))
+                                        : rec.final_grade;
+                                    const estado = estadoMinedu(gradeForEstado);
                                     return (
-                                        <tr key={rec.id} className="border-b hover:bg-muted/50">
+                                        <tr key={rec.id} className={`border-b hover:bg-muted/50 ${isEditing ? "bg-amber-50/40" : ""}`}>
                                             <td className="py-2 pr-3 font-mono text-xs">{rec.term}</td>
                                             <td className="py-2 pr-3">{rec.course_name || `Curso #${rec.course_id}`}</td>
                                             <td className="py-2 pr-3 text-center">
@@ -361,25 +582,88 @@ export default function StudentHistoricalGrades({ studentId, studentName, planId
                                                 {comp.C3_LEVEL || comp.C3 || "-"}
                                             </td>
                                             <td className="py-2 pr-3 text-center font-bold">
-                                                {rec.final_grade != null ? rec.final_grade : "-"}
+                                                {isEditing ? (
+                                                    <Input
+                                                        autoFocus
+                                                        type="number"
+                                                        min={0}
+                                                        max={20}
+                                                        step="1"
+                                                        value={editValue}
+                                                        onChange={(e) => setEditValue(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === "Enter") saveEdit(rec);
+                                                            else if (e.key === "Escape") cancelEdit();
+                                                        }}
+                                                        disabled={savingEdit}
+                                                        className="h-8 w-16 text-center font-bold mx-auto"
+                                                    />
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => startEdit(rec)}
+                                                        className="group inline-flex items-center gap-1 px-2 py-0.5 rounded hover:bg-amber-100 transition"
+                                                        title="Click para editar la nota"
+                                                    >
+                                                        <span>{rec.final_grade != null ? rec.final_grade : "-"}</span>
+                                                        <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60" />
+                                                    </button>
+                                                )}
                                             </td>
                                             <td className="py-2 pr-3 text-center">
                                                 <Badge
-                                                    variant={estado === "Logrado" ? "default" : "destructive"}
-                                                    className="text-xs"
+                                                    variant="outline"
+                                                    className={`text-xs whitespace-nowrap ${estadoBadgeClass(estado)}`}
                                                 >
-                                                    {estado}
+                                                    {estado || "—"}
                                                 </Badge>
                                             </td>
                                             <td className="py-2">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-7 w-7 text-destructive"
-                                                    onClick={() => handleDelete(rec.id)}
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </Button>
+                                                {isEditing ? (
+                                                    <div className="flex items-center gap-0.5">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-7 w-7 text-emerald-700"
+                                                            onClick={() => saveEdit(rec)}
+                                                            disabled={savingEdit}
+                                                            title="Guardar (Enter)"
+                                                        >
+                                                            {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-7 w-7 text-slate-500"
+                                                            onClick={cancelEdit}
+                                                            disabled={savingEdit}
+                                                            title="Cancelar (Esc)"
+                                                        >
+                                                            <X className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-0.5">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-7 w-7"
+                                                            onClick={() => startEdit(rec)}
+                                                            title="Editar nota"
+                                                        >
+                                                            <Pencil className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-7 w-7 text-destructive"
+                                                            onClick={() => handleDelete(rec.id)}
+                                                            title="Eliminar nota"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </td>
                                         </tr>
                                     );
@@ -389,6 +673,92 @@ export default function StudentHistoricalGrades({ studentId, studentName, planId
                     </div>
                 )}
             </CardContent>
+
+            {/* ── Diálogo de confirmación de eliminación masiva ── */}
+            {showDeleteConfirm && (
+                <div
+                    className="fixed inset-0 z-[210] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                    onClick={() => !bulkDeleting && setShowDeleteConfirm(false)}
+                >
+                    <div
+                        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden ring-1 ring-rose-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="px-5 py-3 bg-gradient-to-r from-rose-50 to-red-50 border-b border-rose-200 flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-lg bg-rose-100 grid place-items-center">
+                                <AlertTriangle className="w-5 h-5 text-rose-600" />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-extrabold text-rose-900">
+                                    Eliminar periodos completos
+                                </h4>
+                                <p className="text-[11px] text-rose-700">
+                                    Esta acción es <strong>permanente</strong> y no se puede deshacer.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="p-5 space-y-3">
+                            <p className="text-xs text-slate-700">
+                                Se eliminarán <strong>todas las notas</strong> del alumno
+                                {studentName ? <> <strong>{studentName}</strong></> : null} en los
+                                siguientes periodos:
+                            </p>
+
+                            <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2 border border-rose-200 rounded-md bg-rose-50/30">
+                                {Array.from(selectedTerms).sort().map((t) => {
+                                    const item = periodSummary.find((p) => p.term === t);
+                                    return (
+                                        <span
+                                            key={t}
+                                            className="px-2 py-0.5 rounded bg-rose-200/60 text-rose-900 font-bold text-[11px]"
+                                        >
+                                            {t}
+                                            {item && <span className="opacity-60 ml-1">({item.count})</span>}
+                                        </span>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="space-y-1">
+                                <Label className="text-[11px] font-bold text-rose-900">
+                                    Para confirmar, escribe <code className="bg-rose-100 px-1 rounded font-mono">ELIMINAR</code>:
+                                </Label>
+                                <Input
+                                    value={confirmText}
+                                    onChange={(e) => setConfirmText(e.target.value)}
+                                    placeholder="ELIMINAR"
+                                    className="h-8 text-sm uppercase font-bold tracking-wider"
+                                    disabled={bulkDeleting}
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
+
+                        <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => { setShowDeleteConfirm(false); setConfirmText(""); }}
+                                disabled={bulkDeleting}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                size="sm"
+                                className="h-8 bg-rose-600 hover:bg-rose-700 text-white text-xs gap-1.5"
+                                onClick={handleBulkDelete}
+                                disabled={bulkDeleting || confirmText !== "ELIMINAR" || selectedTerms.size === 0}
+                            >
+                                {bulkDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                                Eliminar {selectedTerms.size} periodo{selectedTerms.size === 1 ? "" : "s"}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            <ConfirmModal data={confirmData} onClose={() => setConfirmData(null)} />
         </Card>
     );
 }

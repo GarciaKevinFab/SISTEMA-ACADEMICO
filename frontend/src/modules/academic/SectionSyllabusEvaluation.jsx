@@ -5,7 +5,7 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Badge } from "../../components/ui/badge";
 import { toast } from "sonner";
-import { Syllabus, Evaluation, Sections } from "../../services/academic.service";
+import { Syllabus, Evaluation, Sections, Teacher } from "../../services/academic.service";
 import { useAuth } from "@/context/AuthContext";
 import { Upload, Trash2, Save, FileText, ExternalLink } from "lucide-react";
 
@@ -78,10 +78,17 @@ function StudentSyllabusView() {
    Vista DOCENTE / ADMIN: gestión de sílabos y evaluación
    ────────────────────────────────────────────────────────────── */
 function TeacherSyllabusView() {
+    const { user } = useAuth();
     const [sections, setSections] = useState([]);
     const [section, setSection] = useState(null);
+    const [semFilter, setSemFilter] = useState("");
     const [syllabusInfo, setSyllabusInfo] = useState(null);
     const [file, setFile] = useState(null);
+
+    // Un docente solo ve SUS cursos (áreas) del período; el admin ve todos
+    const isTeacher =
+        (user?.roles || []).some((r) => String(r).toUpperCase().includes("TEACHER")) ||
+        String(user?.role || "").toUpperCase().includes("TEACHER");
 
     const [weights, setWeights] = useState([
         { code: "PARCIAL_1", label: "Parcial 1", weight: 20 },
@@ -91,11 +98,19 @@ function TeacherSyllabusView() {
     ]);
 
     useEffect(() => {
-        Sections.list({}).then(d => {
+        const loader = isTeacher ? Teacher.sectionsMe() : Sections.list({});
+        loader.then(d => {
             const arr = Array.isArray(d?.sections) ? d.sections : (Array.isArray(d) ? d : []);
             setSections(arr);
-        });
-    }, []);
+        }).catch(() => setSections([]));
+    }, [isTeacher]);
+
+    // Semestres disponibles entre las secciones visibles
+    const semestres = [...new Set(sections.map(s => s.semester).filter(Boolean))]
+        .sort((a, b) => a - b);
+    const visibles = semFilter
+        ? sections.filter(s => String(s.semester) === String(semFilter))
+        : sections;
 
     useEffect(() => {
         if (!section?.id) return;
@@ -147,18 +162,35 @@ function TeacherSyllabusView() {
                     <CardDescription>Suba el sílabo y defina las ponderaciones de evaluación</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div>
-                        <Label>Sección</Label>
-                        <select
-                            className="border rounded p-2 w-full"
-                            value={section?.id || ""}
-                            onChange={e => setSection((Array.isArray(sections) ? sections : []).find(s => String(s.id) === e.target.value) || null)}
-                        >
-                            <option value="">Seleccionar</option>
-                            {(Array.isArray(sections) ? sections : []).map(s => (
-                                <option key={s.id} value={s.id}>{(s.course_name || "").toUpperCase()} - {s.section_code}</option>
-                            ))}
-                        </select>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                        <div>
+                            <Label>Semestre (ciclo)</Label>
+                            <select
+                                className="border rounded p-2 w-full"
+                                value={semFilter}
+                                onChange={e => { setSemFilter(e.target.value); setSection(null); }}
+                            >
+                                <option value="">Todos</option>
+                                {semestres.map(s => (
+                                    <option key={s} value={s}>Ciclo {s}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="sm:col-span-3">
+                            <Label>Área (curso / módulo)</Label>
+                            <select
+                                className="border rounded p-2 w-full"
+                                value={section?.id || ""}
+                                onChange={e => setSection(visibles.find(s => String(s.id) === e.target.value) || null)}
+                            >
+                                <option value="">Seleccionar</option>
+                                {visibles.map(s => (
+                                    <option key={s.id} value={s.id}>
+                                        {`Ciclo ${s.semester ?? "?"} · ${(s.course_name || "").toUpperCase()} — Sec. ${s.section_code || s.label || "A"}${s.period ? ` · ${s.period}` : ""}`}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
                     {section && (
@@ -179,30 +211,13 @@ function TeacherSyllabusView() {
                                 </div>
                             </div>
 
-                            <div className="border rounded p-3 space-y-3">
-                                <div className="font-medium">Esquema de evaluación</div>
-                                <div className="grid md:grid-cols-2 gap-2">
-                                    {weights.map((w, idx) => (
-                                        <div key={w.code} className="flex items-center gap-2">
-                                            <Input value={w.label} onChange={e => {
-                                                const v = [...weights]; v[idx] = { ...v[idx], label: e.target.value }; setWeights(v);
-                                            }} />
-                                            <div className="flex items-center gap-1">
-                                                <Input type="number" min="0" max="100" className="w-24 text-right"
-                                                    value={w.weight}
-                                                    onChange={e => {
-                                                        const v = [...weights]; v[idx] = { ...v[idx], weight: +e.target.value || 0 }; setWeights(v);
-                                                    }} />
-                                                <span>%</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className={`text-sm ${sum === 100 ? 'text-green-600' : 'text-red-600'}`}>Suma: {sum}%</div>
-                                <div className="flex justify-end">
-                                    <Button onClick={saveConfig} disabled={sum !== 100}><Save className="h-4 w-4 mr-2" />Guardar esquema</Button>
-                                </div>
-                            </div>
+                            {/* El esquema de parciales se retiró: la evaluación es
+                                por competencias (RVM 123-2022), no por pesos. */}
+                            <p className="text-xs text-slate-400 border rounded-lg px-3 py-2 bg-slate-50">
+                                La calificación de este curso se registra por <b>competencias</b> con
+                                niveles de desempeño (RVM 123-2022). Ve a la pestaña <b>Evaluación</b>
+                                {" "}para registrar el acta.
+                            </p>
                         </>
                     )}
                 </CardContent>

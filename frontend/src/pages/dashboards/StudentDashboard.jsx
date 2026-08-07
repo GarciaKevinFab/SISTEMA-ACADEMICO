@@ -17,6 +17,7 @@ import { EnrollmentPayment } from "../../services/academic.service";
 import {
     DashboardShell, KpiGrid, StatCard, EmptyBox, toNumber, pickArray,
 } from "./DashboardWidgets";
+import StudentSemesterPanel from "../../modules/student/StudentSemesterPanel";
 
 /* ─── Constants ──────────────────────────────────────────────── */
 const DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -271,7 +272,7 @@ export default function StudentDashboard({ user }) {
     const [enrollmentPaymentInfo, setEnrollmentPaymentInfo] = useState(null);
     useEffect(() => {
         const now = new Date();
-        const period = now.getMonth() < 6 ? `${now.getFullYear()}-I` : `${now.getFullYear()}-II`;
+        const period = now.getMonth() < 7 ? `${now.getFullYear()}-I` : `${now.getFullYear()}-II`;
         EnrollmentPayment.status({ period })
             .then(info => setEnrollmentPaymentInfo(info))
             .catch(() => {});
@@ -454,6 +455,9 @@ export default function StudentDashboard({ user }) {
                     tone={kpis.attendanceRate < 70 ? "rose" : "blue"}
                 />
             </KpiGrid>
+
+            {/* ── Mis Cursos: notas y asistencia por curso (en vivo) ── */}
+            {!L && <StudentSemesterPanel goKardex={() => navigate("/dashboard/academic")} />}
 
             {/* ── Avance + Radar + Notas ── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">

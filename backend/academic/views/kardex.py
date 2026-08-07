@@ -32,6 +32,7 @@ from .kardex_helpers import (
     _get_institution_media_datauris,
     _build_reporte_periodo_ctx,
     _build_record_notas_ctx,
+    _build_ficha_rendimiento_ctx,
     build_boleta_full,
     build_boleta_for_period,
     _pick_kardex_template,
@@ -131,6 +132,52 @@ def _detect_active_stint_periods(all_periods: set) -> set:
 
 
 # ══════════════════════════════════════════════════════════════
+# CONTROL DE ACCESO AL KÁRDEX
+# ══════════════════════════════════════════════════════════════
+
+def _kardex_access_denied(request, student_id):
+    """
+    El kárdex contiene datos personales y académicos: un ESTUDIANTE solo
+    puede consultar el SUYO. Administración (staff/roles académicos) y
+    docentes con permiso de kárdex pueden consultar cualquiera.
+
+    Retorna Response 403 si está prohibido, o None si está permitido.
+    """
+    from .utils import user_has_any_role
+
+    u = request.user
+    if getattr(u, "is_staff", False) or getattr(u, "is_superuser", False):
+        return None
+    if user_has_any_role(u, (
+        "ADMIN_SYSTEM", "ADMIN_ACADEMIC", "ADMIN_ACADEMICO", "REGISTRAR",
+        "SECRETARIA", "SECRETARIA_ACADEMICA", "DIRECTOR", "TEACHER",
+        "DOCENTE", "PROFESOR",
+    )):
+        return None
+
+    # Docentes: se reconocen también por su perfil (no dependen del rol ACL)
+    try:
+        from academic.models import Teacher as AcademicTeacher
+        from catalogs.models import Teacher as CatalogTeacher
+        if (AcademicTeacher.objects.filter(user=u).exists()
+                or CatalogTeacher.objects.filter(user=u).exists()):
+            return None
+    except Exception:
+        pass
+
+    # Resto (alumnos): solo su propio kárdex
+    mi = StudentProfile.objects.filter(user=u).first()
+    if mi:
+        pedido = str(student_id).strip()
+        if pedido == str(mi.id) or pedido == (mi.num_documento or "").strip():
+            return None
+    return Response(
+        {"detail": "Solo puedes consultar tu propio kárdex."},
+        status=403,
+    )
+
+
+# ══════════════════════════════════════════════════════════════
 # VISTA PRINCIPAL DE KARDEX (DATOS JSON)
 # ══════════════════════════════════════════════════════════════
 
@@ -139,6 +186,8 @@ class KardexView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, student_id):
+        if err := _kardex_access_denied(request, student_id):
+            return err
         # 1) Buscar estudiante
         st = None
         doc = str(student_id).strip()
@@ -341,8 +390,10 @@ class KardexView(APIView):
             cr = int(it.get("credits") or 0)
             g = it.get("grade")
 
-            # Créditos aprobados: solo del stint activo
-            if it.get("status") == "LOGRADO" and in_active:
+            # Créditos aprobados: solo del stint activo.
+            # Aprobado = nota vigesimal >= 11 (incluye EN PROCESO, LOGRADO y DESTACADO
+            # según escala MINEDU RVM N° 123-2022).
+            if in_active and it.get("status") in ("LOGRADO", "EN PROCESO", "DESTACADO"):
                 credits_earned += cr
 
             # Ponderado para GPA: solo del stint activo
@@ -376,6 +427,8 @@ class KardexExportXlsxView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request, student_id):
+        if err := _kardex_access_denied(request, student_id):
+            return err
         period_q = (request.query_params.get("period") or "").strip()
         
         kv = KardexView()
@@ -452,6 +505,8 @@ class KardexBoletaPDFView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request, student_id):
+        if err := _kardex_access_denied(request, student_id):
+            return err
         st = _student_lookup(student_id)
         if not st:
             return Response({"detail": "Estudiante no encontrado"}, status=404)
@@ -491,6 +546,8 @@ class KardexConstanciaPDFView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request, student_id):
+        if err := _kardex_access_denied(request, student_id):
+            return err
         kv = KardexView()
         kv.request = request
         resp = kv.get(request, student_id)
@@ -532,6 +589,8 @@ class KardexBoletaPeriodoPDFView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, student_id):
+        if err := _kardex_access_denied(request, student_id):
+            return err
         period_q = (request.query_params.get("period") or "").strip()
         if not period_q:
             return Response({"detail": "Falta period (ej: 2018-II)"}, status=400)
@@ -569,6 +628,8 @@ class KardexBoletaAnioPDFView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, student_id):
+        if err := _kardex_access_denied(request, student_id):
+            return err
         period_q = (request.query_params.get("period") or "").strip()
         if not period_q:
             return Response({"detail": "Falta period (ej: 2018-I)"}, status=400)
@@ -625,6 +686,8 @@ class KardexRecordNotasPDFView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, student_id):
+        if err := _kardex_access_denied(request, student_id):
+            return err
         st = _student_lookup(student_id)
         if not st:
             return Response({"detail": "Estudiante no encontrado"}, status=404)
@@ -633,11 +696,11 @@ class KardexRecordNotasPDFView(APIView):
             ctx, err = _build_record_notas_ctx(request, st)
             if err:
                 raise ValueError(err)
-            
+
             html = render_to_string("kardex/record_notas.html", ctx)
             pdf_bytes = html_to_pdf_bytes(html)
             filename = f"record_notas-{student_id}.pdf"
-            
+
             return HttpResponse(
                 pdf_bytes,
                 content_type="application/pdf",
@@ -648,3 +711,170 @@ class KardexRecordNotasPDFView(APIView):
         except Exception as e:
             logger.exception("Error PDF certificado student=%s", student_id)
             return Response({"detail": "Error interno generando PDF", "error": str(e)}, status=500)
+
+
+class KardexFichaRendimientoPDFView(APIView):
+    """Ficha de Rendimiento Académico (formato oficial MINEDU)."""
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, student_id):
+        if err := _kardex_access_denied(request, student_id):
+            return err
+        st = _student_lookup(student_id)
+        if not st:
+            return Response({"detail": "Estudiante no encontrado"}, status=404)
+
+        try:
+            ctx, err = _build_ficha_rendimiento_ctx(request, st)
+            if err:
+                raise ValueError(err)
+
+            html = render_to_string("kardex/ficha_rendimiento.html", ctx)
+            pdf_bytes = html_to_pdf_bytes(html)
+            doc = st.num_documento or student_id
+            filename = f"ficha_rendimiento-{doc}.pdf"
+
+            return HttpResponse(
+                pdf_bytes,
+                content_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+        except ValueError as ve:
+            return Response({"detail": "No hay registros", "error": str(ve)}, status=404)
+        except Exception as e:
+            logger.exception("Error PDF ficha rendimiento student=%s", student_id)
+            return Response({"detail": "Error interno generando PDF", "error": str(e)}, status=500)
+
+
+# ══════════════════════════════════════════════════════════════
+# FICHA DE RENDIMIENTO — BULK (ZIP)
+# ══════════════════════════════════════════════════════════════
+
+class FichaRendimientoBulkZipView(APIView):
+    """
+    GET /api/academic/reports/fichas-rendimiento.zip
+    Query params (todos opcionales):
+        ?career_id=ID       Filtra por carrera
+        ?semester=N         Filtra por ciclo actual del alumno
+        ?period=2026-I      Filtra por período actual del alumno
+        ?only_with_grades=1 (default) Solo alumnos con notas registradas
+
+    Empaqueta una ficha de rendimiento PDF por estudiante en un ZIP.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        import zipfile
+        from io import BytesIO as ZipBuf
+
+        career_id = request.query_params.get("career_id")
+        semester = request.query_params.get("semester")
+        period = (request.query_params.get("period") or "").strip()
+        only_with_grades = str(
+            request.query_params.get("only_with_grades", "1")
+        ).lower() in ("1", "true", "yes")
+
+        qs = StudentProfile.objects.select_related("plan", "plan__career")
+
+        if career_id:
+            try:
+                qs = qs.filter(plan__career_id=int(career_id))
+            except (TypeError, ValueError):
+                return Response({"detail": "career_id inválido"}, status=400)
+
+        if semester:
+            try:
+                qs = qs.filter(ciclo=int(semester))
+            except (TypeError, ValueError):
+                return Response({"detail": "semester inválido"}, status=400)
+
+        if period:
+            qs = qs.filter(periodo=period)
+
+        if only_with_grades:
+            qs = qs.filter(grade_records__isnull=False).distinct()
+
+        qs = qs.order_by("apellido_paterno", "apellido_materno", "nombres")
+        students = list(qs)
+
+        if not students:
+            return Response(
+                {"detail": "No hay estudiantes con notas para los filtros indicados"},
+                status=404,
+            )
+
+        zip_buf = ZipBuf()
+        generated = 0
+        errors_list = []
+
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for st in students:
+                try:
+                    ctx, err = _build_ficha_rendimiento_ctx(request, st)
+                    if err:
+                        errors_list.append({
+                            "dni": st.num_documento or str(st.id),
+                            "name": f"{st.apellido_paterno} {st.nombres}".strip(),
+                            "error": err,
+                        })
+                        continue
+
+                    html = render_to_string("kardex/ficha_rendimiento.html", ctx)
+                    pdf_bytes = html_to_pdf_bytes(html)
+                    doc = st.num_documento or str(st.id)
+                    safe_name = (
+                        f"{st.apellido_paterno or ''}_{st.apellido_materno or ''}_{st.nombres or ''}"
+                        .replace(" ", "_").replace("/", "-").strip("_")
+                    )
+                    fname = f"ficha_rendimiento-{doc}-{safe_name}.pdf"
+                    zf.writestr(fname, pdf_bytes)
+                    generated += 1
+                except Exception as exc:
+                    logger.exception("Error generando ficha bulk student=%s", st.id)
+                    errors_list.append({
+                        "dni": st.num_documento or str(st.id),
+                        "name": f"{st.apellido_paterno} {st.nombres}".strip(),
+                        "error": str(exc),
+                    })
+
+            # Reporte de errores
+            if errors_list:
+                report_lines = [
+                    "FICHAS DE RENDIMIENTO — ERRORES",
+                    "================================",
+                    f"Total estudiantes:    {len(students)}",
+                    f"Fichas generadas:     {generated}",
+                    f"Estudiantes con error:{len(errors_list)}",
+                    "",
+                    "Detalle:",
+                ]
+                for e in errors_list:
+                    report_lines.append(f"- {e['dni']} · {e['name']}: {e['error']}")
+                zf.writestr("_ERRORES.txt", "\n".join(report_lines))
+
+        if generated == 0:
+            return Response(
+                {
+                    "detail": "No se pudo generar ninguna ficha.",
+                    "errors": errors_list[:20],
+                },
+                status=500,
+            )
+
+        zip_buf.seek(0)
+        suffix_parts = []
+        if career_id:
+            suffix_parts.append(f"carrera{career_id}")
+        if semester:
+            suffix_parts.append(f"ciclo{semester}")
+        if period:
+            suffix_parts.append(period)
+        suffix = "_".join(suffix_parts) or "todos"
+        fname = f"fichas_rendimiento_{suffix}.zip"
+        return HttpResponse(
+            zip_buf.getvalue(),
+            content_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+        )

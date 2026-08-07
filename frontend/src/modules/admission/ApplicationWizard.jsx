@@ -508,7 +508,9 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
         formData.append("voucher", compressed, voucherFile.name);
       }
 
-      const resp = await AdmissionPublic.apply(formData);
+      const resp = await AdmissionPublic.apply(formData, {
+        timeout: 120000, // 2 min para uploads móviles con datos lentos
+      });
 
       setResult({
         application_id: resp.application_id,
@@ -520,15 +522,33 @@ export default function ApplicationWizard({ callId: propCallId, onClose, onAppli
       setStep(confirmStep);
       toast.success("¡Postulación registrada exitosamente!");
     } catch (e) {
+      const status = e?.response?.status;
+      const isTimeout = e?.code === "ECONNABORTED" || (e?.message || "").toLowerCase().includes("timeout");
       const isNetwork = !e?.response && (e?.message === "Network Error" || e?.code === "ERR_NETWORK");
-      if (isNetwork) {
+
+      if (isTimeout) {
+        toast.error("La subida tardó demasiado. Verifica que tu foto/voucher no supere 5 MB e inténtalo con WiFi.");
+      } else if (isNetwork) {
         toast.error("Error de conexión. Verifique su internet e intente de nuevo. Si el problema persiste, use una red WiFi.");
+      } else if (status === 413) {
+        toast.error("Archivo demasiado grande. Reduce el tamaño de la foto/voucher e inténtalo de nuevo.");
+      } else if (status === 400) {
+        // DRF puede devolver detail o errores por campo
+        const data = e?.response?.data || {};
+        let msg = data.detail;
+        if (!msg && typeof data === "object") {
+          const parts = Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`);
+          if (parts.length) msg = parts.join(" · ");
+        }
+        toast.error(msg || "Faltan datos obligatorios o hay un dato inválido.");
+      } else if (status === 500 || status === 502 || status === 503 || status === 504) {
+        toast.error(`Servidor con problemas (HTTP ${status}). Intenta de nuevo en unos minutos.`);
       } else {
         const detail =
           e?.response?.data?.detail ||
           e?.message ||
           "Error al registrar postulación";
-        toast.error(detail);
+        toast.error(status ? `[${status}] ${detail}` : detail);
       }
     } finally {
       setSubmitting(false);

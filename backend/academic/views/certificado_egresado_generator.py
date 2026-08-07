@@ -74,10 +74,11 @@ def _get_total_credits_from_plan(plan_id: int) -> int:
         return 0
     try:
         from academic.models import PlanCourse
+        # Sumar TODOS los cursos del plan (incluidos electivos), igual que
+        # el panel de egresados (_plan_total_credits) → 220 para FID.
         total = (
             PlanCourse.objects
             .filter(plan_id=plan_id)
-            .exclude(type="ELECTIVE")   # excluir electivos si los hay
             .values_list("credits", flat=True)
         )
         return sum(c or 0 for c in total)

@@ -40,7 +40,20 @@ def resolve_teacher(teacher_id):
 
     tid = int(teacher_id)
 
-    # ─── 1) ¿Es un catalogs.Teacher? ───
+    # ─── 1) ¿Es un User.id? (lo que envía TODO el frontend actual:
+    #        /academic/teachers retorna user ids) ───
+    # Va primero para evitar colisiones con catalogs.Teacher.id, que
+    # podían asignar la sección al docente equivocado.
+    acad = AcademicTeacher.objects.select_related("user").filter(user_id=tid).first()
+    if acad:
+        return acad
+
+    user = User.objects.filter(id=tid, is_active=True).first()
+    if user:
+        acad, _ = AcademicTeacher.objects.get_or_create(user=user)
+        return acad
+
+    # ─── 2) ¿Es un catalogs.Teacher? (legacy) ───
     cat_teacher = (
         CatalogTeacher.objects
         .select_related("user")
@@ -54,12 +67,7 @@ def resolve_teacher(teacher_id):
         )
         return acad
 
-    # ─── 2) ¿Es un academic.Teacher.user_id? ───
-    acad = AcademicTeacher.objects.select_related("user").filter(user_id=tid).first()
-    if acad:
-        return acad
-
-    # ─── 3) ¿Es un academic.Teacher.id? ───
+    # ─── 3) ¿Es un academic.Teacher.id? (legacy) ───
     acad = AcademicTeacher.objects.select_related("user").filter(id=tid).first()
     if acad:
         return acad

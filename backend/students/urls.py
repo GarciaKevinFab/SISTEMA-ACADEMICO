@@ -10,10 +10,14 @@ from .views import (
     students_me_photo,
     students_me_delete_photo,
     students_sync_from_users,
+    students_matrix,
+    students_missing_data,
 )
 
 urlpatterns = [
     path("students", students_collection),
+    path("students/matrix", students_matrix),
+    path("students/missing-data", students_missing_data),
     path("students/me", students_me),
     path("students/me/photo", students_me_photo),
     path("students/me/delete-photo", students_me_delete_photo),

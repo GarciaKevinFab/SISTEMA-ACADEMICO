@@ -123,13 +123,13 @@ def _term_sort_key(term: str) -> Tuple:
 def current_period(dt: Optional[date] = None) -> str:
     """
     Retorna el período académico actual basado en el mes.
-      Enero–Junio  → {año}-I
-      Julio–Diciembre → {año}-II
+      Enero–Julio  → {año}-I   (Sem I va de marzo a julio)
+      Agosto–Diciembre → {año}-II
 
     >>> current_period()   # En marzo 2026 → '2026-I'
     """
     ref   = dt or timezone.now().date()
-    sem   = "I" if ref.month <= 6 else "II"
+    sem   = "I" if ref.month <= 7 else "II"
     return f"{ref.year}-{sem}"
 
 
@@ -353,16 +353,31 @@ def _get_full_name(u) -> str:
 
 
 def list_users_by_role_names(role_names):
+    """
+    Usuarios que tienen alguno de los roles dados. Los roles pueden vivir en
+    DOS tablas según cómo se asignaron: acl.UserRole (acl_userrole) o la M2M
+    directa User.roles (accounts_user_roles, usada por Administración →
+    Usuarios). Se consultan ambas.
+    """
     User = get_user_model()
     role_ids = list(Role.objects.filter(name__in=role_names).values_list("id", flat=True))
     if not role_ids:
         return User.objects.none()
-    user_ids = (
+    user_ids = set(
         UserRole.objects
         .filter(role_id__in=role_ids)
         .values_list("user_id", flat=True)
-        .distinct()
     )
+    try:
+        user_ids |= set(
+            User.objects
+            .filter(roles__id__in=role_ids)
+            .values_list("id", flat=True)
+        )
+    except Exception:
+        pass
+    if not user_ids:
+        return User.objects.none()
     return User.objects.filter(id__in=user_ids, is_active=True)
 
 
@@ -380,7 +395,13 @@ def user_has_any_role(user, names) -> bool:
     if getattr(user, "is_superuser", False):
         return True
     try:
-        return UserRole.objects.filter(user=user, role__name__in=names).exists()
+        if UserRole.objects.filter(user=user, role__name__in=names).exists():
+            return True
+    except Exception:
+        pass
+    try:
+        # M2M directa User.roles (accounts_user_roles)
+        return user.roles.filter(name__in=list(names)).exists()
     except Exception:
         return False
 
@@ -423,7 +444,7 @@ INT_TO_DAY = {v: k for k, v in DAY_TO_INT.items()}
 
 PASSING_GRADE = 11  # vigesimal
 
-ALLOWED_ATT = {"PRESENT", "ABSENT", "LATE", "EXCUSED"}
+ALLOWED_ATT = {"PRESENT", "ABSENT", "LATE", "EXCUSED", "HOLIDAY"}
 
 ACTA_LEVELS       = {"PI", "I", "P", "L", "D"}
 LEVEL_TO_NUM      = {"PI": 1, "I": 2, "P": 3, "L": 4, "D": 5}

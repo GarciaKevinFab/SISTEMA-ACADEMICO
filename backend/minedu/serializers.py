@@ -36,12 +36,16 @@ class MineduExportBatchSerializer(serializers.ModelSerializer):
         ]
 
     def get_file_url(self, obj):
-        if obj.file:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.file.url)
-            return obj.file.url
-        return None
+        if not obj.file:
+            return None
+        request = self.context.get("request")
+        url = request.build_absolute_uri(obj.file.url) if request else obj.file.url
+        # Detrás de Cloudflare/Nginx el esquema puede llegar como http si el
+        # proxy no envía X-Forwarded-Proto; forzar https (salvo desarrollo
+        # local) para evitar Mixed Content al descargar el archivo.
+        if url.startswith("http://") and "localhost" not in url and "127.0.0.1" not in url:
+            url = "https://" + url[len("http://"):]
+        return url
 
 
 class MineduCatalogMappingSerializer(serializers.ModelSerializer):

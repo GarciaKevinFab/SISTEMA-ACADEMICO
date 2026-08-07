@@ -33,6 +33,7 @@ import {
     DialogTitle,
 } from "../../components/ui/dialog";
 import { toast } from "sonner";
+import ConfirmModal from "../../components/ConfirmModal";
 import {
     CheckCircle2,
     XCircle,
@@ -114,6 +115,7 @@ const fmtMoney = (v) => {
 export default function PaymentsManagement() {
     const [calls, setCalls] = useState([]);
     const [call, setCall] = useState(null);
+    const [confirmData, setConfirmData] = useState(null);
     const [careerId, setCareerId] = useState("");
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -224,14 +226,16 @@ export default function PaymentsManagement() {
         }
     };
 
-    const handleVoidPayment = async (paymentId) => {
-        if (
-            !window.confirm(
-                "¿Está seguro de anular este pago? Se revocarán las credenciales generadas."
-            )
-        )
-            return;
+    const handleVoidPayment = (paymentId) => {
+        setConfirmData({
+            title: "¿Anular este pago?",
+            message: "Se revocarán las credenciales generadas.",
+            confirmLabel: "Anular pago",
+            onConfirm: () => doVoidPayment(paymentId),
+        });
+    };
 
+    const doVoidPayment = async (paymentId) => {
         try {
             await Payments.void(paymentId);
             toast.success("Pago anulado");
@@ -284,6 +288,7 @@ export default function PaymentsManagement() {
 
     return (
         <div className="space-y-6">
+            <ConfirmModal data={confirmData} onClose={() => setConfirmData(null)} />
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">

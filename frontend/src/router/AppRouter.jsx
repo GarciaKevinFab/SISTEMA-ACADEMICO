@@ -29,6 +29,7 @@ import AcademicModule from "../modules/academic/AcademicModule";
 import EnrollmentComponent from "../modules/academic/EnrollmentComponent";
 import GradesAttendanceComponent from "../modules/academic/GradesAttendanceComponent";
 
+import MesaControlModule from "../modules/mesa-control/MesaControlModule";
 import MesaDePartesModule from "../modules/mesa-partes/MesaDePartesModule";
 import FinanceModule from "../modules/finance/FinanceModule";
 import MineduIntegrationModule from "../modules/minedu/MineduIntegrationModule";
@@ -152,6 +153,22 @@ export default function AppRouter() {
                             ]}
                         >
                             <AcademicModule />
+                        </RequirePerm>
+                    }
+                />
+
+                {/* Mesa de Control Académica — correcciones de matrícula que
+                    antes solo se podían hacer por consola */}
+                <Route
+                    path="/dashboard/mesa-control"
+                    element={
+                        <RequirePerm
+                            any={[
+                                PERMS["academic.enrollment.commit"],
+                                PERMS["academic.enrollment.view"],
+                            ]}
+                        >
+                            <MesaControlModule />
                         </RequirePerm>
                     }
                 />

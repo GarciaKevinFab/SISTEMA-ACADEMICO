@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Plus, Search, Loader2, UserPlus, FileText, ArrowLeft, Copy, KeyRound } from "lucide-react";
 import { StudentsService } from "@/services/students.service";
 import { Careers, Plans } from "@/services/academic.service";
+import { nombreOficial } from "@/lib/nombre";
 import StudentHistoricalGrades from "./StudentHistoricalGrades";
 
 const EMPTY_FORM = {
@@ -139,8 +140,36 @@ export default function TransferManagement() {
             setSelectedStudent(newStudent);
             setView("grades");
         } catch (e) {
-            const detail = e?.response?.data?.detail || e?.response?.data?.numDocumento?.[0] || "Error creando estudiante";
+            // Extraer el primer mensaje útil del payload de error
+            const data = e?.response?.data || {};
+            let detail = data.detail
+                || data.numDocumento?.[0]
+                || data.nombres?.[0]
+                || data.apellidoPaterno?.[0]
+                || data.email?.[0]
+                || data.ciclo?.[0];
+            if (!detail && typeof data === "object") {
+                // Buscar primer valor que sea un array de strings o un string
+                for (const k of Object.keys(data)) {
+                    const v = data[k];
+                    if (typeof v === "string") { detail = v; break; }
+                    if (Array.isArray(v) && typeof v[0] === "string") { detail = v[0]; break; }
+                }
+            }
+            if (!detail) detail = e?.message || "Error creando estudiante";
+
             toast.error(typeof detail === "string" ? detail : JSON.stringify(detail));
+
+            // Si el DNI ya existe, auto-buscarlo en la lista
+            if (
+                typeof detail === "string"
+                && detail.toLowerCase().includes("ya existe")
+                && form.numDocumento.trim()
+            ) {
+                setSearchQuery(form.numDocumento.trim());
+                setShowCreate(false);
+                setTimeout(() => handleSearch(), 100);
+            }
         } finally {
             setCreating(false);
         }
@@ -209,7 +238,7 @@ export default function TransferManagement() {
                     </Button>
                     <div>
                         <h3 className="font-semibold text-sm">
-                            {selectedStudent.nombres} {selectedStudent.apellidoPaterno} {selectedStudent.apellidoMaterno}
+                            {nombreOficial(selectedStudent)}
                         </h3>
                         <p className="text-xs text-muted-foreground">
                             DNI: {selectedStudent.numDocumento}
@@ -220,7 +249,7 @@ export default function TransferManagement() {
                 </div>
                 <StudentHistoricalGrades
                     studentId={selectedStudent.id}
-                    studentName={`${selectedStudent.nombres} ${selectedStudent.apellidoPaterno}`}
+                    studentName={nombreOficial(selectedStudent)}
                     planId={selectedStudent.planId || null}
                 />
             </div>
@@ -268,7 +297,7 @@ export default function TransferManagement() {
                                 <div key={st.id} className="flex items-center justify-between p-3 hover:bg-muted/50">
                                     <div>
                                         <p className="text-sm font-medium">
-                                            {st.nombres} {st.apellidoPaterno} {st.apellidoMaterno}
+                                            {nombreOficial(st)}
                                         </p>
                                         <p className="text-xs text-muted-foreground">
                                             DNI: {st.numDocumento}

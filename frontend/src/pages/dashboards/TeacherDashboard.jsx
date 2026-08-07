@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 
 import { TeacherDashboardSvc as TeacherSvc } from "../../services/dashboard.service";
+import api from "../../lib/api";
+import { toast } from "sonner";
 import {
     DashboardShell, KpiGrid, StatCard, ChartCard, EmptyBox,
     toNumber, pickArray,
@@ -207,6 +209,147 @@ const SectionCard = ({ sec, navigate }) => {
     );
 };
 
+/* ─── Mis Cursos: avance de notas/acta/sílabo por sección ────── */
+function MisCursos({ sections, navigate }) {
+    if (!sections?.length) return null;
+    return (
+        <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-blue-50/40 to-white">
+                <div className="h-8 w-8 rounded-lg bg-blue-100 grid place-items-center">
+                    <BookOpen size={15} className="text-blue-600" />
+                </div>
+                <div className="flex-1">
+                    <h3 className="font-bold text-slate-800 text-sm leading-none">Mis Cursos</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Avance de notas, actas y sílabos del período</p>
+                </div>
+            </div>
+            <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                {sections.map((s) => {
+                    const pct = Math.min(100, toNumber(s.grades_pct));
+                    const done = pct >= 100;
+                    return (
+                        <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => navigate("/dashboard/academic/attendance")}
+                            className="text-left rounded-xl border border-slate-200 hover:border-blue-300 hover:shadow-md transition-all p-4 space-y-2.5 group"
+                        >
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                    <p className="text-[13px] font-bold text-slate-800 leading-snug line-clamp-2">
+                                        {s.course_name}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 mt-0.5">
+                                        {s.career_name}{s.semester ? ` · Ciclo ${s.semester}` : ""} · Sec. {s.label}
+                                        {s.room ? ` · ${s.room}` : ""}
+                                    </p>
+                                </div>
+                                <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${s.submitted
+                                    ? "bg-slate-100 text-slate-500 border-slate-200"
+                                    : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                                    {s.submitted ? "ACTA CERRADA" : "ACTA ABIERTA"}
+                                </span>
+                            </div>
+
+                            <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                                <span className="inline-flex items-center gap-1">
+                                    <Users size={11} /> {toNumber(s.students)}
+                                </span>
+                                <span className="inline-flex items-center gap-1">
+                                    <ClipboardCheck size={11} /> {toNumber(s.sessions)} ses.
+                                </span>
+                                <span className={`inline-flex items-center gap-1 ${s.syllabus ? "text-emerald-600" : "text-slate-400"}`}>
+                                    {s.syllabus ? <CheckCircle2 size={11} /> : <Upload size={11} />}
+                                    Sílabo
+                                </span>
+                            </div>
+
+                            <div>
+                                <div className="flex items-center justify-between text-[10px] mb-1">
+                                    <span className="font-semibold uppercase tracking-wider text-slate-400">Notas cargadas</span>
+                                    <span className={`font-black tabular-nums ${done ? "text-emerald-600" : pct > 0 ? "text-blue-600" : "text-rose-500"}`}>
+                                        {toNumber(s.grades_loaded)}/{toNumber(s.students)} · {pct}%
+                                    </span>
+                                </div>
+                                <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full transition-all duration-700 ${done ? "bg-emerald-500" : pct > 0 ? "bg-blue-500" : "bg-rose-300"}`}
+                                        style={{ width: `${Math.max(pct, 2)}%` }}
+                                    />
+                                </div>
+                            </div>
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+/* ─── Mi Horario Semanal ─────────────────────────────────────── */
+const WEEK_DAYS = [
+    { key: "MON", label: "Lunes" }, { key: "TUE", label: "Martes" },
+    { key: "WED", label: "Miércoles" }, { key: "THU", label: "Jueves" },
+    { key: "FRI", label: "Viernes" }, { key: "SAT", label: "Sábado" },
+];
+
+const WeeklySchedule = ({ sections, navigate }) => {
+    const byDay = useMemo(() => {
+        const map = Object.fromEntries(WEEK_DAYS.map((d) => [d.key, []]));
+        for (const sec of sections) {
+            for (const sl of (Array.isArray(sec.slots) ? sec.slots : [])) {
+                if (map[sl.day]) map[sl.day].push({ sec, sl });
+            }
+        }
+        for (const k of Object.keys(map)) {
+            map[k].sort((a, b) => (a.sl.start || "").localeCompare(b.sl.start || ""));
+        }
+        return map;
+    }, [sections]);
+
+    const total = Object.values(byDay).reduce((n, arr) => n + arr.length, 0);
+    if (!total) return null;
+
+    return (
+        <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-blue-50/40 to-white">
+                <div className="h-8 w-8 rounded-lg bg-blue-100 grid place-items-center">
+                    <Clock size={15} className="text-blue-600" />
+                </div>
+                <div className="flex-1">
+                    <h3 className="font-bold text-slate-800 text-sm leading-none">Mi Horario Semanal</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Clic en un curso para registrar asistencia o notas</p>
+                </div>
+            </div>
+            <div className="p-4 overflow-x-auto">
+                <div className="grid grid-cols-6 gap-2 min-w-[860px]">
+                    {WEEK_DAYS.map((d) => (
+                        <div key={d.key}>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center mb-2">{d.label}</p>
+                            <div className="space-y-1.5">
+                                {byDay[d.key].length === 0 && (
+                                    <p className="text-center text-slate-200 text-xs py-4">—</p>
+                                )}
+                                {byDay[d.key].map(({ sec, sl }, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => navigate("/dashboard/academic/attendance")}
+                                        className="w-full text-left rounded-lg bg-sky-50 border border-sky-200 px-2 py-1.5 hover:bg-sky-100 hover:border-sky-300 transition-colors"
+                                    >
+                                        <p className="font-bold text-sky-900 text-[11px] leading-tight truncate">{sec.course_name}</p>
+                                        <p className="text-[10px] text-sky-600 tabular-nums">{sl.start} – {sl.end}</p>
+                                        {sec.room_name && <p className="text-[10px] text-sky-500 truncate">{sec.room_name}</p>}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 /* ─── Main Component ─────────────────────────────────────────── */
 export default function TeacherDashboard({ user }) {
     const navigate = useNavigate();
@@ -314,6 +457,9 @@ export default function TeacherDashboard({ user }) {
                 <StatCard icon={FileEdit} title="Notas Pendientes" value={L ? "…" : kpis.gradesPending} hint={kpis.gradesPending > 0 ? "Por registrar y enviar" : "Al día ✓"} tone={kpis.gradesPending > 0 ? "amber" : "emerald"} />
             </KpiGrid>
 
+            {/* ── Mis Cursos: avance por sección ── */}
+            {!L && <MisCursos sections={data.dashboard?.sections || []} navigate={navigate} />}
+
             {/* ── Clases de hoy + Acciones ── */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
@@ -369,6 +515,38 @@ export default function TeacherDashboard({ user }) {
                         <QuickAction icon={Upload} label="Subir sílabo" path="/dashboard/academic" accent="violet" navigate={navigate} />
                         <QuickAction icon={Eye} label="Ver mis secciones" path="/dashboard/academic" accent="indigo" navigate={navigate} />
                         <QuickAction icon={Send} label="Enviar notas a secretaría" path="/dashboard/academic/attendance" accent="rose" navigate={navigate} />
+                        {/* Descargar horario en PDF (con datos personales + foto) */}
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                try {
+                                    toast.info("Generando tu horario en PDF…");
+                                    const res = await api.get("/academic/teachers/me/horario.pdf", { responseType: "blob" });
+                                    const blob = res?.data instanceof Blob ? res.data : new Blob([res.data]);
+                                    const url = window.URL.createObjectURL(blob);
+                                    const a = document.createElement("a");
+                                    a.href = url; a.download = "mi-horario.pdf";
+                                    document.body.appendChild(a); a.click(); a.remove();
+                                    setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+                                    toast.success("Horario descargado");
+                                } catch (e) {
+                                    let msg = "No se pudo generar el horario";
+                                    try {
+                                        if (e?.response?.data instanceof Blob) {
+                                            msg = JSON.parse(await e.response.data.text())?.detail || msg;
+                                        }
+                                    } catch { /* ignore */ }
+                                    toast.error(msg);
+                                }
+                            }}
+                            className="w-full flex items-center gap-3 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50/50 transition-all px-3.5 py-2.5 text-left group"
+                        >
+                            <span className="h-8 w-8 rounded-lg bg-amber-100 grid place-items-center shrink-0">
+                                <Calendar size={15} className="text-amber-600" />
+                            </span>
+                            <span className="text-[13px] font-bold text-slate-700 flex-1">Descargar mi horario (PDF)</span>
+                            <ChevronRight size={14} className="text-slate-300 group-hover:text-amber-500 transition-colors" />
+                        </button>
                     </div>
 
                     {/* Estado sílabos */}
@@ -391,6 +569,14 @@ export default function TeacherDashboard({ user }) {
                     </div>
                 </div>
             </div>
+
+            {/* ── Mi Horario Semanal (todas mis secciones con franjas) ── */}
+            {!L && (
+                <WeeklySchedule
+                    sections={pickArray(data.sections || {}, ["sections", "results", "data", "items"])}
+                    navigate={navigate}
+                />
+            )}
 
             {/* ── Gráficos ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">

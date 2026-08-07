@@ -23,6 +23,10 @@ import { UsersService } from "../../services/users.service";
 import StudentProfileForm from "./StudentProfileForm";
 import StudentKardexCard from "./StudentKardexCard";
 
+import StudentsMatrixWidget from "../academic/StudentsMatrixWidget";
+import StudentsManagementGrid from "../academic/StudentsManagementGrid";
+import EgresadosPanel from "../academic/EgresadosPanel";
+
 import { useAuth } from "../../context/AuthContext";
 import { PERMS } from "../../auth/permissions";
 
@@ -447,6 +451,9 @@ export default function StudentModule() {
     const [pwd, setPwd] = useState({ current_password: "", new_password: "", confirm_password: "" });
     const [pwdSaving, setPwdSaving] = useState(false);
 
+    // Filtros para la Vista General (drill-down desde la matriz)
+    const [overviewFilters, setOverviewFilters] = useState(null);
+
     /* ── Loaders ── */
     const loadMyProfile = useCallback(async () => {
         try {
@@ -671,9 +678,27 @@ export default function StudentModule() {
                         />
                     )}
 
-                    {/* Tabs: Perfil / Historial */}
+                    {/* Tabs: Vista General · Egresados (admin) · Perfil · Historial */}
                     <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-                        <TabsList className="grid grid-cols-2 gap-2 h-auto bg-slate-50 border border-slate-200 p-1.5 rounded-xl">
+                        <TabsList className={`grid ${mode === "admin" ? "grid-cols-4" : "grid-cols-2"} gap-2 h-auto bg-slate-50 border border-slate-200 p-1.5 rounded-xl`}>
+                            {mode === "admin" && (
+                                <TabsTrigger
+                                    value="overview"
+                                    className="stu-tab flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-600 text-slate-500 hover:text-slate-700 transition-all border border-transparent"
+                                >
+                                    <Users size={13} />
+                                    <span>Vista General</span>
+                                </TabsTrigger>
+                            )}
+                            {mode === "admin" && (
+                                <TabsTrigger
+                                    value="graduates"
+                                    className="stu-tab flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-600 text-slate-500 hover:text-slate-700 transition-all border border-transparent"
+                                >
+                                    <BookOpen size={13} />
+                                    <span>Egresados</span>
+                                </TabsTrigger>
+                            )}
                             <TabsTrigger
                                 value="profile"
                                 className="stu-tab flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-600 text-slate-500 hover:text-slate-700 transition-all border border-transparent"
@@ -696,6 +721,32 @@ export default function StudentModule() {
                                 </TabsTrigger>
                             )}
                         </TabsList>
+
+                        {/* Contenido Vista General — solo admin */}
+                        {mode === "admin" && (
+                            <TabsContent value="overview" className="mt-0 fade-in space-y-4">
+                                <StudentsMatrixWidget
+                                    onCellClick={({ career_id, ciclo, periodo }) => {
+                                        setOverviewFilters({ career_id: String(career_id || ""), ciclo: String(ciclo || ""), periodo });
+                                    }}
+                                />
+                                <StudentsManagementGrid
+                                    initialFilters={overviewFilters}
+                                    showSelectAction
+                                    onSelectStudent={(s) => {
+                                        setSelectedId(String(s.id));
+                                        setTab("profile");
+                                    }}
+                                />
+                            </TabsContent>
+                        )}
+
+                        {/* Contenido Egresados — solo admin */}
+                        {mode === "admin" && (
+                            <TabsContent value="graduates" className="mt-0 fade-in">
+                                <EgresadosPanel />
+                            </TabsContent>
+                        )}
 
                         {/* Contenido Perfil */}
                         <TabsContent value="profile" className="mt-0 fade-in">

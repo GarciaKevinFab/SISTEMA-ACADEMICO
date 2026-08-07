@@ -2,10 +2,11 @@
 // ✅ Fix: GPA y créditos solo del stint activo (detecta reingreso tras gap de períodos)
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { FileText, RefreshCw, Layers, Download, Loader2, BookOpen, Award, TrendingUp, AlertTriangle } from "lucide-react";
+import { FileText, RefreshCw, Layers, Download, Loader2, BookOpen, Award, TrendingUp, AlertTriangle, Eye } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Kardex } from "@/services/academic.service";
 import { ensureFreshToken } from "@/lib/api";
+import RecordNotasPreviewModal from "./RecordNotasPreviewModal";
 
 /* ─── inject font ─── */
 function InjectKardexStyles() {
@@ -158,7 +159,10 @@ const toApiPeriod = (raw) => {
 
 const normStr = (v) => (v == null ? "" : String(v).trim());
 const getCycleKey = (it) => normStr(it?.period ?? it?.cycle ?? it?.ciclo ?? it?.term ?? "Sin ciclo");
-const getCourseName = (r) => r?.course_name ?? r?.courseName ?? r?.curso ?? r?.subject ?? r?.asignatura ?? "—";
+const getCourseName = (r) => {
+    const raw = r?.course_name ?? r?.courseName ?? r?.curso ?? r?.subject ?? r?.asignatura ?? "—";
+    return typeof raw === "string" ? raw.toUpperCase() : raw;
+};
 const getCourseCode = (r) => r?.course_code ?? r?.courseCode ?? r?.codigo ?? r?.code ?? "—";
 const getCredits = (r) => r?.credits ?? r?.creditos ?? "—";
 const getGrade = (r) => { const v = r?.grade ?? r?.nota ?? r?.final ?? r?.promedio; return v == null || String(v).trim() === "" ? null : v; };
@@ -200,6 +204,7 @@ export default function StudentKardexCard({ mode, studentKey, titlePrefix = "Ká
     const [exportingCycle, setExportingCycle] = useState(false);
     const [exportingAll, setExportingAll] = useState(false);
     const [exportingRecord, setExportingRecord] = useState(false);
+    const [showRecordPreview, setShowRecordPreview] = useState(false);
     const [kardex, setKardex] = useState(null);
     const [activeCycle, setActiveCycle] = useState("");
 
@@ -340,8 +345,15 @@ export default function StudentKardexCard({ mode, studentKey, titlePrefix = "Ká
                                     {exportingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                                     PDF Año
                                 </Button>
+                                <Button variant="outline" className="h-9 px-4 rounded-xl border-emerald-300 text-emerald-700 text-sm gap-1.5 hover:bg-emerald-50"
+                                    onClick={() => setShowRecordPreview(true)} disabled={anyExporting || !studentKey}
+                                    title="Vista previa con opción de editar notas (admin) e imprimir">
+                                    <Eye className="w-3.5 h-3.5" />
+                                    Vista previa + Imprimir
+                                </Button>
                                 <Button variant="outline" className="h-9 px-4 rounded-xl border-slate-200 text-sm gap-1.5 hover:bg-slate-50"
-                                    onClick={exportPdfRecord} disabled={anyExporting || !studentKey}>
+                                    onClick={exportPdfRecord} disabled={anyExporting || !studentKey}
+                                    title="Descarga directa sin vista previa">
                                     {exportingRecord ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                                     Record de Notas
                                 </Button>
@@ -521,6 +533,18 @@ export default function StudentKardexCard({ mode, studentKey, titlePrefix = "Ká
                     </div>
                 </div>
             </div>
+
+            {/* Modal de vista previa + edición + impresión */}
+            <RecordNotasPreviewModal
+                open={showRecordPreview}
+                onClose={() => setShowRecordPreview(false)}
+                studentKey={studentKey}
+                studentName={kardex?.student_name || kardex?.student?.full_name || ""}
+                onPrint={async () => {
+                    setShowRecordPreview(false);
+                    await exportPdfRecord();
+                }}
+            />
         </>
     );
 }

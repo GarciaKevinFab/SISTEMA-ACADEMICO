@@ -11,12 +11,14 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import viewsets, permissions
 from rest_framework.views import APIView
+from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from academic.models import (
     Teacher, Section, SectionGrades, AcademicGradeRecord, PlanCourse
 )
 from students.models import Student
+from students.name_utils import nombre_oficial
 from catalogs.models import Teacher as CatalogTeacher
 from academic.serializers import smart_title
 
@@ -43,20 +45,96 @@ def _calc_promedio_final(final_grade):
         return None
 
 
-def _calc_escala_0_5(c1, c2, c3):
-    vals = [c1, c2, c3]
-    if not all(isinstance(x, int) and 1 <= x <= 5 for x in vals):
+def _calc_escala_0_5(*valores):
+    """Promedio de las competencias registradas (1.0–5.0, con decimales) a un
+    decimal, redondeo de 0.05 a favor del estudiante (RVM 123-2022, Anexo 5).
+
+    Solo promedia las competencias CON valor: un curso puede tener 1, 2 o 3
+    competencias (p. ej. Inglés tiene una sola).
+    """
+    import math
+    vals = []
+    for v in valores:
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= f <= 5:
+            vals.append(f)
+    if not vals:
         return None
-    return round((c1 + c2 + c3) / 3.0, 1)
+    avg = sum(vals) / len(vals)
+    return math.floor(avg * 10 + 0.5) / 10   # half-up a 1 decimal
+
+
+# Rangos oficiales por nivel (RVM 123-2022, pág. 27)
+NIVEL_RANGO = {
+    "PI": (1.0, 1.9),
+    "I":  (2.0, 2.9),
+    "P":  (3.0, 3.9),
+    "L":  (4.0, 4.9),
+    "D":  (5.0, 5.0),
+}
+
+
+def _nivel_de_valor(v):
+    """Nivel (PI/I/P/L/D) que corresponde a un valor 1.0–5.0."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return ""
+    for nivel, (lo, hi) in NIVEL_RANGO.items():
+        if lo - 1e-9 <= f <= hi + 1e-9:
+            return nivel
+    return ""
+
+
+# Tabla oficial RVM 123-2022 pág. 28: escala (1-5, 1 decimal) → vigesimal (1-20)
+ESCALA_TO_VIGESIMAL = [
+    (1.0, 1), (1.2, 2), (1.4, 3), (1.6, 4), (1.8, 5),          # Previo al inicio
+    (2.0, 6), (2.2, 7), (2.4, 8), (2.6, 9), (2.8, 10),          # Inicio
+    (3.0, 11), (3.3, 12), (3.6, 13), (3.8, 14),                 # En proceso
+    (4.0, 15), (4.2, 16), (4.4, 17), (4.6, 18), (4.8, 19),      # Logrado
+    (5.0, 20),                                                   # Destacado
+]
 
 
 def _calc_promedio_final_0_20(escala_0_5):
+    """Calificación vigesimal para el sistema de educación superior,
+    según la tabla oficial de la RVM 123-2022 (pág. 28)."""
     if escala_0_5 is None:
         return None
-    return int(round(((float(escala_0_5) - 1.0) / 4.0) * 20.0))
+    e = float(escala_0_5) + 1e-9
+    result = 1
+    for lower, vig in ESCALA_TO_VIGESIMAL:
+        if e >= lower:
+            result = vig
+        else:
+            break
+    return result
 
 
-def _calc_estado(prom_final):
+def _calif_curso(escala_0_5):
+    """Calificación del curso/módulo (cualitativa) según el resultado 1-5."""
+    if escala_0_5 is None:
+        return ""
+    e = float(escala_0_5) + 1e-9
+    if e >= 5:
+        return "Destacado"
+    if e >= 4:
+        return "Logrado"
+    if e >= 3:
+        return "En proceso"
+    if e >= 2:
+        return "Inicio"
+    return "Previo al inicio"
+
+
+def _calc_estado(prom_final, escala_0_5=None):
+    """Compat: si se conoce la escala usa la calificación oficial del curso;
+    si no, degrada al binario histórico."""
+    if escala_0_5 is not None:
+        return _calif_curso(escala_0_5)
     if prom_final is None:
         return ""
     return "Logrado" if int(prom_final) >= 11 else "En proceso"
@@ -88,50 +166,76 @@ def _validate_acta_student_payload(payload: dict) -> tuple[bool, list[str]]:
 
 
 def _normalize_acta_student_payload(payload: dict):
+    """
+    Normaliza el acta de un alumno.
+
+    Cada competencia acepta un valor DECIMAL 1.0–5.0 (el docente traslada la
+    nota de su registro) y/o el nivel PI/I/P/L/D. Reglas:
+      · Si viene valor y nivel, el valor debe caer dentro del rango del nivel
+        (L = 4.0–4.9, etc.) — si no, se rechaza.
+      · Si solo viene valor, el nivel se deduce del rango.
+      · Si solo viene nivel, se usa el mínimo de su rango (PI=1, I=2, …, D=5).
+      · Se promedian SOLO las competencias registradas: un curso puede tener
+        1, 2 o 3 competencias (Inglés tiene una sola).
+    """
     if not isinstance(payload, dict):
         return None, ["Payload no es objeto"]
 
     errors = []
     out = dict(payload)
 
-    for lf in ("C1_LEVEL", "C2_LEVEL", "C3_LEVEL"):
-        lv = _to_str(payload.get(lf)).upper()
-        if not lv:
-            errors.append(f"{lf} es obligatorio")
-        elif lv not in ACTA_LEVELS:
-            errors.append(f"{lf} inválido: {lv}")
-        out[lf] = lv
-
-    out["C1_REC"] = _to_str(payload.get("C1_REC"))
-    out["C2_REC"] = _to_str(payload.get("C2_REC"))
-    out["C3_REC"] = _to_str(payload.get("C3_REC"))
-
     for i in (1, 2, 3):
-        c_key = f"C{i}"
-        lv_key = f"C{i}_LEVEL"
+        c_key, lv_key, rec_key = f"C{i}", f"C{i}_LEVEL", f"C{i}_REC"
+        out[rec_key] = _to_str(payload.get(rec_key))
 
-        c_val = _to_int(payload.get(c_key))
-        if c_val is None:
-            lv = out.get(lv_key)
-            c_val = LEVEL_TO_NUM.get(lv)
+        lv = _to_str(payload.get(lv_key)).upper()
+        if lv and lv not in ACTA_LEVELS:
+            errors.append(f"Competencia {i}: nivel inválido '{lv}' (PI, I, P, L o D)")
+            lv = ""
 
-        if c_val is None:
-            errors.append(f"{c_key} es obligatorio (1-5) o derivable de {lv_key}")
-        elif not (1 <= int(c_val) <= 5):
-            errors.append(f"{c_key} fuera de rango (1-5): {c_val}")
+        raw = payload.get(c_key)
+        val = None
+        if raw not in (None, "", []):
+            val = _to_float(raw)
+            if val is None:
+                errors.append(f"Competencia {i}: '{raw}' no es un número válido")
+            elif not (1.0 - 1e-9 <= val <= 5.0 + 1e-9):
+                errors.append(f"Competencia {i}: {raw} fuera del rango permitido (1.0 – 5.0)")
+                val = None
+            else:
+                val = round(val, 1)
 
-        out[c_key] = int(c_val) if c_val is not None else ""
+        if val is not None and lv:
+            lo, hi = NIVEL_RANGO[lv]
+            if not (lo - 1e-9 <= val <= hi + 1e-9):
+                rango = f"{lo:g}" if lo == hi else f"{lo:g} – {hi:g}"
+                errors.append(
+                    f"Competencia {i}: {val:g} no corresponde al nivel {lv} "
+                    f"(rango permitido: {rango})")
+                val = None
+        elif val is not None and not lv:
+            lv = _nivel_de_valor(val)
+        elif val is None and lv:
+            val = NIVEL_RANGO[lv][0]      # nivel sin valor → mínimo del rango
+
+        out[lv_key] = lv
+        out[c_key] = val if val is not None else ""
 
     if errors:
         return None, errors
 
-    escala = _calc_escala_0_5(out["C1"], out["C2"], out["C3"])
+    registradas = [out[f"C{i}"] for i in (1, 2, 3) if out[f"C{i}"] != ""]
+    if not registradas:
+        return None, ["Debe registrar al menos una competencia"]
+
+    escala = _calc_escala_0_5(*registradas)
     prom_final = _calc_promedio_final_0_20(escala)
-    estado = _calc_estado(prom_final)
+    estado = _calc_estado(prom_final, escala)
 
     out["ESCALA_0_5"] = escala
     out["PROMEDIO_FINAL"] = prom_final
     out["ESTADO"] = estado
+    out["N_COMPETENCIAS"] = len(registradas)
 
     return out, []
 
@@ -173,9 +277,21 @@ class TeachersViewSet(viewsets.ViewSet):
         seen_ids = set()
         teachers = []
 
+        # Cuentas administrativas NO son docentes: se excluyen SIEMPRE,
+        # incluso si alguien les asignó el rol TEACHER por error.
+        def _es_cuenta_admin(u):
+            if not u:
+                return True
+            if getattr(u, "is_staff", False) or getattr(u, "is_superuser", False):
+                return True
+            uname = (getattr(u, "username", "") or "").upper()
+            if uname.startswith("ADMIN"):
+                return True
+            return user_has_any_role(u, ["ADMIN_SYSTEM", "ADMIN_ACADEMIC", "ADMIN_ACADEMICO", "REGISTRAR"])
+
         # ── 1) Users con rol docente (fuente principal) ──
         for u in list_teacher_users_qs():
-            if u.id in seen_ids:
+            if u.id in seen_ids or _es_cuenta_admin(u):
                 continue
             seen_ids.add(u.id)
             teachers.append({
@@ -188,7 +304,7 @@ class TeachersViewSet(viewsets.ViewSet):
         # ── 2) catalogs.Teacher con user (cubre docentes sin rol asignado) ──
         for ct in CatalogTeacher.objects.select_related("user").filter(user__isnull=False):
             uid = ct.user_id
-            if uid in seen_ids:
+            if uid in seen_ids or _es_cuenta_admin(ct.user):
                 continue
             seen_ids.add(uid)
             teachers.append({
@@ -201,7 +317,7 @@ class TeachersViewSet(viewsets.ViewSet):
         # ── 3) academic.Teacher con user (último fallback) ──
         for at in Teacher.objects.select_related("user").filter(user__isnull=False):
             uid = at.user_id
-            if uid in seen_ids:
+            if uid in seen_ids or _es_cuenta_admin(at.user):
                 continue
             seen_ids.add(uid)
             teachers.append({
@@ -233,6 +349,8 @@ class TeacherSectionsView(APIView):
             .order_by("-id")
         )
 
+        from .utils import INT_TO_DAY
+
         sections = []
         for s in qs:
             pc = s.plan_course
@@ -245,7 +363,17 @@ class TeacherSectionsView(APIView):
                 "label": s.label,
                 "period": s.period,
                 "plan_course_id": s.plan_course_id,
+                "semester": pc.semester,
                 "room_name": s.classroom.code if s.classroom else "",
+                # Horario semanal de la sección (para el dashboard del docente)
+                "slots": [
+                    {
+                        "day": INT_TO_DAY.get(sl.weekday, str(sl.weekday)),
+                        "start": sl.start.strftime("%H:%M") if hasattr(sl.start, "strftime") else str(sl.start)[:5],
+                        "end": sl.end.strftime("%H:%M") if hasattr(sl.end, "strftime") else str(sl.end)[:5],
+                    }
+                    for sl in s.schedule_slots.all()
+                ],
             })
 
         return ok(sections=sections)
@@ -275,6 +403,8 @@ class TeacherSectionsMeView(APIView):
             .order_by("-id")
         )
 
+        from .utils import INT_TO_DAY
+
         sections = []
         for s in qs:
             pc = s.plan_course
@@ -287,7 +417,17 @@ class TeacherSectionsMeView(APIView):
                 "label": s.label,
                 "period": s.period,
                 "plan_course_id": s.plan_course_id,
+                "semester": pc.semester,
                 "room_name": s.classroom.code if s.classroom else "",
+                # Horario semanal de la sección (para el dashboard del docente)
+                "slots": [
+                    {
+                        "day": INT_TO_DAY.get(sl.weekday, str(sl.weekday)),
+                        "start": sl.start.strftime("%H:%M") if hasattr(sl.start, "strftime") else str(sl.start)[:5],
+                        "end": sl.end.strftime("%H:%M") if hasattr(sl.end, "strftime") else str(sl.end)[:5],
+                    }
+                    for sl in s.schedule_slots.all()
+                ],
             })
 
         return ok(sections=sections)
@@ -301,90 +441,531 @@ class SectionStudentsView(APIView):
         """
         Solo devuelve estudiantes MATRICULADOS (Enrollment CONFIRMED) en la sección.
         Si no hay matrículas, retorna lista vacía.
+
+        Un docente solo puede consultar el roster de SUS propias secciones
+        (los administradores pueden consultar cualquiera).
         """
-        from academic.models import Enrollment, EnrollmentItem
+        from .acta_excel import _roster, roster_sin_seccion
+        from .utils import _can_admin_enroll
 
         sec = get_object_or_404(Section, id=section_id)
 
-        # Intentar obtener estudiantes matriculados en esta sección
-        enrolled_items = (
-            EnrollmentItem.objects
-            .select_related("enrollment__student")
-            .filter(
-                section_id=section_id,
-                enrollment__status="CONFIRMED",
-                enrollment__period=sec.period,
+        if not _can_admin_enroll(request.user):
+            es_su_seccion = bool(
+                sec.teacher and sec.teacher.user_id == request.user.id
             )
+            if not es_su_seccion:
+                return Response(
+                    {"detail": "Solo puedes ver los alumnos de tus propias secciones."},
+                    status=403,
+                )
+
+        # Una sola fuente para el roster: `_roster` (la misma que usan el acta,
+        # el registro de asistencia y los PDFs). Antes esta vista repetía la
+        # consulta y podía divergir del acta.
+        students = [
+            {
+                "id": r["id"],
+                "student_id": r["pk"],
+                "first_name": r["nombres"],
+                "last_name": r["apellidos"],
+                "num_documento": r["dni"],
+                "estado_academico": r["estado"],
+                "estado_rd": r["estado_rd"],
+            }
+            for r in _roster(sec)
+        ]
+
+        # Matriculados que no se pueden ubicar en ninguna sección (section NULL
+        # con varias secciones del curso): se avisan para que Secretaría los
+        # asigne, en vez de desaparecer en silencio.
+        sin_seccion = [
+            {"student_id": st.id,
+             "num_documento": getattr(st, "num_documento", "") or "",
+             "nombre": nombre_oficial(st)}
+            for st in roster_sin_seccion(sec)
+        ]
+
+        return ok(students=students, unassigned=sin_seccion)
+
+
+# ══════════════════════════════════════════════════════════════
+# PERFIL DEL DOCENTE (editable por el propio docente)
+# ══════════════════════════════════════════════════════════════
+
+class TeacherSelfProfileView(APIView):
+    """
+    GET /api/academic/teachers/me/profile
+    PUT /api/academic/teachers/me/profile   (multipart o JSON)
+        campos: fecha_nac (YYYY-MM-DD), grado_academico (PROFESOR|BACHILLER|
+        LICENCIADO|MAGISTER|DOCTOR), celular, email_institucional, photo (file)
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    GRADOS = {"", "PROFESOR", "BACHILLER", "LICENCIADO", "MAGISTER", "DOCTOR"}
+    CONDICIONES = {"", "NOMBRADO", "CONTRATADO"}
+
+    def _get_teacher(self, request):
+        ct, _ = CatalogTeacher.objects.get_or_create(user=request.user)
+        return ct
+
+    def _payload(self, request, ct):
+        photo_url = ""
+        try:
+            if ct.photo:
+                photo_url = request.build_absolute_uri(ct.photo.url)
+        except Exception:
+            pass
+        return {
+            "full_name": getattr(request.user, "full_name", "") or ct.full_name,
+            "document": ct.document or getattr(request.user, "username", ""),
+            "fecha_nac": ct.fecha_nac.isoformat() if ct.fecha_nac else "",
+            "grado_academico": ct.grado_academico or "",
+            "grado_academico_label": dict(CatalogTeacher.GRADOS_ACADEMICOS).get(
+                ct.grado_academico, ""),
+            "celular": ct.phone or "",
+            "email_institucional": ct.email or "",
+            "specialization": ct.specialization or "",
+            "photo_url": photo_url,
+            "condicion_laboral": ct.condicion_laboral or "",
+            "condicion_laboral_label": dict(CatalogTeacher.CONDICIONES).get(
+                ct.condicion_laboral, ""),
+            "rd_nombramiento": ct.rd_nombramiento or "",
+            "rd_fecha": ct.rd_fecha.isoformat() if ct.rd_fecha else "",
+        }
+
+    def get(self, request):
+        return Response(self._payload(request, self._get_teacher(request)))
+
+    def put(self, request):
+        ct = self._get_teacher(request)
+        data = request.data or {}
+
+        if "fecha_nac" in data:
+            v = (data.get("fecha_nac") or "").strip()
+            if v:
+                from django.utils.dateparse import parse_date
+                d = parse_date(v)
+                if not d:
+                    return Response({"detail": "fecha_nac inválida (YYYY-MM-DD)"}, status=400)
+                ct.fecha_nac = d
+            else:
+                ct.fecha_nac = None
+
+        if "grado_academico" in data:
+            g = (data.get("grado_academico") or "").strip().upper()
+            if g not in self.GRADOS:
+                return Response({"detail": f"grado_academico inválido: {g!r}"}, status=400)
+            ct.grado_academico = g
+
+        if "condicion_laboral" in data:
+            c = (data.get("condicion_laboral") or "").strip().upper()
+            if c not in self.CONDICIONES:
+                return Response({"detail": f"condicion_laboral inválida: {c!r}"}, status=400)
+            ct.condicion_laboral = c
+
+        if "rd_nombramiento" in data:
+            ct.rd_nombramiento = (data.get("rd_nombramiento") or "").strip()[:120]
+
+        if "rd_fecha" in data:
+            v = (data.get("rd_fecha") or "").strip()
+            if v:
+                from django.utils.dateparse import parse_date
+                d = parse_date(v)
+                if not d:
+                    return Response({"detail": "rd_fecha inválida (YYYY-MM-DD)"}, status=400)
+                ct.rd_fecha = d
+            else:
+                ct.rd_fecha = None
+
+        if "celular" in data:
+            ct.phone = (data.get("celular") or "").strip()[:30]
+        if "email_institucional" in data:
+            ct.email = (data.get("email_institucional") or "").strip()[:254]
+        if "specialization" in data:
+            ct.specialization = (data.get("specialization") or "").strip()[:120]
+
+        photo = request.FILES.get("photo")
+        if photo:
+            if photo.size > 5 * 1024 * 1024:
+                return Response({"detail": "La foto no debe superar 5 MB"}, status=400)
+            ct.photo = photo
+
+        if not ct.full_name:
+            ct.full_name = getattr(request.user, "full_name", "") or ""
+        if not ct.document:
+            ct.document = getattr(request.user, "username", "") or ""
+        ct.save()
+        return Response({"success": True, "message": "Perfil actualizado",
+                         **self._payload(request, ct)})
+
+
+class SectionGradesWindowView(APIView):
+    """
+    GET /api/academic/sections/<id>/grades-window
+    Estado del registro de calificaciones para la sección (lo consulta el
+    docente antes de editar): abierto / aún no abre / vencido / cerrado,
+    con el mensaje listo para mostrar y si el usuario puede editar.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, section_id: int):
+        from academic.models import AcademicPeriod
+
+        sec = get_object_or_404(Section, id=section_id)
+        if err := _grades_section_access_denied(request, sec):
+            return err
+
+        es_admin = _is_grades_admin(request.user)
+        per = AcademicPeriod.objects.filter(code=sec.period).first()
+        if not per:
+            # Sin período configurado → sin restricción
+            return Response({
+                "period": sec.period, "window_state": "OPEN", "is_open": True,
+                "has_window": False, "can_edit": True, "is_admin": es_admin,
+                "message": "Registro de calificaciones habilitado (sin restricción de fechas).",
+                "grades_start": None, "grades_end": None,
+                "acta_submitted": SectionGrades.objects.filter(
+                    section=sec, submitted=True).exists(),
+            })
+
+        info = per.grades_window_info()
+        submitted = SectionGrades.objects.filter(section=sec, submitted=True).exists()
+        return Response({
+            "period": sec.period,
+            **info,
+            "can_edit": bool(info["is_open"] or es_admin),
+            "is_admin": es_admin,
+            "acta_submitted": submitted,
+            "admin_override": bool(es_admin and not info["is_open"]),
+        })
+
+
+class TeacherSelfPeriodsView(APIView):
+    """
+    GET /api/academic/teachers/me/periodos
+    Períodos en los que el docente tuvo carga académica (para filtrar y
+    descargar horarios de períodos pasados), con su n° de secciones.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        teacher = Teacher.objects.filter(user=request.user).first()
+        if not teacher:
+            return ok(periods=[], current="")
+
+        from django.db.models import Count
+        rows = (Section.objects.filter(teacher=teacher)
+                .values("period")
+                .annotate(n=Count("id"))
+                .order_by("-period"))
+        current = ""
+        try:
+            from catalogs.models import Period as CatalogPeriod
+            per = CatalogPeriod.objects.filter(is_active=True).first()
+            current = (per.code or "").strip() if per else ""
+        except Exception:
+            pass
+        return ok(
+            periods=[{"code": r["period"], "sections": r["n"]}
+                     for r in rows if (r["period"] or "").strip()],
+            current=current,
         )
 
-        if enrolled_items.exists():
-            students = []
-            seen_ids = set()
-            for item in enrolled_items:
-                st = item.enrollment.student
-                if st.id in seen_ids:
-                    continue
-                seen_ids.add(st.id)
 
-                full = f"{getattr(st, 'nombres', '')} {getattr(st, 'apellido_paterno', '')} {getattr(st, 'apellido_materno', '')}".strip()
-                parts = full.split()
-                first = parts[0] if parts else ""
-                last = " ".join(parts[1:]) if len(parts) > 1 else ""
+# ══════════════════════════════════════════════════════════════
+# ADMIN: VENTANA DE CARGA DE NOTAS POR PERIODO
+# ══════════════════════════════════════════════════════════════
 
-                students.append({
-                    "id": st.user_id if getattr(st, "user_id", None) else st.id,
-                    "student_id": st.id,
-                    "first_name": first,
-                    "last_name": last,
-                    "num_documento": getattr(st, "num_documento", ""),
-                })
+class AdminGradesWindowView(APIView):
+    """
+    GET  /api/academic/periods/<code>/grades-window
+    PUT  /api/academic/periods/<code>/grades-window
+      body: { "grades_start": "2026-06-01T00:00", "grades_end": "2026-07-15T23:59" }
+    Si grades_start/end son null se elimina la restricción (cualquier momento).
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
 
-            students.sort(key=lambda x: (x.get("last_name", ""), x.get("first_name", "")))
-            return ok(students=students)
+    def _get_period(self, code):
+        from academic.models import AcademicPeriod
+        return AcademicPeriod.objects.filter(code=code).first()
 
-        # Fallback: también buscar por plan_course (sin sección específica)
-        enrolled_by_pc = (
-            EnrollmentItem.objects
-            .select_related("enrollment__student")
-            .filter(
-                plan_course_id=sec.plan_course_id,
-                enrollment__status="CONFIRMED",
-                enrollment__period=sec.period,
+    def get(self, request, code: str):
+        try:
+            per = self._get_period(code)
+            if not per:
+                return Response({"detail": f"Periodo {code} no existe"}, status=404)
+            return Response({"code": per.code, **per.grades_window_info()})
+        except Exception as exc:
+            import traceback
+            return Response({
+                "detail": f"Error en grades-window GET: {type(exc).__name__}: {exc}",
+                "traceback": traceback.format_exc().splitlines()[-10:],
+            }, status=500)
+
+    def put(self, request, code: str):
+        # Solo admins pueden configurar la ventana
+        u = request.user
+        is_admin = (
+            getattr(u, "is_staff", False)
+            or getattr(u, "is_superuser", False)
+            or user_has_any_role(u, ("ADMIN_SYSTEM", "ADMIN_ACADEMIC",
+                                     "ADMIN_ACADEMICO", "REGISTRAR"))
+        )
+        if not is_admin:
+            return Response({"detail": "No autorizado."}, status=403)
+
+        per = self._get_period(code)
+        if not per:
+            return Response({"detail": f"Periodo {code} no existe"}, status=404)
+
+        from django.utils.dateparse import parse_datetime
+        data = request.data or {}
+
+        def _p(key):
+            v = data.get(key)
+            if v in (None, ""):
+                return None
+            dt = parse_datetime(str(v))
+            if dt and timezone.is_naive(dt):
+                dt = timezone.make_aware(dt)
+            return dt
+
+        start = _p("grades_start")
+        end   = _p("grades_end")
+        if start and end and end < start:
+            return Response({"detail": "grades_end no puede ser anterior a grades_start"}, status=400)
+
+        per.grades_start = start
+        per.grades_end   = end
+        per.save(update_fields=["grades_start", "grades_end"])
+        return Response({"code": per.code, **per.grades_window_info(), "success": True})
+
+
+# ══════════════════════════════════════════════════════════════
+# ADMIN: MONITOREO GLOBAL DE NOTAS POR PERIODO
+# ══════════════════════════════════════════════════════════════
+
+class AdminGradesOverviewView(APIView):
+    """
+    GET /api/academic/admin/grades/overview?period=2026-I[&career_id=5]
+    Devuelve por cada Section: cuántos alumnos hay, cuántas notas
+    cargadas (cualquier valor distinto de vacío), si el acta está cerrada,
+    y cuántos alumnos con nota < 11 (desaprobados) o DPI.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            return self._do_get(request)
+        except Exception as exc:
+            import traceback
+            return Response({
+                "detail": f"Error en grades/overview: {type(exc).__name__}: {exc}",
+                "traceback": traceback.format_exc().splitlines()[-15:],
+            }, status=500)
+
+    def _do_get(self, request):
+        from academic.models import EnrollmentItem, Enrollment
+
+        period = (request.query_params.get("period") or "").strip()
+        career_id = request.query_params.get("career_id")
+
+        sec_qs = Section.objects.select_related(
+            "plan_course", "plan_course__course", "plan_course__plan",
+            "plan_course__plan__career", "teacher", "teacher__user",
+        )
+        if period:
+            sec_qs = sec_qs.filter(period=period)
+        if career_id:
+            try:
+                sec_qs = sec_qs.filter(plan_course__plan__career_id=int(career_id))
+            except (TypeError, ValueError):
+                pass
+
+        out = []
+        for sec in sec_qs:
+            bundle, _ = SectionGrades.objects.get_or_create(section=sec)
+            grades = bundle.grades or {}
+
+            # (student_id, user_id): el acta del docente usa user_id como clave,
+            # las vistas admin históricamente usaban student_id — se aceptan ambas.
+            students_in_section = set(
+                EnrollmentItem.objects
+                .filter(plan_course=sec.plan_course,
+                        enrollment__period=sec.period,
+                        enrollment__status=Enrollment.STATUS_CONFIRMED)
+                .values_list("enrollment__student_id", "enrollment__student__user_id")
             )
+            n_students = len(students_in_section)
+
+            # Cantidad con nota cargada
+            n_loaded = 0
+            n_failed = 0
+            n_dpi = 0
+            for sid, uid in students_in_section:
+                entry = None
+                for key in (uid, sid):
+                    if key is not None and isinstance(grades.get(str(key)), dict):
+                        entry = grades[str(key)]
+                        break
+                if entry is None:
+                    continue
+                fg = entry.get("final_grade")
+                if fg is None:
+                    fg = entry.get("PROMEDIO_FINAL")
+                st = (entry.get("status") or "").upper()
+                if st == "DPI":
+                    n_dpi += 1
+                    n_loaded += 1
+                    n_failed += 1
+                    continue
+                try:
+                    fgn = float(fg)
+                    n_loaded += 1
+                    if fgn < 11:
+                        n_failed += 1
+                except (TypeError, ValueError):
+                    pass
+
+            teacher_name = ""
+            if sec.teacher and sec.teacher.user:
+                teacher_name = (getattr(sec.teacher.user, "full_name", "")
+                                or sec.teacher.user.username or "")
+
+            pct = (n_loaded / n_students * 100) if n_students else 0
+
+            out.append({
+                "section_id": sec.id,
+                "period": sec.period,
+                "label": sec.label,
+                "course_code": sec.plan_course.effective_code if sec.plan_course else "",
+                "course_name": sec.plan_course.effective_name if sec.plan_course else "",
+                "career_name": (sec.plan_course.plan.career.name
+                                if sec.plan_course and sec.plan_course.plan
+                                and sec.plan_course.plan.career else ""),
+                "semester": sec.plan_course.semester if sec.plan_course else None,
+                "teacher_name": teacher_name,
+                "n_students": n_students,
+                "n_loaded": n_loaded,
+                "n_pending": max(n_students - n_loaded, 0),
+                "n_failed": n_failed,
+                "n_dpi": n_dpi,
+                "loaded_pct": round(pct, 1),
+                "submitted": bool(bundle.submitted),
+                "submitted_at": bundle.submitted_at.isoformat() if bundle.submitted_at else None,
+            })
+
+        # Orden: actas no cargadas primero, luego más alumnos sin nota
+        out.sort(key=lambda s: (s["submitted"], -s["n_pending"],
+                                s["career_name"], s["semester"] or 0,
+                                s["course_name"]))
+        return Response({"period": period, "sections": out})
+
+
+class AdminGradesSectionDetailView(APIView):
+    """
+    GET /api/academic/admin/grades/section/<section_id>
+    Detalle: lista de alumnos con su nota, estado (DPI / desaprobado / aprobado / pendiente).
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, section_id):
+        from academic.models import EnrollmentItem, Enrollment
+        from students.models import Student
+
+        sec = get_object_or_404(Section, id=section_id)
+        bundle, _ = SectionGrades.objects.get_or_create(section=sec)
+        grades = bundle.grades or {}
+
+        st_ids = list(
+            EnrollmentItem.objects
+            .filter(plan_course=sec.plan_course,
+                    enrollment__period=sec.period,
+                    enrollment__status=Enrollment.STATUS_CONFIRMED)
+            .values_list("enrollment__student_id", flat=True)
+            .distinct()
+        )
+        students = Student.objects.filter(id__in=st_ids).order_by(
+            "apellido_paterno", "apellido_materno", "nombres"
         )
 
-        if enrolled_by_pc.exists():
-            students = []
-            seen_ids = set()
-            for item in enrolled_by_pc:
-                st = item.enrollment.student
-                if st.id in seen_ids:
-                    continue
-                seen_ids.add(st.id)
+        teacher_name = ""
+        if sec.teacher and sec.teacher.user:
+            teacher_name = (getattr(sec.teacher.user, "full_name", "")
+                            or sec.teacher.user.username or "")
 
-                full = f"{getattr(st, 'nombres', '')} {getattr(st, 'apellido_paterno', '')} {getattr(st, 'apellido_materno', '')}".strip()
-                parts = full.split()
-                first = parts[0] if parts else ""
-                last = " ".join(parts[1:]) if len(parts) > 1 else ""
+        out = []
+        for st in students:
+            entry = {}
+            for key in (getattr(st, "user_id", None), st.id):
+                if key is not None and isinstance(grades.get(str(key)), dict):
+                    entry = grades[str(key)]
+                    break
+            fg = entry.get("final_grade") if entry else None
+            if fg is None and entry:
+                fg = entry.get("PROMEDIO_FINAL")
+            status_val = (entry.get("status") or "").upper() if entry else ""
+            estado = "PENDIENTE"
+            try:
+                fgn = float(fg)
+                if status_val == "DPI":
+                    estado = "DPI"
+                elif fgn < 11:
+                    estado = "DESAPROBADO"
+                else:
+                    estado = "APROBADO"
+            except (TypeError, ValueError):
+                if status_val == "DPI":
+                    estado = "DPI"
+                    fg = 0
+            out.append({
+                "student_id": st.id,
+                "dni": st.num_documento,
+                "full_name": f"{st.apellido_paterno or ''} {st.apellido_materno or ''} {st.nombres or ''}".strip(),
+                "final_grade": fg,
+                "status": status_val or estado,
+                "estado": estado,
+                "dpi_pct": entry.get("dpi_pct") if entry else None,
+            })
 
-                students.append({
-                    "id": st.user_id if getattr(st, "user_id", None) else st.id,
-                    "student_id": st.id,
-                    "first_name": first,
-                    "last_name": last,
-                    "num_documento": getattr(st, "num_documento", ""),
-                })
-
-            students.sort(key=lambda x: (x.get("last_name", ""), x.get("first_name", "")))
-            return ok(students=students)
-
-        # Sin matrículas registradas → lista vacía
-        return ok(students=[])
+        return Response({
+            "section_id": sec.id,
+            "period": sec.period,
+            "course": sec.plan_course.effective_name if sec.plan_course else "",
+            "label": sec.label,
+            "teacher_name": teacher_name,
+            "n_students": len(out),
+            "submitted": bool(bundle.submitted),
+            "students": out,
+        })
 
 
 # ══════════════════════════════════════════════════════════════
 # VISTAS DE CALIFICACIONES Y ACTAS
 # ══════════════════════════════════════════════════════════════
+
+def _grades_section_access_denied(request, sec):
+    """
+    Un docente solo puede leer/escribir notas de SUS propias secciones;
+    los administradores de notas pueden operar sobre cualquiera.
+    Retorna Response 403 si está prohibido, o None si está OK.
+    """
+    if _is_grades_admin(request.user):
+        return None
+    if sec.teacher and sec.teacher.user_id == request.user.id:
+        return None
+    return Response(
+        {"detail": "Solo puedes operar sobre las notas de tus propias secciones."},
+        status=403,
+    )
+
 
 class SectionGradesView(APIView):
     authentication_classes = [JWTAuthentication]
@@ -392,11 +973,142 @@ class SectionGradesView(APIView):
 
     def get(self, request, section_id: int):
         sec = get_object_or_404(Section, id=section_id)
+        if err := _grades_section_access_denied(request, sec):
+            return err
         bundle, _ = SectionGrades.objects.get_or_create(section=sec)
         return ok(
             grades=(bundle.grades or {}),
             submitted=bool(bundle.submitted)
         )
+
+
+# ── Helpers compartidos por GradesSave/GradesSubmit ──────────────────
+DPI_GRADES_THRESHOLD = 0.30   # 30% de inasistencias = DPI (RVM 277-2019)
+
+
+def _is_grades_admin(user):
+    return (
+        getattr(user, "is_staff", False)
+        or getattr(user, "is_superuser", False)
+        or user_has_any_role(user, ("ADMIN_SYSTEM", "ADMIN_ACADEMIC",
+                                    "ADMIN_ACADEMICO", "REGISTRAR"))
+    )
+
+
+def _check_grades_window(section, user):
+    """Devuelve (ok, error_dict). Si la ventana de notas está cerrada,
+    los no-admin reciben 423 (Locked) con el rango configurado."""
+    try:
+        from academic.models import AcademicPeriod
+        per = AcademicPeriod.objects.filter(code=section.period).first()
+    except Exception:
+        per = None
+    if not per:
+        return True, None
+    if per.grades_window_open():
+        return True, None
+    if _is_grades_admin(user):
+        return True, None
+    return False, {
+        "detail": per.grades_window_message(),
+        **per.grades_window_info(),
+    }
+
+
+def _licencia_students(section):
+    """Alumnos de la sección con estado LICENCIA.
+    Retorna dict {clave_del_acta: nombre} (claves user_id y pk)."""
+    from academic.models import EnrollmentItem, Enrollment
+    out = {}
+    items = (
+        EnrollmentItem.objects
+        .select_related("enrollment__student")
+        .filter(plan_course=section.plan_course,
+                enrollment__period=section.period,
+                enrollment__status=Enrollment.STATUS_CONFIRMED)
+    )
+    for item in items:
+        st = item.enrollment.student
+        if (getattr(st, "estado_academico", "") or "").upper() == "LICENCIA":
+            nombre = f"{st.apellido_paterno or ''} {st.nombres or ''}".strip()
+            for key in (st.user_id, st.id):
+                if key is not None:
+                    out[str(key)] = nombre
+    return out
+
+
+def _strip_licencia(section, grades_payload):
+    """Quita del payload las notas de alumnos con LICENCIA (bloqueados).
+    Retorna (payload_filtrado, nombres_bloqueados)."""
+    lic = _licencia_students(section)
+    if not lic or not isinstance(grades_payload, dict):
+        return grades_payload, []
+    bloqueados = []
+    out = {}
+    for key, val in grades_payload.items():
+        if str(key) in lic:
+            if lic[str(key)] not in bloqueados:
+                bloqueados.append(lic[str(key)])
+            continue
+        out[key] = val
+    return out, bloqueados
+
+
+def _apply_dpi_override(section, normalized):
+    """Para cada alumno con >30% inasistencias en esta sección, fuerza
+    final_grade=0 y status='DPI', sin importar lo que envió el docente.
+
+    Devuelve (normalized_modificado, dpi_students_info[])
+    """
+    try:
+        from academic.models import AttendanceSession, AttendanceRow, EnrollmentItem, Enrollment
+    except Exception:
+        return normalized, []
+
+    sessions = AttendanceSession.objects.filter(section=section)
+    n_sessions = sessions.count()
+    if n_sessions == 0:
+        return normalized, []   # sin sesiones, no se puede evaluar DPI
+
+    # Alumnos de la sección
+    st_ids = set(
+        EnrollmentItem.objects
+        .filter(plan_course=section.plan_course,
+                enrollment__period=section.period,
+                enrollment__status=Enrollment.STATUS_CONFIRMED)
+        .values_list("enrollment__student_id", flat=True)
+    )
+    # Faltas por alumno
+    absences = {}
+    for r in AttendanceRow.objects.filter(
+        session__in=sessions, student_id__in=st_ids,
+    ).values("student_id", "status"):
+        if (r["status"] or "").upper() == "ABSENT":
+            sid = r["student_id"]
+            absences[sid] = absences.get(sid, 0) + 1
+
+    dpi_info = []
+    out = dict(normalized) if isinstance(normalized, dict) else {}
+    for sid in st_ids:
+        a = absences.get(sid, 0)
+        pct = a / n_sessions
+        if pct > DPI_GRADES_THRESHOLD:
+            existing = out.get(str(sid)) if isinstance(out.get(str(sid)), dict) else {}
+            out[str(sid)] = {
+                **(existing or {}),
+                "final_grade": 0,
+                "status": "DPI",
+                "dpi_pct": round(pct * 100, 1),
+                "dpi_absences": a,
+                "dpi_sessions": n_sessions,
+            }
+            dpi_info.append({
+                "student_id": sid,
+                "absences": a,
+                "sessions": n_sessions,
+                "pct": round(pct * 100, 1),
+            })
+    return out, dpi_info
 
 
 class GradesSaveView(APIView):
@@ -412,10 +1124,25 @@ class GradesSaveView(APIView):
             return Response({"detail": "section_id es requerido"}, status=400)
 
         sec = get_object_or_404(Section, id=int(section_id))
+        if err := _grades_section_access_denied(request, sec):
+            return err
         bundle, _ = SectionGrades.objects.get_or_create(section=sec)
 
+        # ── Ventana de notas (admin bypass) ──
+        ok_win, err = _check_grades_window(sec, request.user)
+        if not ok_win:
+            return Response(err, status=423)  # Locked
+
         if bundle.submitted:
-            return Response({"detail": "El acta ya está cerrada. No se puede modificar."}, status=409)
+            # Acta cerrada → solo administradores pueden modificar
+            if not _is_grades_admin(request.user):
+                return Response(
+                    {"detail": "El acta ya está cerrada. Solo administradores pueden modificarla."},
+                    status=409,
+                )
+
+        # ── Alumnos con LICENCIA: bloqueados, no se les puede calificar ──
+        grades, bloqueados = _strip_licencia(sec, grades)
 
         normalized, errors_by_student = _normalize_acta_grades_payload(grades)
 
@@ -425,9 +1152,22 @@ class GradesSaveView(APIView):
                 status=400
             )
 
+        # ── Auto-DPI: alumnos con >30% inasistencias forzados a 0/DPI ──
+        normalized, dpi_info = _apply_dpi_override(sec, normalized)
+
         bundle.grades = normalized
         bundle.save()
-        return ok(success=True, message="Acta guardada correctamente (borrador)")
+        msg = (
+            "Acta modificada por administrador (acta permanece cerrada)"
+            if bundle.submitted else
+            "Acta guardada correctamente (borrador)"
+        )
+        if dpi_info:
+            msg += f" · {len(dpi_info)} alumno(s) marcado(s) DPI por inasistencia (>30%)"
+        if bloqueados:
+            msg += f" · {len(bloqueados)} alumno(s) con LICENCIA no calificable(s): {', '.join(bloqueados)}"
+        return ok(success=True, message=msg, dpi_applied=dpi_info,
+                  licencia_bloqueados=bloqueados)
 
 
 class GradesSubmitView(APIView):
@@ -443,7 +1183,17 @@ class GradesSubmitView(APIView):
             return Response({"detail": "section_id es requerido"}, status=400)
 
         sec = get_object_or_404(Section, id=int(section_id))
+        if err := _grades_section_access_denied(request, sec):
+            return err
         bundle, _ = SectionGrades.objects.get_or_create(section=sec)
+
+        # Ventana
+        ok_win, err = _check_grades_window(sec, request.user)
+        if not ok_win:
+            return Response(err, status=423)
+
+        # Alumnos con LICENCIA no se califican (bloqueados)
+        grades, bloqueados = _strip_licencia(sec, grades)
 
         normalized, errors_by_student = _normalize_acta_grades_payload(grades)
 
@@ -453,12 +1203,52 @@ class GradesSubmitView(APIView):
                 status=400
             )
 
+        # Auto-DPI antes de cerrar
+        normalized, dpi_info = _apply_dpi_override(sec, normalized)
+
         bundle.grades = normalized
         bundle.submitted = True
         bundle.submitted_at = timezone.now()
         bundle.save()
 
-        return ok(success=True, submitted=True, message="Acta enviada y cerrada correctamente")
+        msg = "Acta enviada y cerrada correctamente"
+        if dpi_info:
+            msg += f" · {len(dpi_info)} alumno(s) DPI aplicados automáticamente"
+        if bloqueados:
+            msg += f" · {len(bloqueados)} alumno(s) con LICENCIA no calificable(s)"
+
+        # ── Auto-emisión de CERTIFICADO_EGRESADO ──
+        # Al cerrar el acta, revisamos si algún alumno alcanza los créditos
+        # totales del plan y si aún no tiene certificado, lo emitimos.
+        auto_emitted = []
+        try:
+            from students.models import Student as _Student
+            from academic.models import EnrollmentItem, Enrollment as _E
+            from .graduates import maybe_auto_emit_certificate
+            st_ids = list(
+                EnrollmentItem.objects
+                .filter(plan_course=sec.plan_course,
+                        enrollment__period=sec.period,
+                        enrollment__status=_E.STATUS_CONFIRMED)
+                .values_list("enrollment__student_id", flat=True)
+                .distinct()
+            )
+            for stu in _Student.objects.filter(id__in=st_ids).select_related("plan"):
+                proc = maybe_auto_emit_certificate(stu)
+                if proc:
+                    auto_emitted.append({
+                        "student_id": stu.id,
+                        "process_id": proc.id,
+                        "dni": stu.num_documento,
+                    })
+            if auto_emitted:
+                msg += f" · {len(auto_emitted)} certificado(s) de egresado auto-emitido(s)"
+        except Exception:
+            # No romper el submit si la auto-emisión falla
+            pass
+
+        return ok(success=True, submitted=True, message=msg,
+                  dpi_applied=dpi_info, certificates_emitted=auto_emitted)
 
 
 class GradesReopenView(APIView):
@@ -466,7 +1256,14 @@ class GradesReopenView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        if not user_has_any_role(request.user, ["REGISTRAR", "ADMIN_ACADEMIC"]):
+        u = request.user
+        is_admin = (
+            getattr(u, "is_staff", False)
+            or getattr(u, "is_superuser", False)
+            or user_has_any_role(u, ["REGISTRAR", "ADMIN_ACADEMIC",
+                                     "ADMIN_ACADEMICO", "ADMIN_SYSTEM"])
+        )
+        if not is_admin:
             return Response({"detail": "No autorizado para reabrir actas"}, status=403)
 
         body = request.data or {}
@@ -545,9 +1342,13 @@ except ImportError:
         return PlanCourse.objects.filter(plan_id=pid, course=course).first()
 
 try:
-    from catalogs.models import Course
+    from academic.models import Course
 except ImportError:
-    Course = None
+    try:
+        # Fallback por si en algún despliegue se renombró el módulo
+        from catalogs.models import Course  # type: ignore
+    except ImportError:
+        Course = None
 
 
 def _require_admin(request):
@@ -592,19 +1393,16 @@ def _build_components(raw_components: dict) -> dict:
                 if c_val in num_to_level and not lv:
                     out[lv_key] = num_to_level[c_val]
 
-    # Auto-calcular escala y promedio
-    c1 = _to_int(out.get("C1"))
-    c2 = _to_int(out.get("C2"))
-    c3 = _to_int(out.get("C3"))
-
-    if c1 is not None and c2 is not None and c3 is not None:
-        if all(1 <= x <= 5 for x in (c1, c2, c3)):
-            escala = _calc_escala_0_5(c1, c2, c3)
-            prom = _calc_promedio_final_0_20(escala)
-            estado = _calc_estado(prom)
-            out["ESCALA_0_5"] = escala
-            out["PROMEDIO_FINAL"] = prom
-            out["ESTADO"] = estado
+    # Auto-calcular escala y promedio con las competencias registradas
+    registradas = [_to_float(out.get(f"C{i}")) for i in (1, 2, 3)]
+    registradas = [v for v in registradas if v is not None and 1 <= v <= 5]
+    if registradas:
+        escala = _calc_escala_0_5(*registradas)
+        prom = _calc_promedio_final_0_20(escala)
+        estado = _calc_estado(prom, escala)
+        out["ESCALA_0_5"] = escala
+        out["PROMEDIO_FINAL"] = prom
+        out["ESTADO"] = estado
 
     return out
 
@@ -635,6 +1433,37 @@ class HistoricalGradesView(APIView):
             .order_by("-term", "course__name")
         )
 
+        # Cache para créditos y semestre
+        try:
+            student = Student.objects.select_related("plan").get(pk=int(student_id))
+        except Student.DoesNotExist:
+            student = None
+
+        from .kardex_helpers import (
+            _credits_for_student_course,
+            _build_pc_name_cache,
+        )
+        pc_cache = _build_pc_name_cache(getattr(student, "plan_id", None)) if student else {}
+
+        # Mapa de PlanCourse → semester (para incluir el ciclo)
+        _ROMAN = {1:"I",2:"II",3:"III",4:"IV",5:"V",6:"VI",7:"VII",8:"VIII",9:"IX",10:"X"}
+
+        def _ciclo_for(rec):
+            if rec.plan_course and rec.plan_course.semester:
+                return int(rec.plan_course.semester)
+            if student and student.plan_id:
+                try:
+                    sem = (
+                        PlanCourse.objects
+                        .filter(plan_id=student.plan_id, course_id=rec.course_id)
+                        .values_list("semester", flat=True).first()
+                    )
+                    if sem:
+                        return int(sem)
+                except Exception:
+                    pass
+            return 0
+
         result = []
         for rec in records:
             pc_name = ""
@@ -643,6 +1472,17 @@ class HistoricalGradesView(APIView):
                 if not pc_name and rec.plan_course.course:
                     pc_name = rec.plan_course.course.name
 
+            credits = 0
+            if student and rec.course:
+                try:
+                    credits = _credits_for_student_course(student, rec.course, _pc_name_cache=pc_cache) or 0
+                except Exception:
+                    credits = int(getattr(rec.course, "credits", 0) or 0)
+            elif rec.course:
+                credits = int(getattr(rec.course, "credits", 0) or 0)
+
+            sem = _ciclo_for(rec)
+
             result.append({
                 "id": rec.id,
                 "course_id": rec.course_id,
@@ -650,6 +1490,9 @@ class HistoricalGradesView(APIView):
                 "course_code": rec.course.code if rec.course else "",
                 "term": rec.term,
                 "final_grade": float(rec.final_grade) if rec.final_grade is not None else None,
+                "credits": credits,
+                "ciclo": sem,
+                "ciclo_roman": _ROMAN.get(sem, "") if sem > 0 else "",
                 "components": rec.components or {},
                 "plan_course_id": rec.plan_course_id,
                 "created_at": rec.created_at.isoformat() if rec.created_at else None,
@@ -758,3 +1601,60 @@ class HistoricalGradesView(APIView):
 
         rec.delete()
         return ok(deleted=True)
+
+
+class HistoricalGradesBulkDeleteView(APIView):
+    """
+    POST /api/academic/grades/historical/bulk-delete
+    Body: { student_id: X, terms: ["2023-I", "2023-II", "2024-EXTRAORDINARIO"] }
+
+    Elimina TODOS los registros del alumno para los periodos indicados.
+    Útil cuando un alumno reingresa como cachimbo y se debe limpiar su
+    historial anterior. Solo accesible por admin.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        err, code = _require_admin(request)
+        if err:
+            return ok(error=err["detail"])
+
+        student_id = request.data.get("student_id")
+        terms = request.data.get("terms") or []
+
+        if not student_id:
+            return ok(error="student_id es requerido")
+        if not isinstance(terms, list) or not terms:
+            return ok(error="terms es requerido (lista de periodos, ej. ['2023-I', '2023-II'])")
+
+        # Normalizar y filtrar
+        terms_clean = [str(t).strip() for t in terms if str(t).strip()]
+        if not terms_clean:
+            return ok(error="No se recibieron periodos válidos")
+
+        try:
+            student_id = int(student_id)
+        except (TypeError, ValueError):
+            return ok(error="student_id inválido")
+
+        if not Student.objects.filter(pk=student_id).exists():
+            return ok(error=f"Estudiante {student_id} no existe")
+
+        qs = AcademicGradeRecord.objects.filter(
+            student_id=student_id,
+            term__in=terms_clean,
+        )
+        count_before = qs.count()
+        if count_before == 0:
+            return ok(deleted=0, terms=terms_clean,
+                      message="No se encontraron registros en esos periodos")
+
+        # Eliminar
+        deleted, _per_model = qs.delete()
+
+        return ok(
+            deleted=count_before,
+            terms=terms_clean,
+            student_id=student_id,
+        )

@@ -639,10 +639,14 @@ const PeriodsSection = () => {
 // ===============================================================
 // ★ Sedes & Aulas — con scroll en ambas listas
 // ===============================================================
-const CampusesSection = () => {
+export const CampusesSection = () => {
     const [campuses, setCampuses] = useState([]);
     const [classrooms, setClassrooms] = useState([]);
     const [selCampus, setSelCampus] = useState("");
+    const [selAulas, setSelAulas] = useState(new Set());
+    const [bulkCapOpen, setBulkCapOpen] = useState(false);
+    const [bulkCap, setBulkCap] = useState(30);
+    const [bulkBusy, setBulkBusy] = useState(false);
     const [loading, setLoading] = useState(true);
     const [openCampus, setOpenCampus] = useState(false);
     const [openClass, setOpenClass] = useState(false);
@@ -674,6 +678,52 @@ const CampusesSection = () => {
 
     useEffect(() => { load(); }, [load]);
     useEffect(() => { if (selCampus) loadClassrooms(); }, [loadClassrooms, selCampus]);
+    useEffect(() => { setSelAulas(new Set()); }, [selCampus]);
+
+    /* ── Acciones masivas sobre aulas ── */
+    const toggleAula = (id) => {
+        setSelAulas((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+    const toggleTodasAulas = () => {
+        setSelAulas((prev) =>
+            prev.size === classrooms.length ? new Set() : new Set(classrooms.map((a) => a.id))
+        );
+    };
+
+    const eliminarAulasMasivo = async () => {
+        setBulkBusy(true);
+        let ok = 0, fail = 0;
+        for (const id of selAulas) {
+            try { await Classrooms.remove(id); ok++; } catch { fail++; }
+        }
+        setBulkBusy(false);
+        setSelAulas(new Set());
+        toast[fail ? "warning" : "success"](
+            `${ok} aula(s) eliminada(s)` + (fail ? ` · ${fail} no se pudieron eliminar (¿en uso?)` : "")
+        );
+        loadClassrooms();
+    };
+
+    const capacidadMasiva = async () => {
+        const cap = Number(bulkCap || 0);
+        if (!cap || cap < 1) return toast.error("Capacidad inválida");
+        setBulkBusy(true);
+        let ok = 0, fail = 0;
+        for (const id of selAulas) {
+            try { await Classrooms.update(id, { capacity: cap }); ok++; } catch { fail++; }
+        }
+        setBulkBusy(false);
+        setBulkCapOpen(false);
+        setSelAulas(new Set());
+        toast[fail ? "warning" : "success"](
+            `Capacidad actualizada en ${ok} aula(s)` + (fail ? ` · ${fail} fallaron` : "")
+        );
+        loadClassrooms();
+    };
 
     const saveCampus = async () => {
         try {
@@ -690,13 +740,26 @@ const CampusesSection = () => {
         } catch (e) { toast.error(formatApiError(e)); }
     };
 
+    // Código duplicado en la sede seleccionada (aviso en vivo)
+    const codigoAulaDuplicado = useMemo(() => {
+        const code = (classForm.code || "").trim().toUpperCase();
+        if (!code) return false;
+        const campusPk = String(classForm.campus_id || selCampus || "");
+        if (campusPk !== String(selCampus || "")) return false; // solo validamos la lista cargada
+        return classrooms.some(
+            (a) => (a.code || "").trim().toUpperCase() === code &&
+                String(a.id) !== String(editingClass?.id || "")
+        );
+    }, [classForm.code, classForm.campus_id, selCampus, classrooms, editingClass]);
+
     const saveClass = async () => {
         try {
             if (!classForm.code?.trim()) return toast.error("Código de aula es requerido");
             if (!classForm.name?.trim()) return toast.error("Nombre de aula es requerido");
             const campusPk = Number(classForm.campus_id || selCampus);
             if (!campusPk) return toast.error("Selecciona una sede");
-            const payload = { code: classForm.code, name: classForm.name, capacity: Number(classForm.capacity || 0), campus_id: campusPk };
+            if (codigoAulaDuplicado) return toast.error(`Ya existe un aula con el código "${classForm.code.trim()}" en esta sede`);
+            const payload = { code: classForm.code.trim(), name: classForm.name.trim(), capacity: Number(classForm.capacity || 0), campus_id: campusPk };
             if (editingClass?.id) {
                 await Classrooms.update(editingClass.id, payload);
                 toast.success("Aula actualizada");
@@ -705,7 +768,14 @@ const CampusesSection = () => {
                 toast.success("Aula creada");
             }
             setOpenClass(false); resetClassForm(); loadClassrooms();
-        } catch (e) { toast.error(formatApiError(e)); }
+        } catch (e) {
+            const raw = JSON.stringify(e?.response?.data || "");
+            if (raw.includes("conjunto único") || raw.toLowerCase().includes("unique")) {
+                toast.error(`Ya existe un aula con el código "${classForm.code?.trim()}" en esa sede. Usa otro código o edita la existente.`);
+            } else {
+                toast.error(formatApiError(e));
+            }
+        }
     };
 
     const campusDialogContent = (
@@ -811,6 +881,28 @@ const CampusesSection = () => {
                                     ? <p className="text-[11px] text-green-600 font-600 mt-0.5 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />{campuses.find((x) => String(x.id) === String(selCampus))?.name}</p>
                                     : <p className="text-[11px] text-amber-600 font-600 mt-0.5">Selecciona una sede primero</p>}
                             </div>
+                            <div className="flex items-center gap-2">
+                                {selAulas.size > 0 && (
+                                    <>
+                                        <Button variant="outline" disabled={bulkBusy}
+                                            className="h-8 px-3 rounded-xl text-xs font-700 gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50"
+                                            onClick={() => setBulkCapOpen(true)}>
+                                            <Edit3 className="w-3.5 h-3.5" /> Capacidad ({selAulas.size})
+                                        </Button>
+                                        <DeleteConfirm
+                                            trigger={
+                                                <Button variant="outline" disabled={bulkBusy}
+                                                    className="h-8 px-3 rounded-xl text-xs font-700 gap-1.5 border-red-200 text-red-600 hover:bg-red-50">
+                                                    {bulkBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                                    Eliminar ({selAulas.size})
+                                                </Button>
+                                            }
+                                            title={`¿Eliminar ${selAulas.size} aula(s)?`}
+                                            description={<>Se eliminarán permanentemente las aulas seleccionadas.</>}
+                                            onConfirm={eliminarAulasMasivo}
+                                        />
+                                    </>
+                                )}
                             <Dialog open={openClass} onOpenChange={(v) => { setOpenClass(v); if (!v) resetClassForm(); }}>
                                 <DialogTrigger asChild>
                                     <Button disabled={!selCampus} className="h-8 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-700 gap-1.5 shadow-sm disabled:opacity-50">
@@ -826,8 +918,15 @@ const CampusesSection = () => {
                                         </DialogHeader>
                                         <div className="space-y-4">
                                             <Field label="Código *">
-                                                <Input className="h-9 rounded-xl border-slate-200 text-sm" placeholder="A-101"
+                                                <Input
+                                                    className={`h-9 rounded-xl text-sm ${codigoAulaDuplicado ? "border-red-300 focus-visible:ring-red-400" : "border-slate-200"}`}
+                                                    placeholder="A-101"
                                                     value={classForm.code} onChange={(e) => setClassForm({ ...classForm, code: e.target.value })} />
+                                                {codigoAulaDuplicado && (
+                                                    <p className="text-[11px] text-red-500 font-600 mt-1">
+                                                        Ya existe un aula con este código en la sede — usa otro o edita la existente.
+                                                    </p>
+                                                )}
                                             </Field>
                                             <Field label="Nombre *">
                                                 <Input className="h-9 rounded-xl border-slate-200 text-sm" placeholder="Laboratorio de Cómputo 1"
@@ -855,12 +954,41 @@ const CampusesSection = () => {
                                     </div>
                                 </DialogContent>
                             </Dialog>
+                            </div>
                         </div>
+
+                        {/* ── Modal: capacidad masiva ── */}
+                        <Dialog open={bulkCapOpen} onOpenChange={setBulkCapOpen}>
+                            <DialogContent className="rounded-2xl sm:max-w-sm">
+                                <DialogHeader>
+                                    <DialogTitle className="font-800 text-slate-800">Cambiar capacidad ({selAulas.size} aulas)</DialogTitle>
+                                    <DialogDescription>Se aplicará la misma capacidad a todas las aulas seleccionadas.</DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4 pt-1">
+                                    <Field label="Nueva capacidad *">
+                                        <Input type="number" min={1} className="h-9 rounded-xl border-slate-200 text-sm"
+                                            value={bulkCap} onChange={(e) => setBulkCap(parseInt(e.target.value || "0", 10))} />
+                                    </Field>
+                                    <div className="flex justify-end gap-2">
+                                        <Button variant="outline" className="h-9 rounded-xl text-sm" onClick={() => setBulkCapOpen(false)}>Cancelar</Button>
+                                        <Button className="h-9 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-sm font-700" onClick={capacidadMasiva} disabled={bulkBusy}>
+                                            {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Aplicar"}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+
                         {/* ★ Scroll en tabla de aulas */}
                         <div className="overflow-x-auto" style={{ maxHeight: 340, overflowY: "auto", scrollbarWidth: "thin" }}>
                             <table className="w-full border-collapse">
                                 <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                                     <tr>
+                                        <th className="cfg-th w-8 text-center">
+                                            <input type="checkbox" className="accent-blue-600 cursor-pointer"
+                                                checked={classrooms.length > 0 && selAulas.size === classrooms.length}
+                                                onChange={toggleTodasAulas} title="Seleccionar todas" />
+                                        </th>
                                         {["Código", "Nombre del aula", "Capacidad", "Acciones"].map((h, i) => (
                                             <th key={i} className={`cfg-th ${i === 2 ? "text-center" : i === 3 ? "text-right" : ""}`}>{h}</th>
                                         ))}
@@ -868,7 +996,11 @@ const CampusesSection = () => {
                                 </thead>
                                 <tbody>
                                     {classrooms.map((a) => (
-                                        <tr key={a.id} className="cfg-tr group">
+                                        <tr key={a.id} className={`cfg-tr group ${selAulas.has(a.id) ? "bg-blue-50/60" : ""}`}>
+                                            <td className="cfg-td text-center">
+                                                <input type="checkbox" className="accent-blue-600 cursor-pointer"
+                                                    checked={selAulas.has(a.id)} onChange={() => toggleAula(a.id)} />
+                                            </td>
                                             <td className="cfg-td font-mono text-xs text-slate-500">{a.code}</td>
                                             <td className="cfg-td font-600 text-slate-700">{a.name}</td>
                                             <td className="cfg-td text-center">
@@ -891,7 +1023,7 @@ const CampusesSection = () => {
                                         </tr>
                                     ))}
                                     {classrooms.length === 0 && (
-                                        <tr><td colSpan={4} className="py-10">
+                                        <tr><td colSpan={5} className="py-10">
                                             <EmptyState icon={Building2} title="Sin aulas registradas" subtitle="Selecciona una sede o crea un nuevo espacio" />
                                         </td></tr>
                                     )}
@@ -1116,7 +1248,28 @@ const InstitutionSection = () => {
     const [settings, setSettings] = useState(null); const [uploadingKind, setUploadingKind] = useState(null); const [dept, setDept] = useState(""); const [prov, setProv] = useState(""); const [dist, setDist] = useState(""); const [deps, setDeps] = useState([]); const [provs, setProvs] = useState([]); const [dists, setDists] = useState([]);
     const load = useCallback(async () => { try { const s = await Institution.getSettings(); setSettings(s ?? {}); const d = await Ubigeo.deps(); setDeps(normalizeUbigeoList(d)); const sDept = String(s?.department || ""); const sProv = String(s?.province || ""); const sDist = String(s?.district || ""); if (sDept) { setDept(sDept); const pv = await Ubigeo.provs(sDept); setProvs(normalizeUbigeoList(pv)); if (sProv) { setProv(sProv); const ds = await Ubigeo.dists(sDept, sProv); setDists(normalizeUbigeoList(ds)); if (sDist) setDist(sDist); } } } catch (e) { toast.error(formatApiError(e)); } }, []);
     useEffect(() => { load(); }, [load]);
-    const update = async () => { try { await Institution.updateSettings({ ...settings, department: dept, province: prov, district: dist }); toast.success("Parámetros guardados"); load(); } catch (e) { toast.error(formatApiError(e)); } };
+    const update = async () => {
+        try {
+            // Resolver nombres legibles de departamento/provincia/distrito
+            // para que la nómina los muestre directamente.
+            const regionName = deps.find((d) => d.code === dept)?.name || "";
+            const provinciaName = provs.find((p) => p.code === prov)?.name || "";
+            const distritoName = dists.find((d) => d.code === dist)?.name || "";
+            await Institution.updateSettings({
+                ...settings,
+                department: dept,
+                province: prov,
+                district: dist,
+                region: regionName,
+                provincia: provinciaName,
+                distrito: distritoName,
+            });
+            toast.success("Parámetros guardados");
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        }
+    };
     const removeMedia = async (kind) => { try { await Institution.removeMedia(kind); setSettings((s) => ({ ...s, ...(kind === "LOGO" ? { logo_url: "" } : {}), ...(kind === "SIGNATURE" ? { signature_url: "" } : {}), ...(kind === "SECRETARY_SIGNATURE" ? { secretary_signature_url: "" } : {}), })); await load(); toast.success(kind === "LOGO" ? "Logo eliminado" : kind === "SIGNATURE" ? "Firma del director eliminada" : "Firma de secretaría eliminada"); } catch (e) { toast.error(formatApiError(e, "No se pudo eliminar")); } };
     const onUpload = async (kind, file) => { try { setUploadingKind(kind); const r = await Institution.uploadMedia(kind, file); const url = r?.absolute_url || r?.file_absolute_url || r?.url || r?.file_url || r?.data?.absolute_url || r?.data?.file_absolute_url || r?.data?.url || r?.data?.file_url; if (!url) throw new Error("Backend no devolvió URL del archivo"); setSettings((s) => ({ ...s, ...(kind === "LOGO" ? { logo_url: url } : {}), ...(kind === "SIGNATURE" ? { signature_url: url } : {}), ...(kind === "SECRETARY_SIGNATURE" ? { secretary_signature_url: url } : {}), })); await load(); toast.success(kind === "LOGO" ? "Logo guardado" : kind === "SIGNATURE" ? "Firma del director guardada" : "Firma de secretaría guardada"); } catch (e) { toast.error(formatApiError(e, "No se pudo subir el archivo")); } finally { setUploadingKind(null); } };
 
@@ -1129,6 +1282,42 @@ const InstitutionSection = () => {
                     <div className="rounded-xl border border-slate-200 p-5 space-y-4"><p className="text-[10px] font-800 text-slate-400 uppercase tracking-widest">Identidad legal</p><div className="grid grid-cols-1 sm:grid-cols-3 gap-4"><div className="sm:col-span-2"><Field label="Nombre / Razón social *"><Input className="h-9 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm" value={settings.name || ""} onChange={(e) => setSettings({ ...settings, name: e.target.value })} placeholder="Institución Educativa…" /></Field></div><Field label="RUC / Identificador"><Input className="h-9 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-mono" value={settings.ruc || ""} onChange={(e) => setSettings({ ...settings, ruc: e.target.value })} placeholder="20123456789" /></Field></div></div>
                     <div className="rounded-xl border border-slate-200 p-5 space-y-4"><p className="text-[10px] font-800 text-slate-400 uppercase tracking-widest">Ubicación geográfica</p><Field label="Dirección fiscal"><div className="relative"><MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" /><Input className="h-9 rounded-xl border-slate-200 pl-9 text-sm bg-slate-50 focus:bg-white" value={settings.address || ""} onChange={(e) => setSettings({ ...settings, address: e.target.value })} placeholder="Av. Principal #123…" /></div></Field><div className="grid grid-cols-3 gap-3">{[{ label: "Departamento", value: dept, disabled: false, options: deps, onChange: async (v) => { setDept(v); setProv(""); setDist(""); setDists([]); const pv = await Ubigeo.provs(v); setProvs(normalizeUbigeoList(pv)); } }, { label: "Provincia", value: prov, disabled: !dept, options: provs, onChange: async (v) => { setProv(v); setDist(""); const ds = await Ubigeo.dists(dept, v); setDists(normalizeUbigeoList(ds)); } }, { label: "Distrito", value: dist, disabled: !dept || !prov, options: dists, onChange: setDist },].map(({ label, value, disabled, options, onChange: onChg }) => (<Field key={label} label={label}><Select value={value} onValueChange={onChg} disabled={disabled}><SelectTrigger className="h-9 rounded-xl border-slate-200 bg-slate-50 text-sm"><SelectValue placeholder="Seleccionar" /></SelectTrigger><SelectContent position="popper" className="max-h-60">{options.map((o) => <SelectItem key={o.code} value={o.code}>{o.name}</SelectItem>)}</SelectContent></Select></Field>))}</div></div>
                     <div className="rounded-xl border border-slate-200 p-5 space-y-4"><p className="text-[10px] font-800 text-slate-400 uppercase tracking-widest">Canales de contacto</p><div className="grid grid-cols-1 sm:grid-cols-3 gap-4"><Field label="Sitio web"><Input className="h-9 rounded-xl border-slate-200 bg-slate-50 text-sm" value={settings.website || ""} onChange={(e) => setSettings({ ...settings, website: e.target.value })} placeholder="www.ejemplo.edu.pe" /></Field><Field label="Correo"><Input className="h-9 rounded-xl border-slate-200 bg-slate-50 text-sm" value={settings.email || ""} onChange={(e) => setSettings({ ...settings, email: e.target.value })} placeholder="contacto@inst.com" /></Field><Field label="Teléfono"><Input className="h-9 rounded-xl border-slate-200 bg-slate-50 text-sm" value={settings.phone || ""} onChange={(e) => setSettings({ ...settings, phone: e.target.value })} placeholder="(01) 123-4567" /></Field></div></div>
+                    <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-5 space-y-4">
+                        <p className="text-[10px] font-800 text-blue-700 uppercase tracking-widest">Director General y Resoluciones</p>
+                        <p className="text-[11px] text-slate-500">Estos datos se imprimen en la <strong>Nómina de Matrícula</strong>, oficios y constancias oficiales.</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <Field label="Director (e) General">
+                                <Input className="h-9 rounded-xl border-slate-200 bg-white text-sm" value={settings.director_name || ""} onChange={(e) => setSettings({ ...settings, director_name: e.target.value })} placeholder="MARIA ELVIRA GARCIA PORRAS" />
+                            </Field>
+                            <Field label="R.D. de Nombramiento o Encargatura">
+                                <Input className="h-9 rounded-xl border-slate-200 bg-white text-sm font-mono" value={settings.director_resolution || ""} onChange={(e) => setSettings({ ...settings, director_resolution: e.target.value })} placeholder="R.D.R N° 017-2026-DREJ" />
+                            </Field>
+                        </div>
+                    </div>
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-5 space-y-4">
+                        <p className="text-[10px] font-800 text-emerald-700 uppercase tracking-widest">Identidad MINEDU</p>
+                        <p className="text-[11px] text-slate-500">Datos oficiales que aparecen en la cabecera de la <strong>Nómina de Matrícula</strong>.</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <Field label="DRE">
+                                <Input className="h-9 rounded-xl border-slate-200 bg-white text-sm" value={settings.dre || ""} onChange={(e) => setSettings({ ...settings, dre: e.target.value })} placeholder="DREJ" />
+                            </Field>
+                            <Field label="UGEL">
+                                <Input className="h-9 rounded-xl border-slate-200 bg-white text-sm" value={settings.ugel || ""} onChange={(e) => setSettings({ ...settings, ugel: e.target.value })} placeholder="UGEL TARMA" />
+                            </Field>
+                            <Field label="Código Modular">
+                                <Input className="h-9 rounded-xl border-slate-200 bg-white text-sm font-mono" value={settings.codigo_modular || ""} onChange={(e) => setSettings({ ...settings, codigo_modular: e.target.value })} placeholder="0609370" />
+                            </Field>
+                            <Field label="Denominación">
+                                <Input className="h-9 rounded-xl border-slate-200 bg-white text-sm" value={settings.denominacion || ""} onChange={(e) => setSettings({ ...settings, denominacion: e.target.value })} placeholder="IESP" />
+                            </Field>
+                            <Field label="Gestión">
+                                <Input className="h-9 rounded-xl border-slate-200 bg-white text-sm" value={settings.gestion || ""} onChange={(e) => setSettings({ ...settings, gestion: e.target.value })} placeholder="Público" />
+                            </Field>
+                            <Field label="D.S. / R.M. de Creación">
+                                <Input className="h-9 rounded-xl border-slate-200 bg-white text-sm font-mono" value={settings.ds_creacion || ""} onChange={(e) => setSettings({ ...settings, ds_creacion: e.target.value })} placeholder="D.S. 059-1984-ED" />
+                            </Field>
+                        </div>
+                    </div>
                     <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-5 space-y-4">
                         <div className="flex items-center gap-2">
                             <Landmark className="w-4 h-4 text-amber-600" />
@@ -1274,7 +1463,7 @@ const ConfigCatalogsModule = () => {
                     </TabsList>
 
                     <TabsContent value="catalogs" className="mt-5 space-y-5 pb-10">
-                        <CampusesSection />
+                        {/* Sedes & Aulas ahora vive en Académico → Docentes → Sedes & Aulas */}
                         <InstitutionSection />
                     </TabsContent>
                     <TabsContent value="backup" className="mt-5 pb-10"><BackupTab /></TabsContent>

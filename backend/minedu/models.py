@@ -60,6 +60,7 @@ class MineduExportBatch(TimeStampedModel):
     FORMAT_CHOICES = [
         ("XLSX", "Excel"),
         ("CSV", "CSV"),
+        ("PDF", "PDF"),
     ]
     STATUS_CHOICES = [
         ("PENDING",    "Pendiente"),

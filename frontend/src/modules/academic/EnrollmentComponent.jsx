@@ -25,7 +25,7 @@ import {
   Clock, Plus, Search as SearchIcon, FileText, Hash, User, Shield,
   ChevronDown, Lock, Unlock, AlertCircle, DollarSign, Calendar,
   Users, UserCheck, UserX, RefreshCw, ChevronLeft, ChevronRight,
-  BookOpenCheck, Download, RotateCcw, GraduationCap,
+  BookOpenCheck, Download, RotateCcw, GraduationCap, Pencil, Save,
 } from "lucide-react";
 import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
 import EnrollmentPaymentGate from "./EnrollmentPaymentGate";
@@ -130,12 +130,20 @@ function generatePeriodOptions() {
 function guessPeriod() {
   const now = new Date();
   const y = now.getFullYear();
-  return now.getMonth() < 6 ? `${y}-I` : `${y}-II`;
+  return now.getMonth() < 7 ? `${y}-I` : `${y}-II`;
 }
 
 /* ════════════════════════════════════════════════════════════
    SUB-COMPONENT: Admin Student Roster
    ════════════════════════════════════════════════════════════ */
+/* Estados académicos especiales (con RD) — colores del badge en el padrón */
+const ESTADO_STYLES = {
+  LICENCIA:        { label: "Licencia",        cls: "bg-rose-100 text-rose-700 border-rose-200" },
+  REINCORPORACION: { label: "Reincorporación", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  TRASLADO:        { label: "Traslado",        cls: "bg-violet-100 text-violet-700 border-violet-200" },
+  SUBSANACION:     { label: "Subsanación",     cls: "bg-orange-100 text-orange-700 border-orange-200" },
+};
+
 const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
   const [students, setStudents] = useState([]);
   const [total, setTotal] = useState(0);
@@ -145,13 +153,24 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [careerFilter, setCareerFilter] = useState("");
+  const [cicloFilter, setCicloFilter] = useState("");
+  const [anioFilter, setAnioFilter] = useState("");
   const [careers, setCareers] = useState([]);
   // ── Reset de matrícula ──
   const [resetTarget, setResetTarget] = useState(null); // student obj to reset
   const [resetting, setResetting] = useState(false);
+  // ── Editar ciclo del alumno ──
+  const [cycleTarget, setCycleTarget] = useState(null); // student obj
+  const [newCycle, setNewCycle] = useState("");
+  const [savingCycle, setSavingCycle] = useState(false);
+  // ── Editar estado académico (Licencia/Reincorporación/Traslado/Subsanación) ──
+  const [estadoTarget, setEstadoTarget] = useState(null);
+  const [estadoValue, setEstadoValue] = useState("");
+  const [estadoRd, setEstadoRd] = useState("");
+  const [savingEstado, setSavingEstado] = useState(false);
   const [tab, setTab] = useState("all"); // all | enrolled | pending
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 50;
+  const PAGE_SIZE = 15;
 
   /* ── Careers para el filtro ── */
   useEffect(() => {
@@ -174,6 +193,8 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
       };
       if (search.trim()) params.search = search.trim();
       if (careerFilter) params.career_id = careerFilter;
+      if (cicloFilter) params.ciclo = cicloFilter;
+      if (anioFilter) params.anio = anioFilter;
       // Filtro de tab → backend para que la paginación funcione correctamente
       if (tab === "enrolled") params.enrolled = "true";
       if (tab === "pending") params.enrolled = "false";
@@ -196,10 +217,10 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
     } finally {
       setLoading(false);
     }
-  }, [api, academicPeriod, search, careerFilter, page, tab]);
+  }, [api, academicPeriod, search, careerFilter, cicloFilter, anioFilter, page, tab]);
 
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
-  useEffect(() => { setPage(1); }, [search, careerFilter, academicPeriod, tab]);
+  useEffect(() => { setPage(1); }, [search, careerFilter, cicloFilter, anioFilter, academicPeriod, tab]);
 
   /* ── Filtered by tab (con filtro backend, visible = todos los de la página) ── */
   const visible = useMemo(() => {
@@ -238,7 +259,7 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
       toast.success("Fichas de matrícula descargadas");
     } catch (e) {
       // Si el blob es JSON con error, intentar leerlo
@@ -255,6 +276,72 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
       }
     } finally {
       setGeneratingFichas(false);
+    }
+  };
+
+  /* ── Cambiar ciclo del alumno (corrección manual) ── */
+  const openCycleEditor = (st) => {
+    setCycleTarget(st);
+    setNewCycle(String(st.semester || st.ciclo || ""));
+  };
+
+  const handleSaveCycle = async () => {
+    if (!cycleTarget) return;
+    const n = parseInt(newCycle, 10);
+    if (!Number.isFinite(n) || n < 1 || n > 10) {
+      toast.error("El ciclo debe ser un número entre 1 y 10");
+      return;
+    }
+    if (n === (cycleTarget.semester || cycleTarget.ciclo)) {
+      toast.info("El ciclo es el mismo, no se cambió nada");
+      setCycleTarget(null);
+      return;
+    }
+    setSavingCycle(true);
+    try {
+      await api.patch(`/students/${cycleTarget.id}`, { ciclo: n });
+      toast.success(
+        `Ciclo de ${cycleTarget.full_name || "alumno"} actualizado a ${n}°`,
+      );
+      setCycleTarget(null);
+      fetchStudents();
+    } catch (e) {
+      toast.error(formatApiError(e, "No se pudo actualizar el ciclo"));
+    } finally {
+      setSavingCycle(false);
+    }
+  };
+
+  /* ── Editar estado académico del alumno (con RD) ── */
+  const openEstadoEditor = (st) => {
+    setEstadoTarget(st);
+    setEstadoValue(st.estado_academico || "");
+    setEstadoRd(st.estado_rd || "");
+  };
+
+  const handleSaveEstado = async () => {
+    if (!estadoTarget) return;
+    if (estadoValue && !estadoRd.trim()) {
+      toast.error("La Resolución Directoral (RD) es obligatoria para este estado");
+      return;
+    }
+    setSavingEstado(true);
+    try {
+      await api.patch(`/students/${estadoTarget.id}`, {
+        estadoAcademico: estadoValue,
+        estadoRd: estadoValue ? estadoRd.trim() : "",
+      });
+      toast.success(
+        estadoValue
+          ? `${estadoTarget.full_name}: estado ${ESTADO_STYLES[estadoValue]?.label || estadoValue} (RD ${estadoRd.trim()})`
+          : `${estadoTarget.full_name}: estado restablecido a normal`,
+      );
+      setEstadoTarget(null);
+      fetchStudents();
+    } catch (e) {
+      toast.error(formatApiError(e, "No se pudo actualizar el estado"));
+    } finally {
+      setSavingEstado(false);
     }
   };
 
@@ -357,6 +444,32 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
             </select>
             <ChevronDown className="absolute right-2 top-2.5 h-4 w-4 text-slate-400 pointer-events-none" />
           </div>
+          <div className="relative sm:w-32">
+            <select
+              value={cicloFilter}
+              onChange={(e) => { setCicloFilter(e.target.value); if (e.target.value) setAnioFilter(""); }}
+              className="w-full h-9 text-sm rounded-md border border-slate-200 bg-white px-3 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todos los ciclos</option>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((c) => (
+                <option key={c} value={c}>Ciclo {c}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2 top-2.5 h-4 w-4 text-slate-400 pointer-events-none" />
+          </div>
+          <div className="relative sm:w-32">
+            <select
+              value={anioFilter}
+              onChange={(e) => { setAnioFilter(e.target.value); if (e.target.value) setCicloFilter(""); }}
+              className="w-full h-9 text-sm rounded-md border border-slate-200 bg-white px-3 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todos los años</option>
+              {[1, 2, 3, 4, 5].map((a) => (
+                <option key={a} value={a}>{a}° año</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2 top-2.5 h-4 w-4 text-slate-400 pointer-events-none" />
+          </div>
           <Button variant="outline" size="sm" onClick={fetchStudents} disabled={loading} className="shrink-0">
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
@@ -430,22 +543,42 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
                       {st.career_name || "—"}
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell text-center text-slate-600">
-                      {st.semester ? `${st.semester}°` : "—"}
+                      <button
+                        type="button"
+                        onClick={() => openCycleEditor(st)}
+                        title="Corregir ciclo"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-blue-50 hover:text-blue-700 transition-colors group"
+                      >
+                        <span>{st.semester ? `${st.semester}°` : "—"}</span>
+                        <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 text-blue-500" />
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {st.is_egresado ? (
-                        <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs">
-                          <GraduationCap className="h-3 w-3 mr-1" />Egresado
-                        </Badge>
-                      ) : st.is_enrolled ? (
-                        <Badge className="bg-green-100 text-green-700 border border-green-200 text-xs">
-                          <UserCheck className="h-3 w-3 mr-1" />Matriculado
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-amber-100 text-amber-700 border border-amber-200 text-xs">
-                          <UserX className="h-3 w-3 mr-1" />Pendiente
-                        </Badge>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => openEstadoEditor(st)}
+                        title={st.estado_rd ? `RD: ${st.estado_rd} — clic para editar estado` : "Clic para editar estado"}
+                        className="inline-flex items-center gap-1 group"
+                      >
+                        {st.estado_academico ? (
+                          <Badge className={`${ESTADO_STYLES[st.estado_academico]?.cls || "bg-slate-100 text-slate-700 border-slate-200"} border text-xs`}>
+                            {ESTADO_STYLES[st.estado_academico]?.label || st.estado_academico}
+                          </Badge>
+                        ) : st.is_egresado ? (
+                          <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs">
+                            <GraduationCap className="h-3 w-3 mr-1" />Egresado
+                          </Badge>
+                        ) : st.is_enrolled ? (
+                          <Badge className="bg-green-100 text-green-700 border border-green-200 text-xs">
+                            <UserCheck className="h-3 w-3 mr-1" />Matriculado
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-amber-100 text-amber-700 border border-amber-200 text-xs">
+                            <UserX className="h-3 w-3 mr-1" />Pendiente
+                          </Badge>
+                        )}
+                        <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 text-blue-500" />
+                      </button>
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-center text-slate-500 text-xs">
                       {st.is_enrolled
@@ -490,17 +623,44 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
           </table>
         </div>
 
-        {/* Pagination */}
+        {/* Pagination (15 por página, con números de página) */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50/50">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-t border-slate-100 bg-slate-50/50">
             <div className="text-xs text-slate-500">
               Página {page} de {totalPages} · {total} alumnos
             </div>
-            <div className="flex gap-1">
+            <div className="flex items-center gap-1">
               <Button size="sm" variant="outline" disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))} className="h-8 w-8 p-0">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
+              {(() => {
+                const nums = new Set([1, totalPages]);
+                for (let p = page - 2; p <= page + 2; p++) {
+                  if (p >= 1 && p <= totalPages) nums.add(p);
+                }
+                const orden = [...nums].sort((a, b) => a - b);
+                const out = [];
+                let prev = 0;
+                for (const n of orden) {
+                  if (prev && n - prev > 1) {
+                    out.push(<span key={`e${n}`} className="px-1 text-xs text-slate-400">…</span>);
+                  }
+                  out.push(
+                    <Button
+                      key={n}
+                      size="sm"
+                      variant={n === page ? "default" : "outline"}
+                      className={`h-8 min-w-8 px-2 text-xs ${n === page ? "bg-blue-600 hover:bg-blue-700" : ""}`}
+                      onClick={() => setPage(n)}
+                    >
+                      {n}
+                    </Button>
+                  );
+                  prev = n;
+                }
+                return out;
+              })()}
               <Button size="sm" variant="outline" disabled={page >= totalPages}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className="h-8 w-8 p-0">
                 <ChevronRight className="h-4 w-4" />
@@ -567,6 +727,166 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
                     <RotateCcw className="h-3.5 w-3.5 mr-1" />
                     Sí, reiniciar
                   </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Diálogo para editar ciclo del alumno ── */}
+      {cycleTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-full">
+                <Pencil className="h-5 w-5 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-800">
+                Corregir ciclo del alumno
+              </h3>
+            </div>
+            <p className="text-sm text-slate-600">
+              Alumno:{" "}
+              <span className="font-semibold text-slate-800">
+                {cycleTarget.full_name}
+              </span>
+              <br />
+              DNI:{" "}
+              <span className="font-mono text-xs">
+                {cycleTarget.dni || cycleTarget.num_documento || "—"}
+              </span>
+              <br />
+              Ciclo actual:{" "}
+              <span className="font-semibold">
+                {cycleTarget.semester || cycleTarget.ciclo || "—"}°
+              </span>
+            </p>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-600 uppercase tracking-wider">
+                Nuevo ciclo
+              </label>
+              <select
+                value={newCycle}
+                onChange={(e) => setNewCycle(e.target.value)}
+                className="w-full h-10 text-sm rounded-md border border-slate-200 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={savingCycle}
+              >
+                <option value="">— Seleccionar —</option>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                  <option key={n} value={n}>
+                    Ciclo {n}°
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+              <p className="flex items-center gap-1">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Este cambio actualiza el ciclo del alumno y los cursos que
+                aparecerán en su matrícula. No afecta a las matrículas ya
+                confirmadas.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCycleTarget(null)}
+                disabled={savingCycle}
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={handleSaveCycle}
+                disabled={savingCycle || !newCycle}
+              >
+                {savingCycle ? (
+                  <>
+                    <Clock className="h-3.5 w-3.5 mr-1 animate-spin" />
+                    Guardando…
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-3.5 w-3.5 mr-1" />
+                    Guardar
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: editar estado académico (Licencia/Reincorporación/…) ── */}
+      {estadoTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-violet-100 rounded-full">
+                <Pencil className="h-5 w-5 text-violet-600" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-800">Estado académico del alumno</h3>
+            </div>
+            <p className="text-sm text-slate-600">
+              Alumno: <span className="font-semibold text-slate-800">{estadoTarget.full_name}</span>
+              <br />
+              DNI: <span className="font-mono text-xs">{estadoTarget.dni || "—"}</span>
+            </p>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-600 uppercase tracking-wider">Estado</label>
+              <select
+                value={estadoValue}
+                onChange={(e) => setEstadoValue(e.target.value)}
+                className="w-full h-10 text-sm rounded-md border border-slate-200 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={savingEstado}
+              >
+                <option value="">Normal (Matriculado / Pendiente según matrícula)</option>
+                <option value="LICENCIA">Licencia</option>
+                <option value="REINCORPORACION">Reincorporación</option>
+                <option value="TRASLADO">Traslado</option>
+                <option value="SUBSANACION">Subsanación</option>
+              </select>
+            </div>
+            {estadoValue && (
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-600 uppercase tracking-wider">
+                  N° de Resolución Directoral (RD) *
+                </label>
+                <input
+                  value={estadoRd}
+                  onChange={(e) => setEstadoRd(e.target.value)}
+                  placeholder="Ej: R.D. N° 123-2026-DG"
+                  className="w-full h-10 text-sm rounded-md border border-slate-200 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={savingEstado}
+                />
+              </div>
+            )}
+            {estadoValue === "LICENCIA" && (
+              <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-xs text-rose-800">
+                <p className="flex items-center gap-1">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Con LICENCIA el alumno queda <b>bloqueado en las actas de calificación</b>:
+                  los docentes verán "LICENCIA" en el comentario y no podrán registrarle notas.
+                </p>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setEstadoTarget(null)} disabled={savingEstado}>
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={handleSaveEstado}
+                disabled={savingEstado || (!!estadoValue && !estadoRd.trim())}
+              >
+                {savingEstado ? (
+                  <><Clock className="h-3.5 w-3.5 mr-1 animate-spin" />Guardando…</>
+                ) : (
+                  <><Save className="h-3.5 w-3.5 mr-1" />Guardar</>
                 )}
               </Button>
             </div>
@@ -815,8 +1135,8 @@ const EnrollmentComponent = () => {
       a.download = `ficha-matricula-${enrollmentId}.pdf`;
       document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
       a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
       toast.success("Ficha de matrícula descargada");
     } catch (e) {
       console.error("Ficha matrícula error:", e);
@@ -898,7 +1218,7 @@ const EnrollmentComponent = () => {
               disabled={!resolvedStudent}
               title={!resolvedStudent ? "Cargue un estudiante primero" : "Exportar horario del período"}
             >
-              <FileText className="h-4 w-4 mr-2" /> Exportar Horario
+              <FileText className="h-4 w-4 mr-2" /> Descargar Horario
             </Button>
           )}
         </div>
