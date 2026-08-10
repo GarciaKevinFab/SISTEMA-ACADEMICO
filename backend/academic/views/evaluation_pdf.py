@@ -34,7 +34,7 @@ from .evaluation import (
 )
 from .acta_excel import (
     _roster, _acta_area_inst, _roman, _cualitativa_de_vigesimal,
-    _section_header_info, _xlsx_response,
+    _section_header_info, _turno_de, _xlsx_response,
 )
 
 import logging
@@ -72,10 +72,19 @@ def _pdf_shell(titulo, cuerpo, landscape=False):
   table {{ border-collapse: collapse; width: 100%; margin-top: 8px; }}
   th, td {{ border: 1px solid #555; padding: 3px 5px; }}
   th {{ background: #1F4E79; color: #fff; font-size: 9px; }}
+  /* Repite la cabecera en cada página cuando la tabla se parte */
+  thead {{ display: table-header-group; }}
   td {{ font-size: 9.5px; }}
   .c {{ text-align: center; }}
   h2 {{ font-size: 11px; color: #1F4E79; margin: 12px 0 2px; }}
-  .grupo {{ page-break-inside: avoid; }}
+  /* `page-break-inside: avoid` dejaba la primera página EN BLANCO: en
+     Chromium, un bloque más alto que la página no se puede mantener entero,
+     así que se empuja a la siguiente y la anterior queda vacía. Un acta de
+     30 alumnos siempre supera la página. Ahora el bloque puede partirse y
+     solo se evita que el título quede huérfano al pie. */
+  .grupo {{ page-break-inside: auto; break-inside: auto; }}
+  .grupo h2 {{ page-break-after: avoid; break-after: avoid; }}
+  .grupo tr {{ page-break-inside: avoid; break-inside: avoid; }}
   .salto {{ page-break-before: always; }}
   .firma {{ margin-top: 34px; text-align: center; }}
   .firma .linea {{ display: inline-block; border-top: 1px solid #111; padding-top: 3px; min-width: 230px; font-size: 9px; }}
@@ -129,22 +138,34 @@ def _nombre(st):
 
 
 def _filtrar_students(period, career_id=None, semester=None, anio=None):
-    qs = (Student.objects.filter(grade_records__term=period)
+    """Alumnos con notas procesadas en el período, filtrables por ciclo.
+
+    El ciclo se evalúa sobre los CURSOS del kárdex del período pedido
+    (`plan_course.semester`), no sobre `Student.ciclo`: ese campo es el ciclo
+    ACTUAL del alumno, así que al cerrar un período y promover ciclos, pedir
+    "2026-I ciclo 2" devolvía a los que HOY están en ciclo 2 (los que cursaron
+    ciclo 1) — o a nadie, con el 404 "No hay alumnos con notas procesadas".
+    Las condiciones van en el MISMO filter() para que apliquen al mismo
+    registro del kárdex.
+    """
+    from django.db.models import Q
+    cond = Q(grade_records__term=period)
+    if semester:
+        try:
+            cond &= Q(grade_records__plan_course__semester=int(semester))
+        except (TypeError, ValueError):
+            pass
+    elif anio:
+        try:
+            n = int(anio)
+            cond &= Q(grade_records__plan_course__semester__in=[2 * n - 1, 2 * n])
+        except (TypeError, ValueError):
+            pass
+    qs = (Student.objects.filter(cond)
           .select_related("plan", "plan__career").distinct())
     if career_id:
         try:
             qs = qs.filter(plan__career_id=int(career_id))
-        except (TypeError, ValueError):
-            pass
-    if semester:
-        try:
-            qs = qs.filter(ciclo=int(semester))
-        except (TypeError, ValueError):
-            pass
-    if anio:
-        try:
-            n = int(anio)
-            qs = qs.filter(ciclo__in=[2 * n - 1, 2 * n])
         except (TypeError, ValueError):
             pass
     return list(qs)
@@ -211,7 +232,7 @@ def _acta_area_pdf_bytes(sec):
     cuerpo = f"""
 <h2 style="text-align:center">ACTA DE EVALUACIÓN DE ÁREA {_esc(curso.upper())}</h2>
 <table style="margin-top:4px">
-  <tr><td><b>Programa de estudios</b></td><td>{_esc(career)} / TURNO: MAÑANA</td>
+  <tr><td><b>Programa de estudios</b></td><td>{_esc(career)} / TURNO: {_esc(_turno_de(sec))}</td>
       <td><b>Periodo Académico</b></td><td class='c'>{_esc(sec.period)}</td></tr>
   <tr><td><b>Director General (e)</b></td><td>{_esc(inst['director'])}</td>
       <td><b>Ciclo - Sección</b></td><td class='c'>{_esc(ciclo)} - "{_esc(sec.label or 'A')}"</td></tr>
@@ -229,9 +250,32 @@ def _acta_area_pdf_bytes(sec):
   <tr><td>Aprobados</td><td class='c'>{aprobados}</td></tr>
   <tr><td>Desaprobados</td><td class='c'>{desaprob}</td></tr>
   <tr><td>Con Licencia</td><td class='c'>{sum(1 for st in alumnos if st.get('estado') == 'LICENCIA')}</td></tr>
-  <tr><td>Límite de Inasistencia</td><td class='c'>{n_dpi}</td></tr>
+  <tr><td>Promedio del aula o sección en la calificación<br>para el sistema de educación superior</td>
+      <td class='c'>{round(sum(f for f in finales if f is not None) / len([f for f in finales if f is not None]), 2) if any(f is not None for f in finales) else ''}</td></tr>
 </table>
-<div class="firma"><span class="linea">Firma del Docente: {_esc(docente.upper())}</span></div>
+<!-- Firmas según el Anexo 3 RVM 123-2022 (antes solo firmaba el docente) -->
+<table style="width:100%; margin-top:46px; border:none">
+  <tr>
+    <td style="border:none; text-align:center; width:33%">
+      <div style="border-top:1px solid #111; margin:0 18px; padding-top:4px">
+        <b style="font-size:9px">DIRECTOR(A) GENERAL</b><br>
+        <span style="font-size:8px">Firma, Post Firma y Sello</span>
+      </div>
+    </td>
+    <td style="border:none; text-align:center; width:33%">
+      <div style="border-top:1px solid #111; margin:0 18px; padding-top:4px">
+        <b style="font-size:9px">SECRETARIO(A) ACADÉMICO(A)</b><br>
+        <span style="font-size:8px">Firma, Post Firma y Sello</span>
+      </div>
+    </td>
+    <td style="border:none; text-align:center; width:33%">
+      <div style="border-top:1px solid #111; margin:0 18px; padding-top:4px">
+        <b style="font-size:9px">DOCENTE FORMADOR(A)</b><br>
+        <span style="font-size:8px">Firma · {_esc(docente.upper())}</span>
+      </div>
+    </td>
+  </tr>
+</table>
 """
     html = _pdf_shell(f"ACTA DE EVALUACIÓN DE ÁREA — {sec.period}", cuerpo)
     return html_to_pdf_bytes(html), f"ACTA_AREA_{codigo or 'CURSO'}_{sec.label or 'A'}_{sec.period}.pdf"
@@ -414,6 +458,17 @@ class EvaluationConsolidadaPdfView(APIView):
             key = (career, (pc.semester if pc else 0) or 0, sec.label or "A")
             groups.setdefault(key, []).append(sec)
 
+        # Formato oficial del Anexo 4 (RVM 123-2022), igual que el Excel:
+        # cabecera institucional, C/CS/PTJ por curso, promedio a 3 decimales,
+        # cuadro de docentes y firmas de Dirección y Secretaría.
+        from django.utils import timezone as _tz
+        from .evaluation import _inst_data, _abrev_calif
+        from .acta_excel import _turno_de
+        from students.name_utils import clave_orden
+
+        inst = _inst_data()
+        hoy = _tz.localtime(_tz.now()).strftime("%d/%m/%Y")
+
         bloques = []
         primero = True
         for (career, sem, label), secs in sorted(groups.items()):
@@ -424,11 +479,32 @@ class EvaluationConsolidadaPdfView(APIView):
                     by_id[st.id] = st
             if not by_id:
                 continue
-            students = sorted(by_id.values(), key=_nombre)
-            heads = "".join(
-                f"<th>{_esc((rw['course_name'] or '').upper()[:30])}<br>"
-                f"<span style='font-weight:normal'>Cr. {getattr(secs[i].plan_course, 'credits', '') or ''}</span></th>"
+            students = sorted(by_id.values(), key=lambda s: clave_orden(_nombre(s)))
+
+            cabecera = f"""
+<table class="inst">
+  <tr><td class="l">Nombre de la Institución</td><td colspan="3">{_esc(inst['nombre'])}</td>
+      <td class="l">Código Modular</td><td>{_esc(inst['codigo_modular'])}</td></tr>
+  <tr><td class="l">R.M. de Licenciamiento o R.D.</td><td colspan="3">{_esc(inst['licenciamiento'])}</td>
+      <td class="l">Dirección</td><td>{_esc(inst['direccion'])}</td></tr>
+  <tr><td class="l">Director General</td><td colspan="3">{_esc(inst['director'])}</td>
+      <td class="l">R.D. de Encargatura</td><td>{_esc(inst['rd_encargatura'])}</td></tr>
+  <tr><td class="l">Programa de Estudios</td><td colspan="3">{_esc(career.upper())}</td>
+      <td class="l">Periodo Académico</td><td>{_esc(period)} &nbsp;·&nbsp; FECHA: {hoy}</td></tr>
+  <tr><td class="l">Ciclo - Sección</td><td colspan="3">{_esc(_roman(sem))} - "{_esc(label)}"</td>
+      <td class="l">N° de Estudiantes (según nóminas)</td><td>{len(students)}</td></tr>
+  <tr><td class="l">Modalidad de Estudios</td><td colspan="3">PRESENCIAL</td>
+      <td class="l">Turno</td><td>{_esc(_turno_de(secs))}</td></tr>
+</table>"""
+
+            # Encabezado: 2 filas — curso (colspan 3, con créditos) y C/CS/PTJ
+            h1 = "".join(
+                f"<th colspan='3'>{_esc((rw['course_name'] or '').upper()[:34])}<br>"
+                f"<span style='font-weight:normal'>Créditos: "
+                f"{getattr(secs[i].plan_course, 'credits', '') or ''}</span></th>"
                 for i, rw in enumerate(rows))
+            h2 = "<th>C</th><th>CS</th><th>PTJ</th>" * len(rows)
+
             filas = []
             for n, st in enumerate(students, 1):
                 celdas, puntaje, cred = [], 0, 0
@@ -436,31 +512,82 @@ class EvaluationConsolidadaPdfView(APIView):
                     f = _final_of(_entry_for(rw["_grades"], st))
                     cr = getattr(secs[i].plan_course, "credits", 0) or 0
                     if f is not None:
-                        puntaje += round(float(f) * cr)
+                        ptj = round(float(f) * cr)
+                        puntaje += ptj
                         cred += cr
-                        celdas.append(f"<td class='c'>{round(float(f))}</td>")
+                        celdas.append(
+                            f"<td class='c'>{_esc(_abrev_calif(f))}</td>"
+                            f"<td class='c'>{round(float(f))}</td>"
+                            f"<td class='c'>{ptj}</td>")
                     else:
-                        celdas.append("<td class='c'></td>")
-                prom = round(puntaje / cred, 2) if cred else ""
+                        celdas.append("<td class='c'></td><td class='c'></td><td class='c'></td>")
+                # Anexo 4, nota 3: promedio ponderado hasta con 3 decimales
+                prom = round(puntaje / cred, 3) if cred else ""
                 filas.append(
                     f"<tr><td class='c'>{n}</td><td class='c'>{_esc(st.num_documento or '')}</td>"
                     f"<td>{_esc(_nombre(st))}</td>{''.join(celdas)}"
                     f"<td class='c'>{puntaje if cred else ''}</td><td class='c'>{cred or ''}</td>"
-                    f"<td class='c'><b>{prom}</b></td></tr>")
+                    f"<td class='c'><b>{prom}</b></td>"
+                    f"<td class='c'>{_esc(_abrev_calif(puntaje / cred) if cred else '')}</td>"
+                    f"<td></td></tr>")
+
+            docentes = "".join(
+                f"<tr><td class='c'>{i}</td><td>{_esc((rw['teacher_name'] or '').upper())}</td>"
+                f"<td style='min-width:130px'></td></tr>"
+                for i, rw in enumerate(rows, 1))
+
             bloques.append(f"""
 <div class="grupo{'' if primero else ' salto'}">
-<h2>{_esc(career.upper())} — Ciclo {_esc(_roman(sem))} · Sección "{_esc(label)}" · {_esc(period)}</h2>
+<h2>ACTA CONSOLIDADA DE EVALUACIÓN DEL DESEMPEÑO ACADÉMICO DEL CICLO</h2>
+{cabecera}
 <table>
-  <tr><th>N°</th><th>DNI</th><th>Apellidos y Nombres</th>{heads}
-      <th>Puntaje</th><th>Créd.</th><th>Prom.<br>Pond.</th></tr>
-  {''.join(filas)}
+  <thead>
+    <tr><th rowspan="2">N°</th><th rowspan="2">N° de<br>Matrícula</th>
+        <th rowspan="2">Apellidos y Nombres del Estudiante<br>(según nóminas)</th>{h1}
+        <th rowspan="2">Puntaje del<br>Semestre</th><th rowspan="2">Crédito del<br>Semestre</th>
+        <th rowspan="2">Promedio<br>Ponderado</th><th rowspan="2">Calificación</th>
+        <th rowspan="2">Observaciones</th></tr>
+    <tr>{h2}</tr>
+  </thead>
+  <tbody>{''.join(filas)}</tbody>
+</table>
+<p style="font-size:8px; color:#555; margin:4px 0 0">
+  C: Calificación del curso/módulo · CS: Calificación para el sistema de educación
+  superior (vigesimal) · PTJ: CS × créditos del curso/módulo. El promedio ponderado
+  semestral se obtiene hasta con tres cifras decimales redondeadas.</p>
+<table style="width:55%; margin-top:10px">
+  <thead><tr><th>N° de curso<br>o módulo</th><th>Apellidos y nombres del docente a cargo</th><th>Firma</th></tr></thead>
+  <tbody>{docentes}</tbody>
+</table>
+<table style="width:100%; margin-top:42px; border:none">
+  <tr>
+    <td style="border:none; text-align:center; width:50%">
+      <div style="border-top:1px solid #111; margin:0 60px; padding-top:4px">
+        <b style="font-size:9px">DIRECTOR(A) GENERAL</b><br>
+        <span style="font-size:8px">Firma, Post Firma y Sello</span>
+      </div>
+    </td>
+    <td style="border:none; text-align:center; width:50%">
+      <div style="border-top:1px solid #111; margin:0 60px; padding-top:4px">
+        <b style="font-size:9px">SECRETARIO(A) ACADÉMICO(A)</b><br>
+        <span style="font-size:8px">Firma, Post Firma y Sello</span>
+      </div>
+    </td>
+  </tr>
 </table>
 </div>""")
             primero = False
 
         if not bloques:
             return Response({"detail": "Sin alumnos para el filtro"}, status=404)
-        html = _pdf_shell(f"ACTA CONSOLIDADA DE EVALUACIÓN — {period}", "".join(bloques), landscape=True)
+        extra_css = """
+<style>
+  .inst { margin-bottom: 6px; }
+  .inst td { font-size: 8.5px; padding: 2px 5px; }
+  .inst td.l { background: #EDF2F8; font-weight: bold; width: 15%; }
+</style>"""
+        html = _pdf_shell(f"ACTA CONSOLIDADA DE EVALUACIÓN — {period}",
+                          extra_css + "".join(bloques), landscape=True)
         return HttpResponse(html_to_pdf_bytes(html), content_type="application/pdf",
                             headers={"Content-Disposition":
                                      f'attachment; filename="acta-consolidada-{period}.pdf"'})
@@ -684,6 +811,10 @@ def _stats_asistencia_ciclo(sec, alumnos, key_of):
     por_alumno = {str(st["id"]): {e: 0 for e in EST_KEYS} for st in alumnos}
     por_mes = {}
     estados_de_sesion = {}
+    # Los alumnos con LICENCIA no entran en el cómputo (ni en los totales de
+    # la sección ni en su propia fila): sus marcas viejas quedan fuera.
+    lic_ids = {str(st["id"]) for st in alumnos
+               if (st.get("estado") or "").upper() == "LICENCIA"}
 
     if sesiones:
         for sid_row, status, sess_id in (
@@ -696,6 +827,8 @@ def _stats_asistencia_ciclo(sec, alumnos, key_of):
             estados_de_sesion.setdefault(sess_id, set()).add(est)
             rid = key_of.get(sid_row)
             if rid is None or str(rid) not in por_alumno:
+                continue
+            if str(rid) in lic_ids:
                 continue
             por_alumno[str(rid)][est] += 1
             totales[est] += 1
@@ -803,7 +936,8 @@ class SectionAttendanceMonthPdfView(APIView):
             hoy = date_cls.today()
             y, m = hoy.year, hoy.month
         n_days = monthrange(y, m)[1]
-        LETRAS = ["L", "M", "X", "J", "V", "S", "D"]
+        # Martes y miércoles con dos letras (antes el miércoles era "X")
+        LETRAS = ["L", "Ma", "Mi", "J", "V", "S", "D"]
         MARK = {"PRESENT": "P", "LATE": "T", "ABSENT": "F",
                 "EXCUSED": "J", "HOLIDAY": "0"}
 
@@ -865,16 +999,25 @@ class SectionAttendanceMonthPdfView(APIView):
 
         stat_filas, n_retirados, n_riesgo, n_licencia = [], 0, 0, 0
         for i, st in enumerate(alumnos, 1):
-            d = por_alumno.get(str(st["id"]), {e: 0 for e in EST_KEYS})
             lic = (st.get("estado") or "").upper() == "LICENCIA"
+            if lic:
+                # Sin números: la licencia no computa faltas ni porcentajes
+                n_licencia += 1
+                stat_filas.append(
+                    f"<tr class='lic'><td class='c'>{i}</td>"
+                    f"<td class='c'>{_esc(st.get('dni') or '')}</td>"
+                    f"<td>{_esc(st['nombre'])}</td>"
+                    f"<td class='c'>—</td><td class='c'>—</td><td class='c'>—</td>"
+                    f"<td class='c'>—</td><td class='c'>—</td><td class='c'>—</td>"
+                    f"<td class='c'>—</td><td class='c'>—</td><td class='barcell'></td>"
+                    f"<td class='c est'>CON LICENCIA</td></tr>")
+                continue
+            d = por_alumno.get(str(st["id"]), {e: 0 for e in EST_KEYS})
             marcadas = sum(d[e] for e in ("PRESENT", "LATE", "ABSENT", "EXCUSED"))
             sin_marca = max(0, base - marcadas)
             pct = (d["ABSENT"] / base * 100) if base else 0
             asis_pct = ((d["PRESENT"] + d["LATE"]) / base * 100) if base else 0
-            if lic:
-                n_licencia += 1
-                estado_txt, estado_cls = "CON LICENCIA", "lic"
-            elif base and pct > UMBRAL:
+            if base and pct > UMBRAL:
                 n_retirados += 1
                 estado_txt, estado_cls = f"RETIRADO POR INASISTENCIA (&gt;{UMBRAL}%)", "ret"
             elif base and pct >= UMBRAL * 2 / 3:
@@ -1061,58 +1204,24 @@ class StudentSelfBoletaPdfView(APIView):
         if not period:
             return Response({"detail": "No hay período activo"}, status=400)
 
-        recs = list(AcademicGradeRecord.objects
-                    .filter(student=st, term=period)
-                    .select_related("course", "plan_course")
-                    .order_by("course__name"))
-        if not recs:
+        # Formato institucional único (el mismo del kárdex "PDF Semestre"):
+        # kardex/reporte_calificaciones.html con membrete del instituto.
+        from django.template.loader import render_to_string
+        from students.name_utils import nombre_archivo
+        from .kardex_helpers import _build_reporte_periodo_ctx
+
+        ctx, err = _build_reporte_periodo_ctx(request, st, period)
+        if err:
             return Response(
                 {"detail": f"Aún no hay notas procesadas para {period}. "
                            "Tus notas aparecerán cuando Secretaría Académica procese el período."},
                 status=404)
 
-        filas, ptos, creds = [], 0, 0
-        for i, rec in enumerate(recs, 1):
-            try:
-                g = round(float(rec.final_grade))
-            except (TypeError, ValueError):
-                g = None
-            cr = _creditos_de(rec)
-            ptj = (g or 0) * cr
-            if g is not None:
-                ptos += ptj
-                creds += cr
-            filas.append(
-                f"<tr><td class='c'>{i}</td><td>{_esc(rec.course.name)}</td>"
-                f"<td class='c'>{cr}</td><td class='c'><b>{g if g is not None else ''}</b></td>"
-                f"<td class='c'>{_esc(_cualitativa_de_vigesimal(g)) if g is not None else ''}</td>"
-                f"<td class='c'>{ptj if g is not None else ''}</td></tr>")
-        prom = round(ptos / creds, 2) if creds else ""
-        career = (st.plan.career.name if st.plan_id and st.plan and st.plan.career else "")
-
-        cuerpo = f"""
-<h2 style="text-align:center">BOLETA DE CALIFICACIONES</h2>
-<table style="margin-top:4px">
-  <tr><td style="width:22%"><b>Estudiante</b></td><td>{_esc(_nombre(st))}</td>
-      <td style="width:18%"><b>Período</b></td><td class='c'>{_esc(period)}</td></tr>
-  <tr><td><b>N° de Matrícula (DNI)</b></td><td>{_esc(st.num_documento or '')}</td>
-      <td><b>Ciclo</b></td><td class='c'>{_esc(st.ciclo or '')}</td></tr>
-  <tr><td><b>Programa de Estudios</b></td><td colspan="3">{_esc(career.upper())}</td></tr>
-</table>
-<table>
-  <tr><th>N°</th><th>Curso / Módulo</th><th>Créd.</th><th>Calificación</th>
-      <th>Calificación cualitativa</th><th>Puntaje</th></tr>
-  {''.join(filas)}
-  <tr><td colspan="5" style="text-align:right"><b>PROMEDIO PONDERADO DEL PERÍODO</b></td>
-      <td class='c'><b>{prom}</b></td></tr>
-</table>
-<div class="firma"><span class="linea">SECRETARIO(A) ACADÉMICO(A)</span></div>
-"""
-        html = _pdf_shell(f"BOLETA DE CALIFICACIONES — {period}", cuerpo)
+        html = render_to_string("kardex/reporte_calificaciones.html", ctx)
         return HttpResponse(
             html_to_pdf_bytes(html), content_type="application/pdf",
             headers={"Content-Disposition":
-                     f'attachment; filename="boleta-{st.num_documento or st.id}-{period}.pdf"'})
+                     f'attachment; filename="boleta-{nombre_archivo(st)}-{period}.pdf"'})
 
 
 class StudentSelfAsistenciaPdfView(APIView):

@@ -42,7 +42,8 @@ from academic.models import (
     Section, SectionGrades, AttendanceSession, AttendanceRow,
     EnrollmentItem,
 )
-from students.name_utils import apellidos_de, nombre_oficial, nombres_de
+from students.name_utils import (apellidos_de, clave_orden, nombre_oficial,
+                                 nombres_de)
 from .utils import ok
 
 # Marcas de asistencia estilo SIAGIE ↔ estados internos
@@ -160,7 +161,9 @@ def _roster(sec):
             "estado": (getattr(st, "estado_academico", "") or "").upper(),
             "estado_rd": getattr(st, "estado_rd", "") or "",
         })
-    out.sort(key=lambda x: x["nombre"])
+    # Alfabético español: sin `clave_orden` la Ñ (U+00D1) cae después de la Z
+    # y los "ÑAUPARI" quedaban al final de la nómina en vez de entre N y O.
+    out.sort(key=lambda x: clave_orden(x["nombre"]))
     return out
 
 
@@ -219,6 +222,32 @@ def _xlsx_response(wb, filename):
     )
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
+
+
+def _turno_de(secciones):
+    """Turno según el HORARIO registrado de la(s) sección(es), por mayoría de
+    bloques: antes de 13:00 = MAÑANA, 13:00-18:59 = TARDE, desde 19:00 = NOCHE.
+
+    Definición de Secretaría: el turno de las actas "se jala de lo que se
+    estableció en el horario" — antes salía "MAÑANA" fijo en todas (y el
+    acta institucional real de 2025-II era de TARDE). Sin horario cargado se
+    mantiene MAÑANA como antes.
+
+    Acepta una Section o un iterable de Sections.
+    """
+    from academic.models import SectionScheduleSlot
+    if isinstance(secciones, Section):
+        secciones = [secciones]
+    conteo = {"MAÑANA": 0, "TARDE": 0, "NOCHE": 0}
+    for ini in SectionScheduleSlot.objects.filter(
+            section__in=list(secciones)).values_list("start", flat=True):
+        h = getattr(ini, "hour", None)
+        if h is None:
+            continue
+        conteo["MAÑANA" if h < 13 else ("TARDE" if h < 19 else "NOCHE")] += 1
+    if not any(conteo.values()):
+        return "MAÑANA"
+    return max(conteo, key=conteo.get)
 
 
 def _section_header_info(sec):
@@ -324,7 +353,7 @@ def _write_grades_sheet(ws, sec):
     _kv(9, 1, 2, "Curso / Módulo", 3, 13, f"{curso}" + (f" ({codigo})" if codigo else ""))
     ws.cell(row=9, column=15, value="FIN").font = lab_font
     ws.cell(row=9, column=16, value=fin).font = val_font
-    _kv(9, 21, 24, "Turno", 25, 27, "MAÑANA")
+    _kv(9, 21, 24, "Turno", 25, 27, _turno_de(sec))
     _kv(10, 21, 24, "Modalidad de estudios", 25, 27, "PRESENCIAL")
 
     # ── Encabezado de tabla (filas 12-15) ──
@@ -458,15 +487,26 @@ def _write_grades_sheet(ws, sec):
             ws.cell(row=fr + i, column=3).border = thin
             ws.cell(row=fr + i, column=4).border = thin
 
-        # Firma
+        # Firmas — Anexo 3 RVM 123-2022: Director + Secretario + Docente
+        # (antes solo firmaba el docente)
         fs = fr + len(resumen) + 3
-        ws.merge_cells(start_row=fs, start_column=10, end_row=fs, end_column=14)
-        ws.cell(row=fs, column=10, value="_______________________________")\
-          .alignment = Alignment(horizontal="center")
-        ws.merge_cells(start_row=fs + 1, start_column=10, end_row=fs + 1, end_column=14)
-        fc = ws.cell(row=fs + 1, column=10, value="Firma del Docente Formador(a)")
-        fc.font = Font(size=9)
-        fc.alignment = Alignment(horizontal="center")
+        FIRMAS = [
+            (2,  7,  "DIRECTOR(A) GENERAL",       "Firma, Post Firma y Sello"),
+            (10, 15, "SECRETARIO(A) ACADÉMICO(A)", "Firma, Post Firma y Sello"),
+            (18, 23, "DOCENTE FORMADOR(A)",        "Firma"),
+        ]
+        for c1, c2, cargo, sub in FIRMAS:
+            ws.merge_cells(start_row=fs, start_column=c1, end_row=fs, end_column=c2)
+            ws.cell(row=fs, column=c1, value="_______________________________")\
+              .alignment = Alignment(horizontal="center")
+            ws.merge_cells(start_row=fs + 1, start_column=c1, end_row=fs + 1, end_column=c2)
+            fc = ws.cell(row=fs + 1, column=c1, value=cargo)
+            fc.font = Font(bold=True, size=9)
+            fc.alignment = Alignment(horizontal="center")
+            ws.merge_cells(start_row=fs + 2, start_column=c1, end_row=fs + 2, end_column=c2)
+            sc = ws.cell(row=fs + 2, column=c1, value=sub)
+            sc.font = Font(size=8)
+            sc.alignment = Alignment(horizontal="center")
 
     # ── Anchos de columna ──
     widths = {1: 4, 2: 11, 3: 36, 9: 22, 15: 22, 21: 22,
@@ -857,7 +897,9 @@ def _acta_area_inst():
                                         "Tarma – Junín – Perú"),
         "provincia": g("provincia") or "Tarma",
         "distrito": g("distrito") or "Tarma",
-        "resolucion": g("resolucion_autorizacion") or "R.D.",
+        # R.D. de revalidación oficial (confirmada por Secretaría, 2026)
+        "resolucion": (g("resolucion_autorizacion")
+                       or "R.D. N° 306-2016-MINEDU/VMGP/DIGEDD/DIFOID"),
         "director": (g("director_name") or "GARCIA PORRAS, MARIA ELVIRA").upper(),
         "rd_encargatura": g("rd_encargatura") or "R.D.R. N°  017-2026-DREJ",
     }
@@ -947,7 +989,7 @@ def build_acta_area_workbook(sec):
     _box(8, 1, 8, 4, "")
 
     _box(9, 1, 9, 2, "Programa de estudios / Turno")
-    _box(9, 3, 9, 5, f"{career} / TURNO: MAÑANA", is_bold=False)
+    _box(9, 3, 9, 5, f"{career} / TURNO: {_turno_de(sec)}", is_bold=False)
     _box(9, 6, 9, 7, "Periodo Académico")
     _box(9, 8, 9, 8, sec.period, is_bold=False)
     _box(10, 1, 10, 2, "Resolución de Autorización")
@@ -993,16 +1035,19 @@ def build_acta_area_workbook(sec):
                 cell.alignment = Alignment(horizontal="center")
         r += 1
 
-    # ── Resumen (como el modelo: Matriculados/Aprobados/Desaprobados/…) ──
+    # ── Resumen (Anexo 3 RVM 123-2022) ──
     finales = [(_final(_entry(st))) for st in alumnos]
-    n_dpi = sum(1 for st in alumnos
-                if (_entry(st).get("status") or "").upper() == "DPI")
+    con_nota = [f for f in finales if f is not None]
+    promedio_aula = round(sum(con_nota) / len(con_nota), 2) if con_nota else ""
     resumen = [
         ("Matriculados", len(alumnos)),
-        ("Aprobados", sum(1 for f in finales if f is not None and f >= 11)),
-        ("Desaprobados", sum(1 for f in finales if f is not None and f < 11)),
-        ("Con Licencia", ""),
-        ("Límite de Inasistencia", n_dpi),
+        ("Aprobados", sum(1 for f in con_nota if f >= 11)),
+        ("Desaprobados", sum(1 for f in con_nota if f < 11)),
+        ("Con Licencia", sum(1 for st in alumnos
+                             if st.get("estado") == "LICENCIA")),
+        # Última fila según el Anexo 3 (antes decía "Límite de Inasistencia")
+        ("Promedio del aula o sección en la calificación\n"
+         "para el sistema de educación superior", promedio_aula),
     ]
     rr = r + 2
     _box(rr, 1, rr, 2, "Resumen", fill="E2EFDA")
@@ -1011,10 +1056,17 @@ def build_acta_area_workbook(sec):
         _box(rr + i, 1, rr + i, 2, lbl, is_bold=False)
         _box(rr + i, 3, rr + i, 3, val, is_bold=False)
 
-    # ── Firma ──
+    # ── Firmas — Anexo 3: Director + Secretario + Docente ──
     fr = rr + len(resumen) + 3
-    _box(fr, 3, fr, 4, "_______________________________", is_bold=False)
-    _box(fr + 1, 3, fr + 1, 4, f"Firma del Docente: {docente.upper()}", is_bold=False, size=8)
+    FIRMAS = [
+        (1, 3,  "DIRECTOR(A) GENERAL",        "Firma, Post Firma y Sello"),
+        (5, 8,  "SECRETARIO(A) ACADÉMICO(A)", "Firma, Post Firma y Sello"),
+        (10, 12, "DOCENTE FORMADOR(A)",       f"Firma · {docente.upper()}"),
+    ]
+    for c1, c2, cargo, sub in FIRMAS:
+        _box(fr, c1, fr, c2, "_______________________________", is_bold=False)
+        _box(fr + 1, c1, fr + 1, c2, cargo, size=8)
+        _box(fr + 2, c1, fr + 2, c2, sub, is_bold=False, size=7)
 
     widths = {1: 6, 2: 13, 3: 30, 4: 16, 5: 11, 6: 8, 7: 9, 8: 13, 9: 3,
               10: 15, 11: 26, 12: 16}
@@ -1119,7 +1171,8 @@ class SectionAttendanceTemplateView(APIView):
         ws["A5"] = "Marcas: P = Presente · T = Tardanza · F = Falta · J = Justificado · 0 = Feriado · (vacío = sin registrar)"
 
         HEAD_ROW = 7
-        DIAS_SEMANA = ["L", "M", "X", "J", "V", "S", "D"]
+        # Martes y miércoles con dos letras (antes el miércoles era "X")
+        DIAS_SEMANA = ["L", "Ma", "Mi", "J", "V", "S", "D"]
         headers = ["N°", "DNI", "APELLIDOS Y NOMBRES"] + [str(d) for d in range(1, dias + 1)]
         for c, h in enumerate(headers, 1):
             cell = ws.cell(row=HEAD_ROW, column=c, value=h)
@@ -1220,7 +1273,17 @@ class SectionAttendanceImportView(APIView):
         roster = _roster(sec)
         by_dni = {st["dni"]: st for st in roster if st["dni"]}
 
+        # Días de dictado de la sección (misma regla que el registro mensual:
+        # horario configurado, o L-V si no hay). Fuera de ellos no se importa.
+        from .attendance import _schedule_weekdays
+        horario_wd = set(_schedule_weekdays(sec.id))
+
+        def _es_dia_dictado(d):
+            wd = date_cls(y, mo, d).weekday()      # 0=Lunes … 6=Domingo
+            return (wd + 1) in horario_wd if horario_wd else wd < 5
+
         por_dia, errores = {}, []
+        dias_no_dictado, lic_omitidos = set(), set()
         for row in ws.iter_rows(min_row=head_row + 1):
             dni = str(row[col_of["DNI"] - 1].value or "").strip()
             if not dni:
@@ -1233,11 +1296,25 @@ class SectionAttendanceImportView(APIView):
                 raw = str(row[col - 1].value or "").strip().upper()
                 if not raw:
                     continue
+                if not _es_dia_dictado(d):
+                    dias_no_dictado.add(d)
+                    continue
+                if (st.get("estado") or "").upper() == "LICENCIA":
+                    lic_omitidos.add(st["nombre"])
+                    continue
                 status = MARK_TO_STATUS.get(raw)
                 if not status:
                     errores.append(f"DNI {dni} día {d}: marca inválida '{raw}'")
                     continue
                 por_dia.setdefault(d, {})[str(st["id"])] = status
+        if dias_no_dictado:
+            errores.append(
+                "Días sin dictado omitidos (la sección no dicta ese día): "
+                + ", ".join(map(str, sorted(dias_no_dictado))))
+        if lic_omitidos:
+            errores.append(
+                "Alumnos con LICENCIA omitidos (no se les registra asistencia): "
+                + ", ".join(sorted(lic_omitidos)))
 
         sesiones_ok, cerradas = 0, []
         with transaction.atomic():

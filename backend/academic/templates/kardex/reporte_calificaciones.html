@@ -71,6 +71,28 @@
             text-transform: uppercase;
         }
 
+        /* Membrete institucional (nombre + datos del instituto) */
+        .instName {
+            text-align: center;
+            font-weight: 800;
+            font-size: 11px;
+            text-transform: uppercase;
+            line-height: 1.2;
+        }
+
+        .instSub {
+            text-align: center;
+            font-size: 7.5px;
+            color: #333;
+            line-height: 1.25;
+        }
+
+        .headerRule {
+            border: none;
+            border-top: 1.5px solid #111;
+            margin: 6px 0 8px;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -205,20 +227,27 @@
 
 <body>
 
-    <!-- HEADER: 2 logos + título -->
+    <!-- HEADER: 2 logos + membrete institucional -->
     <div class="headerRow">
         <!-- Logo izquierdo -->
         <div class="logoBox">
             {% if logo_url %}<img src="{{ logo_url }}" alt="logo" />{% endif %}
         </div>
 
-        <div class="titleMain">REPORTE DE CALIFICACIONES DE CURSOS / MÓDULOS</div>
+        <div>
+            <div class="instName">{{ institution_name }}</div>
+            {% if header_line2 %}<div class="instSub">{{ header_line2 }}</div>{% endif %}
+            {% if header_line3 %}<div class="instSub">{{ header_line3 }}</div>{% endif %}
+        </div>
 
         <!-- Logo derecho (segundo logo como tu foto) -->
         <div class="logoBox">
             {% if second_logo_url %}<img src="{{ second_logo_url }}" alt="logo 2" />{% endif %}
         </div>
     </div>
+
+    <hr class="headerRule" />
+    <div class="titleMain">REPORTE DE CALIFICACIONES DE CURSOS / MÓDULOS</div>
 
     <!-- META -->
     <div class="mt10">
@@ -357,6 +386,13 @@
             <div class="sigSubLabel">Firma</div>
         </div>
     </div>
+
+    {% if generated_at %}
+    <!-- Pie: fecha y hora de emisión del documento -->
+    <div style="margin-top:18px; text-align:center; font-size:8px; color:#777;">
+        {{ generated_at }}
+    </div>
+    {% endif %}
 
 </body>
 

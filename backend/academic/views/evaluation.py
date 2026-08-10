@@ -31,6 +31,7 @@ from academic.models import (
     EnrollmentItem, Enrollment,
 )
 from students.models import Student
+from students.name_utils import clave_orden
 
 from .teachers import _is_grades_admin
 from ..pdf_render import html_to_pdf_bytes
@@ -65,29 +66,27 @@ def _period_defaults(code: str):
 
 
 def _roster_students(sec):
-    """Alumnos matriculados (CONFIRMED) de la sección — mismo criterio que
-    el roster de la plantilla Excel: por sección, o por plan_course como fallback."""
-    base = (
-        EnrollmentItem.objects
-        .select_related("enrollment__student")
-        .filter(section_id=sec.id,
-                enrollment__status=Enrollment.STATUS_CONFIRMED,
-                enrollment__period=sec.period)
-    )
-    if not base.exists():
-        base = (
-            EnrollmentItem.objects
-            .select_related("enrollment__student")
-            .filter(plan_course_id=sec.plan_course_id,
-                    enrollment__status=Enrollment.STATUS_CONFIRMED,
-                    enrollment__period=sec.period)
-        )
+    """Alumnos matriculados (CONFIRMED) de la sección — EXACTAMENTE el mismo
+    roster que el acta (`acta_excel._items_de_seccion`).
+
+    Antes usaba un respaldo todo-o-nada propio: bastaba que UN alumno tuviera
+    sección asignada para que todos los ítems con section NULL (típico de los
+    ingresantes matriculados antes de crear las secciones) desaparecieran del
+    procesamiento en silencio — figuraban en el acta con notas, pero nunca se
+    les escribía el kárdex y su boleta respondía 404."""
+    from .acta_excel import _items_de_seccion
+    base, _ambiguos = _items_de_seccion(sec)
     out, seen = [], set()
     for item in base:
         st = item.enrollment.student
         if st.id in seen:
             continue
         seen.add(st.id)
+        # Con LICENCIA no se puede calificar (el acta bloquea su nota), así
+        # que tampoco cuenta como "esperado" — si sumara al denominador, la
+        # sección quedaría 24/25 en naranja para siempre.
+        if (getattr(st, "estado_academico", "") or "").upper() == "LICENCIA":
+            continue
         out.append(st)
     return out
 
@@ -434,13 +433,20 @@ def _inst_data():
         data = (InstitutionSetting.objects.filter(pk=1).first() or InstitutionSetting()).data or {}
     except Exception:
         data = {}
+    # Defaults = datos oficiales confirmados por Secretaría (2026). Antes eran
+    # cadenas vacías: si faltaba la configuración, el acta salía con la
+    # cabecera en blanco.
     return {
-        "nombre": (data.get("institution_name") or data.get("name") or "").upper(),
-        "licenciamiento": data.get("licenciamiento") or data.get("resolucion") or "",
-        "director": (data.get("director_name") or "").upper(),
-        "codigo_modular": data.get("codigo_modular") or "",
-        "direccion": data.get("direccion") or data.get("address") or "",
-        "rd_encargatura": data.get("rd_encargatura") or "",
+        "nombre": (data.get("institution_name") or data.get("name")
+                   or 'INSTITUTO DE EDUCACIÓN SUPERIOR PEDAGÓGICO PÚBLICO '
+                      '"GUSTAVO ALLENDE LLAVERIA"').upper(),
+        "licenciamiento": (data.get("licenciamiento") or data.get("resolucion")
+                           or "REVALIDADO: R.D. N° 306-2016-MINEDU/VMGP/DIGEDD/DIFOID"),
+        "director": (data.get("director_name") or "GARCIA PORRAS, MARIA ELVIRA").upper(),
+        "codigo_modular": data.get("codigo_modular") or "0609370",
+        "direccion": (data.get("direccion") or data.get("address")
+                      or "Calle Tacajashi Tacajashi Km. 4 - Pomachaca"),
+        "rd_encargatura": data.get("rd_encargatura") or "R.D. N° 017-2026-DREJ",
     }
 
 
@@ -504,10 +510,7 @@ class EvaluationActaConsolidadaView(APIView):
             if not by_id:
                 continue
             any_sheet = True
-            students = sorted(
-                by_id.values(),
-                key=lambda s: f"{s.apellido_paterno or ''} {s.apellido_materno or ''} {s.nombres or ''}".upper(),
-            )
+            students = sorted(by_id.values(), key=clave_orden)
             ncur = len(secs)
             # Columnas: A N°, B matrícula, C nombres; por curso 3 (C, CS, PTJ);
             # luego Puntaje, Créditos, Promedio, Calificación, Observaciones
@@ -553,12 +556,19 @@ class EvaluationActaConsolidadaView(APIView):
                 ws.cell(row=row, column=rval_a, value=rvalue).font = Font(size=9)
 
             ciclo_sec = f'{_roman(sem)} - "{label or "A"}"'
+            # Como el acta institucional: el período lleva la fecha de emisión,
+            # y el turno se jala del horario de las secciones (no más "MAÑANA"
+            # fijo — el acta real de 2025-II era de TARDE).
+            from django.utils import timezone as _tz
+            from .acta_excel import _turno_de
+            hoy = _tz.localtime(_tz.now()).strftime("%d/%m/%Y")
             _hdr(4, "Nombre de la Institución", inst["nombre"], "Código Modular", inst["codigo_modular"])
             _hdr(5, "R.M. de Licenciamiento o R.D.", inst["licenciamiento"], "Dirección", inst["direccion"])
             _hdr(6, "Director General", inst["director"], "R.D. de Encargatura", inst["rd_encargatura"])
-            _hdr(7, "Programa de Estudios", career.upper(), "Periodo Académico", period)
+            _hdr(7, "Programa de Estudios", career.upper(), "Periodo Académico",
+                 f"{period}      FECHA: {hoy}")
             _hdr(8, "Ciclo - Sección", ciclo_sec, "Número de Estudiantes", len(students))
-            _hdr(9, "Modalidad de Estudios", "PRESENCIAL", "Turno", "MAÑANA")
+            _hdr(9, "Modalidad de Estudios", "PRESENCIAL", "Turno", _turno_de(secs))
 
             # ── Encabezado de la tabla (filas 11-16) ──
             H = 11
@@ -621,7 +631,9 @@ class EvaluationActaConsolidadaView(APIView):
                     prom = puntaje / creditos
                     ws.cell(row=r, column=tot_c, value=puntaje)
                     ws.cell(row=r, column=tot_c + 1, value=creditos)
-                    ws.cell(row=r, column=tot_c + 2, value=round(prom, 2))
+                    # Anexo 4, nota 3: "se obtiene hasta con TRES cifras
+                    # decimales redondeadas" (antes se truncaba a dos).
+                    ws.cell(row=r, column=tot_c + 2, value=round(prom, 3))
                     ws.cell(row=r, column=tot_c + 3, value=_abrev_calif(prom))
                 for c in range(1, last_c + 1):
                     cell = ws.cell(row=r, column=c)
@@ -643,6 +655,29 @@ class EvaluationActaConsolidadaView(APIView):
                 ws.merge_cells(start_row=rr, start_column=6, end_row=rr, end_column=8)
                 for c in range(1, 9):
                     ws.cell(row=rr, column=c).border = border
+
+            # ── Firmas de Dirección y Secretaría Académica ──
+            # El Anexo 4 cierra con estos dos bloques además del cuadro de
+            # docentes de arriba; faltaban por completo.
+            fir = fr + len(rows) + 3
+            for col, cargo in ((1, "DIRECTOR(A) GENERAL"),
+                               (6, "SECRETARIO(A) ACADÉMICO(A)")):
+                ws.merge_cells(start_row=fir, start_column=col,
+                               end_row=fir, end_column=col + 3)
+                linea = ws.cell(row=fir, column=col, value="_" * 34)
+                linea.alignment = Alignment(horizontal="center")
+
+                ws.merge_cells(start_row=fir + 1, start_column=col,
+                               end_row=fir + 1, end_column=col + 3)
+                c1 = ws.cell(row=fir + 1, column=col, value=cargo)
+                c1.font = Font(bold=True, size=9)
+                c1.alignment = Alignment(horizontal="center")
+
+                ws.merge_cells(start_row=fir + 2, start_column=col,
+                               end_row=fir + 2, end_column=col + 3)
+                c2 = ws.cell(row=fir + 2, column=col, value="Firma, Post Firma y Sello")
+                c2.font = Font(size=8)
+                c2.alignment = Alignment(horizontal="center")
 
             # ── Anchos ──
             ws.column_dimensions["A"].width = 4
@@ -695,8 +730,28 @@ class EvaluationBoletasZipView(APIView):
         year = period.split("-")[0]
         terms = [f"{year}-I", f"{year}-II"] if anio_mode else [period]
 
-        qs = (Student.objects
-              .filter(grade_records__term__in=terms)
+        # El filtro de ciclo va sobre los CURSOS del kárdex del período, no
+        # sobre Student.ciclo (que es el ciclo ACTUAL): al promover ciclos,
+        # "2026-I ciclo 2" devolvía a los promovidos equivocados o a nadie
+        # ("No hay alumnos con notas procesadas" con 1867 registros cargados).
+        # Ambas condiciones en el MISMO filter() → aplican al mismo registro.
+        from django.db.models import Q as _Q
+        cond = _Q(grade_records__term__in=terms)
+        semester = request.query_params.get("semester")
+        if semester:
+            try:
+                cond &= _Q(grade_records__plan_course__semester=int(semester))
+            except (TypeError, ValueError):
+                return Response({"detail": "semester inválido"}, status=400)
+        else:
+            anio_acad = request.query_params.get("anio_academico")
+            if anio_acad:
+                try:
+                    n = int(anio_acad)
+                    cond &= _Q(grade_records__plan_course__semester__in=[2 * n - 1, 2 * n])
+                except (TypeError, ValueError):
+                    pass
+        qs = (Student.objects.filter(cond)
               .select_related("plan", "plan__career")
               .distinct())
         career_id = request.query_params.get("career_id")
@@ -705,19 +760,6 @@ class EvaluationBoletasZipView(APIView):
                 qs = qs.filter(plan__career_id=int(career_id))
             except (TypeError, ValueError):
                 return Response({"detail": "career_id inválido"}, status=400)
-        semester = request.query_params.get("semester")
-        if semester:
-            try:
-                qs = qs.filter(ciclo=int(semester))
-            except (TypeError, ValueError):
-                return Response({"detail": "semester inválido"}, status=400)
-        anio_acad = request.query_params.get("anio_academico")
-        if anio_acad:
-            try:
-                n = int(anio_acad)
-                qs = qs.filter(ciclo__in=[2 * n - 1, 2 * n])
-            except (TypeError, ValueError):
-                pass
 
         students = list(qs.order_by("apellido_paterno", "apellido_materno", "nombres"))
         if not students:

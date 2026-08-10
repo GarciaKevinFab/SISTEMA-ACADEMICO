@@ -330,7 +330,7 @@ export default function ActaCalificacionModal({ open, onClose, section, onSaved 
         <Dialog open={open} onOpenChange={(v) => { if (!v) onClose?.(); }}>
             <DialogContent className="max-w-[98vw] w-[1500px] max-h-[94vh] flex flex-col p-4">
                 <DialogHeader className="pb-1">
-                    <DialogTitle className="text-base font-extrabold flex flex-wrap items-center gap-2">
+                    <DialogTitle className="text-base font-extrabold flex flex-wrap items-center justify-center gap-2 text-center">
                         ACTA DE CALIFICACIÓN DEL CURSO O MÓDULO
                         {submitted && (
                             <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-300 gap-1">
@@ -383,7 +383,14 @@ export default function ActaCalificacionModal({ open, onClose, section, onSaved 
                         <Loader2 className="h-5 w-5 animate-spin" /> Cargando acta…
                     </div>
                 ) : (
-                    <div className="overflow-auto border border-slate-200 rounded-lg flex-1 min-h-0">
+                    <div className="overflow-auto border border-slate-200 rounded-lg flex-1 min-h-0 min-w-0 w-full">
+                        {/* El `min-w-0 w-full` del contenedor es lo que mantiene el acta
+                            dentro del modal: sin eso, el `min-w-max` de esta tabla lo
+                            estiraba (un flex item no encoge por debajo de su contenido),
+                            el modal superaba su max-w y, al estar centrado con
+                            translate-x:-50%, el excedente se salía por AMBOS lados — el
+                            título, la leyenda y la columna N° quedaban cortados fuera de
+                            la pantalla, sin manera de llegar a ellos. */}
                         {/* Grilla de trazo fino: 1px hairline en gris claro (las líneas
                             gruesas/oscuras hacían ilegible el acta en pantalla) */}
                         <table className="text-[11px] border-collapse min-w-max

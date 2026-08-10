@@ -237,7 +237,9 @@ export default function AdminAttendanceMonitor() {
         const y = Number(m[1]), mo = Number(m[2]);
         const nDias = new Date(y, mo, 0).getDate();
         const dias = [];
-        const DIAS_SEM = ["D", "L", "M", "X", "J", "V", "S"];
+        // Indexado por getDay() (0=Domingo). Martes y miércoles con dos
+        // letras para no confundirse entre sí (antes el miércoles era "X").
+        const DIAS_SEM = ["D", "L", "Ma", "Mi", "J", "V", "S"];
         // Horario de la sección: weekday 1=Lunes … 7=Domingo. Sin horario
         // configurado se asume L-V (comportamiento anterior).
         const horario = new Set(detail?.schedule_weekdays || []);
@@ -313,6 +315,10 @@ export default function AdminAttendanceMonitor() {
         setDiaLimite(base[base.length - 1].d);
     }, [gridData, gridMes, diaLimite]);
 
+    // A los alumnos con LICENCIA no se les registra asistencia
+    const esLicencia = (st) =>
+        String(st?.estado_academico || st?.estado || "").toUpperCase() === "LICENCIA";
+
     const completarAsistencias = () => {
         if (!gridData) return;
         const nuevos = { ...ediciones };
@@ -323,6 +329,7 @@ export default function AdminAttendanceMonitor() {
             const f = fechaDe(d);
             if (gridData.porFecha?.[f]?.closed) continue;
             for (const st of roster) {
+                if (esLicencia(st)) continue;    // licencia: no se marca
                 const key = String(st.id);
                 if (marcaDe(key, d)) continue;   // ya tiene marca
                 nuevos[f] = { ...(nuevos[f] || {}), [key]: "PRESENT" };
@@ -376,9 +383,10 @@ export default function AdminAttendanceMonitor() {
                     sessId = resp?.session?.id;
                 }
                 if (!sessId) throw new Error("No se pudo crear la sesión");
-                // Combinar marcas existentes + ediciones para TODOS los alumnos
+                // Combinar marcas existentes + ediciones (licencia queda fuera)
                 const rows = [];
                 for (const st of roster) {
+                    if (esLicencia(st)) continue;
                     const key = String(st.id);
                     const edit = ediciones[f]?.[key];
                     const val = edit !== undefined ? edit : (sess?.marcas?.[key] || "");

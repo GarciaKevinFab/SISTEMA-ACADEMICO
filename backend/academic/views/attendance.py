@@ -84,6 +84,15 @@ class AttendanceSessionsView(APIView):
                 d = datetime.strptime(date_str, "%Y-%m-%d").date()
             except Exception:
                 return Response({"detail": "date inválida (YYYY-MM-DD)"}, status=400)
+            # Nunca en fin de semana. (Un día de semana fuera del horario sí
+            # se permite: el horario configurado puede estar incompleto y
+            # bloquearía el registro de un dictado real.)
+            if d.weekday() >= 5:
+                return Response(
+                    {"detail": f"El {d.strftime('%d/%m/%Y')} es "
+                               f"{'sábado' if d.weekday() == 5 else 'domingo'}: "
+                               "no se registra asistencia en fin de semana."},
+                    status=400)
             sess, _ = AttendanceSession.objects.get_or_create(section_id=section_id, date=d)
         else:
             sess = AttendanceSession.objects.create(section_id=section_id)
@@ -113,10 +122,14 @@ class AttendanceSessionSetView(APIView):
             return err
         sess = get_object_or_404(AttendanceSession, id=session_id, section_id=section_id)
         rows = (request.data or {}).get("rows", [])
-        
+
         if not isinstance(rows, list):
             return Response({"detail": "rows debe ser lista"}, status=400)
-        
+
+        # A los alumnos con LICENCIA no se les registra asistencia
+        from .teachers import _licencia_students
+        lic_keys = set(_licencia_students(sess.section).keys())
+
         with transaction.atomic():
             AttendanceRow.objects.filter(session=sess).delete()
             for r in rows:
@@ -125,6 +138,8 @@ class AttendanceSessionSetView(APIView):
                     sid = int(sid)
                 except Exception:
                     sid = 0
+                if str(sid) in lic_keys:
+                    continue
                 st = (r.get("status") or "").upper().strip()
                 AttendanceRow.objects.create(session=sess, student_id=sid, status=st)
         
@@ -151,7 +166,9 @@ class AttendanceMonthView(APIView):
                "EXCUSED": "J", "HOLIDAY": "0"}
     STATUS_OF = {"P": "PRESENT", "T": "LATE", "F": "ABSENT",
                  "J": "EXCUSED", "0": "HOLIDAY"}
-    LETRAS = ["L", "M", "X", "J", "V", "S", "D"]
+    # Iniciales de los días (lunes = 0). Martes y miércoles llevan dos letras
+    # para no confundirse entre sí: antes el miércoles salía como "X".
+    LETRAS = ["L", "Ma", "Mi", "J", "V", "S", "D"]
 
     def _month(self, raw):
         from datetime import date as date_cls
@@ -235,7 +252,7 @@ class AttendanceMonthView(APIView):
 
         if err := _section_access_denied(request, section_id):
             return err
-        get_object_or_404(Section, id=section_id)
+        sec = get_object_or_404(Section, id=section_id)
         body = request.data or {}
         ym = self._month(body.get("month"))
         if not ym:
@@ -245,6 +262,21 @@ class AttendanceMonthView(APIView):
         marks = body.get("marks") or {}
         if not isinstance(marks, dict):
             return Response({"detail": "marks debe ser objeto"}, status=400)
+
+        # La regla "solo días de dictado" antes vivía solo en el cliente:
+        # cualquier POST podía grabar sábados/domingos. Ahora es invariante
+        # del servidor (mismo criterio que el GET: horario, o L-V si no hay).
+        horario_wd = set(_schedule_weekdays(section_id))
+        tiene_horario = bool(horario_wd)
+
+        def _es_dia_dictado(d):
+            wd = date_cls(y, m, d).weekday()      # 0=Lunes … 6=Domingo
+            return (wd + 1) in horario_wd if tiene_horario else wd < 5
+
+        # Alumnos con LICENCIA: no se les registra asistencia (claves por
+        # user_id y pk, igual que las claves del acta).
+        from .teachers import _licencia_students
+        lic_keys = set(_licencia_students(sec).keys())
 
         # días afectados = los que aparecen en alguna marca + los enviados
         # explícitamente en body.days (para borrar días que quedaron vacíos)
@@ -270,6 +302,18 @@ class AttendanceMonthView(APIView):
         with transaction.atomic():
             for d in sorted(dias):
                 fecha = date_cls(y, m, d)
+                if not _es_dia_dictado(d):
+                    # Día sin dictado: nunca se graba. Los FINES DE SEMANA
+                    # heredados se purgan (basura segura del viejo
+                    # "Completar"); un día de semana fuera del horario se
+                    # deja intacto — puede ser dictado real con el horario
+                    # mal configurado en la sección.
+                    if fecha.weekday() >= 5:
+                        sess = AttendanceSession.objects.filter(
+                            section_id=section_id, date=fecha).first()
+                        if sess and not sess.closed:
+                            sess.delete()
+                    continue
                 sess, _ = AttendanceSession.objects.get_or_create(
                     section_id=section_id, date=fecha)
                 if sess.closed:
@@ -279,6 +323,8 @@ class AttendanceMonthView(APIView):
                 nuevos = []
                 for sid, por_dia in marks.items():
                     if not isinstance(por_dia, dict):
+                        continue
+                    if str(sid) in lic_keys:
                         continue
                     mark = str(por_dia.get(str(d)) or "").strip().upper()
                     status = self.STATUS_OF.get(mark)
@@ -583,6 +629,8 @@ class AdminAttendanceOverviewView(APIView):
                 .filter(plan_course=sec.plan_course,
                         enrollment__period=sec.period,
                         enrollment__status=Enrollment.STATUS_CONFIRMED)
+                # LICENCIA: no asiste ni se califica → fuera del cómputo
+                .exclude(enrollment__student__estado_academico__iexact="LICENCIA")
                 .values_list("enrollment__student_id", flat=True)
             )
             n_students = len(students_in_section)
@@ -663,12 +711,13 @@ class AdminAttendanceSectionDetailView(APIView):
         sessions = AttendanceSession.objects.filter(section=sec).order_by("date")
         n_sessions = sessions.count()
 
-        # Alumnos de la sección
+        # Alumnos de la sección (LICENCIA fuera: no asiste ni computa faltas)
         st_ids = list(
             EnrollmentItem.objects
             .filter(plan_course=sec.plan_course,
                     enrollment__period=sec.period,
                     enrollment__status=Enrollment.STATUS_CONFIRMED)
+            .exclude(enrollment__student__estado_academico__iexact="LICENCIA")
             .values_list("enrollment__student_id", flat=True)
             .distinct()
         )
@@ -756,12 +805,14 @@ class AdminAttendanceApplyDpiView(APIView):
                 status=400,
             )
 
-        # Alumnos confirmados de la sección
+        # Alumnos confirmados de la sección — nunca aplicar DPI a un alumno
+        # con LICENCIA (no puede ser calificado ni desaprobado por faltas)
         st_ids = list(
             EnrollmentItem.objects
             .filter(plan_course=sec.plan_course,
                     enrollment__period=sec.period,
                     enrollment__status=Enrollment.STATUS_CONFIRMED)
+            .exclude(enrollment__student__estado_academico__iexact="LICENCIA")
             .values_list("enrollment__student_id", flat=True)
             .distinct()
         )

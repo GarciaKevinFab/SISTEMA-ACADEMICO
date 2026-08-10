@@ -360,6 +360,58 @@ def _get_institution_media_datauris(request=None):
 # CONSTRUCCIÓN DE CONTEXTOS PARA REPORTES
 # ══════════════════════════════════════════════════════════════
 
+_ROMANOS_CICLO = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII",
+                  "IX", "X", "XI", "XII"]
+
+
+def _ciclo_seccion_del_periodo(st, pq):
+    """'V - "A"' según la matrícula de ESE período (el `st.ciclo` actual no
+    sirve para boletas de períodos pasados). Fallback: la ficha del alumno."""
+    from collections import Counter
+    ciclo = seccion = ""
+    try:
+        from academic.models import EnrollmentItem
+        items = list(
+            EnrollmentItem.objects
+            .select_related("plan_course", "section", "enrollment")
+            .filter(enrollment__student=st, enrollment__period__iexact=pq)
+            .exclude(enrollment__status="CANCELLED"))
+        sems = [int(i.plan_course.semester) for i in items
+                if i.plan_course and i.plan_course.semester]
+        if sems:
+            ciclo = _ROMANOS_CICLO[max(sems)] if max(sems) < len(_ROMANOS_CICLO) else str(max(sems))
+        labels = [i.section.label for i in items if i.section and i.section.label]
+        if labels:
+            seccion = Counter(labels).most_common(1)[0][0]
+    except Exception:
+        pass
+    if not ciclo:
+        try:
+            n = int(getattr(st, "ciclo", 0) or 0)
+            ciclo = _ROMANOS_CICLO[n] if 0 < n < len(_ROMANOS_CICLO) else ""
+        except (TypeError, ValueError):
+            ciclo = ""
+    seccion = (seccion or getattr(st, "seccion", "") or "A").upper()
+    return f'{ciclo} - "{seccion}"' if ciclo else f'- "{seccion}"'
+
+
+def _institution_header_lines():
+    """Líneas del membrete institucional (bajo el nombre, sobre el título)."""
+    try:
+        data = (CatalogInstitutionSetting.objects.filter(pk=1).first() or None)
+        data = (data.data or {}) if data else {}
+    except Exception:
+        data = {}
+    g = data.get
+    linea2 = (f'{g("denominacion") or "IESP"} de Gestión '
+              f'{g("gestion") or "Pública"} · Código Modular '
+              f'{g("codigo_modular") or "0609370"} · '
+              f'{g("ds_creacion") or "D.S. 059-1984-ED"}')
+    linea3 = g("direccion") or ("Av. Hiroshi Takahashi Takahashi N° 162 Km. 4 "
+                                "Carretera Central – Pomachaca – Tarma – Junín – Perú")
+    return linea2, linea3
+
+
 def _build_reporte_periodo_ctx(request, st: StudentProfile, pq: str) -> tuple[dict, str]:
     """
     Construye contexto para reporte de calificaciones de un período específico
@@ -456,12 +508,15 @@ def _build_reporte_periodo_ctx(request, st: StudentProfile, pq: str) -> tuple[di
         second_logo_data = _template_kardex_image_to_data_uri("logo_SIST.png")
 
     institution_name = _read_institution_name()
+    header_line2, header_line3 = _institution_header_lines()
 
     ctx = {
         "institution_name": institution_name,
+        "header_line2": header_line2,
+        "header_line3": header_line3,
         "academic_period": pq.upper(),
         "program_name": (st.programa_carrera or "EDUCACIÓN INICIAL (RVM N° 163-2019-MINEDU)"),
-        "cycle_section": getattr(st, "ciclo_seccion", "") or 'I - "A"',
+        "cycle_section": _ciclo_seccion_del_periodo(st, pq),
         "student_name": f"{st.apellido_paterno} {st.apellido_materno} {st.nombres}".strip(),
         "shift": (getattr(st, "turno", "") or "MAÑANA").upper(),
         "enrollment_code": (getattr(st, "codigo_matricula", "") or st.num_documento or "N/A"),
@@ -473,8 +528,20 @@ def _build_reporte_periodo_ctx(request, st: StudentProfile, pq: str) -> tuple[di
         "logo_url": logo_data,
         "second_logo_url": second_logo_data,
         "secretary_signature_url": secretary_sig_data,
+        # Fecha y hora de emisión (pie del PDF) — hora de Perú
+        "generated_at": _fecha_hora_emision(),
     }
     return ctx, ""
+
+
+def _fecha_hora_emision() -> str:
+    """'Documento generado el 09/08/2026 a las 14:35' en hora de Lima.
+
+    `timezone.now()` devuelve UTC (USE_TZ=True): sin `localtime()` el pie
+    saldría con 5 horas de adelanto."""
+    from django.utils import timezone as _tz
+    ahora = _tz.localtime(_tz.now())
+    return ahora.strftime("Documento generado el %d/%m/%Y a las %H:%M")
 
 
 def _build_record_notas_ctx(request, st: StudentProfile):

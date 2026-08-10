@@ -23,7 +23,7 @@ import {
 
 import { UsersService } from "../../services/users.service";
 import { generatePDFWithPolling, generateQRWithPolling, downloadFile } from "../../utils/pdfQrPolling";
-import { Attendance, Teacher, SectionStudents, Grades, AttendanceImport, ActaExcel, Sections } from "../../services/academic.service";
+import { Attendance, Teacher, SectionStudents, Grades, AttendanceImport, ActaExcel, Sections, EvaluationAdmin } from "../../services/academic.service";
 import ActaCalificacionModal, {
   vigesimalDe, califCursoDe, condicionDe, escalaDe as escalaOficial,
   nivelDeValor, valorEnRango, NIVEL_POR_CODE, NIVELES,
@@ -309,7 +309,10 @@ export default function GradesAttendanceComponent({ initialTab = "grades" }) {
       const r = await Attendance.createSession(selectedSection.id, { date: sessionDate });
       const ses = r?.session || r;
       setCurrentSession(ses);
-      setSessionRows(students.map(s => ({ student_id: s.id, status: "PRESENT" })));
+      // Los alumnos con LICENCIA no se pre-marcan (no se les registra asistencia)
+      setSessionRows(students
+        .filter(s => String(s.estado_academico || s.estado || "").toUpperCase() !== "LICENCIA")
+        .map(s => ({ student_id: s.id, status: "PRESENT" })));
       setTakeAttPage(1);
       await fetchAttendanceSessions();
       showToast("success", "Sesión creada");
@@ -504,15 +507,36 @@ export default function GradesAttendanceComponent({ initialTab = "grades" }) {
     finally { setIsSubmitting(false); }
   };
 
+  // Antes pegaba contra /sections/<id>/acta, que era un andamio: devolvía un
+  // PDF falso de 5 líneas ("% Dummy PDF"). El generador real es acta-area.pdf,
+  // el mismo que usa el modal del acta y el Centro de Evaluación.
   const generateActaPDF = async () => {
     if (!selectedSection?.id) return;
     try {
-      const result = await generatePDFWithPolling(`/sections/${selectedSection.id}/acta`, {}, { testId: "acta-pdf" });
-      if (result.success) {
-        await downloadFile(result.downloadUrl, `acta-${selectedSection.course_code || "CURSO"}-${selectedSection.id}.pdf`);
-        showToast("success", "Acta PDF generada"); await generateActaQR();
-      }
-    } catch { showToast("error", "Error al generar acta PDF"); }
+      const res = await EvaluationAdmin.actaAreaPdf(selectedSection.id);
+      const cd = res?.headers?.["content-disposition"] || "";
+      const m = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(cd);
+      const filename = m?.[1]?.replace(/['"]/g, "").trim()
+        || `acta-${selectedSection.course_code || "CURSO"}-${selectedSection.id}.pdf`;
+      const blob = res?.data instanceof Blob ? res.data : new Blob([res.data]);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+      showToast("success", "Acta PDF generada");
+    } catch (e) {
+      // El backend explica el motivo (sin alumnos, sin permiso, etc.); antes
+      // se tragaba el detalle y siempre decía "Error al generar acta PDF".
+      let msg = "Error al generar acta PDF";
+      try {
+        if (e?.response?.data instanceof Blob) {
+          msg = JSON.parse(await e.response.data.text())?.detail || msg;
+        } else if (e?.response?.data?.detail) {
+          msg = e.response.data.detail;
+        }
+      } catch { /* respuesta no-JSON: queda el mensaje genérico */ }
+      showToast("error", msg);
+    }
   };
 
   const generateActaQR = async () => {
@@ -1156,6 +1180,9 @@ export default function GradesAttendanceComponent({ initialTab = "grades" }) {
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-100">
+                          <th rowSpan={2} className="p-3 text-center font-bold text-slate-600 w-12 border-r border-slate-200">
+                            N°
+                          </th>
                           <th rowSpan={2} className="p-3 text-left font-bold text-slate-600 whitespace-nowrap border-r border-slate-200">
                             Apellidos y Nombres del Estudiante
                           </th>
@@ -1206,6 +1233,11 @@ export default function GradesAttendanceComponent({ initialTab = "grades" }) {
                           const nombreAlumno = `${(st.last_name || "").toUpperCase()} ${(st.first_name || "").toUpperCase()}`.trim();
                           return (
                             <tr key={st.id} className={`transition-colors ${lic ? "bg-rose-50/60" : `hover:bg-blue-50/20 ${rowIdx % 2 === 1 ? "bg-slate-50/30" : ""}`}`}>
+                              {/* Correlativo GLOBAL: la tabla está paginada, así que
+                                  el índice de la página se corrige con el offset. */}
+                              <td className="p-3 text-center font-semibold text-slate-500 border-r border-slate-100">
+                                {(gradesPage - 1) * gradesPageSize + rowIdx + 1}
+                              </td>
                               <td className="p-3 font-semibold text-slate-800 whitespace-nowrap border-r border-slate-100">
                                 {(st.last_name || "").toUpperCase()}{st.last_name && st.first_name ? ", " : ""}{(st.first_name || "").toUpperCase()}
                                 {lic && (
@@ -1288,7 +1320,7 @@ export default function GradesAttendanceComponent({ initialTab = "grades" }) {
                         })}
                         {students.length === 0 && (
                           <tr>
-                            <td colSpan={26} className="py-12 text-center">
+                            <td colSpan={27} className="py-12 text-center">
                               <div className="flex flex-col items-center gap-2">
                                 <div className="h-10 w-10 rounded-2xl bg-slate-100 grid place-items-center">
                                   <Users size={18} className="text-slate-300" />
