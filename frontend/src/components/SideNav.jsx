@@ -139,7 +139,7 @@ const SideNav = () => {
       items: [
         {
           id: "security", title: "Seguridad", path: "/dashboard/security", icon: ShieldCheck,
-          show: !!user,
+          show: canAny(PERMS["security.policies.manage"], PERMS["security.sessions.inspect"]),
         },
         {
           id: "admin", title: "Administración", path: "/dashboard/admin", icon: Settings,
@@ -152,11 +152,14 @@ const SideNav = () => {
       items: [
         {
           id: "academic", title: "Académico", path: "/dashboard/academic", icon: BookOpenCheck,
-          show: canAny(PERMS["academic.view"], PERMS["academic.sections.view"], PERMS["academic.plans.view"], PERMS["academic.enrollment.view"], PERMS["academic.reports.view"], PERMS["academic.grades.edit"], PERMS["academic.attendance.view"]),
+          // Sin academic.enrollment.view: el STUDENT lo tiene por compat de su
+          // propia matrícula y le hacía visible el módulo administrativo.
+          show: canAny(PERMS["academic.view"], PERMS["academic.sections.view"], PERMS["academic.plans.view"], PERMS["academic.reports.view"], PERMS["academic.grades.edit"], PERMS["academic.attendance.view"]),
         },
         {
           id: "mesa-control", title: "Mesa de Control", path: "/dashboard/mesa-control", icon: Wrench,
-          show: canAny(PERMS["academic.enrollment.commit"], PERMS["academic.enrollment.view"]),
+          // Mismo criterio que el backend (_can_admin_enroll): por rol, no por permiso
+          show: hasRole("REGISTRAR", "ADMIN_ACADEMIC", "ADMIN_ACADEMICO", "ADMIN_SYSTEM"),
         },
         { id: "student", title: "Estudiante", path: "/dashboard/student", icon: GraduationCap, show: canSeeStudentModule },
         {
@@ -190,7 +193,7 @@ const SideNav = () => {
         },
       ],
     },
-  ], [user, grantedPerms, canSeeStudentModule]);
+  ], [user, roles, grantedPerms, canSeeStudentModule]);
 
   /* ── helpers ── */
   const expanded = !isCollapsed || isMobileOpen;

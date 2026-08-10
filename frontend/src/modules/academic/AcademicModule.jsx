@@ -29,6 +29,7 @@ import {
 
 import {
     DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+    DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
 import {
@@ -275,7 +276,7 @@ function AcademicQuickActions({ go }) {
                         </button>
                     )}
                 </div>
-                <div className="hidden sm:grid sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-8 gap-2">
+                <div className="hidden sm:grid sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-8 gap-2">
                     {actions.map((a) => <ActionBtn key={a.key} {...a} />)}
                 </div>
             </CardContent>
@@ -284,7 +285,7 @@ function AcademicQuickActions({ go }) {
 }
 
 /* ─────────────────────────── DASHBOARD ─────────────────────────── */
-function SmallAcademicDashboard() {
+function SmallAcademicDashboard({ go }) {
     const [stats, setStats] = useState({ sections: 0, teachers: 0, students: 0, openProcesses: 0 });
     const [loading, setLoading] = useState(true);
 
@@ -316,32 +317,42 @@ function SmallAcademicDashboard() {
     }, []);
 
     const items = [
-        { label: "Secciones activas", value: stats.sections, Icon: Calendar, trend: "+2 este periodo", bg: "bg-blue-50", iconBg: "bg-blue-100", iconColor: "text-blue-700", cls: "stat-card-blue" },
-        { label: "Docentes", value: stats.teachers, Icon: Users, trend: "Cuerpo docente", bg: "bg-emerald-50", iconBg: "bg-emerald-100", iconColor: "text-emerald-700", cls: "stat-card-green" },
-        { label: "Estudiantes", value: stats.students, Icon: GraduationCap, trend: "Matriculados", bg: "bg-violet-50", iconBg: "bg-violet-100", iconColor: "text-violet-700", cls: "stat-card-violet" },
-        { label: "Procesos pendientes", value: stats.openProcesses, Icon: Clock, trend: "Requieren atención", bg: "bg-amber-50", iconBg: "bg-amber-100", iconColor: "text-amber-700", cls: "stat-card-amber" },
+        { label: "Secciones activas", value: stats.sections, Icon: Calendar, trend: "Este período", target: "load", bg: "bg-blue-50", iconBg: "bg-blue-100", iconColor: "text-blue-700", cls: "stat-card-blue" },
+        { label: "Docentes", value: stats.teachers, Icon: Users, trend: "Cuerpo docente", target: "teachers", bg: "bg-emerald-50", iconBg: "bg-emerald-100", iconColor: "text-emerald-700", cls: "stat-card-green" },
+        { label: "Estudiantes", value: stats.students, Icon: GraduationCap, trend: "Matriculados", target: "transfers", bg: "bg-violet-50", iconBg: "bg-violet-100", iconColor: "text-violet-700", cls: "stat-card-violet" },
+        { label: "Procesos pendientes", value: stats.openProcesses, Icon: Clock, trend: "Requieren atención", target: "processes", bg: "bg-amber-50", iconBg: "bg-amber-100", iconColor: "text-amber-700", cls: "stat-card-amber" },
     ];
 
     return (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mt-4">
-            {items.map((k, i) => (
-                <Card key={i} className={`stat-card ${k.cls} border border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-200 rounded-2xl overflow-hidden ${k.bg} fade-in`} style={{ animationDelay: `${i * 60}ms` }}>
-                    <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                                <p className="text-[11px] font-600 uppercase tracking-wider text-slate-500 truncate">{k.label}</p>
-                                <div className="mt-1.5 text-3xl font-800 text-slate-800 leading-none tabular-nums">
-                                    {loading ? <div className="skel h-8 w-14 rounded-lg" /> : k.value.toLocaleString()}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {items.map((k, i) => {
+                const clicable = typeof go === "function" && k.target;
+                return (
+                    <Card key={i}
+                        role={clicable ? "button" : undefined}
+                        tabIndex={clicable ? 0 : undefined}
+                        onClick={clicable ? () => go(k.target) : undefined}
+                        onKeyDown={clicable ? (e) => { if (e.key === "Enter" || e.key === " ") go(k.target); } : undefined}
+                        title={clicable ? `Ir a ${k.label}` : undefined}
+                        className={`stat-card ${k.cls} border border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-200 rounded-2xl overflow-hidden ${k.bg} fade-in ${clicable ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-300" : ""}`}
+                        style={{ animationDelay: `${i * 60}ms` }}>
+                        <CardContent className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <p className="text-[11px] font-600 uppercase tracking-wider text-slate-500 truncate">{k.label}</p>
+                                    <div className="mt-1.5 text-3xl font-800 text-slate-800 leading-none tabular-nums">
+                                        {loading ? <div className="skel h-8 w-14 rounded-lg" /> : k.value.toLocaleString()}
+                                    </div>
+                                    <p className="mt-1.5 text-[11px] text-slate-400 flex items-center gap-1"><TrendingUp size={10} /> {k.trend}</p>
                                 </div>
-                                <p className="mt-1.5 text-[11px] text-slate-400 flex items-center gap-1"><TrendingUp size={10} /> {k.trend}</p>
+                                <div className={`flex-shrink-0 w-10 h-10 rounded-xl ${k.iconBg} flex items-center justify-center`}>
+                                    <k.Icon size={18} className={k.iconColor} />
+                                </div>
                             </div>
-                            <div className={`flex-shrink-0 w-10 h-10 rounded-xl ${k.iconBg} flex items-center justify-center`}>
-                                <k.Icon size={18} className={k.iconColor} />
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            ))}
+                        </CardContent>
+                    </Card>
+                );
+            })}
         </div>
     );
 }
@@ -1012,7 +1023,9 @@ function KardexAndCertificates() {
         try {
             setExportingPeriod(true);
             const res = await Kardex.exportBoletaPeriodoPdf(studentId, p);
-            downloadBlob(new Blob([res.data], { type: "application/pdf" }), `boleta-${studentId}-${p.replace(/[-/]/g, "")}.pdf`);
+            const cd1 = /filename="?([^";]+)/.exec(res?.headers?.["content-disposition"] || "");
+            downloadBlob(new Blob([res.data], { type: "application/pdf" }),
+                cd1?.[1] || `boleta-${studentId}-${p.replace(/[-/]/g, "")}.pdf`);
             toast.success("Boleta del periodo descargada");
         } catch (e) { toast.error(e?.message || "No se pudo generar boleta"); }
         finally { setExportingPeriod(false); }
@@ -1027,7 +1040,9 @@ function KardexAndCertificates() {
             setExportingYear(true);
             const res = await Kardex.exportBoletaAnioPdf(studentId, p);
             const year = parseYearFromPeriod(p) || "anio";
-            downloadBlob(new Blob([res.data], { type: "application/pdf" }), `boleta-${studentId}-${year}-completo.pdf`);
+            const cd2 = /filename="?([^";]+)/.exec(res?.headers?.["content-disposition"] || "");
+            downloadBlob(new Blob([res.data], { type: "application/pdf" }),
+                cd2?.[1] || `boleta-${studentId}-${year}-completo.pdf`);
             toast.success("Boleta anual descargada");
         } catch (e) { toast.error(e?.message || "No se pudo generar boleta anual"); }
         finally { setExportingYear(false); }
@@ -1302,6 +1317,23 @@ export default function AcademicModule() {
         if (!tabs.find((t) => t.key === tab)) setTab(tabs[0]?.key ?? "dashboard");
     }, [tabs, tab]);
 
+    // Pestañas agrupadas por bloque de trabajo (para la navegación)
+    const GROUP_LABELS = {
+        inicio: null,
+        docencia: "Mi docencia",
+        academico: "Gestión académica",
+        gestion: "Evaluación y monitoreo",
+        config: "Configuración",
+    };
+    const grupos = useMemo(() => {
+        const m = new Map();
+        for (const t of tabs) {
+            if (!m.has(t.group)) m.set(t.group, []);
+            m.get(t.group).push(t);
+        }
+        return [...m.entries()];
+    }, [tabs]);
+
     return (
         <>
             <InjectStyles />
@@ -1339,13 +1371,25 @@ export default function AcademicModule() {
                                             <ChevronDown size={14} />
                                         </Button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-52 rounded-xl">
-                                        {tabs.slice(2).map((t) => {
+                                    <DropdownMenuContent align="end" className="w-56 rounded-xl max-h-[70vh] overflow-y-auto">
+                                        {tabs.slice(2).map((t, i, arr) => {
                                             const I = tabIcon(t.key);
+                                            const prev = arr[i - 1];
+                                            const nuevoGrupo = !prev || prev.group !== t.group;
                                             return (
-                                                <DropdownMenuItem key={t.key} onClick={() => setTab(t.key)} className={`flex items-center gap-2.5 text-sm rounded-lg ${tab === t.key ? "bg-blue-50 text-blue-700" : ""}`}>
-                                                    <I size={14} /><span>{t.label}</span>
-                                                </DropdownMenuItem>
+                                                <React.Fragment key={t.key}>
+                                                    {nuevoGrupo && GROUP_LABELS[t.group] && (
+                                                        <>
+                                                            {i > 0 && <DropdownMenuSeparator />}
+                                                            <DropdownMenuLabel className="text-[10px] font-700 uppercase tracking-wider text-slate-400 py-1">
+                                                                {GROUP_LABELS[t.group]}
+                                                            </DropdownMenuLabel>
+                                                        </>
+                                                    )}
+                                                    <DropdownMenuItem onClick={() => setTab(t.key)} className={`flex items-center gap-2.5 text-sm rounded-lg ${tab === t.key ? "bg-blue-50 text-blue-700" : ""}`}>
+                                                        <I size={14} /><span>{t.label}</span>
+                                                    </DropdownMenuItem>
+                                                </React.Fragment>
                                             );
                                         })}
                                     </DropdownMenuContent>
@@ -1353,21 +1397,22 @@ export default function AcademicModule() {
                             </div>
                         </div>
 
-                        {/* Desktop: pestañas agrupadas por bloque de trabajo */}
+                        {/* Desktop: bloques etiquetados por área de trabajo */}
                         <div className="hidden sm:block">
-                            <TabsList className="flex flex-wrap h-auto p-1.5 gap-1 bg-slate-50 border border-slate-200 rounded-xl">
-                                {tabs.map((t, i) => {
-                                    const prev = tabs[i - 1];
-                                    const nuevoGrupo = prev && prev.group !== t.group;
-                                    return (
-                                        <React.Fragment key={t.key}>
-                                            {nuevoGrupo && (
-                                                <span className="self-stretch w-px my-1 bg-slate-200 mx-1" aria-hidden />
-                                            )}
-                                            <IconTab value={t.key} label={t.label} Icon={tabIcon(t.key)} />
-                                        </React.Fragment>
-                                    );
-                                })}
+                            <TabsList className="flex flex-wrap items-stretch h-auto gap-2 bg-transparent p-0">
+                                {grupos.map(([g, items]) => (
+                                    <div key={g}
+                                        className="flex flex-col justify-end gap-1 rounded-xl bg-slate-50 border border-slate-200 px-1.5 pb-1.5 pt-1">
+                                        <span className="px-1.5 text-[9px] font-700 uppercase tracking-[0.12em] text-slate-400 select-none min-h-[12px]">
+                                            {GROUP_LABELS[g] || ""}
+                                        </span>
+                                        <div className="flex flex-wrap gap-1">
+                                            {items.map((t) => (
+                                                <IconTab key={t.key} value={t.key} label={t.label} Icon={tabIcon(t.key)} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
                             </TabsList>
                         </div>
 
@@ -1383,8 +1428,9 @@ export default function AcademicModule() {
                                 <TeacherOwnDashboard go={setTab} />
                             ) : (
                                 <>
+                                    {/* Primero el estado del período (KPIs), luego a dónde ir */}
+                                    <SmallAcademicDashboard go={setTab} />
                                     <AcademicQuickActions go={setTab} />
-                                    <SmallAcademicDashboard />
                                 </>
                             )}
                         </TabsContent>

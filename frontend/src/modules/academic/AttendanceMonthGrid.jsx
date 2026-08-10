@@ -132,9 +132,10 @@ export default function AttendanceMonthGrid({ sectionId, sectionLabel }) {
         setMarks(out);
         setDirty(true);
         const diasTxt = habiles.map((d) => d.day).join(", ");
+        const nAlumnos = students.filter((s) => s.estado !== "LICENCIA").length;
         toast.success(
             n > 0
-                ? `Completado con P en ${n} casillero(s): ${students.length} alumno(s) × ${habiles.length} día(s) de clase hasta el ${limite} (${diasTxt}). Ahora cambia solo las excepciones y presiona Grabar.`
+                ? `Completado con P en ${n} casillero(s): ${nAlumnos} alumno(s) × ${habiles.length} día(s) de clase hasta el ${limite} (${diasTxt}). Ahora cambia solo las excepciones y presiona Grabar.`
                 : "Todos los casilleros de los días de clase hasta ese día ya tenían marca.",
             { duration: 6000 });
     };
@@ -184,13 +185,17 @@ export default function AttendanceMonthGrid({ sectionId, sectionLabel }) {
     const grabar = async () => {
         setSaving(true);
         try {
-            // Enviar TODAS las celdas de días no cerrados (las vacías eliminan)
+            // Enviar TODAS las celdas de días no cerrados (las vacías eliminan).
+            // Solo días de dictado y sin alumnos con licencia: las marcas
+            // heredadas de sábados/domingos ya no se re-graban (el backend
+            // además las purga vía `days`).
             const payload = {};
             for (const st of students) {
+                if (st.estado === "LICENCIA") continue;
                 const sid = String(st.id);
                 payload[sid] = {};
                 for (const d of days) {
-                    if (closedSet.has(d.day)) continue;
+                    if (closedSet.has(d.day) || !esDiaClase(d)) continue;
                     const v = marks[sid]?.[String(d.day)] || "";
                     if (v) payload[sid][String(d.day)] = v;
                 }
@@ -338,9 +343,9 @@ export default function AttendanceMonthGrid({ sectionId, sectionLabel }) {
                                             const cerrado = closedSet.has(d.day);
                                             const v = marks[String(st.id)]?.[String(d.day)] || "";
                                             const conClase = esDiaClase(d);
-                                            // un día sin clase que ya tiene marca sigue siendo
-                                            // editable, para poder corregir registros previos
-                                            const bloqueado = cerrado || lic || (!conClase && !v);
+                                            // los días sin dictado nunca se editan; las marcas
+                                            // viejas que tuvieran se purgan al Grabar
+                                            const bloqueado = cerrado || lic || !conClase;
                                             return (
                                                 <td key={d.day}
                                                     className={`border p-0 text-center ${!conClase ? "bg-slate-300" : cerrado ? "bg-slate-100" : ""}`}>

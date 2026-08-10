@@ -535,7 +535,8 @@ class KardexBoletaPDFView(APIView):
         
         html = render_to_string("kardex/boleta_comunicacion.html", ctx)
         pdf_bytes = html_to_pdf_bytes(html)
-        filename = f"boleta-{student_id}.pdf"
+        from students.name_utils import nombre_archivo
+        filename = f"boleta-{nombre_archivo(st)}.pdf"
         
         return HttpResponse(pdf_bytes, content_type="application/pdf",
                             headers={"Content-Disposition": f'attachment; filename="{filename}"'})
@@ -608,7 +609,8 @@ class KardexBoletaPeriodoPDFView(APIView):
             
             html = render_to_string("kardex/reporte_calificaciones.html", ctx)
             pdf_bytes = html_to_pdf_bytes(html)
-            filename = f"reporte-calificaciones-{student_id}-{pq}.pdf"
+            from students.name_utils import nombre_archivo
+            filename = f"boleta-{nombre_archivo(st)}-{pq}.pdf"
             
             return HttpResponse(
                 pdf_bytes,
@@ -671,7 +673,8 @@ class KardexBoletaAnioPDFView(APIView):
             writer.write(out)
             out.seek(0)
 
-            filename = f"reporte-calificaciones-{student_id}-{year}.pdf"
+            from students.name_utils import nombre_archivo
+            filename = f"boleta-{nombre_archivo(st)}-{year}.pdf"
             return HttpResponse(
                 out.getvalue(),
                 content_type="application/pdf",

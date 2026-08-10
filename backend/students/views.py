@@ -583,6 +583,67 @@ def students_link_user(request, pk: int):
     return Response({"status": "linked", "student_id": st.id, "user_id": u.id})
 
 
+def _sync_ficha_academica(st):
+    """Deriva ciclo / período lectivo / sección / turno de la última matrícula
+    CONFIRMADA del alumno. La ficha no se edita a mano: se recalcula sola cada
+    vez que el alumno abre su perfil, así avanza junto con sus matrículas
+    (la actualización al confirmar matrícula solo cubría la auto-matrícula;
+    las hechas por admin o importadores dejaban la ficha congelada)."""
+    from collections import Counter
+    try:
+        from academic.models import (Enrollment, EnrollmentItem,
+                                     SectionScheduleSlot)
+    except Exception:
+        return st
+
+    enr = (Enrollment.objects
+           .filter(student=st, status=Enrollment.STATUS_CONFIRMED)
+           .order_by("-period").first())
+    if not enr:
+        return st
+    items = list(EnrollmentItem.objects
+                 .filter(enrollment=enr)
+                 .select_related("plan_course", "section"))
+    if not items:
+        return st
+
+    campos = []
+    sems = [int(i.plan_course.semester) for i in items
+            if i.plan_course and i.plan_course.semester]
+    if sems and (st.ciclo or 0) != max(sems):
+        st.ciclo = max(sems)
+        campos.append("ciclo")
+    if (st.periodo or "") != enr.period:
+        st.periodo = enr.period
+        campos.append("periodo")
+
+    labels = [i.section.label for i in items if i.section and i.section.label]
+    if labels:
+        sec_label = Counter(labels).most_common(1)[0][0]
+        if (st.seccion or "") != sec_label:
+            st.seccion = sec_label
+            campos.append("seccion")
+
+    # Turno según las horas de inicio del horario real de sus secciones
+    sec_ids = [i.section_id for i in items if i.section_id]
+    if sec_ids:
+        horas = list(SectionScheduleSlot.objects
+                     .filter(section_id__in=sec_ids)
+                     .values_list("start", flat=True))
+        if horas:
+            def _turno(h):
+                return ("Mañana" if h.hour < 13 else
+                        "Tarde" if h.hour < 18 else "Noche")
+            turno = Counter(_turno(h) for h in horas).most_common(1)[0][0]
+            if (st.turno or "") != turno:
+                st.turno = turno
+                campos.append("turno")
+
+    if campos:
+        st.save(update_fields=campos)
+    return st
+
+
 @api_view(["GET", "PATCH"])
 @permission_classes([permissions.IsAuthenticated])
 def students_me(request):
@@ -610,6 +671,8 @@ def students_me(request):
         )
 
     if request.method == "GET":
+        # Ficha académica siempre al día con la matrícula vigente
+        st = _sync_ficha_academica(st)
         return Response(StudentSerializer(st, context={"request": request}).data)
 
     ser = StudentMeUpdateSerializer(st, data=request.data, partial=True)

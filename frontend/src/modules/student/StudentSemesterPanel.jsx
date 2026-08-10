@@ -72,7 +72,10 @@ export default function StudentSemesterPanel({ goKardex }) {
             const href = window.URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = href;
-            a.download = `mi-${tipo}-${effective}.pdf`;
+            // El servidor manda el nombre con apellidos y nombres del alumno
+            const cd = res?.headers?.["content-disposition"] || "";
+            const m = /filename="?([^";]+)/.exec(cd);
+            a.download = m?.[1] || `mi-${tipo}-${effective}.pdf`;
             document.body.appendChild(a); a.click(); a.remove();
             setTimeout(() => window.URL.revokeObjectURL(href), 60000);
             toast.success("Descarga iniciada");

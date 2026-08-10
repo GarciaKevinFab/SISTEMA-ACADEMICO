@@ -176,6 +176,13 @@ const downloadBlob = (blob, filename) => {
     window.URL.revokeObjectURL(url);
 };
 
+// Nombre que manda el servidor (incluye apellidos y nombres del alumno)
+const filenameFromRes = (res, fallback) => {
+    const cd = res?.headers?.["content-disposition"] || "";
+    const m = /filename="?([^";]+)/.exec(cd);
+    return m?.[1] || fallback;
+};
+
 /* ─── sub-components ─── */
 const StatCard = ({ label, value, icon: Icon, colorCls = "kd-stat-blue", delay = 0, subtitle = null }) => (
     <div className={`kd-stat ${colorCls} kd-fade`} style={{ animationDelay: `${delay}ms` }}>
@@ -260,7 +267,8 @@ export default function StudentKardexCard({ mode, studentKey, titlePrefix = "Ká
         try {
             setExportingCycle(true); await ensureFreshToken();
             const res = await Kardex.exportBoletaPeriodoPdf(studentKey, period);
-            downloadBlob(new Blob([res.data], { type: "application/pdf" }), `boleta-${studentKey}-${period.replace(/[-/]/g, "")}.pdf`);
+            downloadBlob(new Blob([res.data], { type: "application/pdf" }),
+                filenameFromRes(res, `boleta-${studentKey}-${period.replace(/[-/]/g, "")}.pdf`));
             toast.success("PDF del ciclo generado");
         } catch (e) { toast.error(e?.message || "No se pudo exportar el PDF del ciclo"); } finally { setExportingCycle(false); }
     };
@@ -272,7 +280,8 @@ export default function StudentKardexCard({ mode, studentKey, titlePrefix = "Ká
             setExportingAll(true); await ensureFreshToken();
             const res = await Kardex.exportBoletaAnioPdf(studentKey, period);
             const year = parsePeriod(period).y || "anio";
-            downloadBlob(new Blob([res.data], { type: "application/pdf" }), `boleta-${studentKey}-${year}-completo.pdf`);
+            downloadBlob(new Blob([res.data], { type: "application/pdf" }),
+                filenameFromRes(res, `boleta-${studentKey}-${year}-completo.pdf`));
             toast.success("PDF completo generado");
         } catch (e) { toast.error(e?.message || "No se pudo exportar el PDF completo"); } finally { setExportingAll(false); }
     };

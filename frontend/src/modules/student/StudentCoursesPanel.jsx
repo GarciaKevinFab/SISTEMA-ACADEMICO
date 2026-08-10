@@ -233,7 +233,9 @@ export default function StudentCoursesPanel({ embedded = false, period: periodPr
                                     const blob = res?.data instanceof Blob ? res.data : new Blob([res.data]);
                                     const url = window.URL.createObjectURL(blob);
                                     const a = document.createElement("a");
-                                    a.href = url; a.download = `mi-boleta-${effective}.pdf`;
+                                    const cd = res?.headers?.["content-disposition"] || "";
+                                    const m = /filename="?([^";]+)/.exec(cd);
+                                    a.href = url; a.download = m?.[1] || `mi-boleta-${effective}.pdf`;
                                     document.body.appendChild(a); a.click(); a.remove();
                                     setTimeout(() => window.URL.revokeObjectURL(url), 60000);
                                     toast.success("Boleta descargada");

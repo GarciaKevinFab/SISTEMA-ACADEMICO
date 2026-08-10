@@ -800,6 +800,8 @@ class AdminGradesOverviewView(APIView):
                 .filter(plan_course=sec.plan_course,
                         enrollment__period=sec.period,
                         enrollment__status=Enrollment.STATUS_CONFIRMED)
+                # LICENCIA no puede ser calificado → no cuenta como esperado
+                .exclude(enrollment__student__estado_academico__iexact="LICENCIA")
                 .values_list("enrollment__student_id", "enrollment__student__user_id")
             )
             n_students = len(students_in_section)
@@ -889,6 +891,9 @@ class AdminGradesSectionDetailView(APIView):
             .filter(plan_course=sec.plan_course,
                     enrollment__period=sec.period,
                     enrollment__status=Enrollment.STATUS_CONFIRMED)
+            # LICENCIA no se califica: fuera del detalle y del conteo,
+            # igual que en el overview (si no, figura PENDIENTE eterno).
+            .exclude(enrollment__student__estado_academico__iexact="LICENCIA")
             .values_list("enrollment__student_id", flat=True)
             .distinct()
         )
@@ -1070,12 +1075,15 @@ def _apply_dpi_override(section, normalized):
     if n_sessions == 0:
         return normalized, []   # sin sesiones, no se puede evaluar DPI
 
-    # Alumnos de la sección
+    # Alumnos de la sección — LICENCIA fuera: no puede ser calificado, así
+    # que tampoco puede ser desaprobado por inasistencia (sería contradictorio
+    # con _strip_licencia, que le borra cualquier nota del acta).
     st_ids = set(
         EnrollmentItem.objects
         .filter(plan_course=section.plan_course,
                 enrollment__period=section.period,
                 enrollment__status=Enrollment.STATUS_CONFIRMED)
+        .exclude(enrollment__student__estado_academico__iexact="LICENCIA")
         .values_list("enrollment__student_id", flat=True)
     )
     # Faltas por alumno

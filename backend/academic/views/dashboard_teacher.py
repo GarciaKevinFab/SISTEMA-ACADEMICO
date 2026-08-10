@@ -71,10 +71,13 @@ def _students_in_section(section):
         section = Section.objects.select_related("plan_course").filter(id=section).first()
         if not section:
             return 0
+    # Los alumnos con LICENCIA no se califican, así que no cuentan como
+    # "esperados" (si no, el docente ve 24/25 · 96% sin poder completarlo).
     n = (EnrollmentItem.objects
          .filter(section_id=section.id,
                  enrollment__status="CONFIRMED",
                  enrollment__period=section.period)
+         .exclude(enrollment__student__estado_academico__iexact="LICENCIA")
          .values("enrollment__student_id").distinct().count())
     if n:
         return n
@@ -82,6 +85,7 @@ def _students_in_section(section):
             .filter(plan_course_id=section.plan_course_id,
                     enrollment__status="CONFIRMED",
                     enrollment__period=section.period)
+            .exclude(enrollment__student__estado_academico__iexact="LICENCIA")
             .values("enrollment__student_id").distinct().count())
 
 
