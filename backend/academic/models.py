@@ -354,9 +354,32 @@ class Enrollment(models.Model):
         (STATUS_CANCELLED, "Anulada"),
     ]
 
+    # ── Tipo de matrícula (nómina oficial) ──
+    # Pertenece a CADA matrícula, no al alumno: quien se reincorporó en
+    # 2025-II vuelve a ser REGULAR en 2026-I (definición de Secretaría).
+    # El estado especial del alumno (Student.estado_academico + RD) es el
+    # insumo del período en que ocurre; acá queda la foto histórica.
+    TIPO_INGRESANTE      = "INGRESANTE"
+    TIPO_REGULAR         = "REGULAR"
+    TIPO_SUBSANACION     = "SUBSANACION"
+    TIPO_REINCORPORACION = "REINCORPORACION"
+    TIPO_TRASLADO        = "TRASLADO"
+    TIPO_CHOICES = [
+        (TIPO_INGRESANTE,      "Ingresante"),
+        (TIPO_REGULAR,         "Regular"),
+        (TIPO_SUBSANACION,     "Subsanación"),
+        (TIPO_REINCORPORACION, "Reincorporación"),
+        (TIPO_TRASLADO,        "Traslado"),
+    ]
+
     student       = models.ForeignKey("students.Student", on_delete=models.CASCADE, related_name="enrollments")
     period        = models.CharField(max_length=20)
     status        = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    tipo_matricula = models.CharField(
+        max_length=16, blank=True, default="", choices=[("", "—")] + TIPO_CHOICES,
+        help_text="Tipo en la nómina del período; se deriva al confirmar y "
+                  "Secretaría puede corregirlo",
+    )
     total_credits = models.PositiveSmallIntegerField(default=0)
     created_at    = models.DateTimeField(auto_now_add=True)
     confirmed_at  = models.DateTimeField(null=True, blank=True)
@@ -379,11 +402,39 @@ class Enrollment(models.Model):
     def is_active(self) -> bool:
         return self.status in (self.STATUS_DRAFT, self.STATUS_CONFIRMED)
 
+    def derivar_tipo_matricula(self) -> str:
+        """Tipo según los datos disponibles al momento de matricular.
+
+        Prioridad: estado especial del alumno (con RD) > antigüedad.
+        INGRESANTE = primera matrícula confirmada y sin historial de notas.
+        """
+        est = (getattr(self.student, "estado_academico", "") or "").upper()
+        if est in (self.TIPO_SUBSANACION, self.TIPO_TRASLADO,
+                   self.TIPO_REINCORPORACION):
+            return est
+        tiene_historia = (
+            Enrollment.objects.filter(
+                student_id=self.student_id, status=self.STATUS_CONFIRMED)
+            .exclude(pk=self.pk).exclude(period=self.period).exists()
+            or AcademicGradeRecord.objects.filter(
+                student_id=self.student_id).exclude(term=self.period).exists()
+        )
+        return self.TIPO_REGULAR if tiene_historia else self.TIPO_INGRESANTE
+
+    @property
+    def tipo_matricula_efectivo(self) -> str:
+        """El tipo guardado, o el derivado si nadie lo fijó aún."""
+        return self.tipo_matricula or self.derivar_tipo_matricula()
+
     def confirm(self):
         """Confirma la matrícula y registra la fecha."""
         self.status      = self.STATUS_CONFIRMED
         self.confirmed_at = timezone.now()
-        self.save(update_fields=["status", "confirmed_at"])
+        campos = ["status", "confirmed_at"]
+        if not self.tipo_matricula:
+            self.tipo_matricula = self.derivar_tipo_matricula()
+            campos.append("tipo_matricula")
+        self.save(update_fields=campos)
 
     def cancel(self):
         """Anula la matrícula."""

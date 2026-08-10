@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
 import EnrollmentPaymentGate from "./EnrollmentPaymentGate";
+import MatriculaDescargasPanel from "./MatriculaDescargasPanel";
 
 /* ─── helpers ─── */
 function formatApiError(err, fallback = "Ocurrió un error") {
@@ -142,6 +143,15 @@ const ESTADO_STYLES = {
   REINCORPORACION: { label: "Reincorporación", cls: "bg-blue-100 text-blue-700 border-blue-200" },
   TRASLADO:        { label: "Traslado",        cls: "bg-violet-100 text-violet-700 border-violet-200" },
   SUBSANACION:     { label: "Subsanación",     cls: "bg-orange-100 text-orange-700 border-orange-200" },
+};
+
+// Tipo de matrícula del período (nómina oficial) — lo deriva el backend
+const TIPO_MATRICULA_STYLES = {
+  INGRESANTE:      { label: "Ingresante",      cls: "bg-cyan-100 text-cyan-700 border-cyan-200" },
+  REGULAR:         { label: "Regular",         cls: "bg-slate-100 text-slate-600 border-slate-200" },
+  SUBSANACION:     { label: "Subsanación",     cls: "bg-orange-100 text-orange-700 border-orange-200" },
+  REINCORPORACION: { label: "Reincorporación", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  TRASLADO:        { label: "Traslado",        cls: "bg-violet-100 text-violet-700 border-violet-200" },
 };
 
 const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
@@ -507,6 +517,7 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
                 <th className="text-left font-medium text-slate-600 px-4 py-3 hidden lg:table-cell">Carrera</th>
                 <th className="text-center font-medium text-slate-600 px-4 py-3 hidden sm:table-cell">Ciclo</th>
                 <th className="text-center font-medium text-slate-600 px-4 py-3">Estado</th>
+                <th className="text-center font-medium text-slate-600 px-4 py-3 hidden md:table-cell">Tipo de Matrícula</th>
                 <th className="text-center font-medium text-slate-600 px-4 py-3 hidden md:table-cell">Cursos / Créditos</th>
                 <th className="text-right font-medium text-slate-600 px-4 py-3">Acción</th>
               </tr>
@@ -514,14 +525,14 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-10 text-slate-400">
+                  <td colSpan={8} className="text-center py-10 text-slate-400">
                     <Clock className="h-5 w-5 animate-spin inline mr-2" />
                     Cargando padrón...
                   </td>
                 </tr>
               ) : visible.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-10 text-slate-400">
+                  <td colSpan={8} className="text-center py-10 text-slate-400">
                     No se encontraron alumnos
                   </td>
                 </tr>
@@ -579,6 +590,15 @@ const StudentsRoster = ({ academicPeriod, api, onEnrollStudent }) => {
                         )}
                         <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 text-blue-500" />
                       </button>
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell text-center">
+                      {st.tipo_matricula ? (
+                        <Badge className={`${TIPO_MATRICULA_STYLES[st.tipo_matricula]?.cls || "bg-slate-100 text-slate-600 border-slate-200"} border text-xs`}>
+                          {TIPO_MATRICULA_STYLES[st.tipo_matricula]?.label || st.tipo_matricula}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-slate-300">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-center text-slate-500 text-xs">
                       {st.is_enrolled
@@ -1252,7 +1272,24 @@ const EnrollmentComponent = () => {
               </Badge>
             )}
           </button>
+          <button
+            onClick={() => setAdminView("descargas")}
+            className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${adminView === "descargas"
+                ? "border-blue-500 text-blue-600"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+          >
+            <FileText className="h-4 w-4" />
+            Descargas
+          </button>
         </div>
+      )}
+
+      {/* ══════════════════════════════════════
+          ADMIN VIEW: DESCARGAS (actas, nóminas y listas por tipo)
+          ══════════════════════════════════════ */}
+      {adminMode && adminView === "descargas" && (
+        <MatriculaDescargasPanel academicPeriod={academicPeriod} />
       )}
 
       {/* ══════════════════════════════════════

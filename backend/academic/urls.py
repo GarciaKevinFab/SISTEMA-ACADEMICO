@@ -44,6 +44,9 @@ from .views import (
     AcademicReportsSummaryView, AcademicReportPerformanceXlsxView, AcademicReportOccupancyXlsxView,
     NominasMatriculaXlsxView, NominasMatriculaPDFView,
     StudentsDataXlsxView, ReporteMineduXlsxView,
+)
+from .views.matricula_export import MatriculaPorTipoView
+from .views import (
 
     TeacherSectionsView, SectionStudentsView,
     SectionGradesView, GradesSaveView, GradesSubmitView, GradesReopenView,
@@ -298,6 +301,9 @@ urlpatterns = [
     path("reports/occupancy.xlsx",     AcademicReportOccupancyXlsxView.as_view()),
     path("reports/nominas.xlsx",         NominasMatriculaXlsxView.as_view()),
     path("reports/nominas.pdf",          NominasMatriculaPDFView.as_view()),
+    # Listas de matrícula por tipo (panel de descargas de Matrícula)
+    path("reports/matricula-tipo.xlsx",  MatriculaPorTipoView.as_view(fmt="xlsx")),
+    path("reports/matricula-tipo.pdf",   MatriculaPorTipoView.as_view(fmt="pdf")),
     path("reports/students-data.xlsx",   StudentsDataXlsxView.as_view()),
     path("reports/reporte-minedu.xlsx",  ReporteMineduXlsxView.as_view()),
 

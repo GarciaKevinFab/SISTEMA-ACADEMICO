@@ -42,6 +42,13 @@ from .utils import (
 )
 from .kardex_helpers import _resolve_plan_for_student, _build_pc_name_cache
 
+import logging
+
+# `logger` se usaba en cuatro `except` de este módulo sin estar definido: al
+# fallar la generación de la ficha, el manejador reventaba con NameError y
+# escondía el error de verdad.
+logger = logging.getLogger(__name__)
+
 
 # ══════════════════════════════════════════════════════════════
 #  HELPERS DE PERÍODO
@@ -571,6 +578,54 @@ def _dummy_pdf_response(filename="documento.pdf"):
     return FileResponse(buf, as_attachment=True, filename=filename)
 
 
+def _esc_html(v) -> str:
+    """Escapa texto para incrustarlo en el HTML que se convierte a PDF."""
+    from html import escape
+    return escape(str(v if v is not None else ""))
+
+
+def _constancia_shell(titulo: str, inst: dict, cuerpo: str) -> str:
+    """Membrete institucional + cuerpo, listo para `html_to_pdf_bytes`."""
+    nombre = _esc_html(inst.get("name") or "")
+    sub = _esc_html(inst.get("institution_name") or "")
+    cod = _esc_html(inst.get("modular_code") or "")
+    dirn = _esc_html(inst.get("address") or "")
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+  @page {{ size: A4; margin: 18mm 16mm; }}
+  * {{ box-sizing: border-box; }}
+  body {{ font-family: Arial, Helvetica, sans-serif; font-size: 11px;
+          color: #111; margin: 0; }}
+  .head {{ text-align: center; border-bottom: 2px solid #1F4E79;
+           padding-bottom: 6px; margin-bottom: 14px; }}
+  .head h1 {{ font-size: 13px; margin: 0; color: #1F4E79; }}
+  .head h2 {{ font-size: 12px; margin: 1px 0 0; color: #1F4E79; }}
+  .head p {{ margin: 2px 0 0; font-size: 9px; color: #444; }}
+  .titulo {{ text-align: center; font-size: 15px; font-weight: bold;
+             letter-spacing: 2px; margin: 16px 0 14px; }}
+  .titulo2 {{ text-align: center; font-weight: bold; letter-spacing: 1px;
+              margin: 12px 0; }}
+  .parrafo {{ text-align: justify; line-height: 1.6; margin: 8px 0; }}
+  table {{ border-collapse: collapse; width: 100%; margin: 12px 0; }}
+  th, td {{ border: 1px solid #555; padding: 3px 5px; font-size: 10px; }}
+  th {{ background: #1F4E79; color: #fff; }}
+  .c {{ text-align: center; }}
+  .fecha {{ text-align: right; margin-top: 22px; }}
+  .firma {{ margin-top: 52px; text-align: center; }}
+  .firma .linea {{ display: inline-block; border-top: 1px solid #111;
+                   padding-top: 4px; min-width: 260px; font-weight: bold; }}
+  .firma .chico {{ font-weight: normal; font-size: 9px; }}
+</style></head><body>
+<div class="head">
+  <h1>{nombre}</h1>
+  <h2>{sub}</h2>
+  <p>{dirn}{' · Código Modular ' + cod if cod else ''}</p>
+</div>
+<div class="titulo">{_esc_html(titulo)}</div>
+{cuerpo}
+</body></html>"""
+
+
 def _extract_ids_from_body(body: dict) -> list:
     raw = body.get("plan_course_ids") or body.get("course_ids") or []
     if not isinstance(raw, list) or not raw:
@@ -817,6 +872,39 @@ class StudentsOverviewView(APIView):
                 return False
             return True
 
+        # ── 5b. Tipo de matrícula de la página (en batch) ─────
+        # Guardado en la matrícula del período; si aún no se fijó (matrículas
+        # previas a la migración), se deriva con las mismas reglas del modelo.
+        tipo_map = dict(
+            Enrollment.objects
+            .filter(student_id__in=student_ids, period=academic_period)
+            .exclude(status=Enrollment.STATUS_CANCELLED)
+            .values_list("student_id", "tipo_matricula"))
+        con_historia = set(
+            Enrollment.objects
+            .filter(student_id__in=student_ids, status=Enrollment.STATUS_CONFIRMED)
+            .exclude(period=academic_period)
+            .values_list("student_id", flat=True)
+        ) | set(
+            AcademicGradeRecord.objects
+            .filter(student_id__in=student_ids)
+            .exclude(term=academic_period)
+            .values_list("student_id", flat=True))
+        ESPECIALES = {Enrollment.TIPO_SUBSANACION, Enrollment.TIPO_TRASLADO,
+                      Enrollment.TIPO_REINCORPORACION}
+
+        def _tipo_de(st):
+            if st._enrollment_id is None:
+                return ""
+            guardado = tipo_map.get(st.id) or ""
+            if guardado:
+                return guardado
+            est = (getattr(st, "estado_academico", "") or "").upper()
+            if est in ESPECIALES:
+                return est
+            return (Enrollment.TIPO_REGULAR if st.id in con_historia
+                    else Enrollment.TIPO_INGRESANTE)
+
         # ── 6. Serializar ─────────────────────────────────────
         result = []
         for st in students_page:
@@ -865,6 +953,7 @@ class StudentsOverviewView(APIView):
                 "enrolled_credits":       st._enrolled_credits,
                 "estado_academico":       getattr(st, "estado_academico", "") or "",
                 "estado_rd":              getattr(st, "estado_rd", "") or "",
+                "tipo_matricula":         _tipo_de(st),
             })
 
         return ok(
@@ -1540,11 +1629,115 @@ class EnrollmentCertificateView(APIView):
 
 
 class EnrollmentCertificatePDFView(APIView):
+    """
+    GET /academic/enrollments/<id>/certificate/pdf
+    Constancia de matrícula del período: certifica que el alumno está
+    matriculado y detalla los cursos en los que se inscribió.
+
+    Antes devolvía `_dummy_pdf_response`, es decir un PDF falso de cinco
+    líneas: el botón "descargaba" un archivo que ningún lector podía abrir.
+    """
     authentication_classes = [JWTAuthentication]
     permission_classes     = [permissions.IsAuthenticated]
 
     def get(self, request, enrollment_id: int):
-        return _dummy_pdf_response(f"matricula-{enrollment_id}.pdf")
+        from .process_document_gen import _get_institution, _fecha, _to_roman
+        from ..pdf_render import html_to_pdf_bytes
+        from students.name_utils import nombre_oficial
+
+        enr = (Enrollment.objects
+               .select_related("student", "student__plan", "student__plan__career")
+               .filter(id=enrollment_id).first())
+        if not enr:
+            return Response({"detail": "La matrícula no existe."}, status=404)
+        if (enr.status or "").upper() == "CANCELLED":
+            return Response(
+                {"detail": "La matrícula está anulada: no se puede emitir constancia."},
+                status=409)
+        if (enr.status or "").upper() != "CONFIRMED":
+            return Response(
+                {"detail": "La matrícula aún no está confirmada. "
+                           "Confírmala antes de emitir la constancia."},
+                status=409)
+
+        st = enr.student
+        inst = _get_institution()
+
+        items = list(enr.items
+                     .select_related("plan_course__course", "section")
+                     .order_by("plan_course__semester",
+                               "plan_course__display_code", "id"))
+
+        filas, total_cred = [], 0
+        for n, it in enumerate(items, 1):
+            pc = it.plan_course
+            course = getattr(pc, "course", None)
+            cred = int(getattr(pc, "credits", 0) or 0)
+            total_cred += cred
+            nombre = (getattr(pc, "display_name", "")
+                      or getattr(course, "name", "") or "—")
+            codigo = (getattr(pc, "display_code", "")
+                      or getattr(course, "code", "") or "")
+            filas.append(
+                f"<tr><td class='c'>{n}</td><td class='c'>{_esc_html(codigo)}</td>"
+                f"<td>{_esc_html(nombre.upper())}</td>"
+                f"<td class='c'>{cred or ''}</td>"
+                f"<td class='c'>{_esc_html(getattr(it.section, 'label', '') or '')}</td></tr>")
+
+        if not filas:
+            filas.append("<tr><td colspan='5' class='c'>"
+                         "(sin cursos registrados en esta matrícula)</td></tr>")
+
+        ciclo = st.ciclo or 0
+        carrera = (st.plan.career.name if st.plan and st.plan.career
+                   else (st.programa_carrera or "—"))
+
+        cuerpo = f"""
+<p class="parrafo">
+  El (La) que suscribe, Secretario(a) Académico(a) del
+  <b>{_esc_html(inst.get('institution_name') or inst.get('name') or '')}</b>,
+</p>
+<p class="titulo2">HACE CONSTAR:</p>
+<p class="parrafo">
+  Que el (la) estudiante <b>{_esc_html(nombre_oficial(st))}</b>, identificado(a)
+  con DNI N° <b>{_esc_html(st.num_documento or '—')}</b>, se encuentra
+  <b>MATRICULADO(A)</b> en el Programa de Estudios de
+  <b>{_esc_html((carrera or '').upper())}</b>, ciclo
+  <b>{_esc_html(_to_roman(ciclo) if str(ciclo).isdigit() else str(ciclo))}</b>,
+  sección <b>"{_esc_html(st.seccion or 'A')}"</b>, turno
+  <b>{_esc_html((st.turno or 'MAÑANA').upper())}</b>, durante el período
+  académico <b>{_esc_html(enr.period or '')}</b>, con un total de
+  <b>{len(items)}</b> curso(s) y <b>{total_cred}</b> crédito(s), según el
+  detalle siguiente:
+</p>
+<table>
+  <tr><th>N°</th><th>Código</th><th>Curso o Módulo</th>
+      <th>Créditos</th><th>Sección</th></tr>
+  {''.join(filas)}
+</table>
+<p class="parrafo">
+  Se expide la presente constancia a solicitud del (de la) interesado(a),
+  para los fines que estime conveniente.
+</p>
+<p class="fecha">{_esc_html(_fecha(inst))}</p>
+<div class="firma"><span class="linea">SECRETARIO(A) ACADÉMICO(A)<br>
+  <span class="chico">Firma, Post Firma y Sello</span></span></div>
+"""
+        html = _constancia_shell("CONSTANCIA DE MATRÍCULA", inst, cuerpo)
+        try:
+            pdf = html_to_pdf_bytes(html)
+        except Exception as exc:
+            logger.error(f"Constancia de matrícula enrollment={enrollment_id}: {exc}",
+                         exc_info=True)
+            return Response(
+                {"detail": f"No se pudo generar el PDF de la constancia: {exc}"},
+                status=500)
+
+        dni = st.num_documento or st.id
+        return HttpResponse(
+            pdf, content_type="application/pdf",
+            headers={"Content-Disposition":
+                     f'attachment; filename="constancia-matricula-{dni}-{enr.period}.pdf"'})
 
 
 class EnrollmentFichaView(APIView):

@@ -454,6 +454,11 @@ export const AcademicReports = {
         api.get("/academic/reports/nominas.pdf", { params, responseType: "blob" }),
     exportStudentsData: async (params) =>
         api.get("/academic/reports/students-data.xlsx", { params, responseType: "blob" }),
+    /** Listas de matrícula por tipo (regular | subsanacion | reincorporacion-traslado) */
+    exportMatriculaTipo: async (params) =>
+        api.get("/academic/reports/matricula-tipo.xlsx", { params, responseType: "blob" }),
+    exportMatriculaTipoPdf: async (params) =>
+        api.get("/academic/reports/matricula-tipo.pdf", { params, responseType: "blob" }),
     exportReporteMinedu: async (params) =>
         api.get("/academic/reports/reporte-minedu.xlsx", { params, responseType: "blob" }),
     exportFichasRendimientoZip: async (params) =>
