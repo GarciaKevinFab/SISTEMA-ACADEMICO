@@ -13,10 +13,16 @@ por lo que quedaba desactualizada en cuanto se corregía un apellido.
 Formato oficial (Nómina de Matrícula / actas MINEDU):  "APELLIDOS, NOMBRES"
 """
 import re
+import unicodedata
 
 _ESPACIOS = re.compile(r"\s+")
 
 CAMPOS_NOMBRE = ("nombres", "apellido_paterno", "apellido_materno")
+
+# La Ñ se ordena justo después de TODAS las N. Se marca con un carácter mayor
+# que cualquier letra para que "NUÑEZ" < "ÑAUPARI" < "OLIVA".
+_MARCA_ENIE = "\x01"
+_DESPUES_DE_N = "N" + chr(0xFFFF)
 
 
 def normalizar(texto) -> str:
@@ -45,6 +51,50 @@ def nombre_oficial(student) -> str:
     if ap and no:
         return f"{ap}, {no}"
     return ap or no
+
+
+def nombre_archivo(valor) -> str:
+    """Nombre del alumno apto para nombres de archivo descargables:
+    "APELLIDOS NOMBRES" sin tildes, sin coma y con guiones bajos.
+
+        nombre_archivo(st) → "CAMPOS_APOLINARIO_MARIA_JOSE"
+
+    Acepta un str o un Student (usa `nombre_oficial`). Solo ASCII, así el
+    header Content-Disposition no necesita escaparse."""
+    texto = valor if isinstance(valor, str) else nombre_oficial(valor)
+    texto = unicodedata.normalize("NFD", normalizar(texto))
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    texto = re.sub(r"[^A-Za-z0-9 ]+", "", texto)
+    return _ESPACIOS.sub("_", texto.strip())
+
+
+def clave_orden(valor) -> str:
+    """Clave para ordenar alfabéticamente en español.
+
+    `sorted()` y `.sort()` comparan por código Unicode, donde la Ñ (U+00D1)
+    cae DESPUÉS de la Z — por eso "ÑAUPARI SINCHI" terminaba al final de la
+    nómina en vez de ir entre las N y las O. Esta clave arregla eso:
+
+      · la Ñ va justo después de todas las N:
+            NUÑEZ  <  ÑAUPARI  <  OLIVA
+      · las tildes y la diéresis no cuentan:
+            GARCÍA = GARCIA,  PIÑÓN = PIÑON,  ARGÜELLES = ARGUELLES
+        pero la Ñ SÍ cuenta: es letra propia, no una N con tilde, así que
+            MUNOZ  <  MUÑOZ
+
+    Acepta un str o un Student (en cuyo caso usa `nombre_oficial`).
+
+    Ojo: es solo para ordenar en Python. Un `.order_by()` de Django ordena en
+    PostgreSQL y depende del collation de la base, no de esta función.
+    """
+    texto = valor if isinstance(valor, str) else nombre_oficial(valor)
+    # NFC primero: la Ñ puede venir descompuesta (N + tilde combinante).
+    texto = unicodedata.normalize("NFC", normalizar(texto))
+    texto = texto.replace("Ñ", _MARCA_ENIE)
+    # Quitar tildes/diéresis del resto (la Ñ ya está a salvo en la marca).
+    texto = "".join(c for c in unicodedata.normalize("NFD", texto)
+                    if not unicodedata.combining(c))
+    return texto.replace(_MARCA_ENIE, _DESPUES_DE_N)
 
 
 def sync_user_full_name(student, save: bool = True) -> bool:

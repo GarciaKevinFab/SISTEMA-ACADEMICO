@@ -132,7 +132,9 @@ class TeachersViewSet(viewsets.ModelViewSet):
 
             if extra:
                 items.extend(extra)
-                items.sort(key=lambda t: (t.get("full_name") or "").upper())
+                # `clave_orden`: alfabético español (la Ñ entre la N y la O)
+                from students.name_utils import clave_orden
+                items.sort(key=lambda t: clave_orden(t.get("full_name") or ""))
                 resp.data["items"] = items
         except Exception as exc:
             # El merge nunca debe romper el listado base, pero sí dejar rastro
