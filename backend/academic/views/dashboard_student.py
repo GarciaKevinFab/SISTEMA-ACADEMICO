@@ -64,11 +64,41 @@ def _classroom_name(section):
 
 
 def _enrolled_section_ids(student, period=None):
+    """IDs de sección de la matrícula del alumno (opcionalmente de un período).
+
+    `period` acepta el código ("2026-I") o el objeto `catalogs.Period`. Antes
+    se filtraba el CharField `Enrollment.period` con el OBJETO directamente,
+    que Django convierte con str() → "2026-I - 2026-I" (código + label): no
+    coincidía nunca, la lista salía vacía y el alumno veía "Horario no
+    disponible" aunque estuviera matriculado.
+    """
     qs = Enrollment.objects.filter(student=student)
-    if period:
-        qs = qs.filter(period=period)
-    enroll_ids = qs.values_list("id", flat=True)
-    return list(EnrollmentItem.objects.filter(enrollment_id__in=enroll_ids).values_list("section_id", flat=True))
+    if period is not None:
+        code = period if isinstance(period, str) else (
+            getattr(period, "code", "") or f"{period.year}-{period.term}")
+        qs = qs.filter(period=code)
+    enroll_ids = list(qs.values_list("id", flat=True))
+    items = list(EnrollmentItem.objects
+                 .filter(enrollment_id__in=enroll_ids)
+                 .values_list("section_id", "plan_course_id"))
+
+    out = {sid for sid, _pc in items if sid}
+
+    # Ítems con section NULL (típico: matriculados antes de crear secciones).
+    # Si el curso tiene UNA sola sección en el período, es esa sin ambigüedad
+    # — mismo criterio que el acta (`acta_excel._items_de_seccion`).
+    sueltos = {pc for sid, pc in items if not sid and pc}
+    if sueltos:
+        secs_qs = Section.objects.filter(plan_course_id__in=sueltos)
+        if period is not None:
+            secs_qs = secs_qs.filter(period=code)
+        por_curso = defaultdict(list)
+        for sid, pc in secs_qs.values_list("id", "plan_course_id"):
+            por_curso[pc].append(sid)
+        for pc, sids in por_curso.items():
+            if len(sids) == 1:
+                out.add(sids[0])
+    return list(out)
 
 
 # ─────────────────────────────────────────────
@@ -309,18 +339,20 @@ def student_courses_detail(request):
                 if isinstance(e, dict):
                     entry = e
                     break
-            sess_ids = list(AttendanceSession.objects
-                            .filter(section=sec).values_list("id", flat=True))
-            sesiones = len(sess_ids)
-            if sess_ids:
-                rows = AttendanceRow.objects.filter(
-                    session_id__in=sess_ids, student_id__in=keys)
-                for r in rows.values_list("status", flat=True):
-                    s = (r or "").upper()
-                    if s == "ABSENT":
-                        faltas += 1
-                    elif s == "LATE":
-                        tardanzas += 1
+            # Con LICENCIA no se computa asistencia (ni faltas ni % ni riesgo)
+            if (getattr(student, "estado_academico", "") or "").upper() != "LICENCIA":
+                sess_ids = list(AttendanceSession.objects
+                                .filter(section=sec).values_list("id", flat=True))
+                sesiones = len(sess_ids)
+                if sess_ids:
+                    rows = AttendanceRow.objects.filter(
+                        session_id__in=sess_ids, student_id__in=keys)
+                    for r in rows.values_list("status", flat=True):
+                        s = (r or "").upper()
+                        if s == "ABSENT":
+                            faltas += 1
+                        elif s == "LATE":
+                            tardanzas += 1
 
         # nota: acta en vivo → si ya fue procesada, kárdex manda
         kardex = AcademicGradeRecord.objects.filter(

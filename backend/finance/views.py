@@ -1772,44 +1772,74 @@ def finance_dashboard_stats(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def student_balance(request):
-    """GET /api/finance/student/balance — Saldo del estudiante autenticado"""
-    from academic.models import Student
+    """GET /api/finance/student/balance — Cuenta del estudiante autenticado.
+
+    Devuelve TODO lo que el alumno viene pagando: cargos pendientes, pagos en
+    caja (StudentAccountPayment) y los vouchers de matrícula del Banco de la
+    Nación (EnrollmentPayment) con su estado de revisión.
+
+    Antes importaba `Student` desde `academic.models`, donde no existe: el
+    endpoint moría con ImportError (500) en TODOS los requests y el panel de
+    pagos del alumno quedaba siempre vacío. Además recortaba a 5 cargos y 3
+    pagos, insuficiente como historial.
+    """
+    from students.models import Student
+    from academic.models import EnrollmentPayment
     try:
         student = Student.objects.get(user=request.user)
     except Student.DoesNotExist:
         return Response({"detail": "No se encontró perfil de estudiante."}, status=404)
 
-    pending_charges = StudentAccountCharge.objects.filter(
-        subject_id=student.id, subject_type="STUDENT", paid=False
-    ).order_by("due_date", "created_at")
+    pending_charges = list(StudentAccountCharge.objects.filter(
+        subject_id=str(student.id), subject_type="STUDENT", paid=False
+    ).select_related("concept").order_by("due_date", "created_at"))
 
     total_pending = sum(float(c.amount) for c in pending_charges)
-    next_charge = pending_charges.first()
+    next_charge = pending_charges[0] if pending_charges else None
 
-    payments = []
-    for c in pending_charges[:5]:
-        payments.append({
-            "concept": c.concept_name or (c.concept.name if c.concept else "Cargo"),
-            "amount": float(c.amount),
-            "status": "pendiente",
-            "due_date": str(c.due_date) if c.due_date else "",
-        })
+    charges = [{
+        "concept": c.concept_name or (c.concept.name if c.concept else "Cargo"),
+        "amount": float(c.amount),
+        "status": "pendiente",
+        "due_date": str(c.due_date) if c.due_date else "",
+    } for c in pending_charges]
 
-    paid_entries = StudentAccountPayment.objects.filter(
-        subject_id=student.id, subject_type="STUDENT"
-    ).order_by("-date", "-created_at")[:3]
+    METODO = {"CASH": "Efectivo", "CARD": "Tarjeta", "TRANSFER": "Transferencia"}
+    paid = [{
+        "concept": (p.concept.name if p.concept
+                    else f"Pago en {METODO.get(p.method, p.method)}"
+                         + (f" · Ref. {p.ref}" if p.ref else "")),
+        "amount": float(p.amount),
+        "status": "pagado",
+        "due_date": str(p.date) if p.date else str(p.created_at.date()),
+    } for p in StudentAccountPayment.objects.filter(
+        subject_id=str(student.id), subject_type="STUDENT"
+    ).select_related("concept").order_by("-date", "-created_at")]
 
-    for p in paid_entries:
-        payments.append({
-            "concept": f"Pago {p.method} {p.ref or ''}".strip(),
-            "amount": float(p.amount),
-            "status": "pagado",
-            "due_date": str(p.date) if p.date else "",
-        })
+    CANAL = dict(EnrollmentPayment.CHANNEL_CHOICES)
+    ESTADO_VOUCHER = {"PENDING": "en revisión", "APPROVED": "pagado",
+                      "REJECTED": "rechazado"}
+    vouchers = [{
+        "concept": f"Matrícula {ep.period} · {CANAL.get(ep.channel, ep.channel)}"
+                   + (f" · Op. {ep.operation_code}" if ep.operation_code else ""),
+        "amount": float(ep.amount) + float(ep.surcharge or 0),
+        "status": ESTADO_VOUCHER.get(ep.status, ep.status.lower()),
+        "due_date": str(ep.fecha_movimiento or ep.created_at.date()),
+        "rejection_note": ep.rejection_note or "",
+    } for ep in EnrollmentPayment.objects.filter(student=student)
+        .order_by("-created_at")]
 
+    # `payments`: la clave que la tarjeta "Mis Pagos" del dashboard ya lee
+    # (pendientes primero, luego el historial).
     return Response({
         "pending": total_pending,
         "next_due": str(next_charge.due_date) if next_charge and next_charge.due_date else None,
         "next_amount": float(next_charge.amount) if next_charge else 0,
-        "payments": payments,
+        "payments": charges + vouchers + paid,
+        "charges": charges,
+        "paid": paid,
+        "enrollment_vouchers": vouchers,
+        "total_paid": round(sum(p["amount"] for p in paid)
+                            + sum(v["amount"] for v in vouchers
+                                  if v["status"] == "pagado"), 2),
     })

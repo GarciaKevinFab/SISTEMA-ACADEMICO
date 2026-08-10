@@ -416,7 +416,7 @@ export default function StudentDashboard({ user }) {
                             icon={CreditCard} variant="amber"
                             message={`Deuda pendiente: S/ ${kpis.pendingDebt.toLocaleString("es-PE")}`}
                             sub={kpis.nextPaymentDate ? `Vence: ${kpis.nextPaymentDate}` : undefined}
-                            action="Pagar" onAction={() => navigate("/dashboard/finance")}
+                            action="Pagar" onAction={() => navigate("/dashboard/student/pagos")}
                         />
                     )}
                     {kpis.activeProcedures > 0 && (
@@ -718,7 +718,7 @@ export default function StudentDashboard({ user }) {
                         { icon: BookOpen, label: "Matrícula", path: "/dashboard/student", colorCls: "text-indigo-700 bg-indigo-50 border-indigo-200 hover:border-indigo-300" },
                         { icon: Award, label: "Kárdex", path: "/dashboard/student", colorCls: "text-emerald-700 bg-emerald-50 border-emerald-200 hover:border-emerald-300" },
                         { icon: BarChart3, label: "Notas", path: "/dashboard/student", colorCls: "text-violet-700 bg-violet-50 border-violet-200 hover:border-violet-300" },
-                        { icon: CreditCard, label: "Pagos", path: "/dashboard/finance", colorCls: "text-amber-700 bg-amber-50 border-amber-200 hover:border-amber-300" },
+                        { icon: CreditCard, label: "Pagos", path: "/dashboard/student/pagos", colorCls: "text-amber-700 bg-amber-50 border-amber-200 hover:border-amber-300" },
                         { icon: FileText, label: "Trámites", path: "/public/procedures/track", colorCls: "text-rose-700 bg-rose-50 border-rose-200 hover:border-rose-300" },
                         { icon: Download, label: "Certificados", path: "/dashboard/student", colorCls: "text-cyan-700 bg-cyan-50 border-cyan-200 hover:border-cyan-300" },
                     ].map(props => <QuickAccess key={props.label} {...props} navigate={navigate} />)}

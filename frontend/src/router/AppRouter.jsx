@@ -43,6 +43,7 @@ import PublicMesaDePartesHome from "../modules/mesa-partes/PublicMesaDePartesHom
 
 /* ✅ Módulo Estudiante */
 import StudentModule from "../modules/student/StudentModule";
+import StudentPaymentsPanel from "../modules/student/StudentPaymentsPanel";
 
 /* ✅ Verificador de Grados y Títulos (público) */
 import PublicGraduateVerifier from "../modules/graduates/PublicGraduateVerifier";
@@ -97,7 +98,19 @@ export default function AppRouter() {
                 }
             >
                 <Route path="/dashboard" element={<DashboardHome />} />
-                <Route path="/dashboard/security" element={<SecurityModule />} />
+                <Route
+                    path="/dashboard/security"
+                    element={
+                        <RequirePerm
+                            any={[
+                                PERMS["security.policies.manage"],
+                                PERMS["security.sessions.inspect"],
+                            ]}
+                        >
+                            <SecurityModule />
+                        </RequirePerm>
+                    }
+                />
 
                 {/* Administración / Control de Accesos */}
                 <Route
@@ -138,6 +151,18 @@ export default function AppRouter() {
                     }
                 />
 
+                {/* Pagos del estudiante — vista propia (solo sesión), NO el
+                    módulo administrativo de Finanzas: mandarlo ahí terminaba
+                    en 403 porque STUDENT no tiene permisos de fin.* */}
+                <Route
+                    path="/dashboard/student/pagos"
+                    element={
+                        <RequireAuth>
+                            <StudentPaymentsPanel />
+                        </RequireAuth>
+                    }
+                />
+
                 {/* Académico */}
                 <Route
                     path="/dashboard/academic"
@@ -146,9 +171,7 @@ export default function AppRouter() {
                             any={[
                                 PERMS["academic.plans.view"],
                                 PERMS["academic.sections.view"],
-                                PERMS["academic.enrollment.view"],
                                 PERMS["academic.grades.edit"],
-                                PERMS["academic.kardex.view"],
                                 PERMS["academic.reports.view"],
                             ]}
                         >
@@ -163,9 +186,11 @@ export default function AppRouter() {
                     path="/dashboard/mesa-control"
                     element={
                         <RequirePerm
-                            any={[
-                                PERMS["academic.enrollment.commit"],
-                                PERMS["academic.enrollment.view"],
+                            anyRole={[
+                                "REGISTRAR",
+                                "ADMIN_ACADEMIC",
+                                "ADMIN_ACADEMICO",
+                                "ADMIN_SYSTEM",
                             ]}
                         >
                             <MesaControlModule />
