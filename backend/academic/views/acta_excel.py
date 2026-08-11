@@ -1278,8 +1278,16 @@ class SectionAttendanceImportView(APIView):
         from .attendance import _schedule_weekdays
         horario_wd = set(_schedule_weekdays(sec.id))
 
+        # Vigencia del semestre (Configuración → Periodos Académicos): el
+        # import tampoco graba días fuera del rango del período.
+        from .attendance import _vigencia_de_periodo, _fuera_de_vigencia
+        vig_ini, vig_fin = _vigencia_de_periodo(sec.period)
+
         def _es_dia_dictado(d):
-            wd = date_cls(y, mo, d).weekday()      # 0=Lunes … 6=Domingo
+            fecha = date_cls(y, mo, d)
+            if _fuera_de_vigencia(fecha, vig_ini, vig_fin):
+                return False
+            wd = fecha.weekday()                   # 0=Lunes … 6=Domingo
             return (wd + 1) in horario_wd if horario_wd else wd < 5
 
         por_dia, errores = {}, []

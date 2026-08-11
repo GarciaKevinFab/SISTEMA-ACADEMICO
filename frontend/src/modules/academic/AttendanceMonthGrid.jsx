@@ -299,6 +299,15 @@ export default function AttendanceMonthGrid({ sectionId, sectionLabel }) {
                             que la asistencia se active solo los días de clase.
                         </>
                     )}
+                    {data.period_start && data.period_end && (
+                        <>
+                            {" "}<b className="text-blue-700">Vigencia del período {data.period}:</b>{" "}
+                            {data.period_start.split("-").reverse().join("/")} al{" "}
+                            {data.period_end.split("-").reverse().join("/")} — fuera de ese
+                            rango la asistencia queda deshabilitada
+                            (se configura en Configuración → Periodos Académicos).
+                        </>
+                    )}
                 </p>
             )}
 

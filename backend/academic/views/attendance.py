@@ -41,6 +41,34 @@ def _schedule_label(weekdays):
     return ", ".join(DIAS_NOMBRE.get(w, str(w)) for w in weekdays)
 
 
+def _vigencia_de_periodo(code):
+    """(inicio, fin) del período según Configuración → Periodos Académicos.
+
+    La vigencia se configura en esa pantalla (catalogs.Period.start_date /
+    end_date); la asistencia solo se puede registrar dentro de ese rango.
+    Sin período o sin fechas cargadas devuelve (None, None) = sin
+    restricción, para no bloquear períodos históricos sin configurar.
+    """
+    import re as _re
+    from catalogs.models import Period
+    code = (code or "").strip().upper()
+    if not code:
+        return None, None
+    p = Period.objects.filter(code__iexact=code).first()
+    if not p:
+        m = _re.match(r"^(\d{4})\s*-\s*(I{1,3})$", code)
+        if m:
+            p = Period.objects.filter(year=int(m.group(1)),
+                                      term=m.group(2)).first()
+    if not p:
+        return None, None
+    return p.start_date, p.end_date
+
+
+def _fuera_de_vigencia(fecha, ini, fin):
+    return (ini is not None and fecha < ini) or (fin is not None and fecha > fin)
+
+
 def _section_access_denied(request, section_id):
     """
     Un docente solo puede operar sobre SUS propias secciones; los
@@ -92,6 +120,18 @@ class AttendanceSessionsView(APIView):
                     {"detail": f"El {d.strftime('%d/%m/%Y')} es "
                                f"{'sábado' if d.weekday() == 5 else 'domingo'}: "
                                "no se registra asistencia en fin de semana."},
+                    status=400)
+            # Solo dentro de la vigencia del semestre (Configuración → Periodos)
+            sec = get_object_or_404(Section, id=section_id)
+            ini, fin = _vigencia_de_periodo(sec.period)
+            if _fuera_de_vigencia(d, ini, fin):
+                rango = (f"{ini.strftime('%d/%m/%Y') if ini else '—'} al "
+                         f"{fin.strftime('%d/%m/%Y') if fin else '—'}")
+                return Response(
+                    {"detail": f"El {d.strftime('%d/%m/%Y')} está fuera de la "
+                               f"vigencia del período {sec.period} ({rango}). "
+                               "Ajusta las fechas en Configuración → Periodos "
+                               "Académicos si el semestre cambió."},
                     status=400)
             sess, _ = AttendanceSession.objects.get_or_create(section_id=section_id, date=d)
         else:
@@ -210,12 +250,20 @@ class AttendanceMonthView(APIView):
         horario_wd = set(_schedule_weekdays(section_id))
         tiene_horario = bool(horario_wd)
 
+        # Vigencia del semestre (Configuración → Periodos Académicos): los
+        # días fuera del rango no tienen dictado, aunque caigan en horario.
+        vig_ini, vig_fin = _vigencia_de_periodo(sec.period)
+
         days = []
         for d in range(1, n_days + 1):
-            wd = date_cls(y, m, d).weekday()          # 0=Lunes … 6=Domingo
-            has_class = (wd + 1) in horario_wd if tiene_horario else wd < 5
+            fecha = date_cls(y, m, d)
+            wd = fecha.weekday()                      # 0=Lunes … 6=Domingo
+            fuera = _fuera_de_vigencia(fecha, vig_ini, vig_fin)
+            has_class = (((wd + 1) in horario_wd if tiene_horario else wd < 5)
+                         and not fuera)
             days.append({"day": d, "letra": self.LETRAS[wd],
-                         "weekend": wd >= 5, "has_class": has_class})
+                         "weekend": wd >= 5, "has_class": has_class,
+                         "fuera_periodo": fuera})
 
         sessions = (AttendanceSession.objects
                     .filter(section_id=section_id, date__year=y, date__month=m)
@@ -244,6 +292,9 @@ class AttendanceMonthView(APIView):
             has_schedule=tiene_horario,
             schedule_weekdays=sorted(horario_wd),
             schedule_label=_schedule_label(sorted(horario_wd)),
+            period=sec.period,
+            period_start=str(vig_ini) if vig_ini else "",
+            period_end=str(vig_fin) if vig_fin else "",
         )
 
     def post(self, request, section_id):
@@ -268,9 +319,15 @@ class AttendanceMonthView(APIView):
         # del servidor (mismo criterio que el GET: horario, o L-V si no hay).
         horario_wd = set(_schedule_weekdays(section_id))
         tiene_horario = bool(horario_wd)
+        # Vigencia del semestre: fuera del rango no se graba (mismo criterio
+        # que el GET, que ya muestra esos días como sin dictado).
+        vig_ini, vig_fin = _vigencia_de_periodo(sec.period)
 
         def _es_dia_dictado(d):
-            wd = date_cls(y, m, d).weekday()      # 0=Lunes … 6=Domingo
+            fecha = date_cls(y, m, d)
+            if _fuera_de_vigencia(fecha, vig_ini, vig_fin):
+                return False
+            wd = fecha.weekday()                  # 0=Lunes … 6=Domingo
             return (wd + 1) in horario_wd if tiene_horario else wd < 5
 
         # Alumnos con LICENCIA: no se les registra asistencia (claves por
