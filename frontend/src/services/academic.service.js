@@ -585,6 +585,9 @@ export const EvaluationAdmin = {
     /** ZIP de Actas de Evaluación de Área (un Excel por curso del filtro) */
     actasAreaZip: async (params = {}) =>
         api.get("/academic/admin/evaluation/actas-area.zip", { params, responseType: "blob" }),
+    /** ZIP de Actas de Evaluación de Área en PDF (una por curso del filtro) */
+    actasAreaPdfZip: async (params = {}) =>
+        api.get("/academic/admin/evaluation/actas-area-pdf.zip", { params, responseType: "blob" }),
     /** Acta de Evaluación de Área de UNA sección */
     actaArea: async (sectionId) =>
         api.get(`/academic/sections/${sectionId}/acta-area.xlsx`, { responseType: "blob" }),
@@ -595,6 +598,11 @@ export const EvaluationAdmin = {
     /* ── Versiones PDF ── */
     actaConsolidadaPdf: async (params = {}) =>
         api.get("/academic/admin/evaluation/actas.pdf", { params, responseType: "blob" }),
+    /** Orden de mérito: aula (carrera+ciclo) / especialidad (carrera) / instituto (sin filtros) */
+    meritoPdf: async (params = {}) =>
+        api.get("/academic/admin/evaluation/merito.pdf", { params, responseType: "blob" }),
+    meritoXlsx: async (params = {}) =>
+        api.get("/academic/admin/evaluation/merito.xlsx", { params, responseType: "blob" }),
     rendimientoPdf: async (params = {}) =>
         api.get("/academic/admin/evaluation/rendimiento.pdf", { params, responseType: "blob" }),
     actaAreaPdf: async (sectionId) =>

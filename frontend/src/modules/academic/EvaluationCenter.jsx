@@ -617,11 +617,11 @@ function ReportsTab({ period, careers }) {
         {
             key: "acta_area", num: 7,
             title: "ACTA DE EVALUACIÓN",
-            desc: "Acta de Evaluación de Área por curso (Calificativo, Crédito, Puntaje, Cualitativa). PDF requiere elegir un curso; Excel sin curso descarga ZIP con todas las del filtro.",
+            desc: "Acta de Evaluación de Área por curso (Calificativo, Crédito, Puntaje, Cualitativa). Con un curso elegido emite esa acta; sin curso descarga ZIP con todas las del filtro (PDF o Excel).",
             filtros: "Período · Carrera · Ciclo · Año · Curso",
             pdf: () => {
-                if (!sectionId) { toast.error("Elige un curso en el filtro para emitir el acta en PDF"); return; }
-                run("acta_pdf", () => Evaluation.actaAreaPdf(sectionId), `acta-area-${sectionId}.pdf`);
+                if (sectionId) run("acta_pdf", () => Evaluation.actaAreaPdf(sectionId), `acta-area-${sectionId}.pdf`);
+                else run("acta_pdf", () => Evaluation.actasAreaPdfZip(base()), `actas-area-pdf-${period}.zip`);
             },
             excel: () => {
                 if (sectionId) run("acta_xls", () => Evaluation.actaArea(sectionId), `acta-area-${sectionId}.xlsx`);
@@ -663,6 +663,14 @@ function ReportsTab({ period, careers }) {
             filtros: "Período · Carrera · Ciclo · Año",
             pdf: () => run("becas_pdf", () => Evaluation.constanciasBeca(base()), `constancias-beca-${period}.zip`),
             excel: null,
+        },
+        {
+            key: "merito", num: 12,
+            title: "ORDEN DE MÉRITO",
+            desc: "Ranking completo por promedio ponderado con puesto y marca de beca 25% (≥ 17). El alcance depende del filtro: carrera + ciclo = aula; solo carrera = especialidad; sin filtros = todo el instituto.",
+            filtros: "Período · Carrera (opcional) · Ciclo (opcional)",
+            pdf: () => run("merito_pdf", () => Evaluation.meritoPdf(base()), `orden-merito-${period}.pdf`),
+            excel: () => run("merito_xls", () => Evaluation.meritoXlsx(base()), `orden-merito-${period}.xlsx`),
         },
     ];
 

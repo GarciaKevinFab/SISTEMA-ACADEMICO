@@ -16,9 +16,16 @@ const NAV_STYLE = `
   .sidenav-root { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
   .sidenav-root * { font-family: inherit; }
 
-  /* hide scrollbar */
-  .nav-scroll::-webkit-scrollbar { display:none; width:0; background:transparent; }
-  .nav-scroll { -ms-overflow-style:none; scrollbar-width:none; }
+  /* Barra de scroll delgada pero VISIBLE: antes estaba oculta del todo
+     (display:none) y no había forma de bajar hasta Mesa de Partes, Finanzas,
+     etc. — el menú parecía cortado. */
+  .nav-scroll::-webkit-scrollbar { width:6px; background:transparent; }
+  .nav-scroll::-webkit-scrollbar-thumb {
+    background:rgba(148,163,184,.35); border-radius:9999px; }
+  .nav-scroll::-webkit-scrollbar-thumb:hover {
+    background:rgba(148,163,184,.55); }
+  .nav-scroll { -ms-overflow-style:auto; scrollbar-width:thin;
+                scrollbar-color:rgba(148,163,184,.35) transparent; }
 
   /* active item glow */
   .nav-item-active {

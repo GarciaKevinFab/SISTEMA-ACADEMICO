@@ -492,7 +492,8 @@ class EvaluationActaConsolidadaView(APIView):
 
         thin = Side(style="thin")
         border = Border(left=thin, right=thin, top=thin, bottom=thin)
-        head_fill = PatternFill("solid", start_color="D9E2F3")
+        # Sombreado "plomo claro" (pedido de Secretaría; antes era celeste)
+        head_fill = PatternFill("solid", start_color="E7E6E6")
         center = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
         wb = Workbook()
@@ -526,10 +527,20 @@ class EvaluationActaConsolidadaView(APIView):
             ws = wb.create_sheet(title=title)
 
             # ── Logos + Título ──
+            # MINEDU + instituto a la izquierda; el del sistema al otro extremo
+            import os as _os
             from .acta_excel import _institution_logo_paths, _add_logo
             inst_logo, sist_logo = _institution_logo_paths()
+            minedu_logo = _os.path.join(
+                _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                "..", "common", "assets", "logo_minedu_peru.png")
+            minedu_logo = _os.path.normpath(minedu_logo)
             ws.row_dimensions[1].height = 46
-            _add_logo(ws, inst_logo, "A1", height=56)
+            if _os.path.exists(minedu_logo):
+                _add_logo(ws, minedu_logo, "A1", height=30)
+                _add_logo(ws, inst_logo, "C1", height=56)
+            else:
+                _add_logo(ws, inst_logo, "A1", height=56)
             if last_c >= 8:
                 from openpyxl.utils import get_column_letter as _gcl
                 _add_logo(ws, sist_logo, f"{_gcl(last_c - 1)}1", height=56)
@@ -545,28 +556,40 @@ class EvaluationActaConsolidadaView(APIView):
             rlab_b = min(rlab_a + 2, last_c - 2)
             rval_a = rlab_b + 1
 
+            # Todo el texto de la cabecera va CENTRADO (pedido de Secretaría)
+            _hdr_center = Alignment(horizontal="center", vertical="center",
+                                    wrap_text=True)
+
             def _hdr(row, llabel, lvalue, rlabel, rvalue):
                 ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
-                ws.cell(row=row, column=1, value=llabel).font = Font(bold=True, size=9)
+                c = ws.cell(row=row, column=1, value=llabel)
+                c.font = Font(bold=True, size=9)
+                c.alignment = _hdr_center
                 ws.merge_cells(start_row=row, start_column=4, end_row=row, end_column=mid_l)
-                ws.cell(row=row, column=4, value=lvalue).font = Font(size=9)
+                c = ws.cell(row=row, column=4, value=lvalue)
+                c.font = Font(size=9)
+                c.alignment = _hdr_center
                 ws.merge_cells(start_row=row, start_column=rlab_a, end_row=row, end_column=rlab_b)
-                ws.cell(row=row, column=rlab_a, value=rlabel).font = Font(bold=True, size=9)
+                c = ws.cell(row=row, column=rlab_a, value=rlabel)
+                c.font = Font(bold=True, size=9)
+                c.alignment = _hdr_center
                 ws.merge_cells(start_row=row, start_column=rval_a, end_row=row, end_column=last_c)
-                ws.cell(row=row, column=rval_a, value=rvalue).font = Font(size=9)
+                c = ws.cell(row=row, column=rval_a, value=rvalue)
+                c.font = Font(size=9)
+                c.alignment = _hdr_center
 
             ciclo_sec = f'{_roman(sem)} - "{label or "A"}"'
-            # Como el acta institucional: el período lleva la fecha de emisión,
-            # y el turno se jala del horario de las secciones (no más "MAÑANA"
-            # fijo — el acta real de 2025-II era de TARDE).
+            # El turno se jala del horario de las secciones. La fecha de
+            # emisión va SEPARADA del período, en su propia línea.
             from django.utils import timezone as _tz
             from .acta_excel import _turno_de
             hoy = _tz.localtime(_tz.now()).strftime("%d/%m/%Y")
             _hdr(4, "Nombre de la Institución", inst["nombre"], "Código Modular", inst["codigo_modular"])
             _hdr(5, "R.M. de Licenciamiento o R.D.", inst["licenciamiento"], "Dirección", inst["direccion"])
-            _hdr(6, "Director General", inst["director"], "R.D. de Encargatura", inst["rd_encargatura"])
+            _hdr(6, "Directora General", inst["director"], "R.D. de Encargatura", inst["rd_encargatura"])
             _hdr(7, "Programa de Estudios", career.upper(), "Periodo Académico",
-                 f"{period}      FECHA: {hoy}")
+                 f"{period}\nFECHA: {hoy}")
+            ws.row_dimensions[7].height = 26
             _hdr(8, "Ciclo - Sección", ciclo_sec, "Número de Estudiantes", len(students))
             _hdr(9, "Modalidad de Estudios", "PRESENCIAL", "Turno", _turno_de(secs))
 
@@ -586,12 +609,18 @@ class EvaluationActaConsolidadaView(APIView):
 
             _mh(H, 1, H + 5, 1, "N°")
             _mh(H, 2, H + 5, 2, "N° de\nMatrícula")
-            _mh(H, 3, H + 5, 3, "Apellidos y Nombres del Estudiante")
+            _mh(H, 3, H + 5, 3, "Apellidos y Nombres del Estudiante\n(según nóminas)")
             _mh(H, first_c, H, tot_c - 1, "ASIGNATURAS / ÁREAS")
+            # Nombres de curso "echados" (verticales), completos y con la
+            # fila alta para que entren — como el acta institucional.
+            ws.row_dimensions[H + 2].height = 110
+            vertical = Alignment(horizontal="center", vertical="center",
+                                 wrap_text=True, text_rotation=90)
             for i, rw in enumerate(rows):
                 c0 = first_c + i * 3
                 _mh(H + 1, c0, H + 1, c0 + 2, str(i + 1))
                 _mh(H + 2, c0, H + 2, c0 + 2, (rw["course_name"] or "").upper())
+                ws.cell(row=H + 2, column=c0).alignment = vertical
                 _mh(H + 3, c0, H + 3, c0 + 2, "Créditos")
                 pc = secs[i].plan_course
                 _mh(H + 4, c0, H + 4, c0 + 2, getattr(pc, "credits", "") or "")
@@ -600,7 +629,7 @@ class EvaluationActaConsolidadaView(APIView):
             _mh(H, tot_c, H + 5, tot_c, "Puntaje del\nSemestre")
             _mh(H, tot_c + 1, H + 5, tot_c + 1, "Crédito del\nSemestre")
             _mh(H, tot_c + 2, H + 5, tot_c + 2, "Promedio\nPonderado")
-            _mh(H, tot_c + 3, H + 5, tot_c + 3, "CALIFICACIÓN")
+            _mh(H, tot_c + 3, H + 5, tot_c + 3, "Calificación\nCualitativa")
             _mh(H, tot_c + 4, H + 5, tot_c + 4, "Observaciones")
 
             # ── Filas de alumnos ──
@@ -611,7 +640,10 @@ class EvaluationActaConsolidadaView(APIView):
                           f"{st.nombres or ''}").strip(", ").strip().upper()
                 ws.cell(row=r, column=1, value=n)
                 ws.cell(row=r, column=2, value=st.num_documento or "")
-                ws.cell(row=r, column=3, value=nombre).font = Font(size=9)
+                # Apellidos y nombres en UNA sola fila (sin envolver texto)
+                cn = ws.cell(row=r, column=3, value=nombre)
+                cn.font = Font(size=8)
+                cn.alignment = Alignment(vertical="center", wrap_text=False)
 
                 puntaje = creditos = 0
                 tiene_nota = False
@@ -631,9 +663,9 @@ class EvaluationActaConsolidadaView(APIView):
                     prom = puntaje / creditos
                     ws.cell(row=r, column=tot_c, value=puntaje)
                     ws.cell(row=r, column=tot_c + 1, value=creditos)
-                    # Anexo 4, nota 3: "se obtiene hasta con TRES cifras
-                    # decimales redondeadas" (antes se truncaba a dos).
-                    ws.cell(row=r, column=tot_c + 2, value=round(prom, 3))
+                    # Secretaría pidió el promedio con DOS decimales (el
+                    # Anexo 4 dice "hasta con tres", así que dos cumple).
+                    ws.cell(row=r, column=tot_c + 2, value=round(prom, 2))
                     ws.cell(row=r, column=tot_c + 3, value=_abrev_calif(prom))
                 for c in range(1, last_c + 1):
                     cell = ws.cell(row=r, column=c)
@@ -642,12 +674,16 @@ class EvaluationActaConsolidadaView(APIView):
                         cell.alignment = Alignment(horizontal="center")
 
             # ── Cuadro de firmas de docentes ──
-            fr = r0 + len(students) + 3
+            # +5: "un poco de distancia entre el acta y la firma de los
+            # docentes" (pedido de Secretaría)
+            fr = r0 + len(students) + 5
             _mh(fr, 1, fr, 2, "Número de\nCurso o Área", size=8)
             _mh(fr, 3, fr, 5, "APELLIDOS Y NOMBRES DEL DOCENTE", size=8)
             _mh(fr, 6, fr, 8, "FIRMA", size=8)
             for i, rw in enumerate(rows, 1):
                 rr = fr + i
+                # Filas más separadas para que la firma quepa cómoda
+                ws.row_dimensions[rr].height = 26
                 ws.merge_cells(start_row=rr, start_column=1, end_row=rr, end_column=2)
                 ws.cell(row=rr, column=1, value=i).alignment = Alignment(horizontal="center")
                 ws.merge_cells(start_row=rr, start_column=3, end_row=rr, end_column=5)
@@ -657,14 +693,16 @@ class EvaluationActaConsolidadaView(APIView):
                     ws.cell(row=rr, column=c).border = border
 
             # ── Firmas de Dirección y Secretaría Académica ──
-            # El Anexo 4 cierra con estos dos bloques además del cuadro de
-            # docentes de arriba; faltaban por completo.
-            fir = fr + len(rows) + 3
-            for col, cargo in ((1, "DIRECTOR(A) GENERAL"),
+            # +6 filas de aire: van a poner SELLO REDONDO entre el cuadro de
+            # docentes y estas firmas. Línea corta ("casi el tamaño de las
+            # letras nomas").
+            fir = fr + len(rows) + 6
+            for col, cargo in ((1, "DIRECTORA GENERAL"),
                                (6, "SECRETARIO(A) ACADÉMICO(A)")):
                 ws.merge_cells(start_row=fir, start_column=col,
                                end_row=fir, end_column=col + 3)
-                linea = ws.cell(row=fir, column=col, value="_" * 34)
+                linea = ws.cell(row=fir, column=col, value="_" * 20)
+                linea.font = Font(size=8)
                 linea.alignment = Alignment(horizontal="center")
 
                 ws.merge_cells(start_row=fir + 1, start_column=col,
@@ -680,12 +718,14 @@ class EvaluationActaConsolidadaView(APIView):
                 c2.alignment = Alignment(horizontal="center")
 
             # ── Anchos ──
+            # C/CS/PTJ angostas (los nombres de curso van en vertical);
+            # la columna de apellidos más ancha para que quepan en una fila.
             ws.column_dimensions["A"].width = 4
             ws.column_dimensions["B"].width = 11
-            ws.column_dimensions["C"].width = 36
+            ws.column_dimensions["C"].width = 42
             for i in range(ncur):
                 c0 = first_c + i * 3
-                for j, w in enumerate((4.5, 5, 6)):
+                for j, w in enumerate((3.6, 4.2, 4.8)):
                     ws.column_dimensions[get_column_letter(c0 + j)].width = w
             for j, w in enumerate((9, 9, 10, 12, 14)):
                 ws.column_dimensions[get_column_letter(tot_c + j)].width = w

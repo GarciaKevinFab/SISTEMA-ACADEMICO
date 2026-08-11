@@ -46,6 +46,8 @@ from .views import (
     StudentsDataXlsxView, ReporteMineduXlsxView,
 )
 from .views.matricula_export import MatriculaPorTipoView
+from .views.merito import (EvaluationMeritoView, StudentMeritoView,
+                           StudentMeritoConstanciaView)
 from .views import (
 
     TeacherSectionsView, SectionStudentsView,
@@ -102,6 +104,7 @@ from .views.evaluation import (
 from .views.evaluation_pdf import (
     TeacherSelfSchedulePdfView,
     SectionActaAreaPdfView, EvaluationConsolidadaPdfView,
+    EvaluationActasAreaPdfZipView,
     EvaluationRendimientoPdfView, EvaluationPrimerosLugaresView,
     EvaluationTercioQuintoView, EvaluationConstanciasBecaZipView,
     EvaluationBoletasXlsxView, EvaluationFichasXlsxView,
@@ -219,6 +222,7 @@ urlpatterns = [
     path("admin/evaluation/boletas.zip", EvaluationBoletasZipView.as_view()),
     path("admin/evaluation/actas.xlsx",  EvaluationActaConsolidadaView.as_view()),
     path("admin/evaluation/actas-area.zip",    EvaluationActasAreaZipView.as_view()),
+    path("admin/evaluation/actas-area-pdf.zip", EvaluationActasAreaPdfZipView.as_view()),
     path("admin/evaluation/rendimiento.xlsx",  EvaluationReporteRendimientoView.as_view()),
     # Versiones PDF + Excel complementarios + méritos y becas
     path("sections/<int:section_id>/acta-area.pdf", SectionActaAreaPdfView.as_view()),
@@ -229,6 +233,11 @@ urlpatterns = [
     path("admin/evaluation/primeros-lugares",    EvaluationPrimerosLugaresView.as_view()),
     path("admin/evaluation/tercio-quinto",       EvaluationTercioQuintoView.as_view()),
     path("admin/evaluation/constancias-beca.zip", EvaluationConstanciasBecaZipView.as_view()),
+    # Orden de mérito (aula / especialidad / instituto) + vista del alumno
+    path("admin/evaluation/merito.xlsx",  EvaluationMeritoView.as_view(fmt="xlsx")),
+    path("admin/evaluation/merito.pdf",   EvaluationMeritoView.as_view(fmt="pdf")),
+    path("student/merito",                StudentMeritoView.as_view()),
+    path("student/merito/constancia.pdf", StudentMeritoConstanciaView.as_view()),
     path("admin/evaluation/asistencia.pdf",  EvaluationAsistenciaReporteView.as_view(), {"fmt": "pdf"}),
     path("admin/evaluation/asistencia.xlsx", EvaluationAsistenciaReporteView.as_view(), {"fmt": "xlsx"}),
     # Egresados / Certificado de Egresado

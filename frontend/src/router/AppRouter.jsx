@@ -44,6 +44,7 @@ import PublicMesaDePartesHome from "../modules/mesa-partes/PublicMesaDePartesHom
 /* ✅ Módulo Estudiante */
 import StudentModule from "../modules/student/StudentModule";
 import StudentPaymentsPanel from "../modules/student/StudentPaymentsPanel";
+import StudentMeritoPanel from "../modules/student/StudentMeritoPanel";
 
 /* ✅ Verificador de Grados y Títulos (público) */
 import PublicGraduateVerifier from "../modules/graduates/PublicGraduateVerifier";
@@ -159,6 +160,17 @@ export default function AppRouter() {
                     element={
                         <RequireAuth>
                             <StudentPaymentsPanel />
+                        </RequireAuth>
+                    }
+                />
+
+                {/* Mérito del estudiante — puesto, promedio y constancia
+                    del descuento 25% (el backend solo sirve SUS datos) */}
+                <Route
+                    path="/dashboard/student/merito"
+                    element={
+                        <RequireAuth>
+                            <StudentMeritoPanel />
                         </RequireAuth>
                     }
                 />

@@ -54,14 +54,42 @@ def _logo_datauris():
         return "", ""
 
 
-def _pdf_shell(titulo, cuerpo, landscape=False):
-    """Marco HTML común: membrete con logos + título + contenido."""
+def _minedu_logo_datauri():
+    """Logo MINEDU (common/assets) como data URI, o ''."""
+    import os, base64
+    p = os.path.normpath(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "..", "common", "assets", "logo_minedu_peru.png"))
+    try:
+        with open(p, "rb") as f:
+            return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+    except OSError:
+        return ""
+
+
+def _pdf_shell(titulo, cuerpo, landscape=False, minedu=False, encuadernar=False):
+    """Marco HTML común: membrete con logos + título + contenido.
+
+    Con `minedu=True` el membrete lleva MINEDU + instituto a la izquierda y
+    el logo del sistema al otro extremo (pedido para el acta consolidada).
+    Con `titulo=''` no se imprime subtítulo bajo el nombre del instituto
+    (cuando el cuerpo ya trae su propio título, evita la redundancia).
+    Con `encuadernar=True` el margen izquierdo crece a 22mm: las actas se
+    anillan o empastan y el contenido pegado al borde quedaba dentro del
+    lomo (pedido de Secretaría).
+    """
     logo, logo2 = _logo_datauris()
     inst = _acta_area_inst()
     size = "A4 landscape" if landscape else "A4"
+    margen = "12mm 10mm 12mm 22mm" if encuadernar else "12mm 10mm"
+    logo_izq = ""
+    if minedu:
+        m = _minedu_logo_datauri()
+        if m:
+            logo_izq = f'<img src="{m}" style="height:26px">'
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
-  @page {{ size: {size}; margin: 12mm 10mm; }}
+  @page {{ size: {size}; margin: {margen}; }}
   * {{ box-sizing: border-box; }}
   body {{ font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #111; margin: 0; }}
   .head {{ display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #1F4E79; padding-bottom: 6px; }}
@@ -90,10 +118,11 @@ def _pdf_shell(titulo, cuerpo, landscape=False):
   .firma .linea {{ display: inline-block; border-top: 1px solid #111; padding-top: 3px; min-width: 230px; font-size: 9px; }}
 </style></head><body>
 <div class="head">
+  {logo_izq}
   {f'<img src="{logo}">' if logo else ''}
   <div class="tit">
     <h1>{_esc(inst['nombre'])}</h1>
-    <p>{_esc(titulo)}</p>
+    {f'<p>{_esc(titulo)}</p>' if titulo else ''}
   </div>
   {f'<img src="{logo2}">' if logo2 else ''}
 </div>
@@ -218,7 +247,7 @@ def _acta_area_pdf_bytes(sec):
         calif = "LICENCIA" if lic else (f if f is not None else "")
         filas.append(
             f"<tr><td class='c'>{n}</td><td class='c'>{_esc(st['dni'])}</td>"
-            f"<td>{_esc(st['nombre'])}</td>"
+            f"<td class='nom'>{_esc(st['nombre'])}</td>"
             f"<td class='c'>{calif}</td>"
             f"<td class='c'>{creditos if f is not None else ''}</td>"
             f"<td class='c'>{round(f * creditos) if f is not None else ''}</td>"
@@ -230,6 +259,11 @@ def _acta_area_pdf_bytes(sec):
     n_dpi = sum(1 for st in alumnos if (_entry(st).get("status") or "").upper() == "DPI")
 
     cuerpo = f"""
+<style>
+  /* Columna de nombres compacta ("puede reducirse para que ocupe menos
+     campo"): ancho contenido y letra un punto menor, sin envolver. */
+  td.nom {{ font-size: 8.5px; white-space: nowrap; width: 210px; }}
+</style>
 <h2 style="text-align:center">ACTA DE EVALUACIÓN DE ÁREA {_esc(curso.upper())}</h2>
 <table style="margin-top:4px">
   <tr><td><b>Programa de estudios</b></td><td>{_esc(career)} / TURNO: {_esc(_turno_de(sec))}</td>
@@ -253,8 +287,9 @@ def _acta_area_pdf_bytes(sec):
   <tr><td>Promedio del aula o sección en la calificación<br>para el sistema de educación superior</td>
       <td class='c'>{round(sum(f for f in finales if f is not None) / len([f for f in finales if f is not None]), 2) if any(f is not None for f in finales) else ''}</td></tr>
 </table>
-<!-- Firmas según el Anexo 3 RVM 123-2022 (antes solo firmaba el docente) -->
-<table style="width:100%; margin-top:46px; border:none">
+<!-- Firmas según el Anexo 3 RVM 123-2022 (antes solo firmaba el docente).
+     Margen amplio: va SELLO REDONDO con postfirma encima de cada línea. -->
+<table style="width:100%; margin-top:95px; border:none">
   <tr>
     <td style="border:none; text-align:center; width:33%">
       <div style="border-top:1px solid #111; margin:0 18px; padding-top:4px">
@@ -277,8 +312,67 @@ def _acta_area_pdf_bytes(sec):
   </tr>
 </table>
 """
-    html = _pdf_shell(f"ACTA DE EVALUACIÓN DE ÁREA — {sec.period}", cuerpo)
+    # `encuadernar`: las actas se anillan/empastan — margen izquierdo de 22mm
+    html = _pdf_shell(f"ACTA DE EVALUACIÓN DE ÁREA — {sec.period}", cuerpo,
+                      encuadernar=True)
     return html_to_pdf_bytes(html), f"ACTA_AREA_{codigo or 'CURSO'}_{sec.label or 'A'}_{sec.period}.pdf"
+
+
+class EvaluationActasAreaPdfZipView(APIView):
+    """
+    GET /academic/admin/evaluation/actas-area-pdf.zip?period=&career_id=&semester=
+    Un PDF de Acta de Evaluación de Área por cada curso (sección) del filtro,
+    en ZIP — el equivalente PDF del botón Excel, para no obligar a elegir
+    curso por curso.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if err := _require_grades_admin(request):
+            return err
+        period = (request.query_params.get("period") or "").strip().upper()
+        if not period:
+            return Response({"detail": "period es requerido"}, status=400)
+        sections = list(_sections_for(
+            period, request.query_params.get("career_id"),
+            request.query_params.get("semester"),
+            anio=request.query_params.get("anio")))
+        if not sections:
+            return Response(
+                {"detail": f"No hay secciones para el filtro en {period}"},
+                status=404)
+
+        zip_buf = BytesIO()
+        generados, errores = 0, []
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for sec in sections:
+                try:
+                    pdf, fname = _acta_area_pdf_bytes(sec)
+                except Exception as exc:
+                    curso, _cod, _doc = _section_header_info(sec)
+                    errores.append(f"{curso or sec.id}: {exc}")
+                    logger.exception("Acta área PDF sección=%s", sec.id)
+                    continue
+                if pdf is None:
+                    # (None, motivo) = sección sin alumnos: se omite y se anota
+                    curso, _cod, _doc = _section_header_info(sec)
+                    errores.append(f"{curso or sec.id}: {fname}")
+                    continue
+                zf.writestr(fname, pdf)
+                generados += 1
+            if errores:
+                zf.writestr("ERRORES.txt", "\n".join(errores))
+        if not generados:
+            return Response(
+                {"detail": "Ninguna acta se pudo generar: "
+                           + "; ".join(errores)[:300]}, status=500)
+
+        zip_buf.seek(0)
+        return HttpResponse(
+            zip_buf.getvalue(), content_type="application/zip",
+            headers={"Content-Disposition":
+                     f'attachment; filename="actas-area-pdf-{period}.zip"'})
 
 
 class SectionActaAreaPdfView(APIView):
@@ -487,10 +581,10 @@ class EvaluationConsolidadaPdfView(APIView):
       <td class="l">Código Modular</td><td>{_esc(inst['codigo_modular'])}</td></tr>
   <tr><td class="l">R.M. de Licenciamiento o R.D.</td><td colspan="3">{_esc(inst['licenciamiento'])}</td>
       <td class="l">Dirección</td><td>{_esc(inst['direccion'])}</td></tr>
-  <tr><td class="l">Director General</td><td colspan="3">{_esc(inst['director'])}</td>
+  <tr><td class="l">Directora General</td><td colspan="3">{_esc(inst['director'])}</td>
       <td class="l">R.D. de Encargatura</td><td>{_esc(inst['rd_encargatura'])}</td></tr>
   <tr><td class="l">Programa de Estudios</td><td colspan="3">{_esc(career.upper())}</td>
-      <td class="l">Periodo Académico</td><td>{_esc(period)} &nbsp;·&nbsp; FECHA: {hoy}</td></tr>
+      <td class="l">Periodo Académico</td><td>{_esc(period)}<br>FECHA: {hoy}</td></tr>
   <tr><td class="l">Ciclo - Sección</td><td colspan="3">{_esc(_roman(sem))} - "{_esc(label)}"</td>
       <td class="l">N° de Estudiantes (según nóminas)</td><td>{len(students)}</td></tr>
   <tr><td class="l">Modalidad de Estudios</td><td colspan="3">PRESENCIAL</td>
@@ -499,9 +593,12 @@ class EvaluationConsolidadaPdfView(APIView):
 
             # Encabezado: 2 filas — curso (colspan 3, con créditos) y C/CS/PTJ
             h1 = "".join(
-                f"<th colspan='3'>{_esc((rw['course_name'] or '').upper()[:34])}<br>"
-                f"<span style='font-weight:normal'>Créditos: "
-                f"{getattr(secs[i].plan_course, 'credits', '') or ''}</span></th>"
+                f"<th colspan='3' class='curso'><div class='vert'>"
+                f"{_esc((rw['course_name'] or '').upper())}</div></th>"
+                for i, rw in enumerate(rows))
+            hcred = "".join(
+                f"<th colspan='3'>Créditos<br>"
+                f"{getattr(secs[i].plan_course, 'credits', '') or ''}</th>"
                 for i, rw in enumerate(rows))
             h2 = "<th>C</th><th>CS</th><th>PTJ</th>" * len(rows)
 
@@ -521,8 +618,8 @@ class EvaluationConsolidadaPdfView(APIView):
                             f"<td class='c'>{ptj}</td>")
                     else:
                         celdas.append("<td class='c'></td><td class='c'></td><td class='c'></td>")
-                # Anexo 4, nota 3: promedio ponderado hasta con 3 decimales
-                prom = round(puntaje / cred, 3) if cred else ""
+                # Secretaría pidió DOS decimales (el Anexo 4 admite hasta 3)
+                prom = round(puntaje / cred, 2) if cred else ""
                 filas.append(
                     f"<tr><td class='c'>{n}</td><td class='c'>{_esc(st.num_documento or '')}</td>"
                     f"<td>{_esc(_nombre(st))}</td>{''.join(celdas)}"
@@ -542,33 +639,37 @@ class EvaluationConsolidadaPdfView(APIView):
 {cabecera}
 <table>
   <thead>
-    <tr><th rowspan="2">N°</th><th rowspan="2">N° de<br>Matrícula</th>
-        <th rowspan="2">Apellidos y Nombres del Estudiante<br>(según nóminas)</th>{h1}
-        <th rowspan="2">Puntaje del<br>Semestre</th><th rowspan="2">Crédito del<br>Semestre</th>
-        <th rowspan="2">Promedio<br>Ponderado</th><th rowspan="2">Calificación</th>
-        <th rowspan="2">Observaciones</th></tr>
+    <tr><th rowspan="4">N°</th><th rowspan="4">N° de<br>Matrícula</th>
+        <th rowspan="4">Apellidos y Nombres del Estudiante<br>(según nóminas)</th>
+        <th colspan="{len(rows) * 3}">ASIGNATURAS / ÁREAS</th>
+        <th rowspan="4">Puntaje del<br>Semestre</th><th rowspan="4">Crédito del<br>Semestre</th>
+        <th rowspan="4">Promedio<br>Ponderado</th><th rowspan="4">Calificación<br>Cualitativa</th>
+        <th rowspan="4">Observaciones</th></tr>
+    <tr>{h1}</tr>
+    <tr>{hcred}</tr>
     <tr>{h2}</tr>
   </thead>
   <tbody>{''.join(filas)}</tbody>
 </table>
 <p style="font-size:8px; color:#555; margin:4px 0 0">
   C: Calificación del curso/módulo · CS: Calificación para el sistema de educación
-  superior (vigesimal) · PTJ: CS × créditos del curso/módulo. El promedio ponderado
-  semestral se obtiene hasta con tres cifras decimales redondeadas.</p>
-<table style="width:55%; margin-top:10px">
-  <thead><tr><th>N° de curso<br>o módulo</th><th>Apellidos y nombres del docente a cargo</th><th>Firma</th></tr></thead>
+  superior (vigesimal) · PTJ: CS × créditos del curso/módulo.</p>
+<table style="width:55%; margin-top:26px">
+  <thead><tr><th>N° de curso<br>o módulo</th><th>APELLIDOS Y NOMBRES DEL DOCENTE A CARGO</th><th>FIRMA</th></tr></thead>
   <tbody>{docentes}</tbody>
 </table>
-<table style="width:100%; margin-top:42px; border:none">
+<!-- Espacio amplio: van a poner SELLO REDONDO entre el cuadro de docentes
+     y las firmas de Dirección/Secretaría -->
+<table style="width:100%; margin-top:82px; border:none">
   <tr>
     <td style="border:none; text-align:center; width:50%">
-      <div style="border-top:1px solid #111; margin:0 60px; padding-top:4px">
-        <b style="font-size:9px">DIRECTOR(A) GENERAL</b><br>
+      <div style="border-top:1px solid #111; width:170px; margin:0 auto; padding-top:4px">
+        <b style="font-size:9px">DIRECTORA GENERAL</b><br>
         <span style="font-size:8px">Firma, Post Firma y Sello</span>
       </div>
     </td>
     <td style="border:none; text-align:center; width:50%">
-      <div style="border-top:1px solid #111; margin:0 60px; padding-top:4px">
+      <div style="border-top:1px solid #111; width:170px; margin:0 auto; padding-top:4px">
         <b style="font-size:9px">SECRETARIO(A) ACADÉMICO(A)</b><br>
         <span style="font-size:8px">Firma, Post Firma y Sello</span>
       </div>
@@ -580,14 +681,24 @@ class EvaluationConsolidadaPdfView(APIView):
 
         if not bloques:
             return Response({"detail": "Sin alumnos para el filtro"}, status=404)
+        # Correcciones de Secretaría: título centrado, sombreado plomo claro,
+        # cabecera centrada, cursos "echados" (verticales) y completos,
+        # apellidos en una sola fila, columnas angostas.
         extra_css = """
 <style>
+  .grupo h2 { text-align: center; }
+  .grupo th { background: #E7E6E6; color: #111; }
   .inst { margin-bottom: 6px; }
-  .inst td { font-size: 8.5px; padding: 2px 5px; }
-  .inst td.l { background: #EDF2F8; font-weight: bold; width: 15%; }
+  .inst td { font-size: 8.5px; padding: 2px 5px; text-align: center; }
+  .inst td.l { background: #E7E6E6; font-weight: bold; width: 15%; }
+  .grupo td:nth-child(3) { white-space: nowrap; }
+  th.curso { padding: 2px 1px; }
+  .vert { writing-mode: vertical-rl; transform: rotate(180deg);
+          margin: 0 auto; max-height: 150px; min-height: 90px;
+          font-size: 7.5px; line-height: 1.15; text-align: left; }
 </style>"""
-        html = _pdf_shell(f"ACTA CONSOLIDADA DE EVALUACIÓN — {period}",
-                          extra_css + "".join(bloques), landscape=True)
+        html = _pdf_shell("", extra_css + "".join(bloques),
+                          landscape=True, minedu=True, encuadernar=True)
         return HttpResponse(html_to_pdf_bytes(html), content_type="application/pdf",
                             headers={"Content-Disposition":
                                      f'attachment; filename="acta-consolidada-{period}.pdf"'})
