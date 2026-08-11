@@ -68,6 +68,19 @@ def _period_obj(code: str, auto_create: bool = False):
     year = int(m.group(1))
     term = m.group(2)
 
+    # CANDADO GLOBAL: solo se auto-crean el período del calendario y el
+    # inmediato siguiente. Antes bastaba que cualquier request pidiera
+    # "2027-II" para crear un período fantasma que, por ser el código más
+    # alto, se volvía el default de pagos, padrón y matrícula de TODO el
+    # sistema. Un período más lejano se crea a mano en Períodos Académicos.
+    hoy = date.today()
+    sem_actual = (hoy.year, 1 if hoy.month < 8 else 2)
+    sem_pedido = (year, 1 if term == 'I' else (2 if term == 'II' else 1))
+    sem_sig = ((sem_actual[0] + 1, 1) if sem_actual[1] == 2
+               else (sem_actual[0], 2))
+    if sem_pedido > sem_sig:
+        return None
+
     if term == 'I':
         start_d = date(year, 3, 1)
         end_d   = date(year, 7, 31)
@@ -86,25 +99,42 @@ def _period_obj(code: str, auto_create: bool = False):
 
 
 def _guess_default_period_code() -> str:
+    """Período por defecto cuando el cliente no manda `academic_period`.
+
+    Antes: primer período "abierto" (los FREE, sin fechas, cuentan como
+    abiertos) o el de MAYOR código. Como `_period_obj(auto_create=True)`
+    crea un AcademicPeriod con cualquier código que llegue por querystring,
+    bastó que alguien pidiera "2027-II" para que ese fantasma fuera el
+    default de todo el sistema: pagos NOT_STARTED, padrón vacío, etc.
+
+    Ahora: 1) un período con ventana CONFIGURADA y abierta (OPEN/EXTEMPORARY
+    — intencional de Secretaría); 2) el período del calendario si existe;
+    3) el más reciente NO futuro. Los fantasmas futuros ya no ganan.
+    """
+    from datetime import date as _date
+    hoy = _date.today()
+    estimado = f"{hoy.year}-{'I' if hoy.month < 8 else 'II'}"
     try:
-        open_p = next(
-            (p for p in AcademicPeriod.objects.all() if p.is_enrollment_open()),
-            None,
-        )
-        if open_p:
-            return open_p.code
+        for p in AcademicPeriod.objects.all():
+            try:
+                if p.enrollment_status() in ("OPEN", "EXTEMPORARY"):
+                    return p.code
+            except Exception:
+                continue
     except Exception:
         pass
     try:
-        last = AcademicPeriod.objects.order_by("-code").first()
-        if last and (last.code or "").strip():
-            return last.code.strip()
+        codes = [c.strip() for c in
+                 AcademicPeriod.objects.values_list("code", flat=True)
+                 if c and c.strip()]
+        if estimado in codes:
+            return estimado
+        pasados = sorted(c for c in codes if c <= estimado)
+        if pasados:
+            return pasados[-1]
     except Exception:
         pass
-    from datetime import date
-    year = date.today().year
-    sem  = "I" if date.today().month <= 7 else "II"
-    return f"{year}-{sem}"
+    return estimado
 
 
 def _window_info_for_period(per: AcademicPeriod) -> dict:

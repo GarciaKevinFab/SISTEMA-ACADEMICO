@@ -30,6 +30,7 @@ import {
 import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
 import EnrollmentPaymentGate from "./EnrollmentPaymentGate";
 import MatriculaDescargasPanel from "./MatriculaDescargasPanel";
+import { useActivePeriod } from "../../hooks/useActivePeriod";
 
 /* ─── helpers ─── */
 function formatApiError(err, fallback = "Ocurrió un error") {
@@ -928,7 +929,19 @@ const EnrollmentComponent = () => {
   const [adminView, setAdminView] = useState("roster"); // "roster" | "individual"
   const [rosterKey, setRosterKey] = useState(0);
 
+  // Período VIGENTE según el sistema (Configuración → Periodos), no según el
+  // reloj del navegador: con guessPeriod() a secas, el pago y la selección de
+  // cursos podían apuntar a períodos distintos del oficial.
+  const { period: periodoVigente, ready: periodoListo } = useActivePeriod();
   const [academicPeriod, setAcademicPeriod] = useState(guessPeriod);
+  const periodTouched = useRef(false);
+  useEffect(() => {
+    // Corrige el default apenas responde el servidor, salvo que el admin ya
+    // haya elegido otro período a mano en el selector.
+    if (periodoListo && periodoVigente && !periodTouched.current) {
+      setAcademicPeriod((prev) => (prev === periodoVigente ? prev : periodoVigente));
+    }
+  }, [periodoListo, periodoVigente]);
   const [dni, setDni] = useState("");
   const [resolvedStudent, setResolvedStudent] = useState(null);
   const [windowInfo, setWindowInfo] = useState(null);
@@ -1219,7 +1232,7 @@ const EnrollmentComponent = () => {
           <div className="relative">
             <select
               value={academicPeriod}
-              onChange={(e) => setAcademicPeriod(e.target.value)}
+              onChange={(e) => { periodTouched.current = true; setAcademicPeriod(e.target.value); }}
               className="h-9 w-28 rounded-md border border-slate-200 bg-white px-3 pr-8 text-sm appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {generatePeriodOptions().map((p) => (
