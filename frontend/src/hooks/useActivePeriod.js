@@ -23,15 +23,19 @@ async function fetchActivePeriod() {
                 const data = await Periods.list();
                 const items = data?.items ?? data ?? [];
                 const act = items.find((p) => p.is_active);
+                // Sanear el código: un período guardado como "2026 - II" (con
+                // espacios) no coincide con nada — pagos y matrículas viven
+                // bajo "2026-II" limpio.
+                const limpio = (c) => String(c || "").replace(/\s+/g, "").toUpperCase();
                 if (act?.code) {
-                    _cache = act.code;
+                    _cache = limpio(act.code);
                 } else {
                     // Sin período activo: usar el que contiene la fecha de hoy
                     const hoy = new Date().toISOString().slice(0, 10);
                     const vigente = items.find(
                         (p) => p.start_date && p.end_date && p.start_date <= hoy && hoy <= p.end_date
                     );
-                    if (vigente?.code) _cache = vigente.code;
+                    if (vigente?.code) _cache = limpio(vigente.code);
                 }
             } catch { /* mantener estimación */ }
             return _cache;

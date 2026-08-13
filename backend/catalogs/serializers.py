@@ -18,6 +18,28 @@ class PeriodSerializer(serializers.ModelSerializer):
         model  = Period
         fields = "__all__"
 
+    def validate_code(self, value):
+        """Normaliza el código: MAYÚSCULAS y SIN espacios.
+
+        Se creó un período como "2026 - II" (con espacios) y todo el sistema
+        quedó preguntando por un período inexistente: pagos, matrículas y
+        cursos viven bajo "2026-II" limpio. La coincidencia es textual, así
+        que el código se sanea al guardar.
+        """
+        import re
+        return re.sub(r"\s+", "", str(value or "")).upper()
+
+    def validate(self, data):
+        # El término debe coincidir con el código: "2026-II" con term="I"
+        # deja al período activo apuntando al semestre equivocado.
+        code = data.get("code") or getattr(self.instance, "code", "")
+        term = data.get("term") or getattr(self.instance, "term", "")
+        import re
+        m = re.match(r"^\d{4}-(I{1,3})$", code or "")
+        if m and term and m.group(1) != term:
+            data["term"] = m.group(1)
+        return data
+
 
 class CampusSerializer(serializers.ModelSerializer):
     class Meta:
