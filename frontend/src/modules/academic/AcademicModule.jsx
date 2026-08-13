@@ -41,6 +41,7 @@ import EnrollmentWindowManager from "./EnrollmentWindowManager";
 import { useActivePeriod } from "@/hooks/useActivePeriod";
 import GradesAttendanceComponent from "./GradesAttendanceComponent";
 import SectionSyllabusEvaluation from "./SectionSyllabusEvaluation";
+import TeacherSesiones from "./TeacherSesiones";
 import AcademicReportsPage from "./AcademicReports";
 import AcademicProcesses from "./AcademicProcesses";
 import StudentHistoricalGrades from "./StudentHistoricalGrades";
@@ -1288,6 +1289,8 @@ export default function AcademicModule() {
             // ── Estudiante / común ──
             { key: "enroll", label: "Matrícula", need: REQS.enroll, group: "academico" },
             { key: "syllabus", label: "Sílabos", need: REQS.syllabus, group: "academico" },
+            // Sesiones de aprendizaje: subida del docente por curso y día de clase
+            { key: "sesiones", label: "Sesiones", need: [], teacherOnly: true, group: "academico" },
             // Kárdex: consulta por DNI de cualquier alumno → solo personal
             // autorizado. El estudiante ve lo suyo en "Mi Semestre".
             { key: "kardex", label: "Kárdex", need: REQS.kardex, notStudent: true, group: "academico" },
@@ -1444,6 +1447,7 @@ export default function AcademicModule() {
                         <TabsContent value="schedule"><TeacherSchedule /></TabsContent>
                         <TabsContent value="profile"><TeacherProfile /></TabsContent>
                         <TabsContent value="syllabus"><SectionSyllabusEvaluation /></TabsContent>
+                        <TabsContent value="sesiones"><TeacherSesiones /></TabsContent>
                         <TabsContent value="kardex"><KardexAndCertificates /></TabsContent>
                         <TabsContent value="reports"><AcademicReportsPage /></TabsContent>
                         <TabsContent value="processes"><AcademicProcesses /></TabsContent>

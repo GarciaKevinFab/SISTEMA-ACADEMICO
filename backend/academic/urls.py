@@ -46,6 +46,7 @@ from .views import (
     StudentsDataXlsxView, ReporteMineduXlsxView,
 )
 from .views.matricula_export import MatriculaPorTipoView
+from .views.sesiones import SectionSesionesView, SesionDetailView
 from .views.merito import (EvaluationMeritoView, StudentMeritoView,
                            StudentMeritoConstanciaView)
 from .views import (
@@ -98,7 +99,8 @@ from .views.process_document_gen import ProcessGenerateDocumentView
 from .views.evaluation import (
     EvaluationStateView, EvaluationSectionsView,
     EvaluationProcessView, EvaluationBoletasZipView,
-    EvaluationActaConsolidadaView,
+    EvaluationActaConsolidadaView, EvaluationSubsanacionListView,
+    EvaluationActasCalificacionSubsaZipView,
     EvaluationActasAreaZipView, EvaluationReporteRendimientoView,
 )
 from .views.evaluation_pdf import (
@@ -197,6 +199,9 @@ urlpatterns = [
 
     # ── Registro por Excel estilo SIAGIE (plantilla prellenada + carga) ──
     path("sections/<int:section_id>/grades/plantilla",     SectionGradesTemplateView.as_view()),
+    # Sesiones de aprendizaje del docente (PDF por día de clase)
+    path("sections/<int:section_id>/sesiones", SectionSesionesView.as_view()),
+    path("sesiones/<int:sesion_id>",           SesionDetailView.as_view()),
     path("sections/<int:section_id>/grades/importar",      SectionGradesImportView.as_view()),
     path("sections/<int:section_id>/attendance/plantilla", SectionAttendanceTemplateView.as_view()),
     path("sections/<int:section_id>/attendance/importar",  SectionAttendanceImportView.as_view()),
@@ -221,6 +226,9 @@ urlpatterns = [
     path("admin/evaluation/process",     EvaluationProcessView.as_view()),
     path("admin/evaluation/boletas.zip", EvaluationBoletasZipView.as_view()),
     path("admin/evaluation/actas.xlsx",  EvaluationActaConsolidadaView.as_view()),
+    path("admin/evaluation/subsanacion",  EvaluationSubsanacionListView.as_view()),
+    path("admin/evaluation/actas-calificacion-subsanacion.zip",
+         EvaluationActasCalificacionSubsaZipView.as_view()),
     path("admin/evaluation/actas-area.zip",    EvaluationActasAreaZipView.as_view()),
     path("admin/evaluation/actas-area-pdf.zip", EvaluationActasAreaPdfZipView.as_view()),
     path("admin/evaluation/rendimiento.xlsx",  EvaluationReporteRendimientoView.as_view()),

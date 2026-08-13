@@ -606,3 +606,29 @@ class EnrollmentPayment(models.Model):
     @property
     def total(self):
         return self.amount + self.surcharge
+
+class SesionAprendizaje(models.Model):
+    """Sesión de aprendizaje del docente (PDF por semana/día de clase).
+
+    Cada sesión pertenece a una sección (el curso que el docente dicta) y a
+    una FECHA que debe ser día de dictado según el horario de la sección y
+    estar dentro de la vigencia del período (misma regla que la asistencia).
+    """
+    section = models.ForeignKey(Section, on_delete=models.CASCADE,
+                                related_name="sesiones_aprendizaje")
+    fecha = models.DateField()
+    semana = models.PositiveSmallIntegerField(null=True, blank=True)
+    tema = models.CharField(max_length=255)
+    archivo = models.FileField(upload_to="sesiones/")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="sesiones_subidas")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["fecha", "id"]
+        indexes = [models.Index(fields=["section", "fecha"])]
+
+    def __str__(self):
+        return f"Sesión<{self.section_id} {self.fecha} {self.tema[:30]}>"
