@@ -65,7 +65,7 @@ def _period_defaults(code: str):
     return {"start": date(y, 8, 1), "end": date(y, 12, 15)}
 
 
-def _roster_students(sec):
+def _roster_students(sec, incluir_licencia=False):
     """Alumnos matriculados (CONFIRMED) de la sección — EXACTAMENTE el mismo
     roster que el acta (`acta_excel._items_de_seccion`).
 
@@ -82,10 +82,21 @@ def _roster_students(sec):
         if st.id in seen:
             continue
         seen.add(st.id)
+        # Marcas: subsanación (por tipo de MATRÍCULA del período o por
+        # estado) y licencia. Pueden convivir (pidió licencia de su
+        # subsanación).
+        st._subsa = (
+            (getattr(item.enrollment, "tipo_matricula", "") or "").upper()
+            == "SUBSANACION"
+            or (getattr(st, "estado_academico", "") or "").upper()
+            == "SUBSANACION")
+        st._licencia = ((getattr(st, "estado_academico", "") or "").upper()
+                        == "LICENCIA")
         # Con LICENCIA no se puede calificar (el acta bloquea su nota), así
         # que tampoco cuenta como "esperado" — si sumara al denominador, la
-        # sección quedaría 24/25 en naranja para siempre.
-        if (getattr(st, "estado_academico", "") or "").upper() == "LICENCIA":
+        # sección quedaría 24/25 en naranja para siempre. Con el flag sí se
+        # devuelve (marcada) para las actas donde DEBE figurar.
+        if st._licencia and not incluir_licencia:
             continue
         out.append(st)
     return out
@@ -128,7 +139,8 @@ def _section_eval_row(sec, bundle_map=None):
     else:
         bundle = bundle_map.get(sec.id)
     grades = (bundle.grades or {}) if bundle else {}
-    students = _roster_students(sec)
+    _full = _roster_students(sec, incluir_licencia=True)
+    students = [st for st in _full if not getattr(st, "_licencia", False)]
 
     n_loaded = 0
     finals = {}   # student.pk -> final
@@ -167,6 +179,8 @@ def _section_eval_row(sec, bundle_map=None):
         "n_processed": n_processed,
         "processed": bool(finals) and n_processed >= len(finals),
         "_students": students,
+        "_students_lic": [st for st in _full
+                          if getattr(st, "_licencia", False)],
         "_finals": finals,
         "_grades": grades,
     }
@@ -437,9 +451,12 @@ def _inst_data():
     # cadenas vacías: si faltaba la configuración, el acta salía con la
     # cabecera en blanco.
     return {
-        "nombre": (data.get("institution_name") or data.get("name")
-                   or 'INSTITUTO DE EDUCACIÓN SUPERIOR PEDAGÓGICO PÚBLICO '
-                      '"GUSTAVO ALLENDE LLAVERIA"').upper(),
+        "nombre": ((data.get("institution_name") or data.get("name")
+                    or 'INSTITUTO DE EDUCACIÓN SUPERIOR PEDAGÓGICO PÚBLICO '
+                       '"GUSTAVO ALLENDE LLAVERIA"').upper().rstrip()
+                   + (" - TARMA" if "TARMA" not in
+                      (data.get("institution_name") or data.get("name") or "").upper()
+                      else "")),
         "licenciamiento": (data.get("licenciamiento") or data.get("resolucion")
                            or "REVALIDADO: R.D. N° 306-2016-MINEDU/VMGP/DIGEDD/DIFOID"),
         "director": (data.get("director_name") or "GARCIA PORRAS, MARIA ELVIRA").upper(),
@@ -496,6 +513,8 @@ class EvaluationActaConsolidadaView(APIView):
         head_fill = PatternFill("solid", start_color="E7E6E6")
         center = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
+        subsa = str(request.query_params.get("subsanacion", "")).lower() in ("1", "true", "si")
+
         wb = Workbook()
         wb.remove(wb.active)
         used_titles = set()
@@ -503,10 +522,17 @@ class EvaluationActaConsolidadaView(APIView):
 
         for (career, sem, label), secs in sorted(groups.items()):
             rows = [_section_eval_row(s, bmap) for s in secs]
-            # Roster consolidado del ciclo (unión de todas las secciones)
+            # Roster consolidado del ciclo (unión de todas las secciones).
+            # Subsanación lleva acta consolidada APARTE (?subsanacion=1).
             by_id = {}
             for rw in rows:
-                for st in rw["_students"]:
+                for st in rw["_students"] + rw.get("_students_lic", []):
+                    if bool(getattr(st, "_subsa", False)) != bool(subsa):
+                        continue
+                    # En el acta regular los de licencia no se consolidan;
+                    # en la de subsanación SÍ figuran (con marca LICENCIA).
+                    if getattr(st, "_licencia", False) and not subsa:
+                        continue
                     by_id[st.id] = st
             if not by_id:
                 continue
@@ -546,7 +572,8 @@ class EvaluationActaConsolidadaView(APIView):
                 _add_logo(ws, sist_logo, f"{_gcl(last_c - 1)}1", height=56)
             ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=last_c)
             t = ws.cell(row=2, column=1,
-                        value=f"ACTA CONSOLIDADA DE EVALUACIÓN DEL PERÍODO ACADÉMICO {period}")
+                        value=f"ACTA CONSOLIDADA DE EVALUACIÓN DEL PERÍODO ACADÉMICO {period}"
+                              + (" — SUBSANACIÓN" if subsa else ""))
             t.font = Font(bold=True, size=13)
             t.alignment = Alignment(horizontal="center")
 
@@ -588,8 +615,7 @@ class EvaluationActaConsolidadaView(APIView):
             _hdr(5, "R.M. de Licenciamiento o R.D.", inst["licenciamiento"], "Dirección", inst["direccion"])
             _hdr(6, "Directora General", inst["director"], "R.D. de Encargatura", inst["rd_encargatura"])
             _hdr(7, "Programa de Estudios", career.upper(), "Periodo Académico",
-                 f"{period}\nFECHA: {hoy}")
-            ws.row_dimensions[7].height = 26
+                 f"{period}   ·   FECHA: {hoy}")
             _hdr(8, "Ciclo - Sección", ciclo_sec, "Número de Estudiantes", len(students))
             _hdr(9, "Modalidad de Estudios", "PRESENCIAL", "Turno", _turno_de(secs))
 
@@ -667,6 +693,9 @@ class EvaluationActaConsolidadaView(APIView):
                     # Anexo 4 dice "hasta con tres", así que dos cumple).
                     ws.cell(row=r, column=tot_c + 2, value=round(prom, 2))
                     ws.cell(row=r, column=tot_c + 3, value=_abrev_calif(prom))
+                if getattr(st, "_licencia", False):
+                    obs = "LICENCIA" + (f" ({st.estado_rd})" if st.estado_rd else "")
+                    ws.cell(row=r, column=last_c, value=obs).font = Font(size=8)
                 for c in range(1, last_c + 1):
                     cell = ws.cell(row=r, column=c)
                     cell.border = border
@@ -698,7 +727,8 @@ class EvaluationActaConsolidadaView(APIView):
             # letras nomas").
             fir = fr + len(rows) + 6
             for col, cargo in ((1, "DIRECTORA GENERAL"),
-                               (6, "SECRETARIO(A) ACADÉMICO(A)")):
+                               (6, "SECRETARIO(A) ACADÉMICO(A)"),
+                               (11, "V°B° DRE / UGEL")):
                 ws.merge_cells(start_row=fir, start_column=col,
                                end_row=fir, end_column=col + 3)
                 linea = ws.cell(row=fir, column=col, value="_" * 20)
@@ -732,7 +762,10 @@ class EvaluationActaConsolidadaView(APIView):
             ws.freeze_panes = f"D{r0}"
 
         if not any_sheet:
-            return Response({"detail": f"Ninguna sección de {period} tiene alumnos matriculados"}, status=404)
+            det = (f"Ningún alumno de SUBSANACIÓN en {period} con el filtro."
+                   if subsa else
+                   f"Ninguna sección de {period} tiene alumnos matriculados")
+            return Response({"detail": det}, status=404)
 
         buf = BytesIO()
         wb.save(buf)
@@ -741,7 +774,7 @@ class EvaluationActaConsolidadaView(APIView):
             buf.getvalue(),
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition":
-                     f'attachment; filename="acta-consolidada-{period}.xlsx"'},
+                     f'attachment; filename="acta-consolidada{"-subsanacion" if subsa else ""}-{period}.xlsx"'},
         )
 
 
@@ -866,6 +899,145 @@ class EvaluationBoletasZipView(APIView):
 # 4c. Actas de Evaluación de Área — ZIP masivo con filtros
 # ══════════════════════════════════════════════════════════════
 
+class EvaluationSubsanacionListView(APIView):
+    """
+    GET /academic/admin/evaluation/subsanacion?period=2026-II[&career_id]
+    Estudiantes con estado SUBSANACIÓN (ciclos II al VIII) matriculados en el
+    período, con sus cursos — para el panel de Subsanación de Evaluación.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if err := _require_grades_admin(request):
+            return err
+        period = (request.query_params.get("period") or "").strip().upper()
+        if not period:
+            return Response({"detail": "period es requerido"}, status=400)
+
+        from django.db.models import Q
+        # Subsanación por estado del alumno O por tipo de matrícula del
+        # período (caso real: alumna con matrícula de subsanación que pidió
+        # LICENCIA — sigue siendo de subsanación, con su marca de licencia).
+        qs = (Student.objects
+              .select_related("plan", "plan__career")
+              .filter(Q(estado_academico=Student.ESTADO_SUBSANACION)
+                      | Q(enrollments__tipo_matricula="SUBSANACION"),
+                      enrollments__period=period,
+                      enrollments__status=Enrollment.STATUS_CONFIRMED)
+              .distinct())
+        career_id = request.query_params.get("career_id")
+        if career_id:
+            try:
+                qs = qs.filter(plan__career_id=int(career_id))
+            except (TypeError, ValueError):
+                pass
+
+        items_map = {}
+        for it in (EnrollmentItem.objects
+                   .select_related("plan_course__course", "section",
+                                   "enrollment")
+                   .filter(enrollment__student__in=qs,
+                           enrollment__period=period,
+                           enrollment__status=Enrollment.STATUS_CONFIRMED)):
+            pc = it.plan_course
+            items_map.setdefault(it.enrollment.student_id, []).append({
+                "curso": (getattr(pc, "display_name", "")
+                          or (pc.course.name if pc and pc.course else "")),
+                "semestre": getattr(pc, "semester", None),
+                "creditos": getattr(pc, "credits", 0) or 0,
+                "section_id": it.section_id,
+            })
+
+        out = []
+        for st in sorted(qs, key=clave_orden):
+            cursos = items_map.get(st.id, [])
+            sems = [c["semestre"] for c in cursos if c["semestre"]]
+            ciclo = max(sems) if sems else (st.ciclo or None)
+            # Subsanación solo existe del II al VIII (regla de Secretaría)
+            if ciclo and not (2 <= int(ciclo) <= 8):
+                continue
+            out.append({
+                "id": st.id,
+                "dni": st.num_documento or "",
+                "nombre": (f"{st.apellido_paterno or ''} "
+                           f"{st.apellido_materno or ''}, "
+                           f"{st.nombres or ''}").strip(", ").strip().upper(),
+                "carrera": (st.plan.career.name
+                            if st.plan and st.plan.career else ""),
+                "ciclo": ciclo,
+                "estado_rd": st.estado_rd or "",
+                "creditos": sum(c["creditos"] for c in cursos),
+                "cursos": cursos,
+            })
+        return Response({"period": period, "total": len(out), "students": out})
+
+
+class EvaluationActasCalificacionSubsaZipView(APIView):
+    """
+    GET /academic/admin/evaluation/actas-calificacion-subsanacion.zip
+        ?period=2026-II[&career_id][&semester][&anio]
+    Un Excel de ACTA DE CALIFICACIÓN (Anexo 3, competencias) en versión
+    SUBSANACIÓN por cada curso del filtro que tenga alumnos de subsanación,
+    empaquetados en ZIP — para no obligar a emitirlas curso por curso.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if err := _require_grades_admin(request):
+            return err
+        period = (request.query_params.get("period") or "").strip().upper()
+        if not period:
+            return Response({"detail": "period es requerido"}, status=400)
+
+        from openpyxl import Workbook
+        from .acta_excel import _write_grades_sheet, _section_header_info
+
+        sections = list(_sections_for(
+            period, request.query_params.get("career_id"),
+            request.query_params.get("semester"),
+            anio=request.query_params.get("anio")))
+        if not sections:
+            return Response(
+                {"detail": f"No hay secciones para el filtro en {period}"},
+                status=404)
+
+        zip_buf = BytesIO()
+        generados = 0
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for sec in sections:
+                try:
+                    wb = Workbook()
+                    ws = wb.active
+                    ws.title = "ACTA SUBSANACIÓN"
+                    n = _write_grades_sheet(ws, sec, subsanacion=True)
+                    if n == 0:
+                        continue   # este curso no tiene alumnos de subsanación
+                    _, codigo, _ = _section_header_info(sec)
+                    buf = BytesIO()
+                    wb.save(buf)
+                    zf.writestr(
+                        f"ACTA_SUBSANACION_{codigo or sec.id}_"
+                        f"{sec.label or 'A'}_{period}.xlsx",
+                        buf.getvalue())
+                    generados += 1
+                except Exception:
+                    logger.exception("Acta subsanación Anexo 3 sec=%s", sec.id)
+                    continue
+        if not generados:
+            return Response(
+                {"detail": "Ningún curso del filtro tiene alumnos de "
+                           "subsanación (el estado/tipo se asigna en "
+                           "Matrícula → Padrón de Alumnos)."}, status=404)
+
+        zip_buf.seek(0)
+        return HttpResponse(
+            zip_buf.getvalue(), content_type="application/zip",
+            headers={"Content-Disposition":
+                     f'attachment; filename="actas-calificacion-subsanacion-{period}.zip"'})
+
+
 class EvaluationActasAreaZipView(APIView):
     """
     GET /api/academic/admin/evaluation/actas-area.zip?period=2026-I[&career_id][&semester]
@@ -884,6 +1056,7 @@ class EvaluationActasAreaZipView(APIView):
 
         from .acta_excel import build_acta_area_workbook
 
+        subsa = str(request.query_params.get("subsanacion", "")).lower() in ("1", "true", "si")
         sections = list(_sections_for(
             period, request.query_params.get("career_id"),
             request.query_params.get("semester"),
@@ -896,7 +1069,7 @@ class EvaluationActasAreaZipView(APIView):
         with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
             for sec in sections:
                 try:
-                    wb, fname_or_err = build_acta_area_workbook(sec)
+                    wb, fname_or_err = build_acta_area_workbook(sec, subsanacion=subsa)
                     if wb is None:
                         errors_list.append(f"Sección {sec.id}: {fname_or_err}")
                         continue

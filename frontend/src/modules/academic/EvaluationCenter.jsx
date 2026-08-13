@@ -25,7 +25,8 @@ import {
     ClipboardCheck, Cog, Download, FileSpreadsheet, FileText, Shield,
     AlertTriangle, ListChecks, Archive,
 } from "lucide-react";
-import { EvaluationAdmin as Evaluation, Grades, Careers, AcademicReports } from "@/services/academic.service";
+import { EvaluationAdmin as Evaluation, Grades, Careers, AcademicReports, ActaExcel } from "@/services/academic.service";
+import { api } from "@/lib/api";
 import { useActivePeriod } from "@/hooks/useActivePeriod";
 import AdminGradesMonitor from "./AdminGradesMonitor";
 
@@ -672,6 +673,20 @@ function ReportsTab({ period, careers }) {
             pdf: () => run("merito_pdf", () => Evaluation.meritoPdf(base()), `orden-merito-${period}.pdf`),
             excel: () => run("merito_xls", () => Evaluation.meritoXlsx(base()), `orden-merito-${period}.xlsx`),
         },
+        {
+            key: "acta_subsa", num: 13,
+            title: "ACTA DE SUBSANACIÓN",
+            desc: "Acta de Evaluación de Área SOLO con los estudiantes en subsanación (ellos no figuran en el acta regular). Con un curso elegido emite esa acta; sin curso, ZIP con todas las del filtro.",
+            filtros: "Período · Carrera · Ciclo · Año · Curso",
+            pdf: () => {
+                if (sectionId) run("acta_subsa_pdf", () => Evaluation.actaAreaPdf(sectionId, { subsanacion: 1 }), `acta-subsanacion-${sectionId}.pdf`);
+                else run("acta_subsa_pdf", () => Evaluation.actasAreaPdfZip({ ...base(), subsanacion: 1 }), `actas-subsanacion-${period}.zip`);
+            },
+            excel: () => {
+                if (sectionId) run("acta_subsa_xls", () => Evaluation.actaArea(sectionId, { subsanacion: 1 }), `acta-subsanacion-${sectionId}.xlsx`);
+                else run("acta_subsa_xls", () => Evaluation.actasAreaZip({ ...base(), subsanacion: 1 }), `actas-subsanacion-${period}.zip`);
+            },
+        },
     ];
 
     const DocCard = ({ d }) => (
@@ -792,8 +807,123 @@ function ReportsTab({ period, careers }) {
                 <div className="grid md:grid-cols-2 gap-3">
                     {meritos.map((d) => <DocCard key={d.key} d={d} />)}
                 </div>
+
+                {/* ── Estudiantes de Subsanación (II–VIII) ── */}
+                <SubsanacionPanel period={period} careerId={careerId}
+                    sectionId={sectionId} run={run} base={base} busy={busy} />
             </CardContent>
         </Card>
+    );
+}
+
+/* ─────────── Panel de Subsanación (ciclos II–VIII) ───────────
+   Lista a los alumnos con estado SUBSANACIÓN matriculados en el período y
+   emite sus actas aparte: Consolidada (Anexo 4) y Acta de Calificación
+   (Anexo 3), ambas en versión subsanación. */
+function SubsanacionPanel({ period, careerId, sectionId, run, base, busy }) {
+    const [rows, setRows] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let cancel = false;
+        (async () => {
+            setLoading(true);
+            try {
+                const { data } = await api.get("/academic/admin/evaluation/subsanacion",
+                    { params: { period, ...(careerId ? { career_id: careerId } : {}) } });
+                if (!cancel) setRows(data?.students || []);
+            } catch { if (!cancel) setRows([]); }
+            finally { if (!cancel) setLoading(false); }
+        })();
+        return () => { cancel = true; };
+    }, [period, careerId]);
+
+    const ROMANOS = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+    return (
+        <div className="mt-6 rounded-xl border border-orange-200 bg-orange-50/40 overflow-hidden">
+            <div className="px-4 py-3 border-b border-orange-200/70 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <p className="text-sm font-extrabold text-orange-800">
+                        ESTUDIANTES DE SUBSANACIÓN (II–VIII) — {period}
+                    </p>
+                    <p className="text-[11px] text-orange-700/80">
+                        No figuran en las actas regulares; sus actas se emiten desde aquí.
+                        El estado se asigna en Matrícula → Padrón de Alumnos.
+                    </p>
+                </div>
+                <div className="flex gap-1.5">
+                    <Button size="sm" disabled={!!busy}
+                        className="gap-1.5 h-8 bg-rose-600 hover:bg-rose-700"
+                        title="Acta Consolidada (Anexo 4) — solo subsanación"
+                        onClick={() => run("subsa_cons_pdf",
+                            () => Evaluation.actaConsolidadaPdf({ ...base(), subsanacion: 1 }),
+                            `acta-consolidada-subsanacion-${period}.pdf`)}>
+                        <FileText className="h-3.5 w-3.5" /> Acta Consolidada (Anexo 4) PDF
+                    </Button>
+                    <Button size="sm" disabled={!!busy}
+                        className="gap-1.5 h-8 bg-emerald-600 hover:bg-emerald-700"
+                        title="Acta Consolidada (Anexo 4) — solo subsanación"
+                        onClick={() => run("subsa_cons_xls",
+                            () => Evaluation.actaConsolidada({ ...base(), subsanacion: 1 }),
+                            `acta-consolidada-subsanacion-${period}.xlsx`)}>
+                        <FileSpreadsheet className="h-3.5 w-3.5" /> Acta Consolidada (Anexo 4) Excel
+                    </Button>
+                    <Button size="sm" disabled={!!busy}
+                        className="gap-1.5 h-8 bg-orange-600 hover:bg-orange-700"
+                        title="Acta de Calificación (Anexo 3) — solo subsanación. Con curso elegido emite esa acta; sin curso, ZIP con todas las del filtro"
+                        onClick={() => {
+                            if (sectionId) run("subsa_a3_xls",
+                                () => ActaExcel.gradesTemplate(sectionId, { subsanacion: 1 }),
+                                `acta-calificacion-subsanacion-${sectionId}.xlsx`);
+                            else run("subsa_a3_xls",
+                                () => Evaluation.actasCalificacionSubsaZip(base()),
+                                `actas-calificacion-subsanacion-${period}.zip`);
+                        }}>
+                        <FileSpreadsheet className="h-3.5 w-3.5" /> Acta de Calificación (Anexo 3)
+                    </Button>
+                </div>
+            </div>
+            {loading ? (
+                <div className="flex items-center gap-2 px-4 py-4 text-xs text-slate-500">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Buscando estudiantes de subsanación…
+                </div>
+            ) : rows.length === 0 ? (
+                <p className="px-4 py-4 text-xs text-slate-500">
+                    No hay estudiantes con estado Subsanación matriculados en {period}.
+                </p>
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                        <thead>
+                            <tr className="bg-orange-100/60 text-orange-900">
+                                <th className="px-3 py-2 text-left">Apellidos y Nombres</th>
+                                <th className="px-3 py-2">DNI</th>
+                                <th className="px-3 py-2 text-left">Carrera</th>
+                                <th className="px-3 py-2">Ciclo</th>
+                                <th className="px-3 py-2">Créditos</th>
+                                <th className="px-3 py-2">N° R.D.</th>
+                                <th className="px-3 py-2 text-left">Cursos</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-orange-100">
+                            {rows.map((r) => (
+                                <tr key={r.id} className="bg-white/60">
+                                    <td className="px-3 py-2 font-semibold text-slate-700 whitespace-nowrap">{r.nombre}</td>
+                                    <td className="px-3 py-2 text-center">{r.dni}</td>
+                                    <td className="px-3 py-2">{r.carrera}</td>
+                                    <td className="px-3 py-2 text-center">{ROMANOS[r.ciclo] || r.ciclo || "—"}</td>
+                                    <td className="px-3 py-2 text-center">{r.creditos}</td>
+                                    <td className="px-3 py-2 text-center">{r.estado_rd || "—"}</td>
+                                    <td className="px-3 py-2 text-slate-500">
+                                        {(r.cursos || []).map((c) => c.curso).join(" · ") || "—"}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
     );
 }
 

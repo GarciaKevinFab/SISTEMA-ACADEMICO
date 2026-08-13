@@ -482,8 +482,8 @@ export const Teacher = {
 
 /* ── Registro por Excel estilo SIAGIE: plantilla prellenada + carga ── */
 export const ActaExcel = {
-    gradesTemplate: (sectionId) =>
-        api.get(`/academic/sections/${sectionId}/grades/plantilla`, { responseType: "blob" }),
+    gradesTemplate: (sectionId, params = {}) =>
+        api.get(`/academic/sections/${sectionId}/grades/plantilla`, { params, responseType: "blob" }),
 
     gradesImport: (sectionId, file) => {
         const fd = new FormData();
@@ -585,12 +585,16 @@ export const EvaluationAdmin = {
     /** ZIP de Actas de Evaluación de Área (un Excel por curso del filtro) */
     actasAreaZip: async (params = {}) =>
         api.get("/academic/admin/evaluation/actas-area.zip", { params, responseType: "blob" }),
+    /** ZIP de Actas de Calificación (Anexo 3) SOLO subsanación */
+    actasCalificacionSubsaZip: async (params = {}) =>
+        api.get("/academic/admin/evaluation/actas-calificacion-subsanacion.zip",
+            { params, responseType: "blob" }),
     /** ZIP de Actas de Evaluación de Área en PDF (una por curso del filtro) */
     actasAreaPdfZip: async (params = {}) =>
         api.get("/academic/admin/evaluation/actas-area-pdf.zip", { params, responseType: "blob" }),
-    /** Acta de Evaluación de Área de UNA sección */
-    actaArea: async (sectionId) =>
-        api.get(`/academic/sections/${sectionId}/acta-area.xlsx`, { responseType: "blob" }),
+    /** Acta de Evaluación de Área de UNA sección (params: subsanacion=1) */
+    actaArea: async (sectionId, params = {}) =>
+        api.get(`/academic/sections/${sectionId}/acta-area.xlsx`, { params, responseType: "blob" }),
     /** Reporte de rendimiento académico (resumen por curso + detalle por alumno) */
     reporteRendimiento: async (params = {}) =>
         api.get("/academic/admin/evaluation/rendimiento.xlsx", { params, responseType: "blob" }),
@@ -605,8 +609,8 @@ export const EvaluationAdmin = {
         api.get("/academic/admin/evaluation/merito.xlsx", { params, responseType: "blob" }),
     rendimientoPdf: async (params = {}) =>
         api.get("/academic/admin/evaluation/rendimiento.pdf", { params, responseType: "blob" }),
-    actaAreaPdf: async (sectionId) =>
-        api.get(`/academic/sections/${sectionId}/acta-area.pdf`, { responseType: "blob" }),
+    actaAreaPdf: async (sectionId, params = {}) =>
+        api.get(`/academic/sections/${sectionId}/acta-area.pdf`, { params, responseType: "blob" }),
     /* ── Excel complementarios ── */
     boletasXlsx: async (params = {}) =>
         api.get("/academic/admin/evaluation/boletas.xlsx", { params, responseType: "blob" }),

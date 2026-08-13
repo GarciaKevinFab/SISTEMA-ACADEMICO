@@ -67,7 +67,8 @@ def _minedu_logo_datauri():
         return ""
 
 
-def _pdf_shell(titulo, cuerpo, landscape=False, minedu=False, encuadernar=False):
+def _pdf_shell(titulo, cuerpo, landscape=False, minedu=False, encuadernar=False,
+               nombre_inst=""):
     """Marco HTML común: membrete con logos + título + contenido.
 
     Con `minedu=True` el membrete lleva MINEDU + instituto a la izquierda y
@@ -81,7 +82,7 @@ def _pdf_shell(titulo, cuerpo, landscape=False, minedu=False, encuadernar=False)
     logo, logo2 = _logo_datauris()
     inst = _acta_area_inst()
     size = "A4 landscape" if landscape else "A4"
-    margen = "12mm 10mm 12mm 22mm" if encuadernar else "12mm 10mm"
+    margen = "12mm 10mm 12mm 25mm" if encuadernar else "12mm 10mm"
     logo_izq = ""
     if minedu:
         m = _minedu_logo_datauri()
@@ -121,7 +122,7 @@ def _pdf_shell(titulo, cuerpo, landscape=False, minedu=False, encuadernar=False)
   {logo_izq}
   {f'<img src="{logo}">' if logo else ''}
   <div class="tit">
-    <h1>{_esc(inst['nombre'])}</h1>
+    <h1>{_esc(nombre_inst or inst['nombre'])}</h1>
     {f'<p>{_esc(titulo)}</p>' if titulo else ''}
   </div>
   {f'<img src="{logo2}">' if logo2 else ''}
@@ -204,7 +205,9 @@ def _filtrar_students(period, career_id=None, semester=None, anio=None):
 # 1. Acta de Evaluación de Área — PDF (docente y admin)
 # ══════════════════════════════════════════════════════════════
 
-def _acta_area_pdf_bytes(sec):
+def _acta_area_pdf_bytes(sec, subsanacion=False):
+    """Con `subsanacion=True`: acta SOLO de alumnos en subsanación; sin el
+    flag, esos alumnos se excluyen (llevan acta aparte)."""
     from academic.models import SectionGrades
     curso, codigo, docente = _section_header_info(sec)
     pc = sec.plan_course
@@ -215,9 +218,12 @@ def _acta_area_pdf_bytes(sec):
 
     bundle = SectionGrades.objects.filter(section=sec).first()
     grades = (bundle.grades or {}) if bundle else {}
-    alumnos = _roster(sec)
+    alumnos = [a for a in _roster(sec)
+               if bool(a.get("subsanacion")) == bool(subsanacion)]
     if not alumnos:
-        return None, f"La sección no tiene alumnos matriculados en {sec.period}."
+        return None, ("La sección no tiene alumnos de SUBSANACIÓN."
+                      if subsanacion else
+                      f"La sección no tiene alumnos matriculados en {sec.period}.")
 
     def _entry(st):
         for key in (st["id"], st.get("pk")):
@@ -258,17 +264,19 @@ def _acta_area_pdf_bytes(sec):
     desaprob = sum(1 for f in finales if f is not None and f < 11)
     n_dpi = sum(1 for st in alumnos if (_entry(st).get("status") or "").upper() == "DPI")
 
+    sufijo = " — SUBSANACIÓN" if subsanacion else ""
     cuerpo = f"""
 <style>
-  /* Columna de nombres compacta ("puede reducirse para que ocupe menos
-     campo"): ancho contenido y letra un punto menor, sin envolver. */
-  td.nom {{ font-size: 8.5px; white-space: nowrap; width: 210px; }}
+  /* Sin fondo azul: todos los recuadros sombreados van en plomo claro
+     (pedido de Secretaría), y la columna de nombres compacta. */
+  th {{ background: #E7E6E6; color: #111; }}
+  td.nom {{ font-size: 8.5px; white-space: nowrap; width: 185px; }}
 </style>
-<h2 style="text-align:center">ACTA DE EVALUACIÓN DE ÁREA {_esc(curso.upper())}</h2>
+<h2 style="text-align:center">ACTA DE EVALUACIÓN DE ÁREA {_esc(curso.upper())}{_esc(sufijo)}</h2>
 <table style="margin-top:4px">
   <tr><td><b>Programa de estudios</b></td><td>{_esc(career)} / TURNO: {_esc(_turno_de(sec))}</td>
       <td><b>Periodo Académico</b></td><td class='c'>{_esc(sec.period)}</td></tr>
-  <tr><td><b>Director General (e)</b></td><td>{_esc(inst['director'])}</td>
+  <tr><td><b>Director(a) General</b></td><td>{_esc(inst['director'])}</td>
       <td><b>Ciclo - Sección</b></td><td class='c'>{_esc(ciclo)} - "{_esc(sec.label or 'A')}"</td></tr>
   <tr><td><b>Docente</b></td><td>{_esc(docente.upper())}</td>
       <td><b>R.D. de Encargatura</b></td><td class='c'>{_esc(inst['rd_encargatura'])}</td></tr>
@@ -289,7 +297,7 @@ def _acta_area_pdf_bytes(sec):
 </table>
 <!-- Firmas según el Anexo 3 RVM 123-2022 (antes solo firmaba el docente).
      Margen amplio: va SELLO REDONDO con postfirma encima de cada línea. -->
-<table style="width:100%; margin-top:95px; border:none">
+<table style="width:100%; margin-top:115px; border:none">
   <tr>
     <td style="border:none; text-align:center; width:33%">
       <div style="border-top:1px solid #111; margin:0 18px; padding-top:4px">
@@ -306,7 +314,7 @@ def _acta_area_pdf_bytes(sec):
     <td style="border:none; text-align:center; width:33%">
       <div style="border-top:1px solid #111; margin:0 18px; padding-top:4px">
         <b style="font-size:9px">DOCENTE FORMADOR(A)</b><br>
-        <span style="font-size:8px">Firma · {_esc(docente.upper())}</span>
+        <span style="font-size:8px">Firma</span>
       </div>
     </td>
   </tr>
@@ -334,6 +342,7 @@ class EvaluationActasAreaPdfZipView(APIView):
         period = (request.query_params.get("period") or "").strip().upper()
         if not period:
             return Response({"detail": "period es requerido"}, status=400)
+        subsa = str(request.query_params.get("subsanacion", "")).lower() in ("1", "true", "si")
         sections = list(_sections_for(
             period, request.query_params.get("career_id"),
             request.query_params.get("semester"),
@@ -348,7 +357,7 @@ class EvaluationActasAreaPdfZipView(APIView):
         with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
             for sec in sections:
                 try:
-                    pdf, fname = _acta_area_pdf_bytes(sec)
+                    pdf, fname = _acta_area_pdf_bytes(sec, subsanacion=subsa)
                 except Exception as exc:
                     curso, _cod, _doc = _section_header_info(sec)
                     errores.append(f"{curso or sec.id}: {exc}")
@@ -387,7 +396,8 @@ class SectionActaAreaPdfView(APIView):
             id=section_id)
         if err := _grades_section_access_denied(request, sec):
             return err
-        pdf, fname_or_err = _acta_area_pdf_bytes(sec)
+        subsa = str(request.query_params.get("subsanacion", "")).lower() in ("1", "true", "si")
+        pdf, fname_or_err = _acta_area_pdf_bytes(sec, subsanacion=subsa)
         if pdf is None:
             return Response({"detail": fname_or_err}, status=400)
         return HttpResponse(pdf, content_type="application/pdf",
@@ -562,14 +572,20 @@ class EvaluationConsolidadaPdfView(APIView):
 
         inst = _inst_data()
         hoy = _tz.localtime(_tz.now()).strftime("%d/%m/%Y")
+        subsa = str(request.query_params.get("subsanacion", "")).lower() in ("1", "true", "si")
 
         bloques = []
         primero = True
         for (career, sem, label), secs in sorted(groups.items()):
             rows = [_section_eval_row(s, bmap) for s in secs]
+            # Subsanación lleva acta consolidada APARTE (?subsanacion=1)
             by_id = {}
             for rw in rows:
-                for st in rw["_students"]:
+                for st in rw["_students"] + rw.get("_students_lic", []):
+                    if bool(getattr(st, "_subsa", False)) != bool(subsa):
+                        continue
+                    if getattr(st, "_licencia", False) and not subsa:
+                        continue
                     by_id[st.id] = st
             if not by_id:
                 continue
@@ -584,7 +600,7 @@ class EvaluationConsolidadaPdfView(APIView):
   <tr><td class="l">Directora General</td><td colspan="3">{_esc(inst['director'])}</td>
       <td class="l">R.D. de Encargatura</td><td>{_esc(inst['rd_encargatura'])}</td></tr>
   <tr><td class="l">Programa de Estudios</td><td colspan="3">{_esc(career.upper())}</td>
-      <td class="l">Periodo Académico</td><td>{_esc(period)}<br>FECHA: {hoy}</td></tr>
+      <td class="l">Periodo Académico</td><td>{_esc(period)} &nbsp;&nbsp;·&nbsp;&nbsp; FECHA: {hoy}</td></tr>
   <tr><td class="l">Ciclo - Sección</td><td colspan="3">{_esc(_roman(sem))} - "{_esc(label)}"</td>
       <td class="l">N° de Estudiantes (según nóminas)</td><td>{len(students)}</td></tr>
   <tr><td class="l">Modalidad de Estudios</td><td colspan="3">PRESENCIAL</td>
@@ -600,6 +616,8 @@ class EvaluationConsolidadaPdfView(APIView):
                 f"<th colspan='3'>Créditos<br>"
                 f"{getattr(secs[i].plan_course, 'credits', '') or ''}</th>"
                 for i, rw in enumerate(rows))
+            hnum = "".join(f"<th colspan='3'>{i}</th>"
+                           for i in range(1, len(rows) + 1))
             h2 = "<th>C</th><th>CS</th><th>PTJ</th>" * len(rows)
 
             filas = []
@@ -626,25 +644,33 @@ class EvaluationConsolidadaPdfView(APIView):
                     f"<td class='c'>{puntaje if cred else ''}</td><td class='c'>{cred or ''}</td>"
                     f"<td class='c'><b>{prom}</b></td>"
                     f"<td class='c'>{_esc(_abrev_calif(puntaje / cred) if cred else '')}</td>"
-                    f"<td></td></tr>")
+                    f"<td class='c' style='font-size:7.5px'>"
+                    f"{_esc('LICENCIA' + (' (' + st.estado_rd + ')' if getattr(st, 'estado_rd', '') else '') if getattr(st, '_licencia', False) else '')}"
+                    f"</td></tr>")
 
             docentes = "".join(
                 f"<tr><td class='c'>{i}</td><td>{_esc((rw['teacher_name'] or '').upper())}</td>"
                 f"<td style='min-width:130px'></td></tr>"
                 for i, rw in enumerate(rows, 1))
 
+            # El acta puede ocupar 2 o más hojas; la cabecera de la tabla se
+            # repite por página (thead) y el cuadro de docentes + firmas
+            # viajan como bloque indivisible: nunca firmas solas en hoja libre.
             bloques.append(f"""
 <div class="grupo{'' if primero else ' salto'}">
-<h2>ACTA CONSOLIDADA DE EVALUACIÓN DEL DESEMPEÑO ACADÉMICO DEL CICLO</h2>
+<h2>ACTA CONSOLIDADA DE EVALUACIÓN DEL DESEMPEÑO ACADÉMICO DEL CICLO{' — SUBSANACIÓN' if subsa else ''}</h2>
 {cabecera}
 <table>
   <thead>
-    <tr><th rowspan="4">N°</th><th rowspan="4">N° de<br>Matrícula</th>
-        <th rowspan="4">Apellidos y Nombres del Estudiante<br>(según nóminas)</th>
+    <tr><th rowspan="5">N°</th><th rowspan="5">N° de<br>Matrícula</th>
+        <th rowspan="5">Apellidos y Nombres del Estudiante<br>(según nóminas)</th>
         <th colspan="{len(rows) * 3}">ASIGNATURAS / ÁREAS</th>
-        <th rowspan="4">Puntaje del<br>Semestre</th><th rowspan="4">Crédito del<br>Semestre</th>
-        <th rowspan="4">Promedio<br>Ponderado</th><th rowspan="4">Calificación<br>Cualitativa</th>
-        <th rowspan="4">Observaciones</th></tr>
+        <th rowspan="5"><div class='vertc'>Puntaje</div></th>
+        <th rowspan="5"><div class='vertc'>Créditos</div></th>
+        <th rowspan="5"><div class='vertc'>Prom. Ponderado</div></th>
+        <th rowspan="5"><div class='vertc'>Calif. Cualitativa</div></th>
+        <th rowspan="5">Observaciones</th></tr>
+    <tr>{hnum}</tr>
     <tr>{h1}</tr>
     <tr>{hcred}</tr>
     <tr>{h2}</tr>
@@ -654,6 +680,7 @@ class EvaluationConsolidadaPdfView(APIView):
 <p style="font-size:8px; color:#555; margin:4px 0 0">
   C: Calificación del curso/módulo · CS: Calificación para el sistema de educación
   superior (vigesimal) · PTJ: CS × créditos del curso/módulo.</p>
+<div style="page-break-inside:avoid; break-inside:avoid">
 <table style="width:55%; margin-top:26px">
   <thead><tr><th>N° de curso<br>o módulo</th><th>APELLIDOS Y NOMBRES DEL DOCENTE A CARGO</th><th>FIRMA</th></tr></thead>
   <tbody>{docentes}</tbody>
@@ -662,20 +689,27 @@ class EvaluationConsolidadaPdfView(APIView):
      y las firmas de Dirección/Secretaría -->
 <table style="width:100%; margin-top:82px; border:none">
   <tr>
-    <td style="border:none; text-align:center; width:50%">
+    <td style="border:none; text-align:center; width:33%">
       <div style="border-top:1px solid #111; width:170px; margin:0 auto; padding-top:4px">
         <b style="font-size:9px">DIRECTORA GENERAL</b><br>
         <span style="font-size:8px">Firma, Post Firma y Sello</span>
       </div>
     </td>
-    <td style="border:none; text-align:center; width:50%">
+    <td style="border:none; text-align:center; width:33%">
       <div style="border-top:1px solid #111; width:170px; margin:0 auto; padding-top:4px">
         <b style="font-size:9px">SECRETARIO(A) ACADÉMICO(A)</b><br>
         <span style="font-size:8px">Firma, Post Firma y Sello</span>
       </div>
     </td>
+    <td style="border:none; text-align:center; width:33%">
+      <div style="border-top:1px solid #111; width:170px; margin:0 auto; padding-top:4px">
+        <b style="font-size:9px">V°B° DRE / UGEL</b><br>
+        <span style="font-size:8px">Firma, Post Firma y Sello</span>
+      </div>
+    </td>
   </tr>
 </table>
+</div>
 </div>""")
             primero = False
 
@@ -686,22 +720,25 @@ class EvaluationConsolidadaPdfView(APIView):
         # apellidos en una sola fila, columnas angostas.
         extra_css = """
 <style>
-  .grupo h2 { text-align: center; }
+  .grupo h2 { text-align: center; font-size: 12px; }
   .grupo th { background: #E7E6E6; color: #111; }
   .inst { margin-bottom: 6px; }
   .inst td { font-size: 8.5px; padding: 2px 5px; text-align: center; }
   .inst td.l { background: #E7E6E6; font-weight: bold; width: 15%; }
   .grupo td:nth-child(3) { white-space: nowrap; }
   th.curso { padding: 2px 1px; }
+  .vertc { writing-mode: vertical-rl; transform: rotate(180deg);
+           margin: 0 auto; font-size: 7.5px; line-height: 1.1; }
   .vert { writing-mode: vertical-rl; transform: rotate(180deg);
           margin: 0 auto; max-height: 150px; min-height: 90px;
           font-size: 7.5px; line-height: 1.15; text-align: left; }
 </style>"""
         html = _pdf_shell("", extra_css + "".join(bloques),
-                          landscape=True, minedu=True, encuadernar=True)
+                          landscape=True, minedu=True, encuadernar=True,
+                          nombre_inst=inst["nombre"])
         return HttpResponse(html_to_pdf_bytes(html), content_type="application/pdf",
                             headers={"Content-Disposition":
-                                     f'attachment; filename="acta-consolidada-{period}.pdf"'})
+                                     f'attachment; filename="acta-consolidada{"-subsanacion" if subsa else ""}-{period}.pdf"'})
 
 
 class EvaluationRendimientoPdfView(APIView):

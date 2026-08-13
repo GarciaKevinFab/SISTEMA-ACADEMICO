@@ -160,6 +160,14 @@ def _roster(sec):
             "apellidos": apellidos_de(st),
             "estado": (getattr(st, "estado_academico", "") or "").upper(),
             "estado_rd": getattr(st, "estado_rd", "") or "",
+            # Subsanación = tipo de la MATRÍCULA del período, o estado del
+            # alumno. Puede convivir con LICENCIA (pidió licencia de su
+            # subsanación): va al acta de subsanación con la marca LICENCIA.
+            "subsanacion": (
+                (getattr(item.enrollment, "tipo_matricula", "") or "").upper()
+                == "SUBSANACION"
+                or (getattr(st, "estado_academico", "") or "").upper()
+                == "SUBSANACION"),
         })
     # Alfabético español: sin `clave_orden` la Ñ (U+00D1) cae después de la Z
     # y los "ÑAUPARI" quedaban al final de la nómina en vez de entre N y O.
@@ -271,7 +279,7 @@ def _sheet_title(codigo, label, idx):
 # NOTAS — construcción de hoja (compartida)
 # ══════════════════════════════════════════════════════════════
 
-def _write_grades_sheet(ws, sec):
+def _write_grades_sheet(ws, sec, subsanacion=False):
     """
     Escribe la hoja en el formato oficial "ACTA DE CALIFICACIÓN":
       - Cabecera: programa, docente, curso, período, ciclo-sección, turno, modalidad
@@ -313,7 +321,9 @@ def _write_grades_sheet(ws, sec):
     _add_logo(ws, sist_logo, "C1", height=58)
     _add_logo(ws, inst_logo, "T1", height=58)
     ws.merge_cells(start_row=2, start_column=7, end_row=4, end_column=18)
-    tcell = ws.cell(row=2, column=7, value="ACTA DE CALIFICACIÓN DEL CURSO O MÓDULO")
+    tcell = ws.cell(row=2, column=7,
+                    value="ACTA DE CALIFICACIÓN DEL CURSO O MÓDULO"
+                          + (" — SUBSANACIÓN" if subsanacion else ""))
     tcell.font = Font(bold=True, size=14)
     tcell.alignment = Alignment(horizontal="center", vertical="center")
     ws.merge_cells(start_row=1, start_column=21, end_row=1, end_column=27)
@@ -390,8 +400,9 @@ def _write_grades_sheet(ws, sec):
     _mh(H, 26, H + 3, 26, "PROMEDIO\nFINAL")
     _mh(H, 27, H + 3, 27, "CALIFICACIÓN\nCUALITATIVA")
 
-    # ── Alumnos ──
-    alumnos = _roster(sec)
+    # ── Alumnos ── (subsanación va en acta aparte, igual que el acta de área)
+    alumnos = [a for a in _roster(sec)
+               if bool(a.get("subsanacion")) == bool(subsanacion)]
     r0 = ACTA_FIRST_STUDENT
     for idx, st in enumerate(alumnos):
         r = r0 + idx
@@ -709,10 +720,15 @@ class SectionGradesTemplateView(APIView):
         if err := _grades_section_access_denied(request, sec):
             return err
 
+        subsa = str(request.query_params.get("subsanacion", "")).lower() in ("1", "true", "si")
         wb = Workbook()
         ws = wb.active
         ws.title = "REGISTRO DE NOTAS"
-        n = _write_grades_sheet(ws, sec)
+        n = _write_grades_sheet(ws, sec, subsanacion=subsa)
+        if n == 0 and subsa:
+            return Response(
+                {"detail": "La sección no tiene alumnos de SUBSANACIÓN."},
+                status=400)
         if n == 0:
             return Response(
                 {"detail": (
@@ -724,7 +740,8 @@ class SectionGradesTemplateView(APIView):
             )
 
         _, codigo, _ = _section_header_info(sec)
-        fname = f"NOTAS_{codigo or 'CURSO'}_{sec.label or 'A'}_{sec.period}.xlsx"
+        pref = "ACTA_SUBSANACION" if subsa else "NOTAS"
+        fname = f"{pref}_{codigo or 'CURSO'}_{sec.label or 'A'}_{sec.period}.xlsx"
         return _xlsx_response(wb, fname)
 
 
@@ -905,9 +922,13 @@ def _acta_area_inst():
     }
 
 
-def build_acta_area_workbook(sec):
+def build_acta_area_workbook(sec, subsanacion=False):
     """Construye el Acta de Evaluación de Área de una sección.
-    Retorna (Workbook, filename) o (None, detail_error) si no hay alumnos."""
+    Retorna (Workbook, filename) o (None, detail_error) si no hay alumnos.
+
+    Con `subsanacion=True` el acta lleva SOLO a los alumnos con estado
+    SUBSANACIÓN; sin el flag, esos alumnos se EXCLUYEN — llevan acta aparte
+    (indicación de Secretaría: "ella va en el acta de subsanación")."""
     curso, codigo, docente = _section_header_info(sec)
     pc = sec.plan_course
     career = (pc.plan.career.name if pc and pc.plan and pc.plan.career else "").upper()
@@ -917,9 +938,13 @@ def build_acta_area_workbook(sec):
 
     bundle = SectionGrades.objects.filter(section=sec).first()
     grades = (bundle.grades or {}) if bundle else {}
-    alumnos = _roster(sec)
+    alumnos = [a for a in _roster(sec)
+               if bool(a.get("subsanacion")) == bool(subsanacion)]
     if not alumnos:
-        return None, f"La sección no tiene alumnos matriculados en {sec.period}."
+        detalle = ("La sección no tiene alumnos de SUBSANACIÓN."
+                   if subsanacion else
+                   f"La sección no tiene alumnos matriculados en {sec.period}.")
+        return None, detalle
 
     def _entry(st):
         for key in (st["id"], st.get("pk")):
@@ -965,7 +990,8 @@ def build_acta_area_workbook(sec):
     _add_logo(ws, sist_logo, "H1", height=58)
 
     # ── Título ──
-    _box(2, 1, 2, 8, f"ACTA DE EVALUACIÓN DE ÁREA {curso}".upper(), size=12)
+    sufijo = " — SUBSANACIÓN" if subsanacion else ""
+    _box(2, 1, 2, 8, f"ACTA DE EVALUACIÓN DE ÁREA {curso}{sufijo}".upper(), size=12)
 
     # ── Bloque institucional ──
     _box(4, 1, 5, 2, "Nombre de la Institución")
@@ -996,7 +1022,7 @@ def build_acta_area_workbook(sec):
     _box(10, 3, 10, 5, inst["resolucion"], is_bold=False)
     _box(10, 6, 10, 7, "Ciclo - Sección")
     _box(10, 8, 10, 8, f'{ciclo} - "{sec.label or "A"}"', is_bold=False)
-    _box(11, 1, 11, 2, "Director General (e)")
+    _box(11, 1, 11, 2, "Director(a) General")
     _box(11, 3, 11, 5, inst["director"], is_bold=False)
     _box(11, 6, 11, 7, "R.D. de Encargatura")
     _box(11, 8, 11, 8, inst["rd_encargatura"], is_bold=False)
@@ -1010,10 +1036,10 @@ def build_acta_area_workbook(sec):
     cols = [1, 2, 3, 4, 5, 6, 7]
     for c, h in zip(cols, heads):
         if c == 3:
-            _box(H, 3, H, 4, h, fill="D9E2F3")
+            _box(H, 3, H, 4, h, fill="E7E6E6")
         else:
             cc = c if c < 3 else c + 1
-            _box(H, cc, H, cc, h, fill="D9E2F3")
+            _box(H, cc, H, cc, h, fill="E7E6E6")
 
     r = H + 1
     for n, st in enumerate(alumnos, 1):
@@ -1050,8 +1076,8 @@ def build_acta_area_workbook(sec):
          "para el sistema de educación superior", promedio_aula),
     ]
     rr = r + 2
-    _box(rr, 1, rr, 2, "Resumen", fill="E2EFDA")
-    _box(rr, 3, rr, 3, "N°", fill="E2EFDA")
+    _box(rr, 1, rr, 2, "Resumen", fill="E7E6E6")
+    _box(rr, 3, rr, 3, "N°", fill="E7E6E6")
     for i, (lbl, val) in enumerate(resumen, 1):
         _box(rr + i, 1, rr + i, 2, lbl, is_bold=False)
         _box(rr + i, 3, rr + i, 3, val, is_bold=False)
@@ -1061,7 +1087,7 @@ def build_acta_area_workbook(sec):
     FIRMAS = [
         (1, 3,  "DIRECTOR(A) GENERAL",        "Firma, Post Firma y Sello"),
         (5, 8,  "SECRETARIO(A) ACADÉMICO(A)", "Firma, Post Firma y Sello"),
-        (10, 12, "DOCENTE FORMADOR(A)",       f"Firma · {docente.upper()}"),
+        (10, 12, "DOCENTE FORMADOR(A)",       "Firma"),
     ]
     for c1, c2, cargo, sub in FIRMAS:
         _box(fr, c1, fr, c2, "_______________________________", is_bold=False)
@@ -1099,7 +1125,8 @@ class SectionActaAreaView(APIView):
         if err := _grades_section_access_denied(request, sec):
             return err
 
-        wb, fname_or_err = build_acta_area_workbook(sec)
+        subsa = str(request.query_params.get("subsanacion", "")).lower() in ("1", "true", "si")
+        wb, fname_or_err = build_acta_area_workbook(sec, subsanacion=subsa)
         if wb is None:
             return Response({"detail": fname_or_err}, status=400)
         return _xlsx_response(wb, fname_or_err)
