@@ -172,3 +172,67 @@ class BackupExport(models.Model):
     scope = models.CharField(max_length=20, default="FULL")  # FULL|DATA_ONLY|FILES_ONLY|DATASET_*
     file = models.FileField(upload_to="backups/", null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+class TeacherCVItem(models.Model):
+    """Ítem de la Hoja de Vida del docente (CV modelo institucional).
+
+    Un solo modelo genérico para todas las secciones del CV; el significado
+    de cada campo varía por sección (los rótulos los pone el frontend y el
+    PDF). `archivo` es el documento que ACREDITA el ítem: el CV "documentado"
+    se emite adjuntando estos archivos después de la parte descriptiva.
+    """
+    SECCIONES = [
+        ("FORMACION",       "II. Formación profesional"),
+        ("ESPECIALIZACION", "III. Especialización y actualización"),
+        ("EXPERIENCIA",     "IV. Experiencia laboral"),
+        ("EVENTO",          "V.a Participación en eventos académicos"),
+        ("PUBLICACION",     "V.b Publicaciones"),
+        ("MERITO",          "VI. Méritos"),
+        ("INVESTIGACION",   "VII. Investigación"),
+    ]
+    # Subsecciones del modelo oficial (Remisión del Currículum Vitae)
+    SUBSECCIONES = [
+        ("PREGRADO",   "Estudios de pregrado"),
+        ("POSTGRADO",  "Estudios de postgrado"),
+        ("SEGUNDA_ESP", "Especialización o segunda especialización"),
+        ("DIPLOMADO",  "Diplomado"),
+        ("ACTIVIDAD",  "Actividad formativa"),
+        ("IDIOMA",     "Idioma extranjero"),
+        ("LENGUA",     "Lengua originaria"),
+        ("TIC",        "Capacitación en TIC"),
+        ("EXP_SUPERIOR", "Docente en educación superior"),
+        ("EXP_BASICA",   "Docente en educación básica / ETP"),
+        ("EXP_CONTINUA", "Formación docente en servicio / continua"),
+        ("",           "—"),
+    ]
+
+    teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE,
+                                related_name="cv_items")
+    seccion = models.CharField(max_length=20, choices=SECCIONES)
+    subseccion = models.CharField(max_length=20, blank=True, default="",
+                                  choices=SUBSECCIONES)
+
+    institucion = models.CharField(  # centro de estudios / institución / entidad / lugar
+        max_length=255, blank=True, default="")
+    titulo = models.CharField(       # nivel académico / curso / cargo / título / tema
+        max_length=255, blank=True, default="")
+    detalle = models.CharField(      # especialidad / tema / descripción / participación
+        max_length=500, blank=True, default="")
+    lugar = models.CharField(max_length=120, blank=True, default="")
+    duracion = models.CharField(     # horas / duración / calidad (investigación)
+        max_length=80, blank=True, default="")
+    fecha_inicio = models.DateField(null=True, blank=True)
+    fecha_fin = models.DateField(null=True, blank=True)
+
+    archivo = models.FileField(upload_to="teachers/cv/", null=True, blank=True)
+
+    orden = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["seccion", "subseccion", "orden", "fecha_inicio", "id"]
+        indexes = [models.Index(fields=["teacher", "seccion"])]
+
+    def __str__(self):
+        return f"CV<{self.teacher_id}:{self.seccion}:{self.titulo[:30]}>"

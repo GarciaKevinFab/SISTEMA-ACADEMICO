@@ -10,6 +10,8 @@ from .views import (
     egresados_list, egresados_stats, egresados_update, egresados_export,
 )
 from users.views import users_bulk_credentials as download_credentials
+from .views.hoja_vida import (TeacherCVListView, TeacherCVDetailView,
+                              TeacherCVPdfView)
 
 router = DefaultRouter(trailing_slash=False)
 router.register(r"periods", PeriodsViewSet, basename="periods")
@@ -18,6 +20,12 @@ router.register(r"classrooms", ClassroomsViewSet, basename="classrooms")
 router.register(r"teachers", TeachersViewSet, basename="teachers")
 
 urlpatterns = [
+    # Hoja de Vida del docente (antes del router para que "teachers/me/…"
+    # no caiga en el detail del viewset)
+    path("teachers/me/cv",               TeacherCVListView.as_view()),
+    path("teachers/me/cv/pdf",           TeacherCVPdfView.as_view()),
+    path("teachers/me/cv/<int:item_id>", TeacherCVDetailView.as_view()),
+
     # CRUD viewsets
     path("", include(router.urls)),
 

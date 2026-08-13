@@ -45,6 +45,7 @@ import PublicMesaDePartesHome from "../modules/mesa-partes/PublicMesaDePartesHom
 import StudentModule from "../modules/student/StudentModule";
 import StudentPaymentsPanel from "../modules/student/StudentPaymentsPanel";
 import StudentMeritoPanel from "../modules/student/StudentMeritoPanel";
+import TeacherHojaVida from "../modules/academic/TeacherHojaVida";
 
 /* ✅ Verificador de Grados y Títulos (público) */
 import PublicGraduateVerifier from "../modules/graduates/PublicGraduateVerifier";
@@ -171,6 +172,17 @@ export default function AppRouter() {
                     element={
                         <RequireAuth>
                             <StudentMeritoPanel />
+                        </RequireAuth>
+                    }
+                />
+
+                {/* Hoja de Vida del docente — el backend resuelve al docente
+                    autenticado, cada uno solo ve la suya */}
+                <Route
+                    path="/dashboard/teacher/hoja-de-vida"
+                    element={
+                        <RequireAuth>
+                            <TeacherHojaVida />
                         </RequireAuth>
                     }
                 />

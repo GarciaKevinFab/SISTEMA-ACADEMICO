@@ -164,9 +164,25 @@ const SideNav = () => {
           show: canAny(PERMS["academic.view"], PERMS["academic.sections.view"], PERMS["academic.plans.view"], PERMS["academic.reports.view"], PERMS["academic.grades.edit"], PERMS["academic.attendance.view"]),
         },
         {
+          // Matrícula del ALUMNO: al ocultarles el módulo Académico (arriba)
+          // les desapareció la única puerta a la selección de cursos — con el
+          // pago aprobado ya no hay banner que lleve ahí. Este ítem va directo
+          // a la pantalla de matrícula y solo lo ven perfiles SIN el módulo
+          // administrativo (los admin ya entran por "Académico").
+          id: "mi-matricula", title: "Matrícula", path: "/dashboard/academic/enrollment", icon: BookOpenCheck,
+          show: canAny(PERMS["academic.enrollment.view"], PERMS["academic.enrollment.commit"])
+            && !canAny(PERMS["academic.view"], PERMS["academic.sections.view"], PERMS["academic.plans.view"], PERMS["academic.reports.view"], PERMS["academic.grades.edit"], PERMS["academic.attendance.view"]),
+        },
+        {
           id: "mesa-control", title: "Mesa de Control", path: "/dashboard/mesa-control", icon: Wrench,
           // Mismo criterio que el backend (_can_admin_enroll): por rol, no por permiso
           show: hasRole("REGISTRAR", "ADMIN_ACADEMIC", "ADMIN_ACADEMICO", "ADMIN_SYSTEM"),
+        },
+        {
+          // CV del docente con documentos que acreditan (pedido de Dirección)
+          id: "hoja-vida", title: "Mi Hoja de Vida", path: "/dashboard/teacher/hoja-de-vida",
+          icon: BookOpenCheck,
+          show: hasRole("TEACHER", "DOCENTE", "PROFESOR"),
         },
         { id: "student", title: "Estudiante", path: "/dashboard/student", icon: GraduationCap, show: canSeeStudentModule },
         {
