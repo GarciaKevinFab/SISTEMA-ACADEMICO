@@ -550,14 +550,16 @@ def _acta_calificacion_pdf_bytes(sec, subsanacion=False):
     sufijo = " — SUBSANACIÓN" if subsanacion else ""
     cuerpo = f"""
 <style>
-  th {{ background: #E7E6E6; color: #111; font-size: 7.5px; }}
-  td {{ font-size: 8px; }}
-  td.nom {{ font-size: 7.5px; white-space: nowrap; }}
-  th.lvl, td.lvl {{ width: 14px; padding: 2px 1px; }}
-  td.rec {{ font-size: 7px; min-width: 60px; }}
+  /* Formato VERTICAL (A4): el acta de subsanación lleva pocos alumnos,
+     así que la tabla se compacta para caber a lo ancho de la hoja. */
+  th {{ background: #E7E6E6; color: #111; font-size: 6.5px; padding: 2px 2px; }}
+  td {{ font-size: 7.5px; padding: 2px 2px; }}
+  td.nom {{ font-size: 7px; width: 110px; }}
+  th.lvl, td.lvl {{ width: 11px; padding: 2px 1px; }}
+  td.rec {{ font-size: 6.5px; min-width: 34px; }}
   table.info td {{ border: none; padding: 2px 4px; font-size: 8.5px; }}
   table.info td.v {{ border-bottom: 1px solid #555; }}
-  table.conv {{ width: 180px; margin: 0; }}
+  table.conv {{ width: 170px; margin: 0; }}
   table.conv td {{ font-size: 7px; padding: 1px 4px; }}
 </style>
 <h2 style="text-align:center">ACTA DE CALIFICACIÓN DEL CURSO O MÓDULO{_esc(sufijo)}</h2>
@@ -628,7 +630,7 @@ def _acta_calificacion_pdf_bytes(sec, subsanacion=False):
 </table>
 """
     html = _pdf_shell(f"ACTA DE CALIFICACIÓN — {sec.period}", cuerpo,
-                      landscape=True, encuadernar=True)
+                      encuadernar=True)
     nombre = (f"ACTA_CALIFICACION{'_SUBSANACION' if subsanacion else ''}_"
               f"{codigo or sec.id}_{sec.label or 'A'}_{sec.period}.pdf")
     return html_to_pdf_bytes(html), nombre
