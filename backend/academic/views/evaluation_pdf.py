@@ -405,6 +405,295 @@ class SectionActaAreaPdfView(APIView):
 
 
 # ══════════════════════════════════════════════════════════════
+# 1c. Acta de Calificación (Anexo 3, competencias) — PDF
+# ══════════════════════════════════════════════════════════════
+
+_A3_LEVELS = ["PI", "I", "P", "L", "D"]
+# Tabla oficial RVM 123-2022 pág. 28: escala (promedio 1-5) → vigesimal
+_A3_ESCALA = list(zip(
+    [1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6, 2.8,
+     3, 3.3, 3.6, 3.8, 4, 4.2, 4.4, 4.6, 4.8, 5],
+    range(1, 21)))
+_A3_CONVERSION = [("1 – 1.9", "Previo al Inicio"), ("2 – 2.9", "Inicio"),
+                  ("3 – 3.9", "En proceso"), ("4 – 4.9", "Logrado"),
+                  ("5", "Destacado")]
+
+
+def _a3_vigesimal(escala):
+    """LOOKUP de la tabla oficial: mayor umbral <= escala."""
+    v = None
+    for umbral, nota in _A3_ESCALA:
+        if escala >= umbral:
+            v = nota
+    return v
+
+
+def _a3_cualitativa(escala):
+    if escala >= 5:
+        return "Destacado"
+    if escala >= 4:
+        return "Logrado"
+    if escala >= 3:
+        return "En proceso"
+    if escala >= 2:
+        return "Inicio"
+    return "Previo al Inicio"
+
+
+def _acta_calificacion_pdf_bytes(sec, subsanacion=False):
+    """PDF del ACTA DE CALIFICACIÓN DEL CURSO O MÓDULO (Anexo 3): mismo
+    contenido que la plantilla Excel, con las fórmulas ya resueltas.
+    Con `subsanacion=True` el acta lleva SOLO a los alumnos de subsanación."""
+    from academic.models import SectionGrades
+    curso, codigo, docente = _section_header_info(sec)
+    pc = sec.plan_course
+    career = (pc.plan.career.name if pc and pc.plan and pc.plan.career else "").upper()
+    ciclo = _roman(pc.semester if pc else "")
+
+    ini = fin = ""
+    try:
+        from academic.models import AcademicPeriod
+        per = AcademicPeriod.get_or_none(sec.period)
+        if per:
+            ini, fin = per.start.isoformat(), per.end.isoformat()
+    except Exception:
+        pass
+
+    bundle = SectionGrades.objects.filter(section=sec).first()
+    grades = (bundle.grades or {}) if bundle else {}
+    alumnos = [a for a in _roster(sec)
+               if bool(a.get("subsanacion")) == bool(subsanacion)]
+    if not alumnos:
+        return None, ("La sección no tiene alumnos de SUBSANACIÓN."
+                      if subsanacion else
+                      f"La sección no tiene alumnos matriculados en {sec.period}.")
+
+    def _entry(st):
+        # Claves duales del acta: user_id o pk según cómo se registró
+        for key in (st["id"], st.get("pk")):
+            if key is not None and isinstance(grades.get(str(key)), dict):
+                return grades[str(key)]
+        return {}
+
+    filas, finales, n_lic = [], [], 0
+    for n, st in enumerate(alumnos, 1):
+        e = _entry(st)
+        lic = st.get("estado") == "LICENCIA"
+        estado_txt = ""
+        if st.get("estado"):
+            estado_txt = st["estado"] + (
+                f" (RD {st['estado_rd']})" if st.get("estado_rd") else "")
+        celdas, scores = [], []
+        for i in range(1, 4):
+            lv = (e.get(f"C{i}_LEVEL") or "").upper()
+            idx = _A3_LEVELS.index(lv) if lv in _A3_LEVELS else None
+            if lic:
+                idx = None
+            scores.append(idx + 1 if idx is not None else None)
+            for j in range(5):
+                celdas.append(
+                    f"<td class='c lvl'>{idx + 1 if idx == j else ''}</td>")
+            rec = e.get(f"C{i}_REC") or ""
+            if lic:
+                rec = estado_txt or "LICENCIA"
+            elif not rec and i == 1 and estado_txt:
+                rec = estado_txt
+            celdas.append(f"<td class='rec'>{_esc(rec)}</td>")
+
+        escala = prom = cuali = ""
+        if all(s is not None for s in scores):
+            esc_v = round(sum(scores) / 3, 1)
+            escala = esc_v
+            prom = _a3_vigesimal(esc_v)
+            cuali = _a3_cualitativa(esc_v)
+        finales.append(prom if prom != "" else None)
+        if lic:
+            n_lic += 1
+        filas.append(
+            f"<tr><td class='c'>{n}</td><td class='c'>{_esc(st['dni'])}</td>"
+            f"<td class='nom'>{_esc(st['nombre'])}</td>"
+            + "".join(celdas)
+            + "".join(f"<td class='c'>{s if s is not None else ''}</td>"
+                      for s in scores)
+            + f"<td class='c'>{escala}</td><td class='c'><b>{prom}</b></td>"
+            f"<td class='c'>{_esc(cuali)}</td></tr>")
+
+    con_nota = [f for f in finales if f is not None]
+    aprobados = sum(1 for f in con_nota if f >= 11)
+    desaprob = sum(1 for f in con_nota if f < 11)
+    promedio_aula = (round(sum(con_nota) / len(con_nota), 1) if con_nota else "")
+
+    comp_heads = "".join(
+        f"<th colspan='6'>COMPETENCIA {i}</th>" for i in range(1, 4))
+    lvl_heads = "".join(
+        ("".join(f"<th class='lvl'>{lv}</th>" for lv in _A3_LEVELS)
+         + "<th>Recomendación /<br>Comentario*</th>")
+        for _ in range(3))
+    conv_filas = "".join(
+        f"<tr><td class='c'>{r}</td><td>{t}</td></tr>"
+        for r, t in _A3_CONVERSION)
+
+    sufijo = " — SUBSANACIÓN" if subsanacion else ""
+    cuerpo = f"""
+<style>
+  th {{ background: #E7E6E6; color: #111; font-size: 7.5px; }}
+  td {{ font-size: 8px; }}
+  td.nom {{ font-size: 7.5px; white-space: nowrap; }}
+  th.lvl, td.lvl {{ width: 14px; padding: 2px 1px; }}
+  td.rec {{ font-size: 7px; min-width: 60px; }}
+  table.info td {{ border: none; padding: 2px 4px; font-size: 8.5px; }}
+  table.info td.v {{ border-bottom: 1px solid #555; }}
+  table.conv {{ width: 180px; margin: 0; }}
+  table.conv td {{ font-size: 7px; padding: 1px 4px; }}
+</style>
+<h2 style="text-align:center">ACTA DE CALIFICACIÓN DEL CURSO O MÓDULO{_esc(sufijo)}</h2>
+<div style="display:flex; gap:14px; align-items:flex-start; margin-top:4px">
+  <table class="info" style="flex:1">
+    <tr><td><b>Programa de Estudios</b></td><td class="v">{_esc(career)}</td>
+        <td><b>Periodo Académico</b></td><td class="v c">{_esc(sec.period)}</td></tr>
+    <tr><td><b>Docente Formador(a)</b></td><td class="v">{_esc(docente.upper())}</td>
+        <td><b>Ciclo - Sección</b></td><td class="v c">{_esc(ciclo)} - "{_esc(sec.label or 'A')}"</td></tr>
+    <tr><td><b>Curso / Módulo</b></td><td class="v">{_esc(curso)}{f" ({_esc(codigo)})" if codigo else ""}</td>
+        <td><b>Turno</b></td><td class="v c">{_esc(_turno_de(sec))}</td></tr>
+    <tr><td><b>Inicio / Fin</b></td><td class="v">{_esc(ini)} — {_esc(fin)}</td>
+        <td><b>Modalidad de estudios</b></td><td class="v c">PRESENCIAL</td></tr>
+  </table>
+  <table class="conv">
+    <tr><th colspan="2">Conversión</th></tr>
+    {conv_filas}
+  </table>
+</div>
+<table style="margin-top:6px">
+  <thead>
+    <tr><th rowspan="2">N°</th><th rowspan="2">N° de<br>Matrícula</th>
+        <th rowspan="2">Apellidos y Nombres del Estudiante</th>
+        {comp_heads}
+        <th colspan="3">CONCLUSIÓN<br>DESCRIPTIVA</th>
+        <th rowspan="2">CALIF.<br>SISTEMA<br>ED. SUP.</th>
+        <th rowspan="2">PROMEDIO<br>FINAL</th>
+        <th rowspan="2">CALIFICACIÓN<br>CUALITATIVA</th></tr>
+    <tr>{lvl_heads}<th>C1</th><th>C2</th><th>C3</th></tr>
+  </thead>
+  <tbody>{''.join(filas)}</tbody>
+</table>
+<p style="font-size:7px; margin:3px 0 0">
+  Niveles: PI = Previo al Inicio · I = Inicio · P = En proceso · L = Logrado ·
+  D = Destacado. (*) La recomendación o comentario es obligatoria cuando el
+  nivel es PI o I.
+</p>
+<table style="width:40%">
+  <tr><th colspan="2">Resumen</th></tr>
+  <tr><td>Matriculados</td><td class='c'>{len(alumnos)}</td></tr>
+  <tr><td>Aprobados</td><td class='c'>{aprobados}</td></tr>
+  <tr><td>Desaprobados</td><td class='c'>{desaprob}</td></tr>
+  <tr><td>Con Licencia</td><td class='c'>{n_lic}</td></tr>
+  <tr><td>Promedio del aula o sección</td><td class='c'>{promedio_aula}</td></tr>
+</table>
+<table style="width:100%; margin-top:95px; border:none">
+  <tr>
+    <td style="border:none; text-align:center; width:33%">
+      <div style="border-top:1px solid #111; margin:0 18px; padding-top:4px">
+        <b style="font-size:9px">DIRECTOR(A) GENERAL</b><br>
+        <span style="font-size:8px">Firma, Post Firma y Sello</span>
+      </div>
+    </td>
+    <td style="border:none; text-align:center; width:33%">
+      <div style="border-top:1px solid #111; margin:0 18px; padding-top:4px">
+        <b style="font-size:9px">SECRETARIO(A) ACADÉMICO(A)</b><br>
+        <span style="font-size:8px">Firma, Post Firma y Sello</span>
+      </div>
+    </td>
+    <td style="border:none; text-align:center; width:33%">
+      <div style="border-top:1px solid #111; margin:0 18px; padding-top:4px">
+        <b style="font-size:9px">DOCENTE FORMADOR(A)</b><br>
+        <span style="font-size:8px">Firma</span>
+      </div>
+    </td>
+  </tr>
+</table>
+"""
+    html = _pdf_shell(f"ACTA DE CALIFICACIÓN — {sec.period}", cuerpo,
+                      landscape=True, encuadernar=True)
+    nombre = (f"ACTA_CALIFICACION{'_SUBSANACION' if subsanacion else ''}_"
+              f"{codigo or sec.id}_{sec.label or 'A'}_{sec.period}.pdf")
+    return html_to_pdf_bytes(html), nombre
+
+
+class SectionActaCalificacionPdfView(APIView):
+    """GET /academic/sections/<id>/acta-calificacion.pdf (?subsanacion=1) —
+    Acta de Calificación (Anexo 3) de UNA sección, en PDF."""
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, section_id: int):
+        from .teachers import _grades_section_access_denied
+        sec = get_object_or_404(
+            Section.objects.select_related(
+                "plan_course__course", "plan_course__plan__career", "teacher__user"),
+            id=section_id)
+        if err := _grades_section_access_denied(request, sec):
+            return err
+        subsa = str(request.query_params.get("subsanacion", "")).lower() in ("1", "true", "si")
+        pdf, fname_or_err = _acta_calificacion_pdf_bytes(sec, subsanacion=subsa)
+        if pdf is None:
+            return Response({"detail": fname_or_err}, status=400)
+        return HttpResponse(pdf, content_type="application/pdf",
+                            headers={"Content-Disposition": f'attachment; filename="{fname_or_err}"'})
+
+
+class EvaluationActasCalificacionSubsaPdfZipView(APIView):
+    """
+    GET /academic/admin/evaluation/actas-calificacion-subsanacion-pdf.zip
+        ?period=2026-II[&career_id][&semester][&anio]
+    Un PDF de Acta de Calificación (Anexo 3) en versión SUBSANACIÓN por cada
+    curso del filtro con alumnos de subsanación, en ZIP — el equivalente PDF
+    del ZIP en Excel.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if err := _require_grades_admin(request):
+            return err
+        period = (request.query_params.get("period") or "").strip().upper()
+        if not period:
+            return Response({"detail": "period es requerido"}, status=400)
+        sections = list(_sections_for(
+            period, request.query_params.get("career_id"),
+            request.query_params.get("semester"),
+            anio=request.query_params.get("anio")))
+        if not sections:
+            return Response(
+                {"detail": f"No hay secciones para el filtro en {period}"},
+                status=404)
+
+        zip_buf = BytesIO()
+        generados = 0
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for sec in sections:
+                try:
+                    pdf, fname = _acta_calificacion_pdf_bytes(sec, subsanacion=True)
+                except Exception:
+                    logger.exception("Acta calificación PDF sec=%s", sec.id)
+                    continue
+                if pdf is None:
+                    continue   # este curso no tiene alumnos de subsanación
+                zf.writestr(fname, pdf)
+                generados += 1
+        if not generados:
+            return Response(
+                {"detail": "Ningún curso del filtro tiene alumnos de "
+                           "subsanación (el estado/tipo se asigna en "
+                           "Matrícula → Padrón de Alumnos)."}, status=404)
+
+        zip_buf.seek(0)
+        return HttpResponse(
+            zip_buf.getvalue(), content_type="application/zip",
+            headers={"Content-Disposition":
+                     f'attachment; filename="actas-calificacion-subsanacion-pdf-{period}.zip"'})
+
+
+# ══════════════════════════════════════════════════════════════
 # 1b. Horario del docente — PDF con sus datos personales y foto
 # ══════════════════════════════════════════════════════════════
 

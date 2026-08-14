@@ -870,7 +870,20 @@ function SubsanacionPanel({ period, careerId, sectionId, run, base, busy }) {
                     </Button>
                     <Button size="sm" disabled={!!busy}
                         className="gap-1.5 h-8 bg-orange-600 hover:bg-orange-700"
-                        title="Acta de Calificación (Anexo 3) — solo subsanación. Con curso elegido emite esa acta; sin curso, ZIP con todas las del filtro"
+                        title="Acta de Calificación (Anexo 3) en PDF — solo subsanación. Con curso elegido emite esa acta; sin curso, ZIP con todas las del filtro"
+                        onClick={() => {
+                            if (sectionId) run("subsa_a3_pdf",
+                                () => Evaluation.actaCalificacionPdf(sectionId, { subsanacion: 1 }),
+                                `acta-calificacion-subsanacion-${sectionId}.pdf`);
+                            else run("subsa_a3_pdf",
+                                () => Evaluation.actasCalificacionSubsaPdfZip(base()),
+                                `actas-calificacion-subsanacion-pdf-${period}.zip`);
+                        }}>
+                        <FileText className="h-3.5 w-3.5" /> Acta de Calificación (Anexo 3) PDF
+                    </Button>
+                    <Button size="sm" disabled={!!busy} variant="outline"
+                        className="gap-1.5 h-8 border-orange-300 text-orange-700 hover:bg-orange-100"
+                        title="Acta de Calificación (Anexo 3) en Excel — solo subsanación. Con curso elegido emite esa acta; sin curso, ZIP con todas las del filtro"
                         onClick={() => {
                             if (sectionId) run("subsa_a3_xls",
                                 () => ActaExcel.gradesTemplate(sectionId, { subsanacion: 1 }),
@@ -879,7 +892,7 @@ function SubsanacionPanel({ period, careerId, sectionId, run, base, busy }) {
                                 () => Evaluation.actasCalificacionSubsaZip(base()),
                                 `actas-calificacion-subsanacion-${period}.zip`);
                         }}>
-                        <FileSpreadsheet className="h-3.5 w-3.5" /> Acta de Calificación (Anexo 3)
+                        <FileSpreadsheet className="h-3.5 w-3.5" /> Anexo 3 Excel
                     </Button>
                 </div>
             </div>

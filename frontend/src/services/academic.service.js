@@ -589,6 +589,14 @@ export const EvaluationAdmin = {
     actasCalificacionSubsaZip: async (params = {}) =>
         api.get("/academic/admin/evaluation/actas-calificacion-subsanacion.zip",
             { params, responseType: "blob" }),
+    /** ZIP de Actas de Calificación (Anexo 3) SOLO subsanación, en PDF */
+    actasCalificacionSubsaPdfZip: async (params = {}) =>
+        api.get("/academic/admin/evaluation/actas-calificacion-subsanacion-pdf.zip",
+            { params, responseType: "blob" }),
+    /** Acta de Calificación (Anexo 3) de UNA sección en PDF (params: subsanacion=1) */
+    actaCalificacionPdf: async (sectionId, params = {}) =>
+        api.get(`/academic/sections/${sectionId}/acta-calificacion.pdf`,
+            { params, responseType: "blob" }),
     /** ZIP de Actas de Evaluación de Área en PDF (una por curso del filtro) */
     actasAreaPdfZip: async (params = {}) =>
         api.get("/academic/admin/evaluation/actas-area-pdf.zip", { params, responseType: "blob" }),
