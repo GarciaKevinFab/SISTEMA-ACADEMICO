@@ -28,7 +28,7 @@ import {
     UploadCloud, Download, RefreshCw, XCircle, Image as ImageIcon,
     FileSpreadsheet, DatabaseZap, Plus, ChevronRight, AlertCircle, MapPin,
     Image, Save, Trash2, CreditCard, UserPlus, Mail, Phone, Edit3,
-    ChevronDown, Loader2, CheckCircle2, GraduationCap, Star, Eye,
+    ChevronDown, Loader2, CheckCircle2, GraduationCap, Star, Eye, FileText,
 } from "lucide-react";
 import { toAbsoluteMediaUrl } from "../../utils/mediaUrl";
 import {
@@ -1038,6 +1038,150 @@ export const CampusesSection = () => {
 };
 
 // ===============================================================
+// ★ Hojas de Vida (CV) — estado de carga por docente + reporte Excel/PDF
+// ===============================================================
+const CV_SECS = ["FORMACION", "ESPECIALIZACION", "EXPERIENCIA", "EVENTO", "PUBLICACION", "MERITO", "INVESTIGACION"];
+const CV_SECS_LBL = ["II", "III", "IV", "V.a", "V.b", "VI", "VII"];
+
+export const CVEstadoDialog = () => {
+    const [open, setOpen] = useState(false);
+    const [rows, setRows] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [busy, setBusy] = useState("");
+    const [q, setQ] = useState("");
+
+    useEffect(() => {
+        if (!open) return;
+        (async () => {
+            setLoading(true);
+            try {
+                const data = await Teachers.cvEstado();
+                setRows(data?.rows || []);
+            } catch (e) { toast.error(formatApiError(e)); }
+            finally { setLoading(false); }
+        })();
+    }, [open]);
+
+    const filtered = useMemo(() => {
+        const t = q.trim().toLowerCase();
+        if (!t) return rows;
+        return rows.filter((r) => r.nombre?.toLowerCase().includes(t) || (r.dni || "").includes(t));
+    }, [rows, q]);
+
+    const descargar = async (fmt) => {
+        setBusy(fmt);
+        try {
+            const res = await Teachers.cvEstadoReporte(fmt);
+            const blob = res?.data instanceof Blob ? res.data : new Blob([res.data]);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url; a.download = `hojas-de-vida-docentes.${fmt}`;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } catch { toast.error("No se pudo descargar el reporte"); }
+        finally { setBusy(""); }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" className="h-9 px-4 rounded-xl text-sm font-700 gap-1.5 border-slate-200">
+                    <FileText className="w-4 h-4 text-blue-600" /> Hojas de Vida
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-5xl rounded-2xl p-0 overflow-hidden">
+                <div className="h-1 bg-gradient-to-r from-blue-500 to-indigo-500" />
+                <div className="p-6">
+                    <DialogHeader className="mb-4">
+                        <DialogTitle className="font-800 text-slate-800 flex items-center gap-2">
+                            <FileText className="w-5 h-5 text-blue-600" /> Hojas de Vida de los docentes
+                        </DialogTitle>
+                        <DialogDescription>
+                            Ítems registrados por sección (entre paréntesis, cuántos con documento que
+                            acredita ✓), avance documentado y último cambio de cada docente.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <Input className="h-9 rounded-xl border-slate-200 text-sm w-64"
+                            placeholder="Buscar por nombre o DNI…"
+                            value={q} onChange={(e) => setQ(e.target.value)} />
+                        <div className="flex gap-2">
+                            <Button size="sm" className="h-9 rounded-xl gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                                disabled={!!busy} onClick={() => descargar("xlsx")}>
+                                {busy === "xlsx" ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                                Reporte Excel
+                            </Button>
+                            <Button size="sm" className="h-9 rounded-xl gap-1.5 bg-rose-600 hover:bg-rose-700"
+                                disabled={!!busy} onClick={() => descargar("pdf")}>
+                                {busy === "pdf" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                                Reporte PDF
+                            </Button>
+                        </div>
+                    </div>
+                    {loading ? (
+                        <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
+                            <Loader2 className="h-5 w-5 animate-spin" /> Cargando estado de las hojas de vida…
+                        </div>
+                    ) : (
+                        <div className="rounded-xl border border-slate-200 overflow-hidden">
+                            <div className="overflow-x-auto" style={{ maxHeight: 420, overflowY: "auto", scrollbarWidth: "thin" }}>
+                                <table className="w-full border-collapse text-xs">
+                                    <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+                                        <tr className="bg-slate-50 text-slate-500">
+                                            <th className="px-3 py-2 text-left">Docente</th>
+                                            <th className="px-2 py-2">DNI</th>
+                                            {CV_SECS_LBL.map((s) => (
+                                                <th key={s} className="px-2 py-2">{s}</th>
+                                            ))}
+                                            <th className="px-2 py-2">Total</th>
+                                            <th className="px-2 py-2">Con doc.</th>
+                                            <th className="px-2 py-2">Avance</th>
+                                            <th className="px-2 py-2">Última act.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 bg-white">
+                                        {filtered.length === 0 ? (
+                                            <tr><td colSpan={12} className="px-3 py-6 text-center text-slate-400">
+                                                Sin docentes que coincidan.
+                                            </td></tr>
+                                        ) : filtered.map((r) => (
+                                            <tr key={r.teacher_id} className="hover:bg-slate-50/60">
+                                                <td className="px-3 py-1.5 font-600 text-slate-700">{r.nombre}</td>
+                                                <td className="px-2 py-1.5 text-center text-slate-500">{r.dni || "—"}</td>
+                                                {CV_SECS.map((s) => {
+                                                    const [n, d] = r.secciones?.[s] || [0, 0];
+                                                    return (
+                                                        <td key={s} className="px-2 py-1.5 text-center">
+                                                            {n ? <span className="text-slate-700">{n} <span className="text-emerald-600">({d}✓)</span></span>
+                                                                : <span className="text-slate-300">—</span>}
+                                                        </td>
+                                                    );
+                                                })}
+                                                <td className="px-2 py-1.5 text-center font-700">{r.total}</td>
+                                                <td className="px-2 py-1.5 text-center">{r.con_doc}</td>
+                                                <td className="px-2 py-1.5 text-center">
+                                                    <span className={"px-1.5 py-0.5 rounded-full text-[10px] font-700 " +
+                                                        (r.avance >= 100 && r.total ? "bg-emerald-50 text-emerald-700"
+                                                            : r.avance > 0 ? "bg-amber-50 text-amber-700"
+                                                                : "bg-slate-100 text-slate-400")}>
+                                                        {r.total ? `${r.avance}%` : "sin CV"}
+                                                    </span>
+                                                </td>
+                                                <td className="px-2 py-1.5 text-center text-slate-500 whitespace-nowrap">{r.actualizado || "—"}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+// ===============================================================
 // ★ Docentes — con editar + scroll en tabla
 // ===============================================================
 const INITIAL_TEACHER_FORM = { document: "", full_name: "", email: "", phone: "", specialization: "" };
@@ -1088,6 +1232,8 @@ const TeachersSection = () => {
         <SectionCard
             icon={Users} title="Directorio de Docentes" desc="Registro de profesores e información de contacto"
             action={
+                <div className="flex flex-wrap gap-2">
+                <CVEstadoDialog />
                 <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
                     <DialogTrigger asChild>
                         <Button className="h-9 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-700 gap-1.5 shadow-sm">
@@ -1141,6 +1287,7 @@ const TeachersSection = () => {
                         </div>
                     </DialogContent>
                 </Dialog>
+                </div>
             }
         >
             <div className="mb-4 relative w-full sm:w-72">

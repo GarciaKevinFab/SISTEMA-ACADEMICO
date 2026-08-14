@@ -32,8 +32,7 @@ SUBSECCIONES_VALIDAS = {c for c, _ in TeacherCVItem.SUBSECCIONES}
 
 
 def _teacher_de(request):
-    ct, _ = Teacher.objects.get_or_create(user=request.user)
-    return ct
+    return Teacher.ficha_de(request.user)
 
 
 def _item_dict(it, request=None):
@@ -57,6 +56,15 @@ def _item_dict(it, request=None):
     }
 
 
+# Topes de los campos de texto (deben calzar con el modelo); detalle es
+# TextField pero igual se acota para que el PDF no se deforme.
+LARGOS = {"institucion": 500, "titulo": 500, "detalle": 2000,
+          "lugar": 200, "duracion": 120}
+ROTULOS = {"institucion": "Institución / Centro de estudios",
+           "titulo": "Título / Cargo / Curso", "detalle": "Descripción",
+           "lugar": "Lugar", "duracion": "Duración"}
+
+
 def _aplicar_campos(it, data, files):
     for campo in CAMPOS:
         if campo not in data:
@@ -71,7 +79,13 @@ def _aplicar_campos(it, data, files):
             except (TypeError, ValueError):
                 pass
         else:
-            setattr(it, campo, str(v or "").strip())
+            v = str(v or "").strip()
+            tope = LARGOS.get(campo)
+            if tope and len(v) > tope:
+                return (f"«{ROTULOS.get(campo, campo)}» supera el máximo de "
+                        f"{tope} caracteres (tiene {len(v)}). Resúmelo para "
+                        "poder guardar.")
+            setattr(it, campo, v)
     if "archivo" in files:
         f = files["archivo"]
         if f.size > 10 * 1024 * 1024:
@@ -196,22 +210,49 @@ class TeacherCVPdfView(APIView):
         items = list(ct.cv_items.all())
         inst = _acta_area_inst()
         logo, logo2 = _logo_datauris()
+
+        # Foto de perfil del docente (Mi Perfil) como data URI
+        foto_uri = ""
+        try:
+            if ct.photo:
+                import base64
+                import mimetypes
+                with ct.photo.open("rb") as fh:
+                    foto_uri = "data:%s;base64,%s" % (
+                        mimetypes.guess_type(ct.photo.name)[0] or "image/jpeg",
+                        base64.b64encode(fh.read()).decode())
+        except Exception:
+            foto_uri = ""
         u = ct.user
         nombre = ((getattr(u, "full_name", "") or "").strip()
                   or (ct.full_name or "").strip()
                   or (u.username if u else ""))
         hoy = timezone.localtime(timezone.now())
 
-        # ── I. Datos personales (Mi Perfil + directorio) ──
-        datos = [
-            ("Apellidos y nombres", nombre.upper()),
+        # ── I. Datos personales (perfil de postulante docente) ──
+        # Con apellidos/nombres separados si el docente los registró;
+        # si no, cae al nombre completo de siempre.
+        if (ct.apellido_paterno or ct.apellido_materno or ct.nombres):
+            filas_nombre = [
+                ("Apellido paterno", ct.apellido_paterno or ""),
+                ("Apellido materno", ct.apellido_materno or ""),
+                ("Nombres", ct.nombres or ""),
+            ]
+        else:
+            filas_nombre = [("Apellidos y nombres", nombre.upper())]
+        ubigeo = " / ".join(v for v in (ct.region, ct.provincia, ct.distrito) if v)
+        datos = filas_nombre + [
             ("DNI", ct.document or ""),
             ("Fecha de nacimiento",
              ct.fecha_nac.strftime("%d/%m/%Y") if ct.fecha_nac else ""),
+            ("Sexo", dict(Teacher.SEXOS).get(ct.sexo, "")),
             ("Grado académico", dict(Teacher.GRADOS_ACADEMICOS).get(
                 ct.grado_academico, ct.grado_academico or "")),
+            ("Teléfono fijo", ct.telefono_fijo or ""),
             ("Celular", ct.phone or ""),
             ("Correo electrónico", ct.email or ""),
+            ("Dirección", ct.direccion or ""),
+            ("Región / Provincia / Distrito", ubigeo),
             ("Condición laboral", dict(Teacher.CONDICIONES).get(
                 ct.condicion_laboral, ct.condicion_laboral or "")),
             ("N° R.D. de Nombramiento / Contrato", ct.rd_nombramiento or ""),
@@ -314,14 +355,23 @@ Tarma, {hoy.strftime('%d/%m/%Y')}</p>
 <div class="head">
   {f'<img src="{logo}">' if logo else ''}
   <div class="tit">
-    <h1>{esc(inst['nombre'])}</h1>
+    <h1>INSTITUTO DE EDUCACIÓN SUPERIOR PEDAGÓGICO PÚBLICO<br>
+        {esc(inst['nombre'])} — {esc((inst.get('provincia') or 'Tarma').upper())}</h1>
     <p>HOJA DE VIDA DEL DOCENTE</p>
   </div>
   {f'<img src="{logo2}">' if logo2 else ''}
 </div>
 <h2>CURRÍCULUM VITAE</h2>
 <h3>I. DATOS PERSONALES</h3>
-<table>{filas_datos}</table>
+<div style="display:flex; gap:10px; align-items:stretch">
+  <table style="flex:1">{filas_datos}</table>
+  <div style="width:30mm; min-height:38mm; border:1px solid #666; flex-shrink:0;
+              display:flex; align-items:center; justify-content:center;
+              overflow:hidden; background:#fff">
+    {f'<img src="{foto_uri}" style="width:100%; height:100%; object-fit:cover">'
+     if foto_uri else '<span style="color:#999; font-size:9px">FOTO</span>'}
+  </div>
+</div>
 {''.join(bloques) if bloques else
  "<p style='margin-top:14px; color:#777'>Aún no hay ítems registrados en la Hoja de Vida.</p>"}
 {cierre}
@@ -387,3 +437,186 @@ Tarma, {hoy.strftime('%d/%m/%Y')}</p>
         out = BytesIO()
         writer.write(out)
         return out.getvalue()
+
+
+# ══════════════════════════════════════════════════════════════
+# ADMIN — estado de las Hojas de Vida (qué cargó cada docente)
+# ══════════════════════════════════════════════════════════════
+
+# Rótulo corto por sección para el reporte (columnas II…VII)
+SECCION_CORTA = [
+    ("FORMACION", "II"), ("ESPECIALIZACION", "III"), ("EXPERIENCIA", "IV"),
+    ("EVENTO", "V.a"), ("PUBLICACION", "V.b"), ("MERITO", "VI"),
+    ("INVESTIGACION", "VII"),
+]
+
+
+class TeacherCVAdminEstadoView(APIView):
+    """
+    GET /catalogs/teachers/cv/estado            → JSON: avance del CV por docente
+    GET /catalogs/teachers/cv/estado?fmt=xlsx   → reporte en Excel
+    GET /catalogs/teachers/cv/estado?fmt=pdf    → reporte en PDF
+    Solo administradores (mismos roles que el módulo de Evaluación).
+    Por cada docente: ítems por sección (y cuántos con documento), totales,
+    % documentado y fecha del último cambio en su hoja de vida.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from academic.views.teachers import _is_grades_admin
+        if not _is_grades_admin(request.user):
+            return Response({"detail": "No autorizado."}, status=403)
+
+        q = (request.query_params.get("q") or "").strip().lower()
+        fmt = (request.query_params.get("fmt") or "").strip().lower()
+
+        filas = []
+        qs = (Teacher.objects.select_related("user")
+              .prefetch_related("cv_items")
+              .order_by("user__full_name", "full_name", "id"))
+        for t in qs:
+            u = t.user
+            nombre = ((getattr(u, "full_name", "") or "").strip() if u else "") \
+                or (t.full_name or "").strip() \
+                or (u.username if u else "")
+            if not nombre and not t.document:
+                continue   # ficha vacía sin identidad: no aporta al reporte
+            items = list(t.cv_items.all())
+            if q and q not in nombre.lower() and q not in (t.document or ""):
+                continue
+            por_sec, ultima = {}, None
+            for clave, _corta in SECCION_CORTA:
+                por_sec[clave] = [0, 0]   # [ítems, con documento]
+            for it in items:
+                d = por_sec.get(it.seccion)
+                if d is None:
+                    continue
+                d[0] += 1
+                if it.archivo:
+                    d[1] += 1
+                if it.updated_at and (ultima is None or it.updated_at > ultima):
+                    ultima = it.updated_at
+            total = sum(v[0] for v in por_sec.values())
+            con_doc = sum(v[1] for v in por_sec.values())
+            filas.append({
+                "teacher_id": t.id,
+                "nombre": nombre.upper(),
+                "dni": t.document or "",
+                "secciones": {c: por_sec[c] for c, _ in SECCION_CORTA},
+                "total": total,
+                "con_doc": con_doc,
+                "sin_doc": total - con_doc,
+                "avance": round(100 * con_doc / total) if total else 0,
+                "actualizado": (timezone.localtime(ultima)
+                                .strftime("%d/%m/%Y %H:%M") if ultima else ""),
+            })
+
+        if fmt == "xlsx":
+            return self._xlsx(filas)
+        if fmt == "pdf":
+            return self._pdf(filas)
+        return Response({"total_docentes": len(filas), "rows": filas})
+
+    # ── Excel ──
+    @staticmethod
+    def _xlsx(filas):
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
+        from openpyxl.utils import get_column_letter
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Hojas de Vida"
+        heads = (["N°", "Docente", "DNI"]
+                 + [f"{c} ítems" for _, c in SECCION_CORTA]
+                 + ["Total ítems", "Con doc.", "Sin doc.", "Avance %",
+                    "Última actualización"])
+        fill = PatternFill("solid", start_color="1F4E79")
+        for j, h in enumerate(heads, 1):
+            c = ws.cell(row=1, column=j, value=h)
+            c.font = Font(bold=True, color="FFFFFF", size=9)
+            c.fill = fill
+            c.alignment = Alignment(horizontal="center", vertical="center",
+                                    wrap_text=True)
+        for i, f in enumerate(filas, 1):
+            r = i + 1
+            vals = ([i, f["nombre"], f["dni"]]
+                    + [f"{n}" + (f" ({d}✓)" if n else "")
+                       for n, d in (f["secciones"][c]
+                                    for c, _ in SECCION_CORTA)]
+                    + [f["total"], f["con_doc"], f["sin_doc"],
+                       f["avance"], f["actualizado"]])
+            for j, v in enumerate(vals, 1):
+                c = ws.cell(row=r, column=j, value=v)
+                c.font = Font(size=9)
+                if j != 2:
+                    c.alignment = Alignment(horizontal="center")
+        widths = [4, 42, 11] + [8] * len(SECCION_CORTA) + [9, 9, 9, 9, 17]
+        for j, w in enumerate(widths, 1):
+            ws.column_dimensions[get_column_letter(j)].width = w
+        ws.freeze_panes = "A2"
+
+        buf = BytesIO()
+        wb.save(buf)
+        return HttpResponse(
+            buf.getvalue(),
+            content_type=("application/vnd.openxmlformats-officedocument"
+                          ".spreadsheetml.sheet"),
+            headers={"Content-Disposition":
+                     'attachment; filename="hojas-de-vida-docentes.xlsx"'})
+
+    # ── PDF ──
+    @staticmethod
+    def _pdf(filas):
+        from html import escape as esc
+        from academic.pdf_render import html_to_pdf_bytes
+        from academic.views.evaluation_pdf import _pdf_shell
+
+        hoy = timezone.localtime(timezone.now()).strftime("%d/%m/%Y %H:%M")
+        heads = ("<th>N°</th><th>Docente</th><th>DNI</th>"
+                 + "".join(f"<th>{c}</th>" for _, c in SECCION_CORTA)
+                 + "<th>Total</th><th>Con<br>doc.</th><th>Sin<br>doc.</th>"
+                   "<th>Avance</th><th>Última<br>actualización</th>")
+        cuerpo_filas = []
+        for i, f in enumerate(filas, 1):
+            celdas_sec = "".join(
+                "<td class='c'>{}</td>".format(
+                    f"{n} ({d}✓)" if n else "—")
+                for n, d in (f["secciones"][c] for c, _ in SECCION_CORTA))
+            cuerpo_filas.append(
+                f"<tr><td class='c'>{i}</td><td>{esc(f['nombre'])}</td>"
+                f"<td class='c'>{esc(f['dni'])}</td>{celdas_sec}"
+                f"<td class='c'><b>{f['total']}</b></td>"
+                f"<td class='c'>{f['con_doc']}</td>"
+                f"<td class='c'>{f['sin_doc']}</td>"
+                f"<td class='c'>{f['avance']}%</td>"
+                f"<td class='c'>{esc(f['actualizado'] or '—')}</td></tr>")
+        cuerpo = f"""
+<style>
+  th {{ background: #E7E6E6; color: #111; }}
+</style>
+<h2 style="text-align:center">ESTADO DE LAS HOJAS DE VIDA DE LOS DOCENTES</h2>
+<p style="font-size:8.5px; margin:2px 0 0">
+  Por sección se muestra el n° de ítems registrados y, entre paréntesis,
+  cuántos tienen documento que acredita (✓). Secciones: II Formación ·
+  III Especialización · IV Experiencia · V.a Eventos · V.b Publicaciones ·
+  VI Méritos · VII Investigación. Emitido el {hoy}.
+</p>
+<table>
+  <thead><tr>{heads}</tr></thead>
+  <tbody>{''.join(cuerpo_filas) if cuerpo_filas else
+          '<tr><td colspan="15" style="color:#777">Sin docentes con hoja de vida.</td></tr>'}</tbody>
+</table>
+"""
+        html = _pdf_shell("ESTADO DE HOJAS DE VIDA — DOCENTES", cuerpo,
+                          landscape=True)
+        try:
+            pdf = html_to_pdf_bytes(html)
+        except Exception as exc:
+            return Response({"detail": f"No se pudo generar el PDF: {exc}"},
+                            status=500)
+        return HttpResponse(
+            pdf, content_type="application/pdf",
+            headers={"Content-Disposition":
+                     'attachment; filename="hojas-de-vida-docentes.pdf"'})

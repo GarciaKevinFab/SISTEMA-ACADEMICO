@@ -505,10 +505,16 @@ class TeacherSelfProfileView(APIView):
 
     GRADOS = {"", "PROFESOR", "BACHILLER", "LICENCIADO", "MAGISTER", "DOCTOR"}
     CONDICIONES = {"", "NOMBRADO", "CONTRATADO"}
+    SEXOS = {"", "M", "F"}
+    # I. Datos personales (Hoja de Vida): texto libre, campo → largo máximo
+    DATOS_PERSONALES = {
+        "apellido_paterno": 80, "apellido_materno": 80, "nombres": 120,
+        "telefono_fijo": 30, "direccion": 200,
+        "region": 80, "provincia": 80, "distrito": 80,
+    }
 
     def _get_teacher(self, request):
-        ct, _ = CatalogTeacher.objects.get_or_create(user=request.user)
-        return ct
+        return CatalogTeacher.ficha_de(request.user)
 
     def _payload(self, request, ct):
         photo_url = ""
@@ -533,6 +539,16 @@ class TeacherSelfProfileView(APIView):
                 ct.condicion_laboral, ""),
             "rd_nombramiento": ct.rd_nombramiento or "",
             "rd_fecha": ct.rd_fecha.isoformat() if ct.rd_fecha else "",
+            "apellido_paterno": ct.apellido_paterno or "",
+            "apellido_materno": ct.apellido_materno or "",
+            "nombres": ct.nombres or "",
+            "sexo": ct.sexo or "",
+            "sexo_label": dict(CatalogTeacher.SEXOS).get(ct.sexo, ""),
+            "telefono_fijo": ct.telefono_fijo or "",
+            "direccion": ct.direccion or "",
+            "region": ct.region or "",
+            "provincia": ct.provincia or "",
+            "distrito": ct.distrito or "",
         }
 
     def get(self, request):
@@ -578,6 +594,16 @@ class TeacherSelfProfileView(APIView):
                 ct.rd_fecha = d
             else:
                 ct.rd_fecha = None
+
+        if "sexo" in data:
+            s = (data.get("sexo") or "").strip().upper()
+            if s not in self.SEXOS:
+                return Response({"detail": f"sexo inválido: {s!r}"}, status=400)
+            ct.sexo = s
+
+        for campo, largo in self.DATOS_PERSONALES.items():
+            if campo in data:
+                setattr(ct, campo, (data.get(campo) or "").strip()[:largo])
 
         if "celular" in data:
             ct.phone = (data.get("celular") or "").strip()[:30]

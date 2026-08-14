@@ -25,6 +25,7 @@ import {
     KeyRound, GraduationCap, ChevronDown, Search, BookOpen, UserX, Copy,
 } from "lucide-react";
 import { UsersService } from "../../services/users.service";
+import { CVEstadoDialog } from "../admin/ConfigCatalogsModule";
 import { invalidateActivePeriod } from "@/hooks/useActivePeriod";
 import { Periods, Teachers, Imports, Credentials } from "@/services/catalogs.service";
 import { StudentsService } from "@/services/students.service";
@@ -492,6 +493,7 @@ export const TeachersSection = () => {
             icon={Users} title="Directorio de Docentes" desc="Registro de profesores e información de contacto"
             action={
                 <div className="flex items-center gap-2">
+                <CVEstadoDialog />
                 {selDocentes.size > 0 && (
                     <DeleteConfirm
                         trigger={

@@ -50,6 +50,11 @@ export const Teachers = {
     create: (payload) => getData(api.post("/catalogs/teachers", payload)),
     update: (id, payload) => getData(api.patch(`/catalogs/teachers/${id}`, payload)),
     remove: (id) => getData(api.delete(`/catalogs/teachers/${id}`)),
+    /** Admin: estado de las Hojas de Vida (qué cargó cada docente) */
+    cvEstado: (params) => getData(api.get("/catalogs/teachers/cv/estado", { params })),
+    /** Admin: reporte del estado en Excel o PDF (fmt: "xlsx" | "pdf") */
+    cvEstadoReporte: (fmt) => api.get("/catalogs/teachers/cv/estado",
+        { params: { fmt }, responseType: "blob" }),
 };
 
 // ------------------ Ubigeo ------------------

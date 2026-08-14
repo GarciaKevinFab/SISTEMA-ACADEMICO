@@ -11,7 +11,7 @@ from .views import (
 )
 from users.views import users_bulk_credentials as download_credentials
 from .views.hoja_vida import (TeacherCVListView, TeacherCVDetailView,
-                              TeacherCVPdfView)
+                              TeacherCVPdfView, TeacherCVAdminEstadoView)
 
 router = DefaultRouter(trailing_slash=False)
 router.register(r"periods", PeriodsViewSet, basename="periods")
@@ -25,6 +25,8 @@ urlpatterns = [
     path("teachers/me/cv",               TeacherCVListView.as_view()),
     path("teachers/me/cv/pdf",           TeacherCVPdfView.as_view()),
     path("teachers/me/cv/<int:item_id>", TeacherCVDetailView.as_view()),
+    # Admin: estado de las hojas de vida (JSON / ?fmt=xlsx / ?fmt=pdf)
+    path("teachers/cv/estado",           TeacherCVAdminEstadoView.as_view()),
 
     # CRUD viewsets
     path("", include(router.urls)),

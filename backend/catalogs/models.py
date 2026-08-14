@@ -1,6 +1,6 @@
 # catalogs/models.py
 from django.conf import settings
-from django.db import models
+from django.db import models, IntegrityError
 
 class Period(models.Model):
     TERM_CHOICES = (
@@ -72,6 +72,18 @@ class Teacher(models.Model):
         max_length=20, blank=True, default="", choices=GRADOS_ACADEMICOS)
     photo = models.ImageField(upload_to="teachers/photos/", null=True, blank=True)
 
+    # ── I. Datos personales (Hoja de Vida — perfil de postulante docente) ──
+    SEXOS = [("M", "Masculino"), ("F", "Femenino")]
+    apellido_paterno = models.CharField(max_length=80, blank=True, default="")
+    apellido_materno = models.CharField(max_length=80, blank=True, default="")
+    nombres = models.CharField(max_length=120, blank=True, default="")
+    sexo = models.CharField(max_length=1, blank=True, default="", choices=SEXOS)
+    telefono_fijo = models.CharField(max_length=30, blank=True, default="")
+    direccion = models.CharField(max_length=200, blank=True, default="")
+    region = models.CharField(max_length=80, blank=True, default="")
+    provincia = models.CharField(max_length=80, blank=True, default="")
+    distrito = models.CharField(max_length=80, blank=True, default="")
+
     # ── Vínculo laboral (RD de nombramiento o contrato) ──
     CONDICIONES = [
         ("NOMBRADO", "Nombrado (a)"),
@@ -92,6 +104,42 @@ class Teacher(models.Model):
         blank=True,
         related_name="catalog_teachers",
     )
+
+    class Meta:
+        constraints = [
+            # Una sola ficha por usuario: sin este candado, dos requests
+            # simultáneos con get_or_create creaban fichas gemelas y todo
+            # acceso posterior tronaba con MultipleObjectsReturned.
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=models.Q(user__isnull=False),
+                name="uniq_catalogs_teacher_user",
+            ),
+        ]
+
+    @classmethod
+    def ficha_de(cls, user):
+        """Ficha (única) del docente para un usuario autenticado.
+
+        Reemplaza a `get_or_create(user=...)`: si en la BD quedaron fichas
+        gemelas, devuelve la más completa (con ítems de CV, luego con
+        documento, luego la más antigua) en vez de reventar; y solo crea
+        cuando no existe ninguna (tolerando la carrera contra el candado).
+        """
+        filas = list(cls.objects.filter(user=user))
+        if not filas:
+            try:
+                return cls.objects.create(user=user)
+            except IntegrityError:
+                return cls.objects.filter(user=user).first()
+        if len(filas) == 1:
+            return filas[0]
+        filas.sort(key=lambda t: (
+            -t.cv_items.count(),
+            0 if (t.document or t.full_name) else 1,
+            t.id,
+        ))
+        return filas[0]
 
     def __str__(self):
         if self.user:
@@ -212,15 +260,19 @@ class TeacherCVItem(models.Model):
     subseccion = models.CharField(max_length=20, blank=True, default="",
                                   choices=SUBSECCIONES)
 
+    # Textos libres: los docentes escriben descripciones extensas — con los
+    # topes originales (255/500) el 7mo ítem de Experiencia reventaba en la BD
+    # con un 500 sin mensaje. Ahora son TextField/limites holgados y la vista
+    # valida con un error claro antes de guardar.
     institucion = models.CharField(  # centro de estudios / institución / entidad / lugar
-        max_length=255, blank=True, default="")
-    titulo = models.CharField(       # nivel académico / curso / cargo / título / tema
-        max_length=255, blank=True, default="")
-    detalle = models.CharField(      # especialidad / tema / descripción / participación
         max_length=500, blank=True, default="")
-    lugar = models.CharField(max_length=120, blank=True, default="")
+    titulo = models.CharField(       # nivel académico / curso / cargo / título / tema
+        max_length=500, blank=True, default="")
+    detalle = models.TextField(      # especialidad / tema / descripción / participación
+        blank=True, default="")
+    lugar = models.CharField(max_length=200, blank=True, default="")
     duracion = models.CharField(     # horas / duración / calidad (investigación)
-        max_length=80, blank=True, default="")
+        max_length=120, blank=True, default="")
     fecha_inicio = models.DateField(null=True, blank=True)
     fecha_fin = models.DateField(null=True, blank=True)
 
