@@ -409,42 +409,23 @@ class SectionActaAreaPdfView(APIView):
 # ══════════════════════════════════════════════════════════════
 
 _A3_LEVELS = ["PI", "I", "P", "L", "D"]
-# Tabla oficial RVM 123-2022 pág. 28: escala (promedio 1-5) → vigesimal
-_A3_ESCALA = list(zip(
-    [1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6, 2.8,
-     3, 3.3, 3.6, 3.8, 4, 4.2, 4.4, 4.6, 4.8, 5],
-    range(1, 21)))
 _A3_CONVERSION = [("1 – 1.9", "Previo al Inicio"), ("2 – 2.9", "Inicio"),
                   ("3 – 3.9", "En proceso"), ("4 – 4.9", "Logrado"),
                   ("5", "Destacado")]
 
 
-def _a3_vigesimal(escala):
-    """LOOKUP de la tabla oficial: mayor umbral <= escala."""
-    v = None
-    for umbral, nota in _A3_ESCALA:
-        if escala >= umbral:
-            v = nota
-    return v
-
-
-def _a3_cualitativa(escala):
-    if escala >= 5:
-        return "Destacado"
-    if escala >= 4:
-        return "Logrado"
-    if escala >= 3:
-        return "En proceso"
-    if escala >= 2:
-        return "Inicio"
-    return "Previo al Inicio"
-
-
 def _acta_calificacion_pdf_bytes(sec, subsanacion=False):
-    """PDF del ACTA DE CALIFICACIÓN DEL CURSO O MÓDULO (Anexo 3): mismo
-    contenido que la plantilla Excel, con las fórmulas ya resueltas.
+    """PDF del ACTA DE CALIFICACIÓN DEL CURSO O MÓDULO (Anexo 3).
+
+    IMPORTANTE: imprime lo REGISTRADO por el docente — valores decimales por
+    competencia (1.0–5.0), ESCALA_0_5 y PROMEDIO_FINAL guardados — la misma
+    fuente que el acta consolidada y el kárdex. Recalcular desde los niveles
+    enteros (PI=1…D=5) daba otro promedio (p.ej. 9 aquí vs 11 en la
+    consolidada para el mismo alumno).
     Con `subsanacion=True` el acta lleva SOLO a los alumnos de subsanación."""
     from academic.models import SectionGrades
+    from .teachers import (_calc_escala_0_5, _calc_promedio_final_0_20,
+                           _calif_curso, NIVEL_RANGO)
     curso, codigo, docente = _section_header_info(sec)
     pc = sec.plan_course
     career = (pc.plan.career.name if pc and pc.plan and pc.plan.career else "").upper()
@@ -483,16 +464,30 @@ def _acta_calificacion_pdf_bytes(sec, subsanacion=False):
         if st.get("estado"):
             estado_txt = st["estado"] + (
                 f" (RD {st['estado_rd']})" if st.get("estado_rd") else "")
-        celdas, scores = [], []
+        celdas, valores = [], []
         for i in range(1, 4):
+            # Valor decimal registrado (C1/C2/C3); si el docente solo marcó
+            # el nivel, cae al mínimo del rango — igual que el panel.
+            try:
+                val = float(e.get(f"C{i}"))
+                if not (1 <= val <= 5):
+                    val = None
+            except (TypeError, ValueError):
+                val = None
             lv = (e.get(f"C{i}_LEVEL") or "").upper()
-            idx = _A3_LEVELS.index(lv) if lv in _A3_LEVELS else None
+            if val is None and lv in _A3_LEVELS:
+                val = float(NIVEL_RANGO[lv][0])
             if lic:
-                idx = None
-            scores.append(idx + 1 if idx is not None else None)
+                val = None
+            idx = None
+            if val is not None:
+                idx = (_A3_LEVELS.index(lv) if lv in _A3_LEVELS
+                       else min(int(val), 5) - 1)
+            valores.append(val)
             for j in range(5):
                 celdas.append(
-                    f"<td class='c lvl'>{idx + 1 if idx == j else ''}</td>")
+                    "<td class='c lvl'>{}</td>".format(
+                        f"{val:g}" if (idx == j and val is not None) else ""))
             rec = e.get(f"C{i}_REC") or ""
             if lic:
                 rec = estado_txt or "LICENCIA"
@@ -500,12 +495,30 @@ def _acta_calificacion_pdf_bytes(sec, subsanacion=False):
                 rec = estado_txt
             celdas.append(f"<td class='rec'>{_esc(rec)}</td>")
 
+        # Escala y promedio: primero lo GUARDADO (fuente de la consolidada y
+        # el kárdex); si falta, se calcula con las funciones oficiales.
+        registradas = [v for v in valores if v is not None]
         escala = prom = cuali = ""
-        if all(s is not None for s in scores):
-            esc_v = round(sum(scores) / 3, 1)
-            escala = esc_v
-            prom = _a3_vigesimal(esc_v)
-            cuali = _a3_cualitativa(esc_v)
+        if registradas:
+            try:
+                esc_v = float(e.get("ESCALA_0_5"))
+            except (TypeError, ValueError):
+                esc_v = _calc_escala_0_5(*registradas)
+            prom_v = None
+            for k in ("PROMEDIO_FINAL", "final_grade", "FINAL"):
+                try:
+                    f_v = float(e.get(k))
+                except (TypeError, ValueError):
+                    continue
+                if 0 <= f_v <= 20:
+                    prom_v = int(round(f_v))
+                    break
+            if prom_v is None and esc_v is not None:
+                prom_v = _calc_promedio_final_0_20(esc_v)
+            escala = f"{esc_v:g}" if esc_v is not None else ""
+            prom = prom_v if prom_v is not None else ""
+            cuali = ((e.get("ESTADO") or "").strip()
+                     or (_calif_curso(esc_v) if esc_v is not None else ""))
         finales.append(prom if prom != "" else None)
         if lic:
             n_lic += 1
@@ -513,8 +526,9 @@ def _acta_calificacion_pdf_bytes(sec, subsanacion=False):
             f"<tr><td class='c'>{n}</td><td class='c'>{_esc(st['dni'])}</td>"
             f"<td class='nom'>{_esc(st['nombre'])}</td>"
             + "".join(celdas)
-            + "".join(f"<td class='c'>{s if s is not None else ''}</td>"
-                      for s in scores)
+            + "".join("<td class='c'>{}</td>".format(
+                          f"{v:g}" if v is not None else "")
+                      for v in valores)
             + f"<td class='c'>{escala}</td><td class='c'><b>{prom}</b></td>"
             f"<td class='c'>{_esc(cuali)}</td></tr>")
 
@@ -578,8 +592,9 @@ def _acta_calificacion_pdf_bytes(sec, subsanacion=False):
 </table>
 <p style="font-size:7px; margin:3px 0 0">
   Niveles: PI = Previo al Inicio · I = Inicio · P = En proceso · L = Logrado ·
-  D = Destacado. (*) La recomendación o comentario es obligatoria cuando el
-  nivel es PI o I.
+  D = Destacado. El casillero del nivel muestra la puntuación registrada por
+  el docente (1.0–5.0). (*) La recomendación o comentario es obligatoria
+  cuando el nivel es PI o I.
 </p>
 <table style="width:40%">
   <tr><th colspan="2">Resumen</th></tr>
