@@ -107,6 +107,10 @@ const VACIO = {
     duracion: "", fecha_inicio: "", fecha_fin: "",
 };
 
+/* Rótulo de cada subsección (la tabla ordena por tipo, no por fecha de
+   registro: sin esta columna un ítem nuevo "desaparece" a media tabla) */
+const SUB_LABELS = Object.fromEntries(SECCIONES.flatMap((s) => s.subsecciones));
+
 const fmtFecha = (iso) => {
     if (!iso) return "";
     const [y, m, d] = String(iso).split("-");
@@ -402,6 +406,9 @@ export default function TeacherHojaVida() {
                                             <thead>
                                                 <tr className="text-slate-500 bg-slate-50 text-[10px] uppercase tracking-wide">
                                                     <th className="px-3 py-2">N°</th>
+                                                    {def.subsecciones.length > 0 && (
+                                                        <th className="px-3 py-2 text-left">Tipo</th>
+                                                    )}
                                                     {def.campos.map(([k, lbl]) => (
                                                         <th key={k} className="px-3 py-2 text-left">{lbl}</th>
                                                     ))}
@@ -413,6 +420,11 @@ export default function TeacherHojaVida() {
                                                 {filas.map((it, i) => (
                                                     <tr key={it.id} className="hover:bg-slate-50/60">
                                                         <td className="px-3 py-2 text-center text-slate-400">{i + 1}</td>
+                                                        {def.subsecciones.length > 0 && (
+                                                            <td className="px-3 py-2 text-slate-500 whitespace-nowrap">
+                                                                {SUB_LABELS[it.subseccion] || it.subseccion || "—"}
+                                                            </td>
+                                                        )}
                                                         {def.campos.map(([k]) => (
                                                             <td key={k} className="px-3 py-2 text-slate-700">
                                                                 {(k === "subseccion"
