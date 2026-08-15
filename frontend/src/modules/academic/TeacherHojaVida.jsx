@@ -4,6 +4,11 @@
 // acredita cada ítem, y emisión del CV completo (descriptivo + documentado)
 // en PDF. Cada docente solo ve y edita SU hoja de vida (el backend la
 // resuelve por el usuario autenticado).
+//
+// Diseño "expediente": numerales romanos en serif (Fraunces), navy
+// institucional (#1F4E79, el mismo de las actas en PDF), tablas agrupadas
+// por tipo con filas ligeras, resumen de avance documentado e índice de
+// secciones para saltar directo.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -21,6 +26,8 @@ import {
 } from "../../components/ui/select";
 import { api } from "../../lib/api";
 
+const NAVY = "#1F4E79";
+
 /* ── I. Datos personales: campos del perfil que se muestran y editan ── */
 const SEXOS = { M: "Masculino", F: "Femenino" };
 const DATOS_VACIO = {
@@ -33,7 +40,8 @@ const DATOS_VACIO = {
 /* Definición de secciones: columnas visibles y mapeo a los campos genéricos */
 const SECCIONES = [
     {
-        key: "FORMACION", icon: GraduationCap, titulo: "II. Formación profesional",
+        key: "FORMACION", icon: GraduationCap, num: "II",
+        nombre: "Formación profesional", titulo: "II. Formación profesional",
         subsecciones: [["PREGRADO", "Estudios de pregrado"], ["POSTGRADO", "Estudios de postgrado"]],
         campos: [
             ["titulo", "Nivel académico"], ["institucion", "Centro de estudios"],
@@ -42,7 +50,9 @@ const SECCIONES = [
         ],
     },
     {
-        key: "ESPECIALIZACION", icon: Award, titulo: "III. Especialización y actualización",
+        key: "ESPECIALIZACION", icon: Award, num: "III",
+        nombre: "Especialización y actualización",
+        titulo: "III. Especialización y actualización",
         subsecciones: [
             ["SEGUNDA_ESP", "Especialización / 2da especialización"],
             ["DIPLOMADO", "Diplomado"], ["ACTIVIDAD", "Actividad formativa"],
@@ -56,7 +66,8 @@ const SECCIONES = [
         ],
     },
     {
-        key: "EXPERIENCIA", icon: Briefcase, titulo: "IV. Experiencia laboral",
+        key: "EXPERIENCIA", icon: Briefcase, num: "IV",
+        nombre: "Experiencia laboral", titulo: "IV. Experiencia laboral",
         subsecciones: [
             ["EXP_SUPERIOR", "Docente en educación superior"],
             ["EXP_BASICA", "Docente en educación básica / ETP"],
@@ -69,7 +80,9 @@ const SECCIONES = [
         ],
     },
     {
-        key: "EVENTO", icon: Mic, titulo: "V. Participación en eventos académicos",
+        key: "EVENTO", icon: Mic, num: "V.a",
+        nombre: "Participación en eventos académicos",
+        titulo: "V.a Participación en eventos académicos",
         subsecciones: [],
         campos: [
             ["institucion", "Institución"], ["detalle", "Descripción"],
@@ -77,7 +90,8 @@ const SECCIONES = [
         ],
     },
     {
-        key: "PUBLICACION", icon: Newspaper, titulo: "Publicaciones",
+        key: "PUBLICACION", icon: Newspaper, num: "V.b",
+        nombre: "Publicaciones", titulo: "V.b Publicaciones",
         subsecciones: [],
         campos: [
             ["institucion", "Lugar y medio de publicación"], ["titulo", "Título"],
@@ -85,7 +99,8 @@ const SECCIONES = [
         ],
     },
     {
-        key: "MERITO", icon: Award, titulo: "VI. Méritos",
+        key: "MERITO", icon: Award, num: "VI",
+        nombre: "Méritos", titulo: "VI. Méritos",
         subsecciones: [],
         campos: [
             ["institucion", "Institución / Empresa / Entidad"],
@@ -93,7 +108,8 @@ const SECCIONES = [
         ],
     },
     {
-        key: "INVESTIGACION", icon: FlaskConical, titulo: "VII. Investigación",
+        key: "INVESTIGACION", icon: FlaskConical, num: "VII",
+        nombre: "Investigación", titulo: "VII. Investigación",
         subsecciones: [],
         campos: [
             ["institucion", "Lugar"], ["titulo", "Tema"],
@@ -107,8 +123,8 @@ const VACIO = {
     duracion: "", fecha_inicio: "", fecha_fin: "",
 };
 
-/* Rótulo de cada subsección (la tabla ordena por tipo, no por fecha de
-   registro: sin esta columna un ítem nuevo "desaparece" a media tabla) */
+/* Rótulo de cada subsección (la tabla agrupa por tipo, no por fecha de
+   registro: sin el rótulo un ítem nuevo "desaparecía" a media tabla) */
 const SUB_LABELS = Object.fromEntries(SECCIONES.flatMap((s) => s.subsecciones));
 
 const fmtFecha = (iso) => {
@@ -117,13 +133,53 @@ const fmtFecha = (iso) => {
     return y && m && d ? `${d}/${m}/${y}` : iso;
 };
 
+/* ── Estilos propios: serif editorial + entrada escalonada ── */
+function InjectHVStyles() {
+    useEffect(() => {
+        const id = "hv-styles";
+        if (document.getElementById(id)) return;
+        const l = document.createElement("link");
+        l.id = id + "-font";
+        l.rel = "stylesheet";
+        l.href = "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap";
+        document.head.appendChild(l);
+        const s = document.createElement("style");
+        s.id = id;
+        s.textContent = `
+          .hv-serif { font-family: 'Fraunces', Georgia, 'Times New Roman', serif; }
+          @keyframes hvRise { from { opacity: 0; transform: translateY(12px); }
+                              to   { opacity: 1; transform: none; } }
+          .hv-card { animation: hvRise .5s cubic-bezier(.22,1,.36,1) both; }
+          .hv-clamp { display: -webkit-box; -webkit-line-clamp: 2;
+                      -webkit-box-orient: vertical; overflow: hidden; }
+          .hv-row td { transition: background .15s ease; }
+        `;
+        document.head.appendChild(s);
+    }, []);
+    return null;
+}
+
+/* Numeral romano de sección — la firma visual del expediente */
+function Numeral({ n, size = "md" }) {
+    const cls = size === "lg"
+        ? "h-10 min-w-[2.5rem] px-2 text-[15px]"
+        : "h-8 min-w-[2rem] px-1.5 text-[13px]";
+    return (
+        <span className={`hv-serif ${cls} rounded-lg grid place-items-center
+                          font-semibold text-white shadow-sm shrink-0`}
+            style={{ background: NAVY }}>
+            {n}
+        </span>
+    );
+}
+
 function Dato({ label, value }) {
     return (
         <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-slate-400">
                 {label}
             </p>
-            <p className="text-[13px] text-slate-700 truncate" title={value || ""}>
+            <p className="text-[13px] text-slate-800 truncate mt-0.5" title={value || ""}>
                 {value || <span className="text-slate-300">—</span>}
             </p>
         </div>
@@ -172,6 +228,12 @@ export default function TeacherHojaVida() {
         const m = {};
         for (const it of items) (m[it.seccion] = m[it.seccion] || []).push(it);
         return m;
+    }, [items]);
+
+    const stats = useMemo(() => {
+        const total = items.length;
+        const conDoc = items.filter((i) => i.archivo_url).length;
+        return { total, conDoc, pct: total ? Math.round((100 * conDoc) / total) : 0 };
     }, [items]);
 
     /* ── I. Datos personales ── */
@@ -275,186 +337,281 @@ export default function TeacherHojaVida() {
         } finally { setEmit(false); }
     };
 
-    const SUBS = seccion ? Object.fromEntries(seccion.subsecciones) : {};
-    const total = items.length;
+    const irA = (key) => {
+        document.getElementById(`hv-${key}`)?.scrollIntoView({
+            behavior: "smooth", block: "start",
+        });
+    };
+
+    const nombreDocente = perfil
+        ? [perfil.nombres, perfil.apellido_paterno, perfil.apellido_materno]
+            .filter(Boolean).join(" ") || perfil.full_name
+        : "";
+    const iniciales = (perfil?.full_name || "D")
+        .split(" ").filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
 
     return (
-        <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
-            {/* ── Encabezado ── */}
-            <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-r from-blue-50 via-white to-white shadow-sm px-5 py-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                        <div className="h-11 w-11 rounded-xl bg-blue-600 shadow-sm grid place-items-center">
-                            <FileText size={19} className="text-white" />
-                        </div>
-                        <div>
-                            <h1 className="text-lg font-extrabold text-slate-800 leading-tight">
-                                Mi Hoja de Vida
-                            </h1>
-                            <p className="text-xs text-slate-500">
-                                Registra cada ítem con su documento que lo acredita. El CV se
-                                emite primero descriptivo y a continuación documentado.
-                            </p>
-                        </div>
+        <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
+            <InjectHVStyles />
+
+            {/* ── Portada del expediente ── */}
+            <div className="hv-card rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70 overflow-hidden">
+                <div className="h-1" style={{ background: NAVY }} />
+                <div className="px-6 pt-5 pb-4 flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <p className="text-[9.5px] font-bold uppercase tracking-[0.22em] text-slate-400">
+                            Currículum Vitae · Modelo institucional
+                        </p>
+                        <h1 className="hv-serif text-[26px] leading-tight font-semibold mt-1"
+                            style={{ color: NAVY }}>
+                            Mi Hoja de Vida
+                        </h1>
+                        <p className="text-xs text-slate-500 mt-1 max-w-md">
+                            Registra cada ítem con el documento que lo acredita. El CV se
+                            emite primero descriptivo y a continuación documentado.
+                        </p>
                     </div>
-                    <div className="flex flex-col items-end gap-1.5">
-                        <label className="flex items-center gap-2 text-[11px] text-slate-600 cursor-pointer select-none">
-                            <input type="checkbox" checked={confirmo}
-                                onChange={(e) => setConfirmo(e.target.checked)} />
-                            Confirmo que la información registrada está completa y correcta
-                        </label>
+                    <div className="flex flex-col items-end gap-2">
                         <Button onClick={emitir} disabled={emit}
-                            className="gap-1.5 bg-blue-600 hover:bg-blue-700">
+                            className="gap-1.5 text-white shadow-sm"
+                            style={{ background: NAVY }}>
                             {emit ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
                             Emitir CV completo (PDF)
                         </Button>
+                        <label className="flex items-center gap-2 text-[11px] text-slate-500 cursor-pointer select-none">
+                            <input type="checkbox" checked={confirmo}
+                                onChange={(e) => setConfirmo(e.target.checked)} />
+                            Confirmo que la información está completa y correcta
+                        </label>
                     </div>
                 </div>
+
                 {!loading && (
-                    <p className="mt-2 text-[11px] text-slate-400">
-                        {total} ítem{total === 1 ? "" : "s"} registrados en las secciones II–VII.
-                    </p>
+                    <div className="px-6 pb-4">
+                        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-slate-100 pt-3">
+                            <p className="text-[11px] text-slate-500">
+                                <b className="text-slate-700 text-sm">{stats.total}</b> ítems registrados
+                            </p>
+                            <p className="text-[11px] text-slate-500">
+                                <b className="text-emerald-600 text-sm">{stats.conDoc}</b> con documento
+                            </p>
+                            <div className="flex items-center gap-2 min-w-[160px] flex-1 max-w-[260px]">
+                                <div className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden">
+                                    <div className="h-full rounded-full bg-emerald-500 transition-all"
+                                        style={{ width: `${stats.pct}%` }} />
+                                </div>
+                                <span className="text-[11px] font-bold text-slate-600">{stats.pct}%</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 ml-auto">
+                                {SECCIONES.map((def) => {
+                                    const n = (porSeccion[def.key] || []).length;
+                                    return (
+                                        <button key={def.key} onClick={() => irA(def.key)}
+                                            title={def.nombre}
+                                            className={"hv-serif text-[11px] px-2 py-1 rounded-md border transition-colors " +
+                                                (n ? "border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                                                    : "border-slate-100 text-slate-300 hover:text-slate-400")}>
+                                            {def.num}
+                                            <span className="ml-1 font-sans text-[10px] text-slate-400">{n}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
                 )}
             </div>
 
             {loading ? (
-                <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
+                <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-400">
                     <Loader2 className="h-5 w-5 animate-spin" /> Cargando hoja de vida…
                 </div>
             ) : (
                 <>
                     {/* ── I. Datos personales ── */}
-                    <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
-                        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50/60">
-                            <div className="flex items-center gap-2.5">
-                                <span className="h-7 w-7 rounded-lg bg-blue-50 border border-blue-100 grid place-items-center">
-                                    <UserRound size={14} className="text-blue-600" />
-                                </span>
-                                <h3 className="font-bold text-slate-700 text-sm">
-                                    I. Datos personales
-                                </h3>
+                    <div className="hv-card rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70 overflow-hidden"
+                        style={{ animationDelay: "60ms" }}>
+                        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+                            <div className="flex items-center gap-3">
+                                <Numeral n="I" />
+                                <div>
+                                    <h3 className="font-bold text-slate-800 text-sm leading-tight">
+                                        Datos personales
+                                    </h3>
+                                    <p className="text-[10.5px] text-slate-400">
+                                        Se imprimen como sección I del CV
+                                    </p>
+                                </div>
                             </div>
-                            <Button size="sm" variant="outline" className="gap-1 h-8"
+                            <Button size="sm" variant="outline" className="gap-1 h-8 text-slate-600"
                                 onClick={abrirDatos} disabled={!perfil}>
                                 <Pencil size={13} /> Editar
                             </Button>
                         </div>
                         <div className="px-5 py-4">
                             {(!perfil?.nombres && !perfil?.apellido_paterno) && (
-                                <p className="mb-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-700">
-                                    Completa tus datos personales: aparecen como sección I
-                                    de tu CV en PDF.
+                                <p className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-700">
+                                    Completa tus datos personales: aparecen como sección I de tu CV en PDF.
                                 </p>
                             )}
-                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
-                                <Dato label="Nombres" value={perfil?.nombres} />
-                                <Dato label="Apellido paterno" value={perfil?.apellido_paterno} />
-                                <Dato label="Apellido materno" value={perfil?.apellido_materno} />
-                                <Dato label="N° DNI" value={perfil?.document} />
-                                <Dato label="Fecha de nacimiento" value={fmtFecha(perfil?.fecha_nac)} />
-                                <Dato label="Sexo" value={SEXOS[perfil?.sexo] || ""} />
-                                <Dato label="Teléfono fijo" value={perfil?.telefono_fijo} />
-                                <Dato label="Teléfono celular" value={perfil?.celular} />
-                                <Dato label="Correo electrónico" value={perfil?.email_institucional} />
-                                <Dato label="Dirección" value={perfil?.direccion} />
-                                <Dato label="Región" value={perfil?.region} />
-                                <Dato label="Provincia" value={perfil?.provincia} />
-                                <Dato label="Distrito" value={perfil?.distrito} />
-                                <Dato label="Grado académico" value={perfil?.grado_academico_label} />
-                                <Dato label="Condición laboral" value={perfil?.condicion_laboral_label} />
-                                <Dato label="R.D. Nombramiento / Contrato" value={perfil?.rd_nombramiento} />
+                            <div className="flex flex-col sm:flex-row gap-5">
+                                <div className="shrink-0 flex sm:flex-col items-center gap-3">
+                                    <div className="h-24 w-24 rounded-2xl overflow-hidden ring-1 ring-slate-200 bg-slate-50 grid place-items-center">
+                                        {perfil?.photo_url ? (
+                                            <img src={perfil.photo_url} alt="Foto de perfil"
+                                                className="h-full w-full object-cover" />
+                                        ) : (
+                                            <span className="hv-serif text-xl text-slate-300">{iniciales}</span>
+                                        )}
+                                    </div>
+                                    <div className="sm:text-center">
+                                        <p className="text-[12.5px] font-bold text-slate-700 leading-tight">
+                                            {nombreDocente || "—"}
+                                        </p>
+                                        <p className="text-[10.5px] text-slate-400">DNI {perfil?.document || "—"}</p>
+                                    </div>
+                                </div>
+                                <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-3.5">
+                                    <Dato label="Fecha de nacimiento" value={fmtFecha(perfil?.fecha_nac)} />
+                                    <Dato label="Sexo" value={SEXOS[perfil?.sexo] || ""} />
+                                    <Dato label="Grado académico" value={perfil?.grado_academico_label} />
+                                    <Dato label="Condición laboral" value={perfil?.condicion_laboral_label} />
+                                    <Dato label="Teléfono fijo" value={perfil?.telefono_fijo} />
+                                    <Dato label="Teléfono celular" value={perfil?.celular} />
+                                    <Dato label="Correo electrónico" value={perfil?.email_institucional} />
+                                    <Dato label="R.D. Nombramiento / Contrato" value={perfil?.rd_nombramiento} />
+                                    <Dato label="Dirección" value={perfil?.direccion} />
+                                    <Dato label="Región" value={perfil?.region} />
+                                    <Dato label="Provincia" value={perfil?.provincia} />
+                                    <Dato label="Distrito" value={perfil?.distrito} />
+                                </div>
                             </div>
-                            <p className="mt-3 text-[10px] text-slate-400">
-                                El grado académico, la condición laboral y la R.D. se
-                                actualizan desde <b>Mi Perfil</b>; el resto puedes editarlo aquí.
+                            <p className="mt-4 text-[10px] text-slate-400 border-t border-slate-100 pt-2.5">
+                                El grado académico, la condición laboral y la R.D. se actualizan
+                                desde <b>Mi Perfil</b>; el resto puedes editarlo aquí.
                             </p>
                         </div>
                     </div>
 
                     {/* ── Secciones II–VII ── */}
-                    {SECCIONES.map((def) => {
+                    {SECCIONES.map((def, si) => {
                         const filas = porSeccion[def.key] || [];
                         const Icon = def.icon;
+                        const conSub = def.subsecciones.length > 0;
+                        let subAnterior = null;
                         return (
-                            <div key={def.key} className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
-                                <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50/60">
-                                    <div className="flex items-center gap-2.5">
-                                        <span className="h-7 w-7 rounded-lg bg-blue-50 border border-blue-100 grid place-items-center">
-                                            <Icon size={14} className="text-blue-600" />
-                                        </span>
-                                        <h3 className="font-bold text-slate-700 text-sm">{def.titulo}</h3>
-                                        <span className={"text-[10px] px-1.5 py-0.5 rounded-full border " +
-                                            (filas.length
-                                                ? "bg-blue-50 border-blue-100 text-blue-600"
-                                                : "bg-slate-50 border-slate-200 text-slate-400")}>
-                                            {filas.length}
-                                        </span>
+                            <div key={def.key} id={`hv-${def.key}`}
+                                className="hv-card rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70 overflow-hidden"
+                                style={{ animationDelay: `${120 + si * 50}ms`, scrollMarginTop: 90 }}>
+                                <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <Numeral n={def.num} />
+                                        <div className="min-w-0">
+                                            <h3 className="font-bold text-slate-800 text-sm leading-tight truncate">
+                                                {def.nombre}
+                                            </h3>
+                                            <p className="text-[10.5px] text-slate-400 flex items-center gap-1">
+                                                <Icon size={11} className="shrink-0" />
+                                                {filas.length === 0 ? "Sin registros"
+                                                    : `${filas.length} ítem${filas.length === 1 ? "" : "s"} · ${filas.filter((f) => f.archivo_url).length} con documento`}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <Button size="sm" variant="outline" className="gap-1 h-8"
+                                    <Button size="sm" variant="outline" className="gap-1 h-8 text-slate-600 shrink-0"
                                         onClick={() => abrir(def)}>
                                         <Plus size={13} /> Agregar
                                     </Button>
                                 </div>
+
                                 {filas.length === 0 ? (
-                                    <p className="px-5 py-4 text-xs text-slate-400">
-                                        Sin registros. Usa «Agregar» para incluir un ítem con su
-                                        documento que lo acredita.
-                                    </p>
+                                    <div className="px-5 py-5">
+                                        <button onClick={() => abrir(def)}
+                                            className="w-full rounded-xl border border-dashed border-slate-200 py-5
+                                                       text-xs text-slate-400 hover:border-slate-300 hover:text-slate-500
+                                                       hover:bg-slate-50/50 transition-colors">
+                                            <Plus size={14} className="inline -mt-0.5 mr-1" />
+                                            Agregar el primer ítem con su documento que lo acredita
+                                        </button>
+                                    </div>
                                 ) : (
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-xs">
                                             <thead>
-                                                <tr className="text-slate-500 bg-slate-50 text-[10px] uppercase tracking-wide">
-                                                    <th className="px-3 py-2">N°</th>
-                                                    {def.subsecciones.length > 0 && (
-                                                        <th className="px-3 py-2 text-left">Tipo</th>
-                                                    )}
+                                                <tr className="text-[9.5px] uppercase tracking-[0.12em] text-slate-400 border-b border-slate-200">
+                                                    <th className="px-3 py-2.5 font-bold">N°</th>
                                                     {def.campos.map(([k, lbl]) => (
-                                                        <th key={k} className="px-3 py-2 text-left">{lbl}</th>
+                                                        <th key={k} className="px-3 py-2.5 text-left font-bold">{lbl}</th>
                                                     ))}
-                                                    <th className="px-3 py-2">Archivo</th>
-                                                    <th className="px-3 py-2"></th>
+                                                    <th className="px-3 py-2.5 font-bold">Documento</th>
+                                                    <th className="px-3 py-2.5"></th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {filas.map((it, i) => (
-                                                    <tr key={it.id} className="hover:bg-slate-50/60">
-                                                        <td className="px-3 py-2 text-center text-slate-400">{i + 1}</td>
-                                                        {def.subsecciones.length > 0 && (
-                                                            <td className="px-3 py-2 text-slate-500 whitespace-nowrap">
-                                                                {SUB_LABELS[it.subseccion] || it.subseccion || "—"}
-                                                            </td>
-                                                        )}
-                                                        {def.campos.map(([k]) => (
-                                                            <td key={k} className="px-3 py-2 text-slate-700">
-                                                                {(k === "subseccion"
-                                                                    ? it.subseccion
-                                                                    : it[k]) || "—"}
-                                                            </td>
-                                                        ))}
-                                                        <td className="px-3 py-2 text-center">
-                                                            {it.archivo_url ? (
-                                                                <a href={it.archivo_url} target="_blank" rel="noreferrer"
-                                                                    title={it.archivo_nombre}
-                                                                    className="inline-flex text-blue-600 hover:text-blue-800">
-                                                                    <Paperclip size={14} />
-                                                                </a>
-                                                            ) : <span className="text-slate-300">—</span>}
-                                                        </td>
-                                                        <td className="px-3 py-2">
-                                                            <div className="flex items-center gap-1 justify-end">
-                                                                <button onClick={() => abrir(def, it)}
-                                                                    className="p-1 text-emerald-600 hover:bg-emerald-50 rounded">
-                                                                    <Pencil size={13} />
-                                                                </button>
-                                                                <button onClick={() => borrar(it)}
-                                                                    className="p-1 text-rose-500 hover:bg-rose-50 rounded">
-                                                                    <Trash2 size={13} />
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                ))}
+                                            <tbody>
+                                                {filas.map((it, i) => {
+                                                    const grupoNuevo = conSub && it.subseccion !== subAnterior;
+                                                    subAnterior = it.subseccion;
+                                                    return (
+                                                        <React.Fragment key={it.id}>
+                                                            {grupoNuevo && (
+                                                                <tr>
+                                                                    <td colSpan={def.campos.length + 3}
+                                                                        className="px-4 py-1.5 text-[9.5px] font-bold uppercase tracking-[0.14em] bg-slate-50/80 border-b border-slate-100"
+                                                                        style={{ color: NAVY }}>
+                                                                        {SUB_LABELS[it.subseccion] || it.subseccion || "Otros"}
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                            <tr className="hv-row group border-b border-slate-100 last:border-0 hover:bg-blue-50/40">
+                                                                <td className="px-3 py-2.5 text-center text-slate-300 tabular-nums">{i + 1}</td>
+                                                                {def.campos.map(([k]) => {
+                                                                    const v = it[k] || "";
+                                                                    const esFecha = k.startsWith("fecha");
+                                                                    return (
+                                                                        <td key={k} title={v}
+                                                                            className={"px-3 py-2.5 align-top " +
+                                                                                (esFecha
+                                                                                    ? "whitespace-nowrap tabular-nums text-slate-500"
+                                                                                    : "text-slate-700")}>
+                                                                            {v
+                                                                                ? (esFecha
+                                                                                    ? fmtFecha(v)
+                                                                                    : <span className="hv-clamp max-w-[280px]">{v}</span>)
+                                                                                : <span className="text-slate-200">—</span>}
+                                                                        </td>
+                                                                    );
+                                                                })}
+                                                                <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                                                                    {it.archivo_url ? (
+                                                                        <a href={it.archivo_url} target="_blank" rel="noreferrer"
+                                                                            title={it.archivo_nombre}
+                                                                            className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50/70 px-2 py-0.5 text-[10.5px] font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
+                                                                            <Paperclip size={10} /> Ver
+                                                                        </a>
+                                                                    ) : (
+                                                                        <span className="inline-flex items-center rounded-full border border-amber-100 bg-amber-50/70 px-2 py-0.5 text-[10.5px] font-semibold text-amber-600"
+                                                                            title="Falta el documento que acredita este ítem">
+                                                                            Falta
+                                                                        </span>
+                                                                    )}
+                                                                </td>
+                                                                <td className="px-3 py-2.5">
+                                                                    <div className="flex items-center gap-0.5 justify-end opacity-30 group-hover:opacity-100 transition-opacity">
+                                                                        <button onClick={() => abrir(def, it)}
+                                                                            title="Editar"
+                                                                            className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-md">
+                                                                            <Pencil size={13} />
+                                                                        </button>
+                                                                        <button onClick={() => borrar(it)}
+                                                                            title="Eliminar"
+                                                                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md">
+                                                                            <Trash2 size={13} />
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        </React.Fragment>
+                                                    );
+                                                })}
                                             </tbody>
                                         </table>
                                     </div>
@@ -469,8 +626,8 @@ export default function TeacherHojaVida() {
             <Dialog open={openDatos} onOpenChange={(v) => { if (!v) setOpenDatos(false); }}>
                 <DialogContent className="max-w-xl">
                     <DialogHeader>
-                        <DialogTitle className="text-base font-extrabold">
-                            Editar — I. Datos personales
+                        <DialogTitle className="text-base font-extrabold flex items-center gap-2.5">
+                            <Numeral n="I" /> Editar datos personales
                         </DialogTitle>
                     </DialogHeader>
                     <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
@@ -552,7 +709,7 @@ export default function TeacherHojaVida() {
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setOpenDatos(false)}>Cancelar</Button>
                         <Button onClick={guardarDatos} disabled={savingDatos}
-                            className="bg-blue-600 hover:bg-blue-700 gap-1.5">
+                            className="gap-1.5 text-white" style={{ background: NAVY }}>
                             {savingDatos && <Loader2 size={14} className="animate-spin" />}
                             Guardar
                         </Button>
@@ -564,8 +721,9 @@ export default function TeacherHojaVida() {
             <Dialog open={open} onOpenChange={(v) => { if (!v) setOpen(false); }}>
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
-                        <DialogTitle className="text-base font-extrabold">
-                            {editing ? "Editar ítem" : "Agregar ítem"} — {seccion?.titulo}
+                        <DialogTitle className="text-base font-extrabold flex items-center gap-2.5">
+                            {seccion && <Numeral n={seccion.num} />}
+                            {editing ? "Editar ítem" : "Agregar ítem"} — {seccion?.nombre}
                         </DialogTitle>
                     </DialogHeader>
                     <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
@@ -613,7 +771,7 @@ export default function TeacherHojaVida() {
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
                         <Button onClick={guardar} disabled={saving}
-                            className="bg-blue-600 hover:bg-blue-700 gap-1.5">
+                            className="gap-1.5 text-white" style={{ background: NAVY }}>
                             {saving && <Loader2 size={14} className="animate-spin" />}
                             Guardar
                         </Button>
