@@ -55,6 +55,9 @@ export const Teachers = {
     /** Admin: reporte del estado en Excel o PDF (fmt: "xlsx" | "pdf") */
     cvEstadoReporte: (fmt) => api.get("/catalogs/teachers/cv/estado",
         { params: { fmt }, responseType: "blob" }),
+    /** Admin: CV completo (descriptivo + documentado) de un docente en PDF */
+    cvPdf: (teacherId) => api.get(`/catalogs/teachers/${teacherId}/cv/pdf`,
+        { responseType: "blob" }),
 };
 
 // ------------------ Ubigeo ------------------

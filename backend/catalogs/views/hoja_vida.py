@@ -14,6 +14,9 @@ Hoja de Vida del docente (Currículum Vitae, modelo institucional).
 
 Cada docente solo ve y toca SU hoja de vida (se resuelve por request.user).
 """
+import re
+import unicodedata
+
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -33,6 +36,54 @@ SUBSECCIONES_VALIDAS = {c for c, _ in TeacherCVItem.SUBSECCIONES}
 
 def _teacher_de(request):
     return Teacher.ficha_de(request.user)
+
+
+# ── Orden de presentación del CV (pedido de Secretaría) ──
+# Formación: grados de mayor a menor (doctor → maestría → 2da especialidad →
+# licenciado/título → bachiller); y dentro de cada grupo lo MÁS RECIENTE
+# primero. Aplica igual en la página, el PDF y la descarga del admin.
+
+_GRADOS_RANGO = [
+    ("DOCTOR", 0),                       # doctorado / doctor(a)
+    ("MAESTR", 1), ("MAGISTER", 1), ("MAGÍSTER", 1), ("MESTR", 1),
+    ("SEGUNDA ESPECIAL", 2),
+    ("LICENCIA", 3), ("TÍTULO", 3), ("TITULO", 3), ("PROFESOR", 3),
+    ("BACHILLER", 4),
+]
+
+
+def _rango_grado(titulo):
+    t = (titulo or "").upper()
+    for marca, rango in _GRADOS_RANGO:
+        if marca in t:
+            return rango
+    return 5
+
+
+def _items_ordenados(ct):
+    from datetime import date
+    sec_pos = {c: i for i, (c, _) in enumerate(TeacherCVItem.SECCIONES)}
+    sub_pos = {c: i for i, (c, _) in enumerate(TeacherCVItem.SUBSECCIONES)}
+    vieja = date(1900, 1, 1)
+
+    def clave(it):
+        f = it.fecha_inicio or it.fecha_fin or vieja
+        if it.seccion == "FORMACION":
+            # El grado manda (postgrado arriba); la subsección lo acompaña
+            grupo = _rango_grado(it.titulo)
+        else:
+            grupo = sub_pos.get(it.subseccion, 99)
+        return (sec_pos.get(it.seccion, 99), grupo, -f.toordinal(), it.id)
+
+    return sorted(ct.cv_items.all(), key=clave)
+
+
+def _cv_filename(nombre, ct):
+    """HOJA-DE-VIDA-APELLIDOS-NOMBRES.pdf (ASCII, sin espacios)."""
+    base = unicodedata.normalize("NFKD", nombre or "").encode(
+        "ascii", "ignore").decode()
+    base = re.sub(r"[^A-Za-z0-9]+", "-", base).strip("-").upper()
+    return f"HOJA-DE-VIDA-{base or (ct.document or ct.id)}.pdf"
 
 
 def _item_dict(it, request=None):
@@ -100,7 +151,7 @@ class TeacherCVListView(APIView):
 
     def get(self, request):
         ct = _teacher_de(request)
-        items = [_item_dict(i, request) for i in ct.cv_items.all()]
+        items = [_item_dict(i, request) for i in _items_ordenados(ct)]
         return Response({"teacher_id": ct.id, "items": items})
 
     def post(self, request):
@@ -200,14 +251,21 @@ class TeacherCVPdfView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
+    def get(self, request, teacher_id=None):
         from html import escape as esc
         from academic.pdf_render import html_to_pdf_bytes
         from academic.views.acta_excel import _acta_area_inst
         from academic.views.evaluation_pdf import _logo_datauris
 
-        ct = _teacher_de(request)
-        items = list(ct.cv_items.all())
+        if teacher_id:
+            # Descarga del ADMIN (panel Hojas de Vida): mismo PDF, otro docente
+            from academic.views.teachers import _is_grades_admin
+            if not _is_grades_admin(request.user):
+                return Response({"detail": "No autorizado."}, status=403)
+            ct = get_object_or_404(Teacher, id=teacher_id)
+        else:
+            ct = _teacher_de(request)
+        items = _items_ordenados(ct)
         inst = _acta_area_inst()
         logo, logo2 = _logo_datauris()
 
@@ -389,11 +447,10 @@ Tarma, {hoy.strftime('%d/%m/%Y')}</p>
         if documentado and anexos:
             pdf = self._anexar_documentos(pdf, anexos)
 
-        dni = ct.document or ct.id
         return HttpResponse(
             pdf, content_type="application/pdf",
             headers={"Content-Disposition":
-                     f'attachment; filename="hoja-de-vida-{dni}.pdf"'})
+                     f'attachment; filename="{_cv_filename(nombre, ct)}"'})
 
     @staticmethod
     def _anexar_documentos(pdf_base: bytes, anexos):

@@ -27,6 +27,8 @@ urlpatterns = [
     path("teachers/me/cv/<int:item_id>", TeacherCVDetailView.as_view()),
     # Admin: estado de las hojas de vida (JSON / ?fmt=xlsx / ?fmt=pdf)
     path("teachers/cv/estado",           TeacherCVAdminEstadoView.as_view()),
+    # Admin: CV completo en PDF de un docente (misma vista que "me")
+    path("teachers/<int:teacher_id>/cv/pdf", TeacherCVPdfView.as_view()),
 
     # CRUD viewsets
     path("", include(router.urls)),

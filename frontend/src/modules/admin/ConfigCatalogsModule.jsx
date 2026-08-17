@@ -1082,6 +1082,24 @@ export const CVEstadoDialog = () => {
         finally { setBusy(""); }
     };
 
+    // CV completo (PDF) de UN docente, con su nombre en el archivo
+    const descargarCV = async (r) => {
+        setBusy(`cv-${r.teacher_id}`);
+        try {
+            const res = await Teachers.cvPdf(r.teacher_id);
+            const blob = res?.data instanceof Blob ? res.data : new Blob([res.data]);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            const slug = (r.nombre || "docente").normalize("NFD")
+                .replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "").toUpperCase();
+            a.href = url; a.download = `HOJA-DE-VIDA-${slug}.pdf`;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } catch { toast.error(`No se pudo descargar el CV de ${r.nombre}`); }
+        finally { setBusy(""); }
+    };
+
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -1137,6 +1155,7 @@ export const CVEstadoDialog = () => {
                                             <th className="px-2 py-2">Con doc.</th>
                                             <th className="px-2 py-2">Avance</th>
                                             <th className="px-2 py-2">Última act.</th>
+                                            <th className="px-2 py-2">CV</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 bg-white">
@@ -1168,6 +1187,16 @@ export const CVEstadoDialog = () => {
                                                     </span>
                                                 </td>
                                                 <td className="px-2 py-1.5 text-center text-slate-500 whitespace-nowrap">{r.actualizado || "—"}</td>
+                                                <td className="px-2 py-1.5 text-center">
+                                                    <button onClick={() => descargarCV(r)}
+                                                        disabled={!!busy || !r.total}
+                                                        title={r.total ? `Descargar CV de ${r.nombre} (PDF)` : "Sin ítems registrados"}
+                                                        className="inline-flex items-center justify-center h-7 w-7 rounded-lg border border-slate-200 text-slate-500 hover:text-blue-700 hover:border-blue-200 hover:bg-blue-50 disabled:opacity-30 transition-colors">
+                                                        {busy === `cv-${r.teacher_id}`
+                                                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                            : <Download className="w-3.5 h-3.5" />}
+                                                    </button>
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
