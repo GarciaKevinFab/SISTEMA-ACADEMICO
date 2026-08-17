@@ -9,9 +9,11 @@ import {
     BookOpen, GraduationCap, CreditCard, FileText, Calendar,
     Award, Clock, ChevronRight, AlertCircle, Bell,
     CheckCircle, CheckCircle2, XCircle, Download, MapPin, BookMarked,
-    BarChart3, Percent, Timer, ArrowRight, Plus, AlertTriangle,
+    BarChart3, Percent, Timer, ArrowRight, Plus, AlertTriangle, Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 
+import { api } from "../../lib/api";
 import { StudentDashboardSvc as StudentSvc } from "../../services/dashboard.service";
 import { EnrollmentPayment } from "../../services/academic.service";
 import {
@@ -270,6 +272,25 @@ export default function StudentDashboard({ user }) {
 
     /* ── Payment status ── */
     const [enrollmentPaymentInfo, setEnrollmentPaymentInfo] = useState(null);
+
+    // Descarga del horario del alumno en PDF (el backend resuelve su ficha
+    // y el período activo por el usuario autenticado)
+    const [dlHorario, setDlHorario] = useState(false);
+    const descargarHorario = async () => {
+        setDlHorario(true);
+        try {
+            const res = await api.get("/academic/schedules/export/pdf",
+                { responseType: "blob" });
+            const blob = res?.data instanceof Blob ? res.data : new Blob([res.data]);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url; a.download = "mi-horario.pdf";
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+        } catch {
+            toast.error("No se pudo descargar el horario");
+        } finally { setDlHorario(false); }
+    };
     useEffect(() => {
         const now = new Date();
         const period = now.getMonth() < 7 ? `${now.getFullYear()}-I` : `${now.getFullYear()}-II`;
@@ -584,14 +605,22 @@ export default function StudentDashboard({ user }) {
 
             {/* ── Horario semanal ── */}
             <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
-                <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-violet-50/40 to-white">
-                    <div className="h-8 w-8 rounded-lg bg-violet-100 grid place-items-center">
-                        <Calendar size={15} className="text-violet-600" />
+                <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-violet-50/40 to-white">
+                    <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-lg bg-violet-100 grid place-items-center">
+                            <Calendar size={15} className="text-violet-600" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-slate-800 text-sm leading-none">Horario de la Semana</h3>
+                            <p className="text-[11px] text-slate-400 mt-0.5">Ciclo {kpis.currentSemester}</p>
+                        </div>
                     </div>
-                    <div>
-                        <h3 className="font-bold text-slate-800 text-sm leading-none">Horario de la Semana</h3>
-                        <p className="text-[11px] text-slate-400 mt-0.5">Ciclo {kpis.currentSemester}</p>
-                    </div>
+                    <button onClick={descargarHorario} disabled={dlHorario}
+                        title="Descargar mi horario en PDF"
+                        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-violet-200 bg-white text-[11px] font-bold text-violet-700 hover:bg-violet-50 transition-colors disabled:opacity-60 shrink-0">
+                        {dlHorario ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                        Descargar PDF
+                    </button>
                 </div>
                 <div className="p-5">
                     {Object.keys(weeklySchedule).length > 0 ? (
