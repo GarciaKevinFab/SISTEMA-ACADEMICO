@@ -17,6 +17,12 @@ import { Teacher } from "@/services/academic.service";
 const DIAS = ["LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES", "SÁBADO", "DOMINGO"];
 const DIA_INDEX = { Lunes: 0, Martes: 1, Miércoles: 2, Jueves: 3, Viernes: 4, Sábado: 5, Domingo: 6 };
 
+/* 'Desarrollo Personal Ii' → 'Desarrollo Personal II' (los nombres llegan
+   title-case y rompen los numerales romanos) */
+const romanos = (t) =>
+    String(t || "").replace(/\b(i{1,3}|iv|v|vi{1,3}|ix|x|xi{1,3})\b/gi,
+        (m) => m.toUpperCase());
+
 export default function TeacherSchedule() {
     const [periodos, setPeriodos] = useState([]);
     const [period, setPeriod] = useState("");
@@ -155,7 +161,7 @@ export default function TeacherSchedule() {
                         <Loader2 className="h-5 w-5 animate-spin" /> Cargando tu horario…
                     </div>
                 ) : totalClases === 0 ? (
-                    <div className="py-10 text-center">
+                    <div className="py-8 text-center">
                         <div className="h-14 w-14 rounded-2xl bg-slate-100 grid place-items-center mx-auto mb-3">
                             <CalendarDays className="h-6 w-6 text-slate-300" />
                         </div>
@@ -167,6 +173,23 @@ export default function TeacherSchedule() {
                                 ? `Tienes ${cursosPeriodo.length} curso(s) asignado(s), pero aún no se les registró horario.`
                                 : "No tienes cursos asignados en este período."}
                         </p>
+                        {/* El período se ve COMPLETO aunque falte el horario:
+                            se listan igual los cursos asignados */}
+                        {cursosPeriodo.length > 0 && (
+                            <div className="mt-5 max-w-2xl mx-auto text-left">
+                                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 inline-flex items-center gap-1.5">
+                                    <BookOpen className="h-3.5 w-3.5" /> Cursos a cargo en {period} ({cursosPeriodo.length})
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                    {cursosPeriodo.map((s) => (
+                                        <span key={s.id} className="text-[11px] bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+                                            <b>{romanos(s.course_name)}</b>
+                                            <span className="text-slate-400"> · Ciclo {s.semester ?? "?"} · Sec. {s.section_code || s.label || "A"} · sin horario</span>
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <>
@@ -186,7 +209,7 @@ export default function TeacherSchedule() {
                                                     <Clock className="h-3 w-3" /> {c.start} – {c.end}
                                                 </p>
                                                 <p className="text-[11px] font-bold text-slate-700 leading-snug mt-0.5">
-                                                    {c.course}
+                                                    {romanos(c.course)}
                                                 </p>
                                                 <p className="text-[10px] text-slate-400">
                                                     Ciclo {c.semester ?? "?"} · Sec. {c.label}
@@ -207,7 +230,7 @@ export default function TeacherSchedule() {
                             <div className="flex flex-wrap gap-2">
                                 {cursosPeriodo.map((s) => (
                                     <span key={s.id} className="text-[11px] bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
-                                        <b>{s.course_name}</b>
+                                        <b>{romanos(s.course_name)}</b>
                                         <span className="text-slate-400"> · Ciclo {s.semester ?? "?"} · Sec. {s.section_code || s.label || "A"}</span>
                                     </span>
                                 ))}

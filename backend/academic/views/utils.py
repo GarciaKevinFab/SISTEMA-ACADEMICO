@@ -16,6 +16,25 @@ from django.contrib.auth import get_user_model
 
 
 # ══════════════════════════════════════════════════════════════
+#  PRESENTACIÓN
+# ══════════════════════════════════════════════════════════════
+
+_ROMANOS_RE = re.compile(r"\b(i{1,3}|iv|v|vi{1,3}|ix|x|xi{1,3})\b",
+                         re.IGNORECASE)
+
+
+def romanos_mayusculas(texto):
+    """'Desarrollo Personal Ii' → 'Desarrollo Personal II'.
+
+    Los nombres de curso llegan en title-case del importador, lo que rompe
+    los numerales romanos (Ii, Iii). Se corrigen solo palabras que son un
+    numeral romano completo."""
+    if not texto:
+        return texto
+    return _ROMANOS_RE.sub(lambda m: m.group(0).upper(), str(texto))
+
+
+# ══════════════════════════════════════════════════════════════
 #  CONVERSIÓN DE TIPOS
 # ══════════════════════════════════════════════════════════════
 

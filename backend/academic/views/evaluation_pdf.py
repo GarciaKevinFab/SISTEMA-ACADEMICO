@@ -783,6 +783,7 @@ class TeacherSelfSchedulePdfView(APIView):
                                  "section__plan_course__plan__career",
                                  "section__classroom")
                  .order_by("weekday", "start"))
+        from .utils import romanos_mayusculas
         filas = []
         for sl in slots:
             sec = sl.section
@@ -791,7 +792,7 @@ class TeacherSelfSchedulePdfView(APIView):
             filas.append(
                 f"<tr><td class='c'><b>{self.DIAS.get(int(sl.weekday), sl.weekday)}</b></td>"
                 f"<td class='c'>{str(sl.start)[:5]} – {str(sl.end)[:5]}</td>"
-                f"<td>{_esc(pc.effective_name if pc else '')}</td>"
+                f"<td>{_esc(romanos_mayusculas(pc.effective_name if pc else ''))}</td>"
                 f"<td>{_esc(career)}</td>"
                 f"<td class='c'>{pc.semester if pc else ''} - \"{_esc(sec.label or 'A')}\"</td>"
                 f"<td class='c'>{_esc(sec.classroom.code if sec.classroom else '—')}</td></tr>")
@@ -800,7 +801,7 @@ class TeacherSelfSchedulePdfView(APIView):
                      f'object-fit:cover;border:1px solid #999;border-radius:4px">'
                      if foto_uri else "")
         cursos_html = "".join(
-            f"<li>{_esc(s.plan_course.effective_name if s.plan_course else '')} "
+            f"<li>{_esc(romanos_mayusculas(s.plan_course.effective_name if s.plan_course else ''))} "
             f"(Ciclo {s.plan_course.semester if s.plan_course else '?'} · Sec. {_esc(s.label or 'A')})</li>"
             for s in sections)
 

@@ -121,6 +121,12 @@ const GradeRow = ({ course, index }) => {
     );
 };
 
+/* Los nombres de curso llegan title-case y rompen los numerales romanos:
+   'Desarrollo Personal Ii' → 'Desarrollo Personal II' */
+const romanosMayusculas = (t) =>
+    String(t || "").replace(/\b(i{1,3}|iv|v|vi{1,3}|ix|x|xi{1,3})\b/gi,
+        (m) => m.toUpperCase());
+
 /* ─── Schedule Day Column ────────────────────────────────────── */
 const DayColumn = ({ day, classes }) => {
     const colorCls = DAY_COLORS[day] ?? "bg-slate-50 border-slate-200 text-slate-600";
@@ -134,7 +140,7 @@ const DayColumn = ({ day, classes }) => {
                     {classes.map((cls, j) => (
                         <div key={j} className="rounded-xl border border-slate-100 bg-white p-2.5 hover:border-slate-200 hover:shadow-sm transition-all">
                             <p className="text-xs font-bold text-slate-700 truncate leading-tight">
-                                {cls.name ?? cls.course ?? cls.materia ?? "Curso"}
+                                {romanosMayusculas(cls.name ?? cls.course ?? cls.materia ?? "Curso")}
                             </p>
                             <p className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1">
                                 <Clock size={9} className="shrink-0" />

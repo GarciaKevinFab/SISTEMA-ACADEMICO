@@ -1838,8 +1838,10 @@ class EnrollmentFichaPDFView(APIView):
             for it in items:
                 pc = it.plan_course
                 course = pc.course
+                from .utils import romanos_mayusculas
                 courses.append({
-                    "nombre":   pc.display_name or (course.name if course else "—"),
+                    "nombre":   romanos_mayusculas(
+                        pc.display_name or (course.name if course else "—")),
                     "codigo":   pc.display_code or (course.code if course else ""),
                     "horas":    pc.weekly_hours or 0,
                     "creditos": it.credits or pc.credits or (course.credits if course else 0),
@@ -2129,28 +2131,20 @@ class ScheduleExportPDFView(APIView):
 
         story = []
 
-        logo_img = None
-        if logo_url:
-            try:
-                img_data = BytesIO()
-                if logo_url.startswith("http://") or logo_url.startswith("https://"):
-                    with urllib.request.urlopen(logo_url, timeout=5) as resp:
-                        img_data.write(resp.read())
-                else:
-                    media_url = getattr(dj_settings, "MEDIA_URL", "/media/")
-                    rel = logo_url
-                    if rel.startswith(media_url):
-                        rel = rel[len(media_url):]
-                    rel = rel.lstrip("/")
-                    abs_path = os.path.join(dj_settings.MEDIA_ROOT, rel)
-                    if os.path.exists(abs_path):
-                        with open(abs_path, "rb") as f:
-                            img_data.write(f.read())
-                img_data.seek(0)
-                if img_data.getbuffer().nbytes > 200:
-                    logo_img = Image(img_data, width=2.4*cm, height=2.4*cm, kind="proportional")
-            except Exception:
-                logo_img = None
+        # Membrete con AMBOS logos, como las actas: institucional a la
+        # izquierda y el del sistema (Tarma) a la derecha.
+        logo_img = logo2_img = None
+        try:
+            from .acta_excel import _institution_logo_paths
+            p_inst, p_sist = _institution_logo_paths()
+            if p_inst:
+                logo_img = Image(p_inst, width=2.2*cm, height=2.2*cm,
+                                 kind="proportional")
+            if p_sist:
+                logo2_img = Image(p_sist, width=2.2*cm, height=2.2*cm,
+                                  kind="proportional")
+        except Exception:
+            logo_img = logo2_img = None
 
         header_text = [
             Paragraph(inst_name, inst_sty),
@@ -2158,13 +2152,15 @@ class ScheduleExportPDFView(APIView):
             Paragraph(f"Período Académico: {period}", per_sty),
         ]
 
-        if logo_img:
+        if logo_img or logo2_img:
             hdr_tbl = Table(
-                [[logo_img, header_text, ""]],
-                colWidths=[2.7*cm, W - 2.9*cm, 0.2*cm],
+                [[logo_img or "", header_text, logo2_img or ""]],
+                colWidths=[2.6*cm, W - 5.2*cm, 2.6*cm],
             )
             hdr_tbl.setStyle(TableStyle([
                 ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN",        (0, 0), (0, 0),   "LEFT"),
+                ("ALIGN",        (2, 0), (2, 0),   "RIGHT"),
                 ("LEFTPADDING",  (0, 0), (-1, -1), 0),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                 ("TOPPADDING",   (0, 0), (-1, -1), 0),
