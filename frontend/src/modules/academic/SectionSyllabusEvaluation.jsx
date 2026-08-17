@@ -97,20 +97,33 @@ function TeacherSyllabusView() {
         { code: "FINAL", label: "Examen Final", weight: 40 },
     ]);
 
+    // Primero se elige el PERÍODO (por defecto el más reciente) y el combo
+    // de cursos muestra SOLO los de ese período — antes se mezclaban todos.
+    const [periodFilter, setPeriodFilter] = useState("");
+
     useEffect(() => {
         const loader = isTeacher ? Teacher.sectionsMe() : Sections.list({});
         loader.then(d => {
             const arr = Array.isArray(d?.sections) ? d.sections : (Array.isArray(d) ? d : []);
             setSections(arr);
+            const pers = [...new Set(arr.map(s => s.period).filter(Boolean))]
+                .sort((a, b) => String(b).localeCompare(String(a)));
+            setPeriodFilter(p => p || pers[0] || "");
         }).catch(() => setSections([]));
     }, [isTeacher]);
 
-    // Semestres disponibles entre las secciones visibles
-    const semestres = [...new Set(sections.map(s => s.semester).filter(Boolean))]
+    const periodos = [...new Set(sections.map(s => s.period).filter(Boolean))]
+        .sort((a, b) => String(b).localeCompare(String(a)));
+    const delPeriodo = periodFilter
+        ? sections.filter(s => s.period === periodFilter)
+        : sections;
+
+    // Semestres disponibles entre las secciones del período
+    const semestres = [...new Set(delPeriodo.map(s => s.semester).filter(Boolean))]
         .sort((a, b) => a - b);
     const visibles = semFilter
-        ? sections.filter(s => String(s.semester) === String(semFilter))
-        : sections;
+        ? delPeriodo.filter(s => String(s.semester) === String(semFilter))
+        : delPeriodo;
 
     useEffect(() => {
         if (!section?.id) return;
@@ -162,7 +175,20 @@ function TeacherSyllabusView() {
                     <CardDescription>Suba el sílabo y defina las ponderaciones de evaluación</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                        <div>
+                            <Label>Período</Label>
+                            <select
+                                className="border rounded p-2 w-full"
+                                value={periodFilter}
+                                onChange={e => { setPeriodFilter(e.target.value); setSemFilter(""); setSection(null); }}
+                            >
+                                {periodos.length === 0 && <option value="">—</option>}
+                                {periodos.map(p => (
+                                    <option key={p} value={p}>{p}</option>
+                                ))}
+                            </select>
+                        </div>
                         <div>
                             <Label>Semestre (ciclo)</Label>
                             <select
@@ -177,7 +203,7 @@ function TeacherSyllabusView() {
                             </select>
                         </div>
                         <div className="sm:col-span-3">
-                            <Label>Área (curso / módulo)</Label>
+                            <Label>Área (curso / módulo) — {periodFilter || "todos los períodos"}</Label>
                             <select
                                 className="border rounded p-2 w-full"
                                 value={section?.id || ""}
@@ -186,7 +212,7 @@ function TeacherSyllabusView() {
                                 <option value="">Seleccionar</option>
                                 {visibles.map(s => (
                                     <option key={s.id} value={s.id}>
-                                        {`Ciclo ${s.semester ?? "?"} · ${(s.course_name || "").toUpperCase()} — Sec. ${s.section_code || s.label || "A"}${s.period ? ` · ${s.period}` : ""}`}
+                                        {`Ciclo ${s.semester ?? "?"} · ${(s.course_name || "").toUpperCase()} — Sec. ${s.section_code || s.label || "A"}`}
                                     </option>
                                 ))}
                             </select>

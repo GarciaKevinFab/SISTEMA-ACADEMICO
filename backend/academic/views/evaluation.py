@@ -973,6 +973,83 @@ class EvaluationSubsanacionListView(APIView):
         return Response({"period": period, "total": len(out), "students": out})
 
 
+class EvaluationSilabosSesionesView(APIView):
+    """
+    GET /academic/admin/evaluation/silabos-sesiones
+        ?period=2026-II[&career_id][&semester][&anio][&section_id]
+    Monitor admin de lo que suben los docentes: por cada sección del filtro,
+    el sílabo (con enlace) y las sesiones de aprendizaje (fecha, semana,
+    tema y archivo). Mismos filtros que los reportes de evaluación.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if err := _require_grades_admin(request):
+            return err
+        period = (request.query_params.get("period") or "").strip().upper()
+        if not period:
+            return Response({"detail": "period es requerido"}, status=400)
+
+        from .utils import romanos_mayusculas
+        secs = (_sections_for(
+            period, request.query_params.get("career_id"),
+            request.query_params.get("semester"),
+            section_id=request.query_params.get("section_id"),
+            anio=request.query_params.get("anio"))
+            .select_related("syllabus")
+            .prefetch_related("sesiones_aprendizaje"))
+
+        def _url(f):
+            try:
+                return request.build_absolute_uri(f.url) if f else ""
+            except Exception:
+                return ""
+
+        rows, con_silabo, total_sesiones = [], 0, 0
+        for sec in secs:
+            pc = sec.plan_course
+            try:
+                silabo_url = _url(sec.syllabus.file)
+            except Exception:
+                silabo_url = ""
+            sesiones = [{
+                "fecha": str(s.fecha), "semana": s.semana, "tema": s.tema,
+                "archivo_url": _url(s.archivo),
+            } for s in sec.sesiones_aprendizaje.all()]
+            docente = ""
+            if sec.teacher:
+                u = getattr(sec.teacher, "user", None)
+                docente = ((getattr(u, "full_name", "") or "").strip()
+                           or str(sec.teacher))
+            if silabo_url:
+                con_silabo += 1
+            total_sesiones += len(sesiones)
+            rows.append({
+                "section_id": sec.id,
+                "curso": romanos_mayusculas(pc.effective_name if pc else ""),
+                "codigo": (getattr(pc, "display_code", "")
+                           or (pc.course.code if pc and pc.course else "")) if pc else "",
+                "ciclo": pc.semester if pc else None,
+                "carrera": (pc.plan.career.name
+                            if pc and pc.plan and pc.plan.career else ""),
+                "seccion": sec.label or "A",
+                "docente": docente,
+                "silabo_url": silabo_url,
+                "sesiones": sesiones,
+                "n_sesiones": len(sesiones),
+            })
+
+        return Response({
+            "period": period,
+            "total_secciones": len(rows),
+            "con_silabo": con_silabo,
+            "sin_silabo": len(rows) - con_silabo,
+            "total_sesiones": total_sesiones,
+            "rows": rows,
+        })
+
+
 class EvaluationActasCalificacionSubsaZipView(APIView):
     """
     GET /academic/admin/evaluation/actas-calificacion-subsanacion.zip

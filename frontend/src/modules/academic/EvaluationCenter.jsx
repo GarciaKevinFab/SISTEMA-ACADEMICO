@@ -940,6 +940,203 @@ function SubsanacionPanel({ period, careerId, sectionId, run, base, busy }) {
     );
 }
 
+/* ═══════════════ TAB: Sílabos y sesiones (monitor admin) ═══════════════
+   Qué subió cada docente: el sílabo de cada sección y sus sesiones de
+   aprendizaje, filtrable por carrera, ciclo y búsqueda por curso/docente. */
+function SilabosSesionesTab({ period, careers }) {
+    const [rows, setRows] = useState([]);
+    const [resumen, setResumen] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [careerId, setCareerId] = useState("");
+    const [semester, setSemester] = useState("");
+    const [q, setQ] = useState("");
+    const [abierto, setAbierto] = useState(null);   // section_id con sesiones desplegadas
+
+    const load = useCallback(async () => {
+        if (!period) return;
+        setLoading(true);
+        try {
+            const d = await Evaluation.silabosSesiones({
+                period,
+                ...(careerId ? { career_id: careerId } : {}),
+                ...(semester ? { semester } : {}),
+            });
+            setRows(d?.rows || []);
+            setResumen(d);
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || "No se pudo cargar el monitor de sílabos");
+            setRows([]); setResumen(null);
+        } finally { setLoading(false); }
+    }, [period, careerId, semester]);
+    useEffect(() => { load(); }, [load]);
+
+    const visibles = useMemo(() => {
+        const t = q.trim().toLowerCase();
+        if (!t) return rows;
+        return rows.filter((r) =>
+            (r.curso || "").toLowerCase().includes(t)
+            || (r.docente || "").toLowerCase().includes(t)
+            || (r.codigo || "").toLowerCase().includes(t));
+    }, [rows, q]);
+
+    return (
+        <Card className="border shadow-sm rounded-2xl">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-blue-600" /> Sílabos y sesiones de aprendizaje — {period}
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                    Monitorea lo que sube cada docente: el sílabo de su curso y las
+                    sesiones de aprendizaje por fecha de clase.
+                </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {/* ── Resumen ── */}
+                {resumen && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {[
+                            ["Secciones", resumen.total_secciones, "text-slate-700"],
+                            ["Con sílabo", resumen.con_silabo, "text-emerald-600"],
+                            ["Sin sílabo", resumen.sin_silabo,
+                                resumen.sin_silabo ? "text-rose-600" : "text-slate-400"],
+                            ["Sesiones subidas", resumen.total_sesiones, "text-blue-600"],
+                        ].map(([lbl, val, cls]) => (
+                            <div key={lbl} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{lbl}</p>
+                                <p className={`text-lg font-extrabold ${cls}`}>{val}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* ── Filtros ── */}
+                <div className="flex flex-wrap items-end gap-3 p-3 rounded-xl bg-slate-50 border">
+                    <div className="min-w-[200px]">
+                        <Label className="text-[10px] font-bold uppercase">Carrera / Especialidad</Label>
+                        <Select value={careerId || "ALL"} onValueChange={(v) => setCareerId(v === "ALL" ? "" : v)}>
+                            <SelectTrigger className="h-9"><SelectValue placeholder="Todas" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">Todas</SelectItem>
+                                {careers.map((c) => (
+                                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="min-w-[110px]">
+                        <Label className="text-[10px] font-bold uppercase">Ciclo</Label>
+                        <Select value={semester || "ALL"} onValueChange={(v) => setSemester(v === "ALL" ? "" : v)}>
+                            <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">Todos</SelectItem>
+                                {CICLOS.map((c) => (
+                                    <SelectItem key={c} value={String(c)}>Ciclo {c}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="min-w-[220px] flex-1 max-w-sm">
+                        <Label className="text-[10px] font-bold uppercase">Buscar curso o docente</Label>
+                        <Input className="h-9" placeholder="Ej: matemática, GOYAS…"
+                            value={q} onChange={(e) => setQ(e.target.value)} />
+                    </div>
+                    <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={load} disabled={loading}>
+                        {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                        Actualizar
+                    </Button>
+                </div>
+
+                {/* ── Tabla ── */}
+                {loading ? (
+                    <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
+                        <Loader2 className="h-5 w-5 animate-spin" /> Cargando sílabos y sesiones…
+                    </div>
+                ) : visibles.length === 0 ? (
+                    <p className="py-8 text-center text-xs text-slate-400">
+                        Sin secciones para el filtro en {period}.
+                    </p>
+                ) : (
+                    <div className="rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+                                        <th className="px-3 py-2 text-left">Curso / Módulo</th>
+                                        <th className="px-3 py-2 text-left">Carrera</th>
+                                        <th className="px-3 py-2">Ciclo · Sec.</th>
+                                        <th className="px-3 py-2 text-left">Docente</th>
+                                        <th className="px-3 py-2">Sílabo</th>
+                                        <th className="px-3 py-2">Sesiones</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {visibles.map((r) => (
+                                        <React.Fragment key={r.section_id}>
+                                            <tr className="hover:bg-slate-50/60">
+                                                <td className="px-3 py-2">
+                                                    <p className="font-bold text-slate-700">{r.curso}</p>
+                                                    {r.codigo && <p className="text-[10px] text-slate-400">{r.codigo}</p>}
+                                                </td>
+                                                <td className="px-3 py-2 text-slate-500">{r.carrera || "—"}</td>
+                                                <td className="px-3 py-2 text-center whitespace-nowrap text-slate-600">
+                                                    {r.ciclo ?? "?"} · "{r.seccion}"
+                                                </td>
+                                                <td className="px-3 py-2 text-slate-600">{r.docente || "—"}</td>
+                                                <td className="px-3 py-2 text-center">
+                                                    {r.silabo_url ? (
+                                                        <a href={r.silabo_url} target="_blank" rel="noreferrer"
+                                                            className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10.5px] font-semibold text-emerald-700 hover:bg-emerald-100">
+                                                            <FileText className="h-3 w-3" /> Ver
+                                                        </a>
+                                                    ) : (
+                                                        <span className="inline-flex rounded-full border border-rose-100 bg-rose-50 px-2 py-0.5 text-[10.5px] font-semibold text-rose-600">
+                                                            Falta
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-2 text-center">
+                                                    {r.n_sesiones > 0 ? (
+                                                        <button
+                                                            onClick={() => setAbierto(abierto === r.section_id ? null : r.section_id)}
+                                                            className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-[10.5px] font-semibold text-blue-700 hover:bg-blue-100">
+                                                            {r.n_sesiones} {abierto === r.section_id ? "▴" : "▾"}
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-slate-300">0</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                            {abierto === r.section_id && r.sesiones.length > 0 && (
+                                                <tr>
+                                                    <td colSpan={6} className="px-5 py-2.5 bg-blue-50/30">
+                                                        <div className="flex flex-wrap gap-1.5">
+                                                            {r.sesiones.map((s, i) => (
+                                                                <a key={i} href={s.archivo_url || undefined}
+                                                                    target="_blank" rel="noreferrer"
+                                                                    title={s.tema}
+                                                                    className={"text-[10.5px] rounded-lg border px-2 py-1 max-w-[260px] truncate " +
+                                                                        (s.archivo_url
+                                                                            ? "border-blue-100 bg-white text-blue-700 hover:bg-blue-50"
+                                                                            : "border-slate-200 bg-white text-slate-400 pointer-events-none")}>
+                                                                    <b>{s.fecha}</b>{s.semana ? ` · Sem. ${s.semana}` : ""} — {s.tema}
+                                                                </a>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
 /* ═══════════════ COMPONENTE PRINCIPAL ═══════════════ */
 export default function EvaluationCenter() {
     const { period, setPeriod } = useActivePeriod();
@@ -1000,6 +1197,7 @@ export default function EvaluationCenter() {
                     <TabsTrigger value="register" className="text-xs gap-1.5"><ClipboardCheck className="h-3.5 w-3.5" /> Registrar calificaciones</TabsTrigger>
                     <TabsTrigger value="process" className="text-xs gap-1.5"><Cog className="h-3.5 w-3.5" /> Procesar calificaciones</TabsTrigger>
                     <TabsTrigger value="reports" className="text-xs gap-1.5"><Download className="h-3.5 w-3.5" /> Boletas y reportes</TabsTrigger>
+                    <TabsTrigger value="silabos" className="text-xs gap-1.5"><FileText className="h-3.5 w-3.5" /> Sílabos y sesiones</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="open_close">
@@ -1013,6 +1211,9 @@ export default function EvaluationCenter() {
                 </TabsContent>
                 <TabsContent value="reports">
                     <ReportsTab period={period} careers={careers} />
+                </TabsContent>
+                <TabsContent value="silabos">
+                    <SilabosSesionesTab period={period} careers={careers} />
                 </TabsContent>
             </Tabs>
         </div>

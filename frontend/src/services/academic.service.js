@@ -606,6 +606,10 @@ export const EvaluationAdmin = {
     /** Reporte de rendimiento académico (resumen por curso + detalle por alumno) */
     reporteRendimiento: async (params = {}) =>
         api.get("/academic/admin/evaluation/rendimiento.xlsx", { params, responseType: "blob" }),
+    /** Monitor admin: sílabos y sesiones de aprendizaje subidos por sección */
+    silabosSesiones: async (params = {}) =>
+        requestJsonSmart("GET", "/academic/admin/evaluation/silabos-sesiones",
+            null, { params }),
 
     /* ── Versiones PDF ── */
     actaConsolidadaPdf: async (params = {}) =>
