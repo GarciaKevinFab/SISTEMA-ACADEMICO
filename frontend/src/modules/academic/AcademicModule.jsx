@@ -229,7 +229,8 @@ function AcademicQuickActions({ go }) {
         { key: "load", label: "Ventanas Matrícula", Icon: Calendar, color: "#2E7D32", bg: "#F0FDF4" },
         { key: "plans", label: "Mallas/Planes", Icon: BookOpen, color: "#6A1B9A", bg: "#FAF5FF" },
         { key: "grades", label: "Notas/Asistencia", Icon: CheckCircle, color: "#B45309", bg: "#FFFBEB" },
-        { key: "syllabus", label: "Sílabos", Icon: FileText, color: "#0F766E", bg: "#F0FDFA" },
+        // "Sílabos" ya no va aquí para admin: el monitoreo vive en
+        // Evaluación → Sílabos y sesiones
         { key: "kardex", label: "Kárdex", Icon: Users, color: "#9F1239", bg: "#FFF1F2" },
         { key: "reports", label: "Reportes", Icon: BarChart3, color: "#0369A1", bg: "#EFF8FF" },
         { key: "processes", label: "Procesos", Icon: Clock, color: "#7C3AED", bg: "#F5F3FF" },
@@ -1288,7 +1289,10 @@ export default function AcademicModule() {
             { key: "profile", label: "Mi Perfil", need: [], teacherOnly: true, group: "docencia" },
             // ── Estudiante / común ──
             { key: "enroll", label: "Matrícula", need: REQS.enroll, group: "academico" },
-            { key: "syllabus", label: "Sílabos", need: REQS.syllabus, group: "academico" },
+            // Sílabos: el docente sube el suyo y el alumno consulta los de sus
+            // cursos. Para administración estaba duplicado: el monitoreo vive
+            // en Evaluación → "Sílabos y sesiones".
+            { key: "syllabus", label: "Sílabos", need: REQS.syllabus, notStaff: true, group: "academico" },
             // Sesiones de aprendizaje: subida del docente por curso y día de clase
             { key: "sesiones", label: "Sesiones", need: [], teacherOnly: true, group: "academico" },
             // Kárdex: consulta por DNI de cualquier alumno → solo personal
@@ -1312,7 +1316,9 @@ export default function AcademicModule() {
             .filter((t) => !t.studentOnly || isStudent)
             .filter((t) => !t.notStudent || !isStudent)
             // staffOnly: ni docentes ni estudiantes
-            .filter((t) => !t.staffOnly || (!isTeacher && !isStudent)),
+            .filter((t) => !t.staffOnly || (!isTeacher && !isStudent))
+            // notStaff: solo docentes o estudiantes (oculto para administración)
+            .filter((t) => !t.notStaff || isTeacher || isStudent),
         [hasAny, isTeacher, isStudent]
     );
 
