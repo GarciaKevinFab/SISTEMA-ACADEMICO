@@ -994,7 +994,7 @@ export default function MesaControlModule() {
                                 </div>
                             ) : (
                                 <select value={period} onChange={(e) => setPeriod(e.target.value)}
-                                    className="h-10 w-64 px-3 text-sm font-semibold rounded-xl border
+                                    className="h-10 w-full sm:w-64 px-3 text-sm font-semibold rounded-xl border
                                         border-slate-200 bg-white text-slate-700">
                                     {periodos.map((p) => (
                                         <option key={p.code} value={p.code}>

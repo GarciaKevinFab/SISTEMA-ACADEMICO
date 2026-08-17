@@ -403,7 +403,7 @@ const CareersManagement = () => {
                 <p className="text-xs text-slate-400 font-semibold mb-1">Descripción</p>
                 <p className="text-sm text-slate-700">{viewRow.description || "Sin descripción."}</p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FieldDisplay label="Código" value={viewRow.code} mono />
                 <FieldDisplay label="Estado" value={viewRow.is_active ? "Activa" : "Inactiva"} />
                 <FieldDisplay label="Duración" value={`${viewRow.duration_semesters} Semestres`} />
@@ -426,7 +426,7 @@ const CareersManagement = () => {
           </div>
           {editRow && (
             <form onSubmit={submitEdit} className="p-6 space-y-5">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label="Nombre" required>
                   <Input value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })}
                     required className="h-10 rounded-xl" />
@@ -552,7 +552,7 @@ export default function CompleteAdmissionModule() {
               <TabsList className="w-full bg-transparent p-0 flex flex-wrap gap-1.5 h-auto">
                 {TABS.map(item => (
                   <TabsTrigger key={item.val} value={item.val}
-                    className="rounded-lg flex-1 whitespace-nowrap text-center min-w-[90px] text-xs font-semibold transition-all duration-200
+                    className="rounded-lg whitespace-nowrap text-center px-3 text-xs font-semibold transition-all duration-200
                                             text-slate-600 hover:bg-slate-200/60 hover:text-slate-900
                                             data-[state=active]:!bg-slate-800 data-[state=active]:!text-white data-[state=active]:!shadow-md">
                     {item.label}

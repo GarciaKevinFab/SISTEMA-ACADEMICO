@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { GraduatesAdmin, GradoTituloTypes } from "../../services/graduates.service";
 import { Imports } from "../../services/catalogs.service";
+import ModuleShell from "@/components/module/ModuleShell";
+import { TabsContent } from "@/components/ui/tabs";
 
 /* ═══════════════════════════════════════════════════════════════════
    STYLES — inject once
@@ -79,13 +81,7 @@ function InjectStyles() {
 /* ═══════════════════════════════════════════════════════════════════
    CONSTANTS
    ═══════════════════════════════════════════════════════════════════ */
-const TABS = [
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "list", label: "Listado", icon: List },
-    { id: "create", label: "Nuevo Titulado", icon: UserPlus },
-    { id: "grados", label: "Grados y Títulos", icon: GraduationCap },
-    { id: "importar", label: "Importar", icon: FileSpreadsheet },
-];
+const GROUP_LABELS = { inicio: null, registros: "Registros", herramientas: "Herramientas" };
 
 const ESPECIALIDADES = [
     "EDUCACIÓN INICIAL",
@@ -333,6 +329,7 @@ function GradosTitulosTab() {
                 </div>
             ) : (
                 <div style={{ borderRadius: 12, border: "1px solid var(--gm-border)", overflow: "hidden" }}>
+                    <div className="overflow-x-auto">
                     <table className="gm-table" style={{ width: "100%" }}>
                         <thead>
                             <tr style={{ background: "#F8FAFC" }}>
@@ -397,6 +394,7 @@ function GradosTitulosTab() {
                             )}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             )}
 
@@ -422,7 +420,7 @@ function GradosTitulosTab() {
                                 <button onClick={() => { setOpen(false); resetForm(); }}><X size={18} style={{ color: "var(--gm-muted)" }} /></button>
                             </div>
                             <div className="space-y-3">
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div>
                                         <label style={{ fontSize: 12, fontWeight: 700, color: "var(--gm-label)" }}>Código *</label>
                                         <input className="gm-input" style={{ width: "100%", height: 36, borderRadius: 10, border: "1px solid var(--gm-border)", padding: "0 12px", fontSize: 13, fontFamily: "monospace" }}
@@ -614,7 +612,7 @@ function ImportarEgresadosTab() {
                             <span>{Math.round(progress)}%</span>
                         </div>
                         {isDone && (
-                            <div className="grid grid-cols-3 gap-3 mt-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
                                 {[{ l: "Importados", v: status?.imported ?? 0, c: "#D1FAE5" }, { l: "Actualizados", v: status?.updated ?? 0, c: "#DBEAFE" }, { l: "Errores", v: errors.length, c: "#FEE2E2" }].map(({ l, v, c }) => (
                                     <div key={l} style={{ background: c, borderRadius: 12, padding: "12px 14px" }}>
                                         <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", opacity: 0.7 }}>{l}</p>
@@ -630,6 +628,7 @@ function ImportarEgresadosTab() {
                                     Errores ({errors.length})
                                 </p>
                                 <div style={{ maxHeight: 200, overflow: "auto" }}>
+                                    <div className="overflow-x-auto">
                                     <table style={{ width: "100%", fontSize: 11 }}>
                                         <thead><tr style={{ color: "#991B1B" }}>
                                             <th style={{ textAlign: "left", padding: "4px 8px", fontWeight: 700 }}>Fila</th>
@@ -644,6 +643,7 @@ function ImportarEgresadosTab() {
                                             </tr>
                                         ))}</tbody>
                                     </table>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -859,60 +859,20 @@ export default function GraduatesModule() {
     }, [graduates]);
 
     /* ═══════════════════════════════════════════════════════════════
-       RENDER: MODULE HEADER
+       SHELL TABS (ModuleShell)
        ═══════════════════════════════════════════════════════════════ */
-    const renderHeader = () => (
-        <div
-            className="rounded-2xl p-6 mb-6"
-            style={{
-                background: "linear-gradient(135deg, #1E293B 0%, #334155 50%, #1E293B 100%)",
-                boxShadow: "0 4px 24px -4px rgba(30,41,59,.4)",
-            }}
-        >
-            <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
-                    <GraduationCap size={28} className="text-white" />
-                </div>
-                <div>
-                    <h1 style={{ fontSize: 22, fontWeight: 900, color: "#FFFFFF", letterSpacing: "-.02em" }}>
-                        Gestión de Titulados
-                    </h1>
-                    <p style={{ fontSize: 13, color: "#94A3B8", marginTop: 2 }}>
-                        Administración de registros de grados y títulos
-                    </p>
-                </div>
-            </div>
-        </div>
-    );
+    const shellTabs = [
+        { key: "dashboard", label: "Dashboard", Icon: LayoutDashboard, group: "inicio" },
+        { key: "list", label: "Listado", Icon: List, group: "registros" },
+        { key: "create", label: editingId ? "Editar Titulado" : "Nuevo Titulado", Icon: UserPlus, group: "registros" },
+        { key: "grados", label: "Grados y Títulos", Icon: Award, group: "herramientas" },
+        { key: "importar", label: "Importar", Icon: FileSpreadsheet, group: "herramientas" },
+    ];
 
-    /* ═══════════════════════════════════════════════════════════════
-       RENDER: TAB BAR
-       ═══════════════════════════════════════════════════════════════ */
-    const renderTabs = () => (
-        <div className="bg-white rounded-2xl p-2 mb-6 shadow-sm border border-slate-100 flex flex-wrap gap-1">
-            {TABS.map((tab) => {
-                const Icon = tab.icon;
-                const active = activeTab === tab.id || (tab.id === "create" && activeTab === "create" && editingId);
-                const label = tab.id === "create" && editingId ? "Editar Titulado" : tab.label;
-                return (
-                    <button
-                        key={tab.id}
-                        onClick={() => {
-                            if (tab.id === "create" && !editingId) handleNewClick();
-                            else setActiveTab(tab.id);
-                        }}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-700 transition-all duration-200 ${active
-                                ? "bg-slate-800 text-white shadow-md"
-                                : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-                            }`}
-                    >
-                        <Icon size={16} />
-                        {label}
-                    </button>
-                );
-            })}
-        </div>
-    );
+    const handleTab = (key) => {
+        if (key === "create" && !editingId) handleNewClick();
+        else setActiveTab(key);
+    };
 
     /* ═══════════════════════════════════════════════════════════════
        RENDER: DASHBOARD
@@ -1594,19 +1554,25 @@ export default function GraduatesModule() {
        MAIN RENDER
        ═══════════════════════════════════════════════════════════════ */
     return (
-        <div className="gm-root min-h-screen" style={{ background: "var(--gm-bg)", padding: "24px" }}>
+        <div className="gm-root">
             <InjectStyles />
 
-            {renderHeader()}
-            {renderTabs()}
-
-            <div className="gm-fade" key={activeTab}>
-                {activeTab === "dashboard" && renderDashboard()}
-                {activeTab === "list" && renderList()}
-                {activeTab === "create" && renderForm()}
-                {activeTab === "grados" && <GradosTitulosTab />}
-                {activeTab === "importar" && <ImportarEgresadosTab />}
-            </div>
+            <ModuleShell
+                icon={GraduationCap}
+                title="Gestión de Titulados"
+                subtitle="Grados, títulos y seguimiento del egresado"
+                accent="linear-gradient(135deg, #F59E0B, #B45309)"
+                tabs={shellTabs}
+                groupLabels={GROUP_LABELS}
+                tab={activeTab}
+                onTab={handleTab}
+            >
+                <TabsContent value="dashboard" className="gm-fade">{renderDashboard()}</TabsContent>
+                <TabsContent value="list" className="gm-fade">{renderList()}</TabsContent>
+                <TabsContent value="create" className="gm-fade">{renderForm()}</TabsContent>
+                <TabsContent value="grados" className="gm-fade"><GradosTitulosTab /></TabsContent>
+                <TabsContent value="importar" className="gm-fade"><ImportarEgresadosTab /></TabsContent>
+            </ModuleShell>
 
             {/* Modals */}
             {renderDetailModal()}

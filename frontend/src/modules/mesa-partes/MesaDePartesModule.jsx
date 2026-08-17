@@ -454,6 +454,7 @@ const ProcedureTypesManagement = () => {
           subtitle={filterActive !== "ALL" ? "Prueba cambiando el filtro" : "Crea el primer tipo para comenzar"} />
       ) : (
         <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr><Th>Tipo de Trámite</Th><Th>Días</Th><Th>Costo</Th><Th>Estado</Th><Th right>Acción</Th></tr>
@@ -487,6 +488,7 @@ const ProcedureTypesManagement = () => {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -521,7 +523,7 @@ const ProcedureTypesManagement = () => {
                 placeholder="Liste los documentos necesarios"
                 onChange={e => setFormData({ ...formData, required_documents: e.target.value })} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <FieldLabel required>Días de procesamiento</FieldLabel>
                 <Input type="number" min="1" className="h-10 rounded-xl font-mono text-center"
@@ -564,7 +566,7 @@ const ProcedureTypesManagement = () => {
           </div>
           {selected && (
             <form onSubmit={saveEdit} className="bg-white p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <FieldLabel>Nombre</FieldLabel>
                   <Input className="h-10 rounded-xl" disabled={!editing} value={selected.name || ""}
@@ -577,7 +579,7 @@ const ProcedureTypesManagement = () => {
                     onChange={e => setSelected({ ...selected, processing_days: parseInt(e.target.value || "0", 10) })} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <FieldLabel>Costo (S/.)</FieldLabel>
                   <Input type="number" min="0" step="0.01" className="h-10 rounded-xl font-mono text-center" disabled={!editing}
@@ -1435,7 +1437,7 @@ const ProceduresManagement = forwardRef(({ initialFilter }, ref) => {
               <FieldError msg={errors.procedure_type_id} />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <FieldLabel required error={!!errors.applicant_name}>Nombre del solicitante</FieldLabel>
                 <Input className={`h-10 rounded-xl ${errors.applicant_name ? "border-red-400" : ""}`}
@@ -1452,7 +1454,7 @@ const ProceduresManagement = forwardRef(({ initialFilter }, ref) => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <FieldLabel error={!!errors.applicant_email}>Correo electrónico</FieldLabel>
                 <Input type="email" className={`h-10 rounded-xl ${errors.applicant_email ? "border-red-400" : ""}`}
@@ -1469,7 +1471,7 @@ const ProceduresManagement = forwardRef(({ initialFilter }, ref) => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <FieldLabel>Nivel de urgencia</FieldLabel>
                 <Select value={formData.urgency_level} onValueChange={v => handleField("urgency_level", v)}>
@@ -1695,7 +1697,7 @@ const OfficesSection = () => {
 
         {/* Table */}
         <div className="rounded-xl border border-slate-200 overflow-hidden">
-          <div style={{ maxHeight: 420, overflowY: "auto", scrollbarWidth: "thin" }}>
+          <div className="overflow-x-auto" style={{ maxHeight: 420, overflowY: "auto", scrollbarWidth: "thin" }}>
             <table className="w-full border-collapse">
               <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                 <tr>
@@ -1992,7 +1994,7 @@ const StaffSection = () => {
       {/* Table */}
       <div className="p-5">
         <div className="rounded-xl border border-slate-200 overflow-hidden">
-          <div style={{ maxHeight: 500, overflowY: "auto", scrollbarWidth: "thin" }}>
+          <div className="overflow-x-auto" style={{ maxHeight: 500, overflowY: "auto", scrollbarWidth: "thin" }}>
             <table className="w-full border-collapse">
               <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                 <tr>

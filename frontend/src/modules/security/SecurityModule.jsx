@@ -6,6 +6,7 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { toast } from "sonner";
 import { ShieldCheck, ShieldAlert, QrCode, Download, Trash2, Key } from "lucide-react";
+import ModuleShell from "@/components/module/ModuleShell";
 const SecurityModule = () => {
     const [qr, setQr] = useState(null);
     const [secret, setSecret] = useState(null);
@@ -27,20 +28,16 @@ const SecurityModule = () => {
         }
     };
 
+   // La cáscara compartida pone la cabecera (antes iba en texto blanco sobre
+   // fondo claro y era ilegible) y el fondo del módulo.
    return (
-   <div className="p-4 md:p-8 pb-32 space-y-8 max-w-2xl mx-auto animate-in fade-in zoom-in-95 duration-500">
-        
-    {/* Encabezado fuera del Card para mayor limpieza */}
-    <div className="flex items-center gap-4 mb-2">
-        <div className="p-3 bg-blue-600 rounded-2xl shadow-lg shadow-blue-200">
-            <ShieldCheck className="h-6 w-6 text-white" />
-        </div>
-        <div>
-            <h2 className="text-2xl font-bold text-white tracking-tight">Seguridad de la Cuenta</h2>
-            <p className="text-sm text-white font-medium opacity-90">Proteja su acceso con autenticación de doble factor</p>
-        </div>
-    </div>
-
+   <ModuleShell
+        icon={ShieldCheck}
+        title="Seguridad de la Cuenta"
+        subtitle="Proteja su acceso con autenticación de doble factor"
+        accent="linear-gradient(135deg, #3B82F6, #1E40AF)"
+   >
+    <div className="max-w-2xl mx-auto w-full">
         <Card className="border-none shadow-xl shadow-slate-200/60 overflow-hidden bg-white/80 backdrop-blur-sm">
             <CardHeader className="border-b border-slate-50 bg-slate-50/30 pb-6">
                 <CardTitle className="text-lg flex items-center gap-2 text-slate-800">
@@ -154,6 +151,7 @@ const SecurityModule = () => {
             </CardContent>
         </Card>
     </div>
+   </ModuleShell>
 );
 };
 

@@ -15,6 +15,8 @@ import {
   MineduCareers,
 } from "../../services/minedu.service";
 
+import ModuleShell from "@/components/module/ModuleShell";
+import { TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -31,8 +33,8 @@ import {
   Loader2, CheckCircle2, AlertTriangle, XCircle, Clock,
   ChevronDown, FileText, Users, GraduationCap,
   Building2, BookOpen, ClipboardList, Award, FileCheck, Zap,
-  Save, Upload, LayoutGrid, Table2, ArrowUpRight, Database,
-  TrendingUp, Activity,
+  Save, Upload, LayoutGrid, Table2, Database,
+  TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -41,13 +43,15 @@ import { toast } from "sonner";
    ================================================================ */
 
 const TABS = [
-  { key: "dashboard", label: "Dashboard", icon: BarChart3 },
-  { key: "export", label: "Exportar", icon: Upload },
-  { key: "history", label: "Historial", icon: History },
-  { key: "mappings", label: "Mapeos", icon: Link2 },
-  { key: "validation", label: "Validación", icon: ShieldCheck },
-  { key: "jobs", label: "Jobs", icon: Cog },
+  { key: "dashboard", label: "Dashboard", Icon: BarChart3, group: "inicio" },
+  { key: "export", label: "Exportar", Icon: Upload, group: "exportacion" },
+  { key: "history", label: "Historial", Icon: History, group: "exportacion" },
+  { key: "mappings", label: "Mapeos", Icon: Link2, group: "datos" },
+  { key: "validation", label: "Validación", Icon: ShieldCheck, group: "datos" },
+  { key: "jobs", label: "Jobs", Icon: Cog, group: "sistema" },
 ];
+
+const GROUP_LABELS = { inicio: null, exportacion: "Exportación", datos: "Datos", sistema: "Sistema" };
 
 const DATA_TYPES = [
   { value: "ENROLLMENT", label: "Nómina de Matrícula", desc: "Padrón general de matriculados", icon: ClipboardList, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200" },
@@ -193,55 +197,23 @@ export default function MineduIntegrationModule() {
   const [tab, setTab] = useState("dashboard");
 
   return (
-    <div className="min-h-screen bg-[#eef2f6]">
-      {/* ─── MODULE HEADER ─── */}
-      <div className="px-6 pt-6 pb-4">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="h-9 w-9 rounded-lg bg-slate-700 flex items-center justify-center">
-            <Building2 className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-slate-800">Integración MINEDU / SIA</h1>
-            <p className="text-sm text-slate-400">Documentos oficiales para archivo institucional</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ─── TAB NAVIGATION ─── */}
-      <div className="px-6 pb-4">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {TABS.map(t => {
-            const active = tab === t.key;
-            return (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`
-                  flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all
-                  ${active
-                    ? "bg-slate-800 text-white shadow-sm"
-                    : "bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 border border-slate-200"
-                  }
-                `}
-              >
-                <t.icon className="h-3.5 w-3.5" />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ─── CONTENT AREA ─── */}
-      <div className="px-6 pb-6">
-        {tab === "dashboard" && <DashboardTab onNav={setTab} />}
-        {tab === "export" && <ExportTab />}
-        {tab === "history" && <HistoryTab />}
-        {tab === "mappings" && <MappingsTab />}
-        {tab === "validation" && <ValidationTab />}
-        {tab === "jobs" && <JobsTab />}
-      </div>
-    </div>
+    <ModuleShell
+      icon={Building2}
+      title="Integración MINEDU / SIA"
+      subtitle="Reportes y sincronización con el SIA"
+      accent="linear-gradient(135deg, #475569, #1E293B)"
+      tabs={TABS}
+      groupLabels={GROUP_LABELS}
+      tab={tab}
+      onTab={setTab}
+    >
+      <TabsContent value="dashboard"><DashboardTab onNav={setTab} /></TabsContent>
+      <TabsContent value="export"><ExportTab /></TabsContent>
+      <TabsContent value="history"><HistoryTab /></TabsContent>
+      <TabsContent value="mappings"><MappingsTab /></TabsContent>
+      <TabsContent value="validation"><ValidationTab /></TabsContent>
+      <TabsContent value="jobs"><JobsTab /></TabsContent>
+    </ModuleShell>
   );
 }
 

@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ModuleShell from "@/components/module/ModuleShell";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
     DialogFooter, DialogClose,
@@ -287,43 +288,32 @@ export default function ResearchModule() {
         return counts;
     }, [projects]);
 
+    /* Cambiar de pestaña conserva los efectos de carga de cada sección */
+    const cambiarTab = (v) => {
+        setMainTab(v);
+        if (v === "dashboard") loadStats();
+        if (v === "reports") loadReport();
+        if (v === "projects") { setProjectView("list"); loadProjects(); }
+        if (v === "catalogs") loadCatalogs();
+    };
+
     /* ═══════════════════════════════════════ */
     return (
-        <div className="space-y-5">
-            {/* ══ HEADER ══ */}
-            <div className="bg-slate-800 rounded-xl px-6 py-4 flex items-center justify-between shadow-md">
-                <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-slate-700 flex items-center justify-center">
-                        <FlaskConical className="h-5 w-5 text-indigo-300" />
-                    </div>
-                    <div>
-                        <h1 className="text-lg font-bold text-white leading-tight">Investigación</h1>
-                        <p className="text-xs text-slate-400">Gestión de proyectos de investigación</p>
-                    </div>
-                </div>
-                <Badge className="bg-white/10 text-white border-white/20 text-sm px-3 py-1">Investigación</Badge>
-            </div>
-
-            {/* ══ TABS ══ */}
-            <Tabs value={mainTab} onValueChange={(v) => {
-                setMainTab(v);
-                if (v === "dashboard") loadStats();
-                if (v === "reports") loadReport();
-                if (v === "projects") { setProjectView("list"); loadProjects(); }
-                if (v === "catalogs") loadCatalogs();
-            }}>
-                <TabsList className="bg-white border border-slate-200 rounded-lg p-1 shadow-sm flex-wrap h-auto">
-                    {[
-                        { v: "dashboard", icon: BarChart3, label: "Dashboard" },
-                        { v: "projects", icon: FolderOpen, label: "Proyectos" },
-                        { v: "catalogs", icon: Settings, label: "Catálogos" },
-                        { v: "reports", icon: TrendingUp, label: "Reportes" },
-                    ].map(t => (
-                        <TabsTrigger key={t.v} value={t.v} className="gap-1.5 text-sm data-[state=active]:bg-slate-800 data-[state=active]:text-white data-[state=active]:shadow-sm">
-                            <t.icon className="h-4 w-4" /> {t.label}
-                        </TabsTrigger>
-                    ))}
-                </TabsList>
+        <ModuleShell
+            icon={FlaskConical}
+            title="Módulo de Investigación"
+            subtitle="Gestión de proyectos de investigación"
+            accent="linear-gradient(135deg, #6366F1, #312E81)"
+            tabs={[
+                { key: "dashboard", label: "Dashboard", Icon: BarChart3, group: "inicio" },
+                { key: "projects", label: "Proyectos", Icon: FolderOpen, group: "gestion" },
+                { key: "catalogs", label: "Catálogos", Icon: Settings, group: "gestion" },
+                { key: "reports", label: "Reportes", Icon: TrendingUp, group: "gestion" },
+            ]}
+            groupLabels={{ inicio: null, gestion: "Gestión" }}
+            tab={mainTab}
+            onTab={cambiarTab}
+        >
 
                 {/* ══ DASHBOARD ══ */}
                 <TabsContent value="dashboard" className="space-y-6 mt-4">
@@ -502,6 +492,7 @@ export default function ResearchModule() {
                                 </div>
                             ) : (
                                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                    <div className="overflow-x-auto">
                                     <table className="w-full text-sm">
                                         <thead>
                                             <tr className="bg-slate-50/80 border-b border-slate-200">
@@ -547,6 +538,7 @@ export default function ResearchModule() {
                                             })}
                                         </tbody>
                                     </table>
+                                    </div>
                                     <div className="px-4 py-2.5 bg-slate-50/50 border-t border-slate-100 text-xs text-slate-400">
                                         Mostrando {filteredProjects.length} de {projects.length} proyectos
                                         {filterStatus && ` · Filtro: ${FILTER_STATUSES.find(s => s.value === filterStatus)?.label || filterStatus}`}
@@ -687,7 +679,6 @@ export default function ResearchModule() {
                         </div>
                     </div>
                 </TabsContent>
-            </Tabs>
 
             {/* ═══ DIALOGS ═══ */}
             <Dialog open={projectDialog} onOpenChange={setProjectDialog}>
@@ -778,7 +769,7 @@ export default function ResearchModule() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-        </div>
+        </ModuleShell>
     );
 }
 
