@@ -183,6 +183,17 @@ class AcademicPeriod(models.Model):
         help_text="Recargo por matrícula extemporánea (soles)",
     )
 
+    # ── Ventana de SUBSANACIÓN ─────────────────────────────────
+    # Solo aplica a alumnos con estado académico SUBSANACIÓN (asignado en
+    # Matrícula → Padrón). Si no se configura, esos alumnos se matriculan
+    # dentro de las ventanas regulares (ordinaria/extemporánea).
+    subsanacion_start = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Inicio de la matrícula de subsanación")
+    subsanacion_end = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Fin de la matrícula de subsanación")
+
     # ── Ventana de carga de NOTAS (docentes) ───────────────────
     # Si ambos están seteados, solo se aceptan saves/submits en ese
     # rango (admins siempre pueden por encima de la ventana).
@@ -232,6 +243,18 @@ class AcademicPeriod(models.Model):
     def is_enrollment_open(self, now=None) -> bool:
         """True si la matrícula está permitida (FREE, OPEN o EXTEMPORARY)."""
         return self.enrollment_status(now) != self.STATUS_CLOSED
+
+    STATUS_SUBSANACION = "SUBSANACION"
+
+    def subsanacion_window_open(self, now=None) -> bool:
+        """Ventana de matrícula para alumnos de SUBSANACIÓN.
+
+        Con fechas configuradas manda su propio rango (aunque las ventanas
+        regulares estén cerradas); sin configurar, valen las regulares."""
+        now = now or timezone.now()
+        if self.subsanacion_start and self.subsanacion_end:
+            return self.subsanacion_start <= now <= self.subsanacion_end
+        return self.is_enrollment_open(now)
 
     # ── Ventana de NOTAS ──────────────────────────────────────
     def grades_window_open(self, now=None) -> bool:
@@ -317,6 +340,9 @@ class AcademicPeriod(models.Model):
             "extemporary_start":     self.extemporary_start.isoformat()  if self.extemporary_start else None,
             "extemporary_end":       self.extemporary_end.isoformat()    if self.extemporary_end   else None,
             "extemporary_surcharge": float(self.extemporary_surcharge),
+            "subsanacion_start":     self.subsanacion_start.isoformat()  if self.subsanacion_start else None,
+            "subsanacion_end":       self.subsanacion_end.isoformat()    if self.subsanacion_end   else None,
+            "subsanacion_open":      self.subsanacion_window_open(now),
         }
 
     # ── Helpers de clase ──────────────────────────────────────

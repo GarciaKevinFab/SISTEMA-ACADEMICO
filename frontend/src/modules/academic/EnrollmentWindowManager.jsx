@@ -123,6 +123,8 @@ export default function EnrollmentWindowManager({ activePeriod }) {
         extemporary_start: "",
         extemporary_end: "",
         extemporary_surcharge: "0",
+        subsanacion_start: "",
+        subsanacion_end: "",
     });
 
     const fetchWindow = useCallback(async () => {
@@ -138,6 +140,8 @@ export default function EnrollmentWindowManager({ activePeriod }) {
                 extemporary_start: toLocalDatetimeValue(data.extemporary_start),
                 extemporary_end: toLocalDatetimeValue(data.extemporary_end),
                 extemporary_surcharge: String(data.extemporary_surcharge ?? 0),
+                subsanacion_start: toLocalDatetimeValue(data.subsanacion_start),
+                subsanacion_end: toLocalDatetimeValue(data.subsanacion_end),
             });
         } catch (e) {
             // 404 = período sin config aún → formulario vacío está bien
@@ -162,6 +166,8 @@ export default function EnrollmentWindowManager({ activePeriod }) {
         const e = fromLocalDatetimeValue(form.enrollment_end);
         const xs = fromLocalDatetimeValue(form.extemporary_start);
         const xe = fromLocalDatetimeValue(form.extemporary_end);
+        const ss = fromLocalDatetimeValue(form.subsanacion_start);
+        const se = fromLocalDatetimeValue(form.subsanacion_end);
 
         if (s && e && new Date(e) < new Date(s)) {
             return toast.error("El fin de matrícula ordinaria no puede ser anterior al inicio");
@@ -171,6 +177,12 @@ export default function EnrollmentWindowManager({ activePeriod }) {
         }
         if (s && e && xs && new Date(xs) < new Date(e)) {
             return toast.error("La ventana extemporánea debe iniciar después de que termine la ordinaria");
+        }
+        if (ss && se && new Date(se) < new Date(ss)) {
+            return toast.error("El fin de matrícula de subsanación no puede ser anterior al inicio");
+        }
+        if (Boolean(ss) !== Boolean(se)) {
+            return toast.error("La ventana de subsanación necesita inicio y fin (o deja ambos vacíos)");
         }
 
         const surcharge = parseFloat(form.extemporary_surcharge || "0");
@@ -186,6 +198,8 @@ export default function EnrollmentWindowManager({ activePeriod }) {
                 extemporary_start: xs,
                 extemporary_end: xe,
                 extemporary_surcharge: surcharge,
+                subsanacion_start: ss,
+                subsanacion_end: se,
             });
             setServerData(data);
             setCurrentStatus(data.status || "FREE");
@@ -204,6 +218,8 @@ export default function EnrollmentWindowManager({ activePeriod }) {
             extemporary_start: "",
             extemporary_end: "",
             extemporary_surcharge: "0",
+            subsanacion_start: "",
+            subsanacion_end: "",
         });
     };
 
@@ -364,6 +380,54 @@ export default function EnrollmentWindowManager({ activePeriod }) {
                             <p className="text-[11px] text-slate-400">
                                 Monto que se cobra al estudiante en Tesorería por matrícula fuera de fecha
                             </p>
+                        </div>
+                    </div>
+
+                    {/* ── VENTANA DE SUBSANACIÓN ── */}
+                    <div className="border border-violet-200 bg-violet-50/40 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center gap-2 mb-1">
+                            <div className="w-2.5 h-2.5 rounded-full bg-violet-500" />
+                            <p className="text-sm font-700 text-violet-800">Matrícula de Subsanación</p>
+                            <Badge className="ml-auto text-[10px] bg-violet-100 text-violet-700 border border-violet-200 px-1.5 py-0.5 rounded-md">
+                                Solo estado Subsanación
+                            </Badge>
+                        </div>
+
+                        <div className="flex items-start gap-2 text-xs text-violet-700 bg-violet-100/60 rounded-lg px-3 py-2 border border-violet-200">
+                            <Info size={13} className="mt-0.5 flex-shrink-0" />
+                            <span>
+                                Aplica solo a estudiantes con estado <strong>Subsanación</strong> (se asigna
+                                en Matrícula → Padrón de Alumnos). Con fechas configuradas pueden
+                                matricularse <strong>aunque las otras ventanas estén cerradas</strong>;
+                                si se deja vacía, se matriculan dentro de las ventanas regulares.
+                            </span>
+                        </div>
+
+                        <div className="grid sm:grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-600 text-slate-700">Inicio</Label>
+                                <Input
+                                    type="datetime-local"
+                                    value={form.subsanacion_start}
+                                    onChange={(e) => setForm((p) => ({ ...p, subsanacion_start: e.target.value }))}
+                                    className="h-9 text-sm rounded-lg border-violet-200 focus:border-violet-400 focus:ring-violet-100"
+                                />
+                                <p className="text-[11px] text-slate-400">
+                                    {form.subsanacion_start ? formatDisplay(fromLocalDatetimeValue(form.subsanacion_start)) : "Sin configurar"}
+                                </p>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-600 text-slate-700">Fin</Label>
+                                <Input
+                                    type="datetime-local"
+                                    value={form.subsanacion_end}
+                                    onChange={(e) => setForm((p) => ({ ...p, subsanacion_end: e.target.value }))}
+                                    className="h-9 text-sm rounded-lg border-violet-200 focus:border-violet-400 focus:ring-violet-100"
+                                />
+                                <p className="text-[11px] text-slate-400">
+                                    {form.subsanacion_end ? formatDisplay(fromLocalDatetimeValue(form.subsanacion_end)) : "Sin configurar"}
+                                </p>
+                            </div>
                         </div>
                     </div>
 

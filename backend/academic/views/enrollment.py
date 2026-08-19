@@ -162,6 +162,9 @@ def _window_info_for_period(per: AcademicPeriod) -> dict:
         "extemporary_start":     per.extemporary_start.isoformat()   if per.extemporary_start   else None,
         "extemporary_end":       per.extemporary_end.isoformat()     if per.extemporary_end     else None,
         "extemporary_surcharge": surcharge,
+        "subsanacion_start":     per.subsanacion_start.isoformat()   if per.subsanacion_start   else None,
+        "subsanacion_end":       per.subsanacion_end.isoformat()     if per.subsanacion_end     else None,
+        "subsanacion_open":      per.subsanacion_window_open(),
     }
 
 
@@ -505,10 +508,17 @@ def _pick_sections_for_pcs(plan_course_ids, academic_period: str, sections_map: 
     return chosen
 
 
-def _assert_enrollment_window(period_code: str):
+def _assert_enrollment_window(period_code: str, st=None):
     p = _period_obj(period_code, auto_create=True)
     if not p:
         return False, "PERIODO_INVALIDO"
+    # Alumno de SUBSANACIÓN (padrón): manda su propia ventana. Con fechas
+    # configuradas puede matricularse aunque la regular esté cerrada; sin
+    # configurar, se matricula en las ventanas regulares.
+    if st is not None and (getattr(st, "estado_academico", "") or "") == "SUBSANACION":
+        if p.subsanacion_window_open():
+            return True, "SUBSANACION"
+        return False, "MATRICULA_SUBSANACION_FUERA_DE_FECHA"
     status = p.enrollment_status()
     if status == "CLOSED":
         return False, "MATRICULA_FUERA_DE_FECHA"
@@ -516,7 +526,7 @@ def _assert_enrollment_window(period_code: str):
 
 
 def _validate_enrollment_payload(request, st, academic_period, plan_course_ids, sections_map):
-    ok_win, win_code = _assert_enrollment_window(academic_period)
+    ok_win, win_code = _assert_enrollment_window(academic_period, st)
     if not ok_win:
         return Response(
             {"errors": [win_code], "warnings": [], "schedule_conflicts": []},
@@ -1105,6 +1115,8 @@ class AcademicPeriodEnrollmentWindowView(APIView):
         dt_end       = _parse_dt("enrollment_end")
         dt_ext_start = _parse_dt("extemporary_start")
         dt_ext_end   = _parse_dt("extemporary_end")
+        dt_sub_start = _parse_dt("subsanacion_start")
+        dt_sub_end   = _parse_dt("subsanacion_end")
 
         if dt_start and dt_end and dt_end < dt_start:
             return Response({"detail": "enrollment_end no puede ser anterior a enrollment_start"}, status=400)
@@ -1112,6 +1124,10 @@ class AcademicPeriodEnrollmentWindowView(APIView):
             return Response({"detail": "extemporary_end no puede ser anterior a extemporary_start"}, status=400)
         if dt_start and dt_end and dt_ext_start and dt_ext_start < dt_end:
             return Response({"detail": "La ventana extemporánea debe iniciar después de que termine la ordinaria"}, status=400)
+        if dt_sub_start and dt_sub_end and dt_sub_end < dt_sub_start:
+            return Response({"detail": "subsanacion_end no puede ser anterior a subsanacion_start"}, status=400)
+        if bool(dt_sub_start) != bool(dt_sub_end):
+            return Response({"detail": "La ventana de subsanación necesita inicio y fin (o ninguno)"}, status=400)
 
         surcharge     = 0
         raw_surcharge = data.get("extemporary_surcharge")
@@ -1128,6 +1144,8 @@ class AcademicPeriodEnrollmentWindowView(APIView):
         p.extemporary_start       = dt_ext_start
         p.extemporary_end         = dt_ext_end
         p.extemporary_surcharge   = surcharge
+        p.subsanacion_start       = dt_sub_start
+        p.subsanacion_end         = dt_sub_end
         p.save()
 
         return ok(success=True, code=p.code, **_window_info_for_period(p))
