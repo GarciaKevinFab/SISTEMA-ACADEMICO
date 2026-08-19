@@ -397,6 +397,18 @@ class EvaluationProcessView(APIView):
                     )
                     n_saved += 1
 
+                # Entradas del acta que no corresponden a ningún alumno del
+                # roster (p. ej. matrícula reasignada de sección después de
+                # registrar la nota): antes se saltaban EN SILENCIO y el curso
+                # "desaparecía" de la boleta del alumno. Ahora se reportan.
+                claves_roster = set()
+                for s in list(row["_students"]) + list(row["_students_lic"]):
+                    claves_roster.add(str(s.id))
+                    if getattr(s, "user_id", None):
+                        claves_roster.add(str(s.user_id))
+                huerfanas = [k for k, v in (row["_grades"] or {}).items()
+                             if isinstance(v, dict) and k not in claves_roster]
+
                 if close_actas:
                     bundle = bmap.get(sec.id)
                     if bundle and not bundle.submitted:
@@ -407,15 +419,22 @@ class EvaluationProcessView(APIView):
                 total_processed += 1
                 results.append({**_public_row(row), "result": "PROCESADO",
                                 "n_saved": n_saved,
+                                "notas_sin_alumno": len(huerfanas),
+                                "claves_sin_alumno": huerfanas,
                                 "submitted": True if close_actas else row["submitted"]})
 
+        total_huerfanas = sum(r.get("notas_sin_alumno", 0) for r in results)
         return Response({
             "success": True,
             "period": period,
             "message": (f"{total_processed} sección(es) procesada(s) al kárdex"
-                        + (f" · {total_skipped} sin notas (omitidas)" if total_skipped else "")),
+                        + (f" · {total_skipped} sin notas (omitidas)" if total_skipped else "")
+                        + (f" · ADVERTENCIA: {total_huerfanas} nota(s) del acta sin "
+                           "alumno en el roster (revisar la sección del alumno en "
+                           "Matrícula)" if total_huerfanas else "")),
             "processed": total_processed,
             "skipped": total_skipped,
+            "notas_sin_alumno": total_huerfanas,
             "results": results,
         })
 
