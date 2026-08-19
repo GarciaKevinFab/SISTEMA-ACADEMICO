@@ -178,13 +178,11 @@ export function PublicHeader({ active = "" }) {
         window.addEventListener("scroll", onScroll, { passive: true });
         return () => window.removeEventListener("scroll", onScroll);
     }, []);
-    // "Inicio" lleva a la página INFORMATIVA del instituto (WordPress),
-    // como en el header original; la marca lleva al home del sistema.
+    // Header simple (pedido): solo Inicio → página informativa del
+    // instituto, y el botón Acceso. Las demás secciones se navegan desde
+    // los botones de cada página.
     const links = [
         ["https://iesppallende.edu.pe/", "Inicio"],
-        ["/public/admission", "Admisión"],
-        ["/public/procedures", "Mesa de Partes"],
-        ["/public/verificador", "Verificador"],
     ];
     return (
         <header className={"sticky top-0 z-50 transition-all duration-500 " +
@@ -210,7 +208,7 @@ export function PublicHeader({ active = "" }) {
                     <nav className="flex items-center gap-1">
                         {links.map(([href, label]) => (
                             <a key={href} href={href}
-                                className={"hidden md:inline-block px-3 py-1.5 rounded-full text-[13px] font-semibold transition-colors " +
+                                className={"px-3.5 py-1.5 rounded-full text-[13px] font-semibold transition-colors " +
                                     (active === href
                                         ? "bg-white/15 text-white"
                                         : "text-blue-100/80 hover:text-white hover:bg-white/10")}>
