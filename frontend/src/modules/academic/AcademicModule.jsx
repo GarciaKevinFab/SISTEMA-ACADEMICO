@@ -959,9 +959,7 @@ function LoadSchedulesAndWindow() {
                 </div>
             </div>
 
-            <div className="max-w-3xl">
-                <EnrollmentWindowManager activePeriod={activePeriod} />
-            </div>
+            <EnrollmentWindowManager activePeriod={activePeriod} />
         </div>
     );
 }

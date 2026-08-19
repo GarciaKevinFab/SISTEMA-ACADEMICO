@@ -277,6 +277,9 @@ export default function EnrollmentWindowManager({ activePeriod }) {
 
                 <CardContent className="px-6 pb-6 pt-4 space-y-5">
 
+                    {/* Las 3 ventanas lado a lado en pantallas anchas */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+
                     {/* ── VENTANA ORDINARIA ── */}
                     <div className="border border-green-200 bg-green-50/40 rounded-xl p-4 space-y-3">
                         <div className="flex items-center gap-2 mb-1">
@@ -431,6 +434,8 @@ export default function EnrollmentWindowManager({ activePeriod }) {
                         </div>
                     </div>
 
+                    </div>{/* /grid de ventanas */}
+
                     {/* ── Timeline visual ── */}
                     {(form.enrollment_start || form.extemporary_start) && (
                         <div className="border border-slate-100 rounded-xl px-4 py-3 bg-slate-50/60">
@@ -510,7 +515,7 @@ export default function EnrollmentWindowManager({ activePeriod }) {
                     <p className="text-[11px] font-700 uppercase tracking-wider text-slate-400 mb-3">
                         Referencia de estados
                     </p>
-                    <div className="space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-2.5">
                         {Object.entries(STATUS_CONFIG).map(([key, c]) => {
                             const I = c.Icon;
                             return (
