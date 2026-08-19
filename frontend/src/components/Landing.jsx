@@ -300,6 +300,7 @@ const Landing = () => {
                                     ["/public/admission", "Admisión"],
                                     ["/public/procedures", "Mesa de Partes"],
                                     ["/public/verificador", "Verificar Grados y Títulos"],
+                                    ["/public/docentes", "Plana Docente"],
                                     ["/login", "Acceso al Sistema"],
                                 ].map(([href, label]) => (
                                     <a key={href} href={href}

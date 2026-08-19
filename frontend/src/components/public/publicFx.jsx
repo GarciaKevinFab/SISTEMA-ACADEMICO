@@ -31,6 +31,8 @@ const STYLES = `
   .pv-scale { transform: scale(.93); }
   .pv-reveal.pv-in { opacity: 1; transform: none; }
 
+  .pv-clamp2 { display: -webkit-box; -webkit-line-clamp: 2;
+               -webkit-box-orient: vertical; overflow: hidden; }
   .pv-lift { transition: transform .45s cubic-bezier(.16,1,.3,1), box-shadow .45s cubic-bezier(.16,1,.3,1); }
   .pv-lift:hover { transform: translateY(-6px) scale(1.015); box-shadow: 0 24px 48px -16px rgba(2,6,23,.35); }
 

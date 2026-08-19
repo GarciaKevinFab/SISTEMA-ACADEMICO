@@ -252,11 +252,6 @@ class TeacherCVPdfView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, teacher_id=None):
-        from html import escape as esc
-        from academic.pdf_render import html_to_pdf_bytes
-        from academic.views.acta_excel import _acta_area_inst
-        from academic.views.evaluation_pdf import _logo_datauris
-
         if teacher_id:
             # Descarga del ADMIN (panel Hojas de Vida): mismo PDF, otro docente
             from academic.views.teachers import _is_grades_admin
@@ -265,6 +260,14 @@ class TeacherCVPdfView(APIView):
             ct = get_object_or_404(Teacher, id=teacher_id)
         else:
             ct = _teacher_de(request)
+        return self._emitir(ct, request)
+
+    def _emitir(self, ct, request):
+        from html import escape as esc
+        from academic.pdf_render import html_to_pdf_bytes
+        from academic.views.acta_excel import _acta_area_inst
+        from academic.views.evaluation_pdf import _logo_datauris
+
         items = _items_ordenados(ct)
         inst = _acta_area_inst()
         logo, logo2 = _logo_datauris()
@@ -494,6 +497,115 @@ Tarma, {hoy.strftime('%d/%m/%Y')}</p>
         out = BytesIO()
         writer.write(out)
         return out.getvalue()
+
+
+# ══════════════════════════════════════════════════════════════
+# PÚBLICO — Hojas de Vida de los docentes (transparencia MINEDU)
+# ══════════════════════════════════════════════════════════════
+
+class TeacherCVPublicListView(APIView):
+    """
+    GET /catalogs/public/teachers?dni=&grado=&especialidad=&curso=
+    Directorio PÚBLICO (sin login) de los docentes: foto, nombres, grado
+    académico, especialidad y cursos del período. Sin filtros lista a TODOS
+    (los docentes son servidores públicos; MINEDU pide su hoja de vida en
+    acceso público, al estilo de su propio directorio).
+    """
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from django.db.models import Count
+        q = request.query_params
+        dni = (q.get("dni") or "").strip()
+        grado = (q.get("grado") or "").strip().upper()
+        espec = (q.get("especialidad") or "").strip().lower()
+        curso = (q.get("curso") or "").strip().lower()
+
+        qs = (Teacher.objects.select_related("user")
+              .filter(user__isnull=False)
+              .annotate(n_cv=Count("cv_items"))
+              .order_by("user__full_name", "full_name", "id"))
+        if dni:
+            qs = qs.filter(document__icontains=dni)
+        if grado:
+            qs = qs.filter(grado_academico=grado)
+
+        # Cursos y carreras que dicta cada docente en su período más reciente
+        # (para mostrar y para los filtros por curso/especialidad)
+        from academic.models import Section
+        por_user = {}
+        secs = (Section.objects
+                .filter(teacher__user__isnull=False)
+                .select_related("teacher", "plan_course__course",
+                                "plan_course__plan__career"))
+        for s in secs:
+            uid = s.teacher.user_id
+            d = por_user.setdefault(uid, {})
+            per = s.period or ""
+            info = d.setdefault(per, {"cursos": set(), "carreras": set()})
+            if s.plan_course:
+                info["cursos"].add(s.plan_course.effective_name or "")
+                if s.plan_course.plan and s.plan_course.plan.career:
+                    info["carreras"].add(s.plan_course.plan.career.name)
+
+        rows = []
+        for t in qs:
+            u = t.user
+            nombre = ((getattr(u, "full_name", "") or "").strip()
+                      or (t.full_name or "").strip())
+            if not nombre:
+                continue
+            pers = por_user.get(t.user_id, {})
+            per_max = max(pers.keys()) if pers else ""
+            cursos = sorted(c for c in pers.get(per_max, {}).get("cursos", set()) if c)
+            carreras = sorted(pers.get(per_max, {}).get("carreras", set()))
+            especialidad = (t.specialization or "").strip() or " / ".join(carreras)
+
+            if curso and not any(curso in c.lower() for c in cursos):
+                continue
+            if espec and espec not in especialidad.lower() \
+                    and not any(espec in c.lower() for c in carreras):
+                continue
+
+            foto = ""
+            try:
+                if t.photo:
+                    foto = request.build_absolute_uri(t.photo.url)
+            except Exception:
+                foto = ""
+            rows.append({
+                "id": t.id,
+                "nombre": nombre.upper(),
+                "dni": t.document or "",
+                "foto_url": foto,
+                "grado": t.grado_academico or "",
+                "grado_label": dict(Teacher.GRADOS_ACADEMICOS).get(
+                    t.grado_academico, ""),
+                "especialidad": especialidad,
+                "cursos": cursos,
+                "carreras": carreras,
+                "periodo": per_max,
+                "cv_items": t.n_cv,
+            })
+
+        return Response({
+            "total": len(rows),
+            "grados": [{"value": v, "label": l}
+                       for v, l in Teacher.GRADOS_ACADEMICOS],
+            "rows": rows,
+        })
+
+
+class TeacherCVPublicPdfView(APIView):
+    """GET /catalogs/public/teachers/<id>/cv.pdf — CV público del docente
+    (mismo PDF descriptivo + documentado que emite el propio docente)."""
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, teacher_id: int):
+        ct = get_object_or_404(Teacher, id=teacher_id)
+        return TeacherCVPdfView()._emitir(ct, request)
 
 
 # ══════════════════════════════════════════════════════════════

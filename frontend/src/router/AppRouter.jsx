@@ -7,6 +7,7 @@ import { PERMS } from "../auth/permissions";
 
 /* Públicas */
 import Landing from "../components/Landing";
+import PublicTeachersDirectory from "../modules/academic/PublicTeachersDirectory";
 import Login from "../components/Login";
 
 /* Layout privado */
@@ -87,6 +88,9 @@ export default function AppRouter() {
 
             {/* ✅ Verificador de Grados y Títulos */}
             <Route path="/public/verificador" element={<PublicGraduateVerifier />} />
+
+            {/* Plana docente pública (transparencia MINEDU) */}
+            <Route path="/public/docentes" element={<PublicTeachersDirectory />} />
 
             {/* 403 */}
             <Route path="/403" element={<Forbidden />} />
