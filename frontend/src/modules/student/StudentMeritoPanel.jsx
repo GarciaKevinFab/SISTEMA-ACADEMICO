@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../lib/api";
+import ModuleShell from "@/components/module/ModuleShell";
 
 const ROMANOS = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 
@@ -79,25 +80,19 @@ export default function StudentMeritoPanel() {
     const alcanza = !!data?.alcanza_descuento;
 
     return (
-        <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
-            <button onClick={() => navigate(-1)}
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors">
-                <ArrowLeft size={15} /> Volver
-            </button>
-
-            <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-violet-50 border border-violet-100 grid place-items-center">
-                    <Trophy size={18} className="text-violet-600" />
-                </div>
-                <div>
-                    <h1 className="text-lg font-extrabold text-slate-800">Mi Orden de Mérito</h1>
-                    <p className="text-xs text-slate-400">
-                        Tu puesto según el promedio ponderado
-                        {data?.period ? ` del período ${data.period}` : ""}
-                    </p>
-                </div>
-            </div>
-
+        <ModuleShell
+            icon={Trophy}
+            title="Mi Orden de Mérito"
+            subtitle={`Tu puesto según el promedio ponderado${data?.period ? ` — ${data.period}` : ""}`}
+            accent="linear-gradient(135deg, #8B5CF6, #6D28D9)"
+            headerRight={
+                <button onClick={() => navigate(-1)}
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3.5 py-2 rounded-xl transition-colors">
+                    <ArrowLeft size={15} /> Volver
+                </button>
+            }
+        >
+            <div className="max-w-3xl mx-auto w-full space-y-4">
             {loading ? (
                 <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
                     <Loader2 className="h-5 w-5 animate-spin" /> Calculando tu puesto…
@@ -159,7 +154,7 @@ export default function StudentMeritoPanel() {
                         <PuestoCard icon={Landmark} titulo="En el instituto"
                             sub="Todas las especialidades"
                             puesto={data.instituto?.puesto} total={data.instituto?.total}
-                            tono={{ border: "border-slate-200/80", bg: "bg-white", icon: "text-slate-500", label: "text-slate-500", value: "text-slate-700" }} />
+                            tono={{ border: "border-slate-200/80", bg: "bg-slate-50/80", icon: "text-slate-500", label: "text-slate-500", value: "text-slate-700" }} />
                     </div>
 
                     {alcanza && (
@@ -178,6 +173,7 @@ export default function StudentMeritoPanel() {
                     </p>
                 </>
             )}
-        </div>
+            </div>
+        </ModuleShell>
     );
 }
