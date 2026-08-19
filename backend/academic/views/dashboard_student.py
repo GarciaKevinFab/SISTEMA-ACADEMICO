@@ -528,13 +528,21 @@ def student_schedule(request):
 
     slots = SectionScheduleSlot.objects.filter(
         section_id__in=section_ids
-    ).select_related("section", "section__plan_course", "section__plan_course__course", "section__classroom")
+    ).select_related("section", "section__plan_course",
+                     "section__plan_course__course", "section__classroom",
+                     "section__teacher__user")
 
     schedule = []
     for slot in slots:
         sec = slot.section
         wd = getattr(slot, "weekday", None)
         day = WEEKDAY_NAMES.get(wd, str(wd)) if isinstance(wd, int) else str(wd or "")
+
+        pc = sec.plan_course
+        docente = ""
+        if sec.teacher and getattr(sec.teacher, "user", None):
+            docente = (getattr(sec.teacher.user, "full_name", "")
+                       or sec.teacher.user.username or "")
 
         schedule.append({
             "day": day,
@@ -543,6 +551,12 @@ def student_schedule(request):
             "end": str(getattr(slot, "end", "")),
             "room": _classroom_name(sec),
             "course": _section_name(sec),
+            # ── Extras para la vista "Horario de asignaturas" ──
+            "code": (getattr(pc, "display_code", "")
+                     or (pc.course.code if pc and pc.course else "")) if pc else "",
+            "teacher": docente,
+            "semester": pc.semester if pc else None,
+            "section_label": sec.label or "A",
         })
 
-    return Response({"schedule": schedule})
+    return Response({"schedule": schedule, "period": period})

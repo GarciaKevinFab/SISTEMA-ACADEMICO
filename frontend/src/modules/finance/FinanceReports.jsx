@@ -6,7 +6,7 @@ import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { toast } from "../../utils/safeToast"; // <-- usa safeToast
 import { RefreshCw, Download } from "lucide-react";
-import { generatePDFWithPolling, downloadFile } from "../../utils/pdfQrPolling";
+import { api } from "../../lib/api";
 import { fmtCurrency, formatApiError, toLimaDate } from "../../utils/format";
 import { optVal } from "../../utils/ui";
 
@@ -100,13 +100,14 @@ export default function FinanceReports() {
         concept_id: conceptId === "ALL" ? undefined : conceptId,
         career: careerName === "ALL" ? undefined : careerName,
       };
-      const res = await generatePDFWithPolling(
-        "/finance/reports/income/export",
-        params,
-        { testId: "finance-report-pdf" }
-      );
-      if (res?.success) await downloadFile(res.downloadUrl, "reporte-ingresos.pdf");
-      else toast.error("No se pudo generar el PDF");
+      const res = await api.get("/finance/reports/income/export",
+        { params, responseType: "blob" });
+      const blob = res?.data instanceof Blob ? res.data : new Blob([res.data]);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "reporte-ingresos.pdf";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
     } catch (e) {
       showApiError(e, "No se pudo exportar PDF");
     } finally {

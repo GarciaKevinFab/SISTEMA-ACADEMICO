@@ -548,23 +548,7 @@ def reconciliation_export_pdf(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def reports_income(request):
-    date_from = request.query_params.get("date_from")
-    date_to = request.query_params.get("date_to")
-    concept_id = request.query_params.get("concept_id")
-    career_id = request.query_params.get("career_id")
-
-    qs = IncomeEntry.objects.all()
-    if date_from:
-        qs = qs.filter(date__gte=date_from)
-    if date_to:
-        qs = qs.filter(date__lte=date_to)
-    if concept_id:
-        qs = qs.filter(concept_id=concept_id)
-    if career_id:
-        qs = qs.filter(career_id=career_id)
-
-    qs = qs.order_by("date", "id")
-
+    qs = _income_report_qs(request)
     data = [
         {
             "date": it.date,
@@ -577,10 +561,82 @@ def reports_income(request):
     return Response(data)
 
 
-@api_view(["POST"])
+def _income_report_qs(request):
+    """Queryset del reporte de ingresos con los filtros de la pantalla.
+    `career` filtra por NOMBRE (los ingresos de admisión no llevan career_id)."""
+    src = request.query_params if request.method == "GET" else request.data
+    g = src.get
+    qs = IncomeEntry.objects.all()
+    if g("date_from"):
+        qs = qs.filter(date__gte=g("date_from"))
+    if g("date_to"):
+        qs = qs.filter(date__lte=g("date_to"))
+    if g("concept_id"):
+        qs = qs.filter(concept_id=g("concept_id"))
+    if g("career_id"):
+        qs = qs.filter(career_id=g("career_id"))
+    if g("career"):
+        qs = qs.filter(career_name=g("career"))
+    return qs.order_by("date", "id")
+
+
+@api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def reports_income_export_pdf(request):
-    return Response({"success": False, "detail": "Exportación PDF de reporte de ingresos no implementada aún"}, status=status.HTTP_200_OK)
+    """Reporte de ingresos en PDF con membrete institucional (mismos filtros
+    que la pantalla). Antes era un stub que devolvía 'no implementada aún'."""
+    from html import escape as esc
+    from django.http import HttpResponse
+    from academic.pdf_render import html_to_pdf_bytes
+    from academic.views.evaluation_pdf import _pdf_shell
+
+    src = request.query_params if request.method == "GET" else request.data
+    rows = list(_income_report_qs(request))
+    total = sum(float(r.amount or 0) for r in rows)
+
+    filtros = []
+    if src.get("date_from") or src.get("date_to"):
+        filtros.append(f"Del {src.get('date_from') or '…'} al {src.get('date_to') or '…'}")
+    if src.get("career"):
+        filtros.append(f"Programa: {src.get('career')}")
+    if src.get("concept_id"):
+        c = Concept.objects.filter(id=src.get("concept_id")).first()
+        if c:
+            filtros.append(f"Concepto: {c.name}")
+
+    filas = "".join(
+        f"<tr><td class='c'>{r.date.strftime('%d/%m/%Y') if r.date else ''}</td>"
+        f"<td>{esc(r.concept_name or '')}</td>"
+        f"<td>{esc(r.career_name or '—')}</td>"
+        f"<td class='c'>S/ {float(r.amount or 0):,.2f}</td></tr>"
+        for r in rows)
+
+    cuerpo = f"""
+<style> th {{ background: #E7E6E6; color: #111; }} </style>
+<h2 style="text-align:center">REPORTE DE INGRESOS</h2>
+<p style="font-size:9px; color:#555; margin:2px 0 0">
+  {esc(' · '.join(filtros) if filtros else 'Todos los ingresos registrados')} ·
+  {len(rows)} registro(s) · Total: <b>S/ {total:,.2f}</b>
+</p>
+<table>
+  <thead><tr><th>Fecha</th><th>Concepto</th><th>Carrera / Programa</th><th>Monto</th></tr></thead>
+  <tbody>{filas if filas else
+          '<tr><td colspan="4" style="color:#777">Sin ingresos para el filtro.</td></tr>'}</tbody>
+</table>
+<table style="width:40%; margin-top:10px">
+  <tr><th>Total registros</th><td class='c'>{len(rows)}</td></tr>
+  <tr><th>Monto total</th><td class='c'><b>S/ {total:,.2f}</b></td></tr>
+</table>
+"""
+    html = _pdf_shell("REPORTE DE INGRESOS — TESORERÍA", cuerpo)
+    try:
+        pdf = html_to_pdf_bytes(html)
+    except Exception as exc:
+        return Response({"detail": f"No se pudo generar el PDF: {exc}"}, status=500)
+    return HttpResponse(
+        pdf, content_type="application/pdf",
+        headers={"Content-Disposition":
+                 'attachment; filename="reporte-ingresos.pdf"'})
 
 
 # =====================
