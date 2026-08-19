@@ -221,6 +221,11 @@ export function PublicHeader({ active = "" }) {
                             className="ml-2 inline-flex items-center px-4 py-2 rounded-full bg-white text-blue-950 text-[13px] font-extrabold hover:bg-blue-50 hover:scale-105 transition-all duration-300 shadow-lg shadow-blue-950/20">
                             Acceso
                         </a>
+                        {/* Escudo institucional (el segundo logo del header original) */}
+                        <span className="ml-2 grid place-items-center h-11 w-11 rounded-full bg-white shadow-lg shadow-blue-950/30 shrink-0">
+                            <img src="/loguito.png" alt="Escudo institucional" draggable="false"
+                                className="h-9 w-9 object-contain" />
+                        </span>
                     </nav>
                 </div>
             </div>
