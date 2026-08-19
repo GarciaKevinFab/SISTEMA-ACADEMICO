@@ -4,6 +4,7 @@
  * Permite ver, aprobar y rechazar vouchers de pago.
  */
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
     Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "../../components/ui/card";
@@ -400,6 +401,20 @@ export default function EnrollmentPaymentsReview() {
                                                             </Button>
                                                         </>
                                                     )}
+                                                    {/* Corrección de estado: un rechazo por error
+                                                        se puede aprobar desde aquí mismo */}
+                                                    {payment.status === "REJECTED" && (
+                                                        <Button
+                                                            size="sm"
+                                                            className="bg-green-600 hover:bg-green-700 text-white h-7 px-2 text-xs"
+                                                            onClick={() => handleApprove(payment)}
+                                                            disabled={actionLoading}
+                                                            title="Corregir el rechazo: aprobar este pago"
+                                                        >
+                                                            <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                                                            <span className="hidden sm:inline">Aprobar</span>
+                                                        </Button>
+                                                    )}
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
@@ -421,8 +436,11 @@ export default function EnrollmentPaymentsReview() {
                 </Card>
             )}
 
-            {/* ── Modal de Rechazo ── */}
-            {reviewingPayment && (
+            {/* ── Modal de Rechazo ──
+                createPortal: los modales van al <body>. Dentro del ModuleShell
+                (backdrop-blur) un `fixed` se ancla a la tarjeta y el modal
+                aparecía fuera de la vista hasta hacer scroll. */}
+            {reviewingPayment && createPortal(
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
                     <Card className="w-full max-w-md">
                         <CardHeader>
@@ -506,11 +524,12 @@ export default function EnrollmentPaymentsReview() {
                             </div>
                         </CardContent>
                     </Card>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* ── Modal de Vista Previa de Voucher ── */}
-            {previewPayment && (
+            {previewPayment && createPortal(
                 <div
                     className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
                     onClick={() => setPreviewPayment(null)}
@@ -599,9 +618,16 @@ export default function EnrollmentPaymentsReview() {
                             )}
                         </div>
 
-                        {/* Footer con acciones rápidas */}
-                        {previewPayment.status === "PENDING" && (
+                        {/* Footer con acciones rápidas: pendiente → aprobar o
+                            rechazar; rechazado → corregir aprobando desde aquí */}
+                        {previewPayment.status !== "APPROVED" && (
                             <div className="flex items-center justify-end gap-2 px-5 py-3 border-t bg-slate-50">
+                                {previewPayment.status === "REJECTED" && previewPayment.rejection_note && (
+                                    <p className="mr-auto text-[11px] text-red-600 truncate max-w-[50%]"
+                                        title={previewPayment.rejection_note}>
+                                        Rechazo: {previewPayment.rejection_note}
+                                    </p>
+                                )}
                                 <Button
                                     size="sm"
                                     className="bg-green-600 hover:bg-green-700 text-white"
@@ -610,27 +636,30 @@ export default function EnrollmentPaymentsReview() {
                                 >
                                     <CheckCircle className="h-4 w-4 mr-1" /> Aprobar
                                 </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="text-red-600 border-red-200 hover:bg-red-50"
-                                    onClick={() => {
-                                        setReviewingPayment(previewPayment);
-                                        setPreviewPayment(null);
-                                        setRejectionNote("");
-                                    }}
-                                    disabled={actionLoading}
-                                >
-                                    <XCircle className="h-4 w-4 mr-1" /> Rechazar
-                                </Button>
+                                {previewPayment.status === "PENDING" && (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="text-red-600 border-red-200 hover:bg-red-50"
+                                        onClick={() => {
+                                            setReviewingPayment(previewPayment);
+                                            setPreviewPayment(null);
+                                            setRejectionNote("");
+                                        }}
+                                        disabled={actionLoading}
+                                    >
+                                        <XCircle className="h-4 w-4 mr-1" /> Rechazar
+                                    </Button>
+                                )}
                             </div>
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* ── Modal de Confirmar Eliminación ── */}
-            {deletingPayment && (
+            {deletingPayment && createPortal(
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
                     <Card className="w-full max-w-sm">
                         <CardHeader>
@@ -670,7 +699,8 @@ export default function EnrollmentPaymentsReview() {
                             </div>
                         </CardContent>
                     </Card>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );
