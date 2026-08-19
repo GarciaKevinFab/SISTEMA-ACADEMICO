@@ -784,18 +784,51 @@ class TeacherSelfSchedulePdfView(APIView):
                                  "section__classroom")
                  .order_by("weekday", "start"))
         from .utils import romanos_mayusculas
-        filas = []
+        # Rejilla semanal (formato "vida académica"): columnas por día con
+        # los bloques del docente, color estable por curso — igual que el
+        # horario del alumno.
+        COLORES = ["#2563EB", "#059669", "#7C3AED", "#D97706",
+                   "#E11D48", "#0284C7", "#0D9488", "#EA580C"]
+        por_dia = {i: [] for i in range(1, 8)}
+        nombres_cursos = set()
         for sl in slots:
             sec = sl.section
             pc = sec.plan_course
             career = (pc.plan.career.name if pc and pc.plan and pc.plan.career else "")
-            filas.append(
-                f"<tr><td class='c'><b>{self.DIAS.get(int(sl.weekday), sl.weekday)}</b></td>"
-                f"<td class='c'>{str(sl.start)[:5]} – {str(sl.end)[:5]}</td>"
-                f"<td>{_esc(romanos_mayusculas(pc.effective_name if pc else ''))}</td>"
-                f"<td>{_esc(career)}</td>"
-                f"<td class='c'>{pc.semester if pc else ''} - \"{_esc(sec.label or 'A')}\"</td>"
-                f"<td class='c'>{_esc(sec.classroom.code if sec.classroom else '—')}</td></tr>")
+            nombre = romanos_mayusculas(pc.effective_name if pc else "")
+            nombres_cursos.add(nombre)
+            try:
+                wd = int(sl.weekday)
+            except (TypeError, ValueError):
+                continue
+            if wd in por_dia:
+                por_dia[wd].append({
+                    "start": str(sl.start)[:5], "end": str(sl.end)[:5],
+                    "curso": nombre, "carrera": career,
+                    "ciclo": pc.semester if pc else "", "sec": sec.label or "A",
+                    "aula": sec.classroom.code if sec.classroom else "",
+                })
+        for d in por_dia.values():
+            d.sort(key=lambda b: b["start"])
+        color_de = {c: COLORES[i % len(COLORES)]
+                    for i, c in enumerate(sorted(nombres_cursos))}
+        dias_idx = list(range(1, 7)) + ([7] if por_dia[7] else [])
+        ths = "".join(f"<th>{self.DIAS.get(i, i)}</th>" for i in dias_idx)
+        tds = []
+        for i in dias_idx:
+            piezas = []
+            for b in por_dia[i]:
+                col = color_de.get(b["curso"], COLORES[0])
+                piezas.append(
+                    f"<div class='blk' style='border-left:3px solid {col}'>"
+                    f"<p class='cur'>{_esc(b['curso'])}</p>"
+                    f"<p class='hor' style='color:{col}'>{b['start']} – {b['end']}</p>"
+                    + (f"<p class='det'>{_esc(b['carrera'])}</p>" if b["carrera"] else "")
+                    + f"<p class='det'>Ciclo {b['ciclo']} · Sec. {_esc(b['sec'])}"
+                    + (f" · Aula {_esc(b['aula'])}" if b["aula"] else "")
+                    + "</p></div>")
+            tds.append(f"<td>{''.join(piezas)}</td>")
+        hay_horario = any(por_dia.values())
 
         foto_html = (f'<img src="{foto_uri}" style="height:88px;width:74px;'
                      f'object-fit:cover;border:1px solid #999;border-radius:4px">'
@@ -822,15 +855,27 @@ class TeacherSelfSchedulePdfView(APIView):
     </table>
   </td>
 </tr></table>
-<table>
-  <tr><th>Día</th><th>Hora</th><th>Curso / Módulo</th><th>Programa</th><th>Ciclo - Sec.</th><th>Aula</th></tr>
-  {''.join(filas) if filas else '<tr><td colspan="6" class="c">Sin horario registrado para el período</td></tr>'}
+<style>
+  table.grid {{ table-layout: fixed; }}
+  table.grid th {{ background: #1F4E79; color: #fff; font-size: 8.5px; }}
+  table.grid td {{ vertical-align: top; padding: 3px; background: #FAFBFD; }}
+  .blk {{ background: #fff; border: 1px solid #E2E8F0; border-radius: 5px;
+          padding: 4px 5px; margin-bottom: 4px; page-break-inside: avoid; }}
+  .blk p {{ margin: 0; }}
+  .cur {{ font-size: 7.8px; font-weight: bold; color: #0F172A; line-height: 1.25; }}
+  .hor {{ font-size: 7.5px; font-weight: bold; margin-top: 1px; }}
+  .det {{ font-size: 6.8px; color: #475569; }}
+</style>
+<table class="grid" style="margin-top:8px">
+  <thead><tr>{ths}</tr></thead>
+  <tbody><tr>{''.join(tds)}</tr></tbody>
 </table>
+{'' if hay_horario else '<p style="font-size:9px;color:#777;text-align:center">Sin horario registrado para el período</p>'}
 <h2>Cursos a cargo ({len(sections)})</h2>
 <ul style="font-size:10px;margin:4px 0 0 14px">{cursos_html or '<li>—</li>'}</ul>
 <div class="firma"><span class="linea">{_esc(full_name)}<br>DOCENTE</span></div>
 """
-        html = _pdf_shell(f"HORARIO DE CLASES — {period_code}", cuerpo)
+        html = _pdf_shell(f"HORARIO DE CLASES — {period_code}", cuerpo, landscape=True)
         return HttpResponse(
             html_to_pdf_bytes(html), content_type="application/pdf",
             headers={"Content-Disposition":

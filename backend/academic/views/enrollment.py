@@ -1971,24 +1971,28 @@ class ScheduleExportView(APIView):
 
 
 class ScheduleExportPDFView(APIView):
+    """
+    GET /academic/schedules/export/pdf[?academic_period][&student_id][&dni]
+    Horario del alumno en PDF con REJILLA SEMANAL (formato "vida académica"):
+    columnas Lunes–Domingo con los bloques de cada día (curso, hora, aula,
+    docente, color por asignatura) y cuadro resumen con créditos.
+    Antes era una tabla plana de cursos (reportlab); ahora usa el membrete
+    institucional común (_pdf_shell) como el resto de documentos.
+    """
     authentication_classes = [JWTAuthentication]
     permission_classes     = [permissions.IsAuthenticated]
 
+    DIAS = {1: "Lunes", 2: "Martes", 3: "Miércoles", 4: "Jueves",
+            5: "Viernes", 6: "Sábado", 7: "Domingo"}
+    COLORES = ["#2563EB", "#059669", "#7C3AED", "#D97706",
+               "#E11D48", "#0284C7", "#0D9488", "#EA580C"]
+
     def get(self, request):
-        from io import BytesIO
-        import os
-        import urllib.request
+        from html import escape as esc
         from django.http import HttpResponse
-        from django.conf import settings as dj_settings
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib import colors
-        from reportlab.lib.units import cm
-        from reportlab.platypus import (
-            SimpleDocTemplate, Table, TableStyle, Paragraph,
-            Spacer, HRFlowable, Image,
-        )
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+        from academic.pdf_render import html_to_pdf_bytes
+        from .evaluation_pdf import _pdf_shell
+        from .utils import romanos_mayusculas
 
         period     = (request.query_params.get("academic_period") or _guess_default_period_code()).strip()
         dni        = (request.query_params.get("dni") or "").strip() or None
@@ -2005,21 +2009,6 @@ class ScheduleExportPDFView(APIView):
         ])).strip()
         student_doc = st.num_documento or ""
         plan_name   = st.plan.name if st.plan_id and st.plan else ""
-        # ciclo_val se calcula después de cargar el enrollment (ver abajo)
-        inst_name = 'I.E.S.P.P "GUSTAVO ALLENDE LLAVERIA"'
-        inst_abbr = ""
-        logo_url  = ""
-        try:
-            from catalogs.models import InstitutionSetting as CIS
-            inst = CIS.objects.filter(pk=1).first()
-            if inst:
-                d = inst.data or {}
-                inst_name = d.get("name", "") or inst_name
-                inst_abbr = d.get("abbreviation", "") or d.get("abbr", "") or ""
-                logo_url  = (d.get("logo_url", "") or d.get("logo", "")
-                             or getattr(inst, "logo_url", "") or "")
-        except Exception:
-            pass
 
         enrollment = (
             Enrollment.objects
@@ -2029,7 +2018,7 @@ class ScheduleExportPDFView(APIView):
             .first()
         )
 
-        schedule_rows = []
+        cursos, por_dia = [], {i: [] for i in range(1, 8)}
         if enrollment:
             for item in enrollment.items.select_related(
                 "plan_course__course", "plan_course",
@@ -2037,8 +2026,7 @@ class ScheduleExportPDFView(APIView):
             ).prefetch_related("section__schedule_slots").all():
                 pc  = item.plan_course
                 sec = item.section
-                # Fallback: matrículas sin sección en el item → resolver la
-                # sección del curso en este período (docente/aula/horario)
+                # Matrículas sin sección en el item → resolver la del curso
                 if sec is None and pc is not None:
                     sec = (
                         Section.objects
@@ -2048,271 +2036,129 @@ class ScheduleExportPDFView(APIView):
                         .order_by("label", "id")
                         .first()
                     )
-                course_name   = (getattr(pc, "display_name", "") or getattr(pc.course, "name", "") or "") if pc else ""
-                course_code   = (getattr(pc, "display_code", "") or getattr(pc.course, "code", "") or "") if pc else ""
-                credits       = int(getattr(pc, "credits", 0) or 0) if pc else 0
-                semester      = int(getattr(pc, "semester", 0) or 0) if pc else 0
-                section_label = sec.label if sec else "—"
-                teacher_name  = (
-                    _get_full_name(getattr(sec.teacher, "user", None))
-                    if sec and sec.teacher else "—"
-                )
-                room_name = "—"
+                nombre = romanos_mayusculas(
+                    (getattr(pc, "display_name", "") or getattr(pc.course, "name", "") or "")
+                    if pc else "")
+                codigo   = (getattr(pc, "display_code", "") or getattr(pc.course, "code", "") or "") if pc else ""
+                creditos = int(getattr(pc, "credits", 0) or 0) if pc else 0
+                semestre = int(getattr(pc, "semester", 0) or 0) if pc else 0
+                docente  = (_get_full_name(getattr(sec.teacher, "user", None))
+                            if sec and sec.teacher else "—")
+                aula = "—"
                 if sec and sec.classroom:
-                    room_name = sec.classroom.code or sec.classroom.name or "—"
+                    aula = sec.classroom.code or sec.classroom.name or "—"
 
-                slots = []
+                n_slots = 0
                 if sec:
-                    for sl in sec.schedule_slots.all().order_by("weekday", "start"):
-                        day_name = {
-                            1: "Lunes", 2: "Martes", 3: "Miércoles",
-                            4: "Jueves", 5: "Viernes", 6: "Sábado", 7: "Domingo",
-                        }.get(int(sl.weekday), str(sl.weekday))
-                        t_start = str(sl.start)[:5]
-                        t_end   = str(sl.end)[:5]
+                    for sl in sec.schedule_slots.all():
                         try:
-                            h = int(t_start.split(":")[0])
-                            ampm = "AM" if h < 12 else "PM"
-                        except Exception:
-                            ampm = ""
-                        slots.append(f"{day_name} {t_start}–{t_end} {ampm}".strip())
-
-                schedule_rows.append({
-                    "course_name":  course_name.upper(),
-                    "course_code":  course_code,
-                    "credits":      credits,
-                    "semester":     semester,
-                    "section":      section_label,
-                    "teacher":      teacher_name,
-                    "room":         room_name,
-                    "horario":      "\n".join(slots) if slots else "Sin horario",
+                            wd = int(sl.weekday)
+                        except (TypeError, ValueError):
+                            continue
+                        if wd in por_dia:
+                            por_dia[wd].append({
+                                "start": str(sl.start)[:5], "end": str(sl.end)[:5],
+                                "curso": nombre, "codigo": codigo,
+                                "docente": docente, "aula": aula,
+                            })
+                            n_slots += 1
+                cursos.append({
+                    "curso": nombre, "codigo": codigo, "creditos": creditos,
+                    "semestre": semestre, "seccion": sec.label if sec else "—",
+                    "docente": docente, "aula": aula, "con_horario": n_slots > 0,
                 })
 
-        schedule_rows.sort(key=lambda r: (r["semester"] or 99, r["course_name"]))
+        cursos.sort(key=lambda c: (c["semestre"] or 99, c["curso"]))
+        for d in por_dia.values():
+            d.sort(key=lambda b: b["start"])
 
-        # Ciclo: usar el semestre máximo de los cursos matriculados;
-        # si no hay matrícula, caer en st.ciclo como referencia.
         try:
-            if schedule_rows:
-                ciclo_val = str(max(r["semester"] for r in schedule_rows if r["semester"]))
-            elif enrollment:
-                max_sem = enrollment.items.select_related("plan_course") \
-                    .aggregate(m=Max("plan_course__semester"))["m"]
-                ciclo_val = str(int(max_sem)) if max_sem else ""
-            else:
-                ciclo_val = str(int(getattr(st, "ciclo", None) or 0)) if getattr(st, "ciclo", None) else ""
-        except Exception:
-            ciclo_val = str(getattr(st, "ciclo", "") or "")
+            ciclo_val = str(max(c["semestre"] for c in cursos if c["semestre"])) if cursos else ""
+        except ValueError:
+            ciclo_val = ""
 
-        buf = BytesIO()
-        PAGE_W, PAGE_H = A4
-        L_MAR = R_MAR = 1.5 * cm
-        T_MAR = 1.5 * cm
-        B_MAR = 2.0 * cm
-        W = PAGE_W - L_MAR - R_MAR
+        # Color estable por asignatura (mismo criterio que la vista web)
+        color_de = {}
+        for i, nombre_c in enumerate(sorted({c["curso"] for c in cursos})):
+            color_de[nombre_c] = self.COLORES[i % len(self.COLORES)]
 
-        doc = SimpleDocTemplate(
-            buf, pagesize=A4,
-            leftMargin=L_MAR, rightMargin=R_MAR,
-            topMargin=T_MAR,  bottomMargin=B_MAR,
-        )
+        dias_idx = list(range(1, 7)) + ([7] if por_dia[7] else [])
+        ths = "".join(f"<th>{self.DIAS[i]}</th>" for i in dias_idx)
 
-        styles = getSampleStyleSheet()
-        BLACK  = colors.black
-        NAVY   = colors.HexColor("#1e3a5f")
-        LGRAY  = colors.HexColor("#f0f4fb")
-        BDBLUE = colors.HexColor("#bfcfe8")
+        tds = []
+        for i in dias_idx:
+            piezas = []
+            for b in por_dia[i]:
+                col = color_de.get(b["curso"], self.COLORES[0])
+                piezas.append(
+                    f"<div class='blk' style='border-left:3px solid {col}'>"
+                    f"<p class='cur'>{esc(b['curso'])}</p>"
+                    + (f"<p class='cod'>{esc(b['codigo'])}</p>" if b["codigo"] else "")
+                    + f"<p class='hor' style='color:{col}'>{b['start']} – {b['end']}</p>"
+                    + (f"<p class='det'>Aula {esc(b['aula'])}</p>"
+                       if b["aula"] and b["aula"] != "—" else "")
+                    + (f"<p class='doc'>{esc(b['docente'])}</p>"
+                       if b["docente"] and b["docente"] != "—" else "")
+                    + "</div>")
+            tds.append(f"<td>{''.join(piezas)}</td>")
 
-        def sty(name, **kw):
-            base = kw.pop("parent", styles["Normal"])
-            return ParagraphStyle(name, parent=base, **kw)
+        filas_resumen = "".join(
+            f"<tr><td class='c'>{n}</td><td><b>{esc(c['curso'])}</b>"
+            + (" <span style='color:#B45309;font-size:7.5px'>(sin horario registrado)</span>"
+               if not c["con_horario"] else "")
+            + f"</td><td class='c'>{esc(c['codigo'])}</td><td class='c'>{c['creditos']}</td>"
+            + f"<td class='c'>{esc(c['seccion'])}</td><td>{esc(c['docente'])}</td>"
+            + f"<td class='c'>{esc(c['aula'])}</td></tr>"
+            for n, c in enumerate(cursos, 1))
+        total_cr = sum(c["creditos"] for c in cursos)
 
-        inst_sty  = sty("IS",  fontSize=13, fontName="Helvetica-Bold",
-                         textColor=NAVY, alignment=TA_CENTER, spaceAfter=1, leading=16)
-        hcls_sty  = sty("HC",  fontSize=11, fontName="Helvetica-Bold",
-                         textColor=NAVY, alignment=TA_CENTER, spaceBefore=4, spaceAfter=1)
-        per_sty   = sty("PR",  fontSize=9,  fontName="Helvetica-Bold",
-                         textColor=NAVY, alignment=TA_CENTER, spaceBefore=2)
-        info_sty  = sty("INF", fontSize=8.5, textColor=BLACK, leading=12)
-        th_sty    = sty("TH",  fontSize=8,  fontName="Helvetica-Bold",
-                         textColor=colors.white, alignment=TA_CENTER, leading=10)
-        td_sty    = sty("TD",  fontSize=8,  textColor=BLACK, leading=11, wordWrap="CJK")
-        ts_sty    = sty("TS",  fontSize=7.5, textColor=BLACK, leading=10, wordWrap="CJK")
-        tc_sty    = sty("TC",  fontSize=8,  textColor=BLACK, leading=11,
-                         alignment=TA_CENTER, wordWrap="CJK")
-        ft_sty    = sty("FT",  fontSize=7,  textColor=colors.HexColor("#888888"),
-                         alignment=TA_CENTER)
-        tot_sty   = sty("TOT", fontSize=9,  fontName="Helvetica-Bold",
-                         textColor=NAVY)
-        tot_r_sty = sty("TOR", fontSize=9,  textColor=colors.HexColor("#444444"),
-                         alignment=TA_RIGHT)
-
-        story = []
-
-        # Membrete con AMBOS logos, como las actas: institucional a la
-        # izquierda y el del sistema (Tarma) a la derecha.
-        logo_img = logo2_img = None
+        cuerpo = f"""
+<style>
+  th {{ background: #1F4E79; color: #fff; font-size: 8.5px; }}
+  table.grid {{ table-layout: fixed; }}
+  table.grid td {{ vertical-align: top; padding: 3px; background: #FAFBFD; }}
+  .blk {{ background: #fff; border: 1px solid #E2E8F0; border-radius: 5px;
+          padding: 4px 5px; margin-bottom: 4px; page-break-inside: avoid; }}
+  .blk p {{ margin: 0; }}
+  .cur {{ font-size: 7.8px; font-weight: bold; color: #0F172A; line-height: 1.25; }}
+  .cod {{ font-size: 6.5px; color: #94A3B8; font-family: monospace; }}
+  .hor {{ font-size: 7.5px; font-weight: bold; margin-top: 1px; }}
+  .det {{ font-size: 6.8px; color: #475569; }}
+  .doc {{ font-size: 6.8px; color: #64748B; font-style: italic; }}
+  table.info td {{ font-size: 9px; }}
+</style>
+<h2 style="text-align:center">HORARIO DE CLASES — {esc(period)}</h2>
+<table class="info" style="margin-top:4px">
+  <tr><td style="width:14%"><b>Alumno</b></td><td>{esc(student_name)}</td>
+      <td style="width:12%"><b>DNI</b></td><td class='c' style="width:16%">{esc(student_doc)}</td></tr>
+  <tr><td><b>Programa</b></td><td>{esc(plan_name)}</td>
+      <td><b>Ciclo · Estado</b></td>
+      <td class='c'>{esc(ciclo_val)}° · {"Matriculado" if enrollment else "Sin matrícula"}</td></tr>
+</table>
+<table class="grid">
+  <thead><tr>{ths}</tr></thead>
+  <tbody><tr>{''.join(tds)}</tr></tbody>
+</table>
+<h2 style="text-align:left; font-size:10px; margin-top:12px">Cuadro resumen</h2>
+<table>
+  <thead><tr><th>N°</th><th>Asignatura</th><th>Código</th><th>Cr.</th>
+             <th>Sec.</th><th>Docente</th><th>Aula</th></tr></thead>
+  <tbody>{filas_resumen if filas_resumen else
+          '<tr><td colspan="7" style="color:#777">Sin cursos matriculados en este período.</td></tr>'}</tbody>
+</table>
+<p style="font-size:9px; margin-top:6px">
+  <b>Total de créditos matriculados: {total_cr}</b> · {len(cursos)} curso(s)
+</p>
+"""
+        html = _pdf_shell(f"HORARIO DE CLASES — {esc(period)}", cuerpo, landscape=True)
         try:
-            from .acta_excel import _institution_logo_paths
-            p_inst, p_sist = _institution_logo_paths()
-            if p_inst:
-                logo_img = Image(p_inst, width=2.2*cm, height=2.2*cm,
-                                 kind="proportional")
-            if p_sist:
-                logo2_img = Image(p_sist, width=2.2*cm, height=2.2*cm,
-                                  kind="proportional")
-        except Exception:
-            logo_img = logo2_img = None
-
-        header_text = [
-            Paragraph(inst_name, inst_sty),
-            Paragraph("HORARIO DE CLASES", hcls_sty),
-            Paragraph(f"Período Académico: {period}", per_sty),
-        ]
-
-        if logo_img or logo2_img:
-            hdr_tbl = Table(
-                [[logo_img or "", header_text, logo2_img or ""]],
-                colWidths=[2.6*cm, W - 5.2*cm, 2.6*cm],
-            )
-            hdr_tbl.setStyle(TableStyle([
-                ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-                ("ALIGN",        (0, 0), (0, 0),   "LEFT"),
-                ("ALIGN",        (2, 0), (2, 0),   "RIGHT"),
-                ("LEFTPADDING",  (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                ("TOPPADDING",   (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING",(0, 0), (-1, -1), 0),
-            ]))
-            story.append(hdr_tbl)
-        else:
-            for p in header_text:
-                story.append(p)
-
-        story.append(Spacer(1, 0.3*cm))
-        story.append(HRFlowable(width="100%", thickness=2, color=NAVY, spaceAfter=8))
-
-        estado_txt = "Matriculado" if enrollment else "Sin matrícula"
-        ciclo_txt  = f"Ciclo: <b>{ciclo_val}°</b>" if ciclo_val else "Ciclo: —"
-
-        def ic(label, value):
-            return Paragraph(f"<b>{label}:</b> {value}", info_sty)
-
-        info_rows = [
-            [ic("Alumno",   student_name),     ic("DNI",    student_doc)],
-            [ic("Programa", plan_name),         Paragraph(f"<b>Estado:</b> {estado_txt}  ·  {ciclo_txt}", info_sty)],
-        ]
-        info_t = Table(info_rows, colWidths=[W*0.62, W*0.38])
-        info_t.setStyle(TableStyle([
-            ("BACKGROUND",    (0, 0), (-1, -1), LGRAY),
-            ("BOX",           (0, 0), (-1, -1), 1.0, NAVY),
-            ("LINEBELOW",     (0, 0), (-1, 0),  0.4, BDBLUE),
-            ("TOPPADDING",    (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
-        ]))
-        story.append(info_t)
-        story.append(Spacer(1, 0.45*cm))
-
-        if not schedule_rows:
-            story.append(Paragraph(
-                "No se encontraron cursos matriculados para este período.",
-                sty("W", fontSize=9, textColor=colors.HexColor("#c0392b"), alignment=TA_CENTER),
-            ))
-        else:
-            col_w = [0.75*cm, 4.2*cm, 2.0*cm, 0.75*cm, 0.75*cm, 2.85*cm, 2.5*cm, 3.7*cm]
-
-            thead = [
-                Paragraph("N°",      th_sty),
-                Paragraph("Curso",   th_sty),
-                Paragraph("Código",  th_sty),
-                Paragraph("Cr.",     th_sty),
-                Paragraph("Sec",     th_sty),
-                Paragraph("Docente", th_sty),
-                Paragraph("Aula",    th_sty),
-                Paragraph("Horario", th_sty),
-            ]
-            table_data = [thead]
-
-            for i, row in enumerate(schedule_rows, start=1):
-                table_data.append([
-                    Paragraph(str(i),              tc_sty),
-                    Paragraph(row["course_name"],   td_sty),
-                    Paragraph(row["course_code"],   ts_sty),
-                    Paragraph(str(row["credits"]),  tc_sty),
-                    Paragraph(row["section"],       tc_sty),
-                    Paragraph(row["teacher"],       ts_sty),
-                    Paragraph(row["room"],          ts_sty),
-                    Paragraph(row["horario"],       ts_sty),
-                ])
-
-            sched_tbl = Table(table_data, colWidths=col_w, repeatRows=1)
-            n_rows    = len(table_data)
-
-            ts = TableStyle([
-                ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
-                ("TEXTCOLOR",     (0, 0), (-1, 0),  colors.white),
-                ("FONTNAME",      (0, 0), (-1, 0),  "Helvetica-Bold"),
-                ("FONTSIZE",      (0, 0), (-1, 0),  8),
-                ("ALIGN",         (0, 0), (-1, 0),  "CENTER"),
-                ("VALIGN",        (0, 0), (-1, 0),  "MIDDLE"),
-                ("TOPPADDING",    (0, 0), (-1, 0),  7),
-                ("BOTTOMPADDING", (0, 0), (-1, 0),  7),
-                ("LEFTPADDING",   (0, 0), (-1, 0),  2),
-                ("RIGHTPADDING",  (0, 0), (-1, 0),  2),
-                ("LINEBELOW",     (0, 0), (-1, 0),  1.5, NAVY),
-                ("FONTSIZE",      (0, 1), (-1, -1), 8),
-                ("TOPPADDING",    (0, 1), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
-                ("LEFTPADDING",   (0, 1), (-1, -1), 4),
-                ("RIGHTPADDING",  (0, 1), (-1, -1), 4),
-                ("VALIGN",        (0, 1), (-1, -1), "MIDDLE"),
-                ("TEXTCOLOR",     (0, 1), (-1, -1), BLACK),
-                ("GRID",          (0, 0), (-1, -1), 0.4, BDBLUE),
-                ("BOX",           (0, 0), (-1, -1), 1.0, NAVY),
-            ])
-            for r in range(1, n_rows):
-                bg = LGRAY if r % 2 == 0 else colors.white
-                ts.add("BACKGROUND", (0, r), (-1, r), bg)
-
-            sched_tbl.setStyle(ts)
-            story.append(sched_tbl)
-
-            total_cr = sum(r["credits"] for r in schedule_rows)
-            story.append(Spacer(1, 0.3*cm))
-            tot_row = Table(
-                [[Paragraph(f"Total de créditos matriculados: {total_cr}", tot_sty),
-                  Paragraph(f"{len(schedule_rows)} curso{'s' if len(schedule_rows) != 1 else ''} matriculado{'s' if len(schedule_rows) != 1 else ''}", tot_r_sty)]],
-                colWidths=[W*0.55, W*0.45],
-            )
-            tot_row.setStyle(TableStyle([
-                ("LEFTPADDING",  (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                ("TOPPADDING",   (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING",(0, 0), (-1, -1), 0),
-            ]))
-            story.append(tot_row)
-
-        story.append(Spacer(1, 1.5*cm))
-        story.append(HRFlowable(width="100%", thickness=0.5,
-                                color=colors.HexColor("#cccccc"), spaceAfter=5))
-        from django.utils import timezone as tz
-        fecha = tz.now().strftime("%d/%m/%Y %H:%M")
-        footer_inst = inst_abbr or inst_name
-        story.append(Paragraph(
-            f"Documento generado el {fecha}  ·  {footer_inst}  ·  Sistema Académico",
-            ft_sty,
-        ))
-
-        doc.build(story)
-        buf.seek(0)
-        filename = f"horario-{student_doc}-{period}.pdf"
+            pdf = html_to_pdf_bytes(html)
+        except Exception as exc:
+            return Response({"detail": f"No se pudo generar el PDF: {exc}"}, status=500)
         return HttpResponse(
-            buf.getvalue(),
-            content_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
+            pdf, content_type="application/pdf",
+            headers={"Content-Disposition":
+                     f'attachment; filename="horario-{student_doc or st.id}-{period}.pdf"'})
 
 
 # ══════════════════════════════════════════════════════════════
