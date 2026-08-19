@@ -386,6 +386,23 @@ def _ciclo_seccion_del_periodo(st, pq):
     except Exception:
         pass
     if not ciclo:
+        # Sin matrícula registrada de ese período (típico de notas históricas
+        # importadas): el ciclo sale del KÁRDEX del período. Antes caía al
+        # ciclo ACTUAL del alumno y la boleta de un período de V ciclo salía
+        # rotulada "VI" (caso Ulloa Rivera, 2024-II).
+        try:
+            from academic.models import AcademicGradeRecord
+            sems = [int(r.plan_course.semester)
+                    for r in AcademicGradeRecord.objects
+                        .select_related("plan_course")
+                        .filter(student=st, term__iexact=pq)
+                    if r.plan_course and r.plan_course.semester]
+            if sems:
+                m = max(sems)
+                ciclo = _ROMANOS_CICLO[m] if m < len(_ROMANOS_CICLO) else str(m)
+        except Exception:
+            pass
+    if not ciclo:
         try:
             n = int(getattr(st, "ciclo", 0) or 0)
             ciclo = _ROMANOS_CICLO[n] if 0 < n < len(_ROMANOS_CICLO) else ""
