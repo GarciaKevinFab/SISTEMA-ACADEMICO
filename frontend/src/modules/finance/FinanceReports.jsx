@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { FReports, Concepts } from "../../services/finance.service";
-import { Careers } from "../../services/academic.service";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -29,20 +28,21 @@ export default function FinanceReports() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [conceptId, setConceptId] = useState("ALL");
-  const [careerId, setCareerId] = useState("ALL");
+  // Carrera se filtra por NOMBRE y en el cliente: los ingresos de admisión
+  // (p.ej. AUXILIAR DE EDUCACIÓN) no existen en el catálogo de carreras ni
+  // llevan career_id, así que el filtro por id del backend los perdía.
+  const [careerName, setCareerName] = useState("ALL");
 
   const [rows, setRows] = useState([]);
   const [concepts, setConcepts] = useState([]);
-  const [careers, setCareers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        const [cs, cr] = await Promise.all([Concepts.list(), Careers.list()]);
+        const cs = await Concepts.list();
         setConcepts(cs?.items ?? cs ?? []);
-        setCareers(cr?.careers ?? cr ?? []);
       } catch {
         // silencioso en carga inicial
       }
@@ -56,7 +56,6 @@ export default function FinanceReports() {
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         concept_id: conceptId === "ALL" ? undefined : conceptId,
-        career_id: careerId === "ALL" ? undefined : careerId,
       };
       const data = await FReports.income(params);
       setRows(toArray(data)); // <— normaliza aquí
@@ -66,15 +65,31 @@ export default function FinanceReports() {
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, conceptId, careerId]);
+  }, [dateFrom, dateTo, conceptId]);
 
   useEffect(() => { load(); }, [load]);
 
-  const totals = useMemo(() => {
-    const list = Array.isArray(rows) ? rows : [];
-    const sum = list.reduce((a, r) => a + Number(r.amount || 0), 0);
-    return { amount: sum, count: list.length };
+  // Opciones de carrera desde los DATOS (incluye programas de admisión que
+  // no están en el catálogo, como Auxiliar de Educación)
+  const carreras = useMemo(() => {
+    const set = new Set();
+    for (const r of (Array.isArray(rows) ? rows : [])) {
+      const c = (r.career_name || "").trim();
+      if (c) set.add(c);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "es"));
   }, [rows]);
+
+  const visibles = useMemo(() => {
+    const list = Array.isArray(rows) ? rows : [];
+    if (careerName === "ALL") return list;
+    return list.filter((r) => (r.career_name || "").trim() === careerName);
+  }, [rows, careerName]);
+
+  const totals = useMemo(() => {
+    const sum = visibles.reduce((a, r) => a + Number(r.amount || 0), 0);
+    return { amount: sum, count: visibles.length };
+  }, [visibles]);
 
   const exportPdf = async () => {
     try {
@@ -83,7 +98,7 @@ export default function FinanceReports() {
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         concept_id: conceptId === "ALL" ? undefined : conceptId,
-        career_id: careerId === "ALL" ? undefined : careerId,
+        career: careerName === "ALL" ? undefined : careerName,
       };
       const res = await generatePDFWithPolling(
         "/finance/reports/income/export",
@@ -99,7 +114,7 @@ export default function FinanceReports() {
     }
   };
 
-  const safeRows = Array.isArray(rows) ? rows : []; // <— usa siempre este en el render
+  const safeRows = visibles; // filtrado por carrera/programa en el cliente
 
   return (
    <div className="space-y-6 pb-24 sm:pb-6">
@@ -174,22 +189,18 @@ export default function FinanceReports() {
   </div>
 
   <div className="md:col-span-2">
-    <label className="text-sm">Carrera</label>
-    <Select value={careerId} onValueChange={setCareerId}>
+    <label className="text-sm">Carrera / Programa</label>
+    <Select value={careerName} onValueChange={setCareerName}>
       <SelectTrigger className="w-full">
         <SelectValue placeholder="Todas" />
       </SelectTrigger>
       <SelectContent className="z-[9999] max-h-60 overflow-y-auto">
         <SelectItem value="ALL">Todas</SelectItem>
-        {careers.map((c) => {
-          const v = optVal(c.id);
-          if (!v) return null;
-          return (
-            <SelectItem key={v} value={v}>
-              {c.name}
-            </SelectItem>
-          );
-        })}
+        {carreras.map((c) => (
+          <SelectItem key={c} value={c}>
+            {c}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   </div>

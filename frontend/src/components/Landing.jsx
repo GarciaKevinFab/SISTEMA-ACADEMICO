@@ -6,7 +6,7 @@
 import React from "react";
 import {
     MessagesSquare, Blocks, BookOpen, Activity, ShieldCheck, ArrowRight,
-    MapPin, Phone, Mail, Clock,
+    MapPin, Phone, Mail, Clock, GraduationCap,
 } from "lucide-react";
 import {
     InjectPublicStyles, Reveal, CountUp, HeroFade, ParallaxBg, PublicHeader,
@@ -85,11 +85,16 @@ const Landing = () => {
                                     </a>
                                 </Reveal>
 
-                                <Reveal delay={520} className="mt-6 flex justify-center">
+                                <Reveal delay={520} className="mt-6 flex flex-wrap justify-center gap-3">
                                     <a href="/public/verificador"
                                         className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-emerald-500/15 border border-emerald-400/25 text-emerald-200 text-sm font-semibold hover:bg-emerald-500/25 hover:text-white transition-all duration-300 backdrop-blur-sm">
                                         <ShieldCheck className="w-4 h-4" />
                                         Verificar Grados y Títulos
+                                    </a>
+                                    <a href="/public/docentes"
+                                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-sky-500/15 border border-sky-400/25 text-sky-200 text-sm font-semibold hover:bg-sky-500/25 hover:text-white transition-all duration-300 backdrop-blur-sm">
+                                        <GraduationCap className="w-4 h-4" />
+                                        Plana Docente
                                     </a>
                                 </Reveal>
                             </HeroFade>
