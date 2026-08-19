@@ -6,7 +6,7 @@ import {
   LayoutDashboard, ShieldCheck, Settings, BookOpenCheck, UserPlus,
   ClipboardList, Wallet, HardDrive, Microscope, LogOut,
   ChevronLeft, ChevronRight, UserCircle, Menu, X, GraduationCap,
-  Award, Wrench,
+  Award, Wrench, CalendarDays,
 } from "lucide-react";
 import { PERMS, PERM_ALIASES } from "../auth/permissions";
 
@@ -185,6 +185,12 @@ const SideNav = () => {
           show: hasRole("TEACHER", "DOCENTE", "PROFESOR"),
         },
         { id: "student", title: "Estudiante", path: "/dashboard/student", icon: GraduationCap, show: canSeeStudentModule },
+        {
+          // Horario de asignaturas del alumno (vista propia, estilo vida académica)
+          id: "mi-horario", title: "Horario", path: "/dashboard/student/horario",
+          icon: CalendarDays,
+          show: hasRole("STUDENT", "ESTUDIANTE"),
+        },
         {
           id: "admission", title: "Admisión", path: "/dashboard/admission", icon: UserPlus,
           show: canAny(PERMS["admission.dashboard.view"], PERMS["admission.calls.view"], PERMS["admission.calls.manage"], PERMS["admission.applicants.manage"], PERMS["admission.documents.review"], PERMS["admission.reports.view"]),

@@ -8,6 +8,7 @@ import { PERMS } from "../auth/permissions";
 /* Públicas */
 import Landing from "../components/Landing";
 import PublicTeachersDirectory from "../modules/academic/PublicTeachersDirectory";
+import StudentSchedulePage from "../modules/student/StudentSchedulePage";
 import Login from "../components/Login";
 
 /* Layout privado */
@@ -176,6 +177,16 @@ export default function AppRouter() {
                     element={
                         <RequireAuth>
                             <StudentMeritoPanel />
+                        </RequireAuth>
+                    }
+                />
+
+                {/* Horario de asignaturas del alumno (estilo vida académica) */}
+                <Route
+                    path="/dashboard/student/horario"
+                    element={
+                        <RequireAuth>
+                            <StudentSchedulePage />
                         </RequireAuth>
                     }
                 />

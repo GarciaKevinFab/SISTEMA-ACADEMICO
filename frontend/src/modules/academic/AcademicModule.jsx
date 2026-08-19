@@ -38,7 +38,6 @@ import {
 import { Teachers as CatalogTeachers, Classrooms as CatalogClassrooms } from "@/services/catalogs.service";
 import EnrollmentComponent from "./EnrollmentComponent";
 import EnrollmentWindowManager from "./EnrollmentWindowManager";
-import StudentSchedulePage from "../student/StudentSchedulePage";
 import { useActivePeriod } from "@/hooks/useActivePeriod";
 import GradesAttendanceComponent from "./GradesAttendanceComponent";
 import SectionSyllabusEvaluation from "./SectionSyllabusEvaluation";
@@ -1288,8 +1287,6 @@ export default function AcademicModule() {
             { key: "profile", label: "Mi Perfil", need: [], teacherOnly: true, group: "docencia" },
             // ── Estudiante / común ──
             { key: "enroll", label: "Matrícula", need: REQS.enroll, group: "academico" },
-            // Horario de asignaturas del alumno (estilo vida académica)
-            { key: "my_schedule", label: "Horario", need: [], studentOnly: true, group: "academico" },
             // Sílabos: el docente sube el suyo y el alumno consulta los de sus
             // cursos. Para administración estaba duplicado: el monitoreo vive
             // en Evaluación → "Sílabos y sesiones".
@@ -1452,7 +1449,6 @@ export default function AcademicModule() {
                         <TabsContent value="grades"><GradesAttendanceComponent /></TabsContent>
                         <TabsContent value="attendance"><GradesAttendanceComponent initialTab="attendance" /></TabsContent>
                         <TabsContent value="schedule"><TeacherSchedule /></TabsContent>
-                        <TabsContent value="my_schedule"><StudentSchedulePage /></TabsContent>
                         <TabsContent value="profile"><TeacherProfile /></TabsContent>
                         <TabsContent value="syllabus"><SectionSyllabusEvaluation /></TabsContent>
                         <TabsContent value="sesiones"><TeacherSesiones /></TabsContent>
@@ -1486,7 +1482,7 @@ function tabIcon(key) {
         dashboard: LayoutGrid, plans: BookOpen, load: Calendar, enroll: GraduationCap,
         grades: CheckCircle, attendance: Users, syllabus: FileText, kardex: Users, reports: BarChart3, processes: Clock,
         evaluation: ClipboardList, attendance_admin: CheckCircle, profile: Users,
-        schedule: CalendarDays, my_schedule: CalendarDays,
+        schedule: CalendarDays,
         transfers: Inbox, periods: CalendarDays, teachers: Users, credentials: KeyRound, importers: FileSpreadsheet,
     };
     return map[key] || LayoutGrid;

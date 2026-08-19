@@ -538,25 +538,34 @@ def student_schedule(request):
         wd = getattr(slot, "weekday", None)
         day = WEEKDAY_NAMES.get(wd, str(wd)) if isinstance(wd, int) else str(wd or "")
 
-        pc = sec.plan_course
-        docente = ""
-        if sec.teacher and getattr(sec.teacher, "user", None):
-            docente = (getattr(sec.teacher.user, "full_name", "")
-                       or sec.teacher.user.username or "")
-
-        schedule.append({
+        fila = {
             "day": day,
             "name": _section_name(sec),
             "time": str(getattr(slot, "start", "")),
             "end": str(getattr(slot, "end", "")),
             "room": _classroom_name(sec),
             "course": _section_name(sec),
-            # ── Extras para la vista "Horario de asignaturas" ──
-            "code": (getattr(pc, "display_code", "")
-                     or (pc.course.code if pc and pc.course else "")) if pc else "",
-            "teacher": docente,
-            "semester": pc.semester if pc else None,
-            "section_label": sec.label or "A",
-        })
+        }
+        # Extras para "Horario de asignaturas": si algo falla en una fila,
+        # esa fila sale sin extras pero el horario NUNCA se cae completo
+        try:
+            pc = sec.plan_course
+            docente = ""
+            if sec.teacher_id and sec.teacher and getattr(sec.teacher, "user", None):
+                docente = (getattr(sec.teacher.user, "full_name", "")
+                           or sec.teacher.user.username or "")
+            fila.update({
+                "code": (getattr(pc, "display_code", "")
+                         or (pc.course.code if pc and pc.course else "")) if pc else "",
+                "teacher": docente,
+                "semester": pc.semester if pc else None,
+                "section_label": sec.label or "A",
+            })
+        except Exception:
+            pass
+        schedule.append(fila)
 
-    return Response({"schedule": schedule, "period": period})
+    # OJO: _current_period() devuelve un OBJETO Period (catalogs) — hay que
+    # serializar su código; devolver el objeto crudo tumbaba el endpoint.
+    period_code = getattr(period, "code", None) or (str(period) if period else "")
+    return Response({"schedule": schedule, "period": period_code})

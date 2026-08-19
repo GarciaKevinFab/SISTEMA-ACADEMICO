@@ -10,6 +10,7 @@ import {
     CalendarDays, Clock, MapPin, UserRound, Download, Loader2, BookOpen,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import ModuleShell from "@/components/module/ModuleShell";
 
 const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
@@ -103,7 +104,13 @@ export default function StudentSchedulePage() {
     };
 
     return (
-        <div className="space-y-4">
+        <ModuleShell
+            icon={CalendarDays}
+            title="Mi Horario"
+            subtitle={`Horario de asignaturas${period ? ` — ${period}` : ""}`}
+            accent="linear-gradient(135deg, #8B5CF6, #6D28D9)"
+        >
+            <div className="space-y-4">
             <Card className="border shadow-sm rounded-2xl">
                 <CardHeader className="pb-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -229,6 +236,7 @@ export default function StudentSchedulePage() {
                     </CardContent>
                 </Card>
             )}
-        </div>
+            </div>
+        </ModuleShell>
     );
 }
