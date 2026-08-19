@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
+import { InjectPublicStyles, Reveal } from "./public/publicFx";
 
 /* ─── inject font ─── */
 function InjectLoginFont() {
@@ -66,7 +67,8 @@ const Login = () => {
   return (
     <>
       <InjectLoginFont />
-      <div className="login-root min-h-screen flex items-center justify-center py-10 px-4 sm:px-6 relative bg-cover bg-center"
+      <InjectPublicStyles />
+      <div className="login-root pv-font min-h-screen flex items-center justify-center py-10 px-4 sm:px-6 relative bg-cover bg-center"
         style={{ backgroundImage: "url('/bg-login.png')" }}>
 
         {/* overlay */}
@@ -77,7 +79,7 @@ const Login = () => {
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="absolute top-5 left-5 z-20 flex items-center gap-1.5 text-sm font-600 text-white/70 hover:text-white bg-white/8 hover:bg-white/14 border border-white/12 px-3.5 py-2 rounded-xl transition-all duration-200"
+          className="absolute top-5 left-5 z-20 flex items-center gap-1.5 text-sm font-semibold text-white/75 hover:text-white bg-white/10 hover:bg-white/20 border border-white/15 px-4 py-2 rounded-full backdrop-blur-md transition-all duration-300 hover:scale-105"
         >
           <ArrowLeft size={15} /> Volver
         </button>
@@ -97,14 +99,23 @@ const Login = () => {
                 <div className="absolute -top-20 -left-20 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
                 <div className="absolute -bottom-16 -right-16 w-56 h-56 bg-blue-400/15 rounded-full blur-3xl pointer-events-none" />
 
-                <img src="/logo.png" alt="Logo del Instituto" className="relative z-10 w-32 md:w-36 object-contain drop-shadow-xl" draggable="false" />
-                <img src="/loguito.png" alt="Logotipo secundario" className="relative z-10 w-28 md:w-32 object-contain opacity-90" draggable="false" />
+                {/* Escudo institucional en medallón blanco (protagonista) */}
+                <Reveal variant="scale">
+                  <div className="relative z-10 grid place-items-center h-36 w-36 md:h-40 md:w-40 rounded-full bg-white shadow-[0_18px_50px_-12px_rgba(0,0,0,0.5)] ring-4 ring-white/15">
+                    <img src="/logo.png" alt="Escudo del Instituto"
+                      className="h-32 w-32 md:h-36 md:w-36 object-contain" draggable="false" />
+                  </div>
+                </Reveal>
+                <Reveal delay={150}>
+                  <img src="/loguito.png" alt="Marca Tarma"
+                    className="relative z-10 w-24 md:w-28 object-contain opacity-95 drop-shadow-lg" draggable="false" />
+                </Reveal>
 
-                <div className="relative z-10 text-center space-y-1.5 mt-1">
-                  <p className="text-white font-800 text-base leading-snug">IESPP</p>
-                  <p className="text-blue-200/80 text-xs font-500 leading-snug max-w-[180px] mx-auto">"Gustavo Allende Llavería"</p>
-                  <p className="text-indigo-300/70 text-[10px] uppercase tracking-[0.15em] font-600 mt-2">Tarma — Junín, Perú</p>
-                </div>
+                <Reveal delay={280} className="relative z-10 text-center space-y-1.5 mt-1">
+                  <p className="pv-display text-white font-extrabold text-lg leading-snug">IESPP</p>
+                  <p className="text-blue-200/85 text-xs font-medium leading-snug max-w-[190px] mx-auto">"Gustavo Allende Llavería"</p>
+                  <p className="text-indigo-300/70 text-[10px] uppercase tracking-[0.18em] font-semibold mt-2">Tarma — Junín, Perú</p>
+                </Reveal>
 
                 {/* bottom decorative dots */}
                 <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
@@ -117,11 +128,11 @@ const Login = () => {
                 <div className="max-w-sm mx-auto w-full">
 
                   {/* heading */}
-                  <div className="mb-8">
-                    <p className="text-[11px] font-700 text-indigo-500 uppercase tracking-[0.18em] mb-1.5">Bienvenido</p>
-                    <h2 className="text-2xl sm:text-3xl font-900 text-slate-900 tracking-tight leading-tight">Sistema Académico</h2>
-                    <p className="text-sm text-slate-500 mt-1.5 font-400">Ingresa tus credenciales para continuar</p>
-                  </div>
+                  <Reveal delay={120} className="mb-8">
+                    <p className="text-[11px] font-bold text-indigo-500 uppercase tracking-[0.2em] mb-1.5">Bienvenido</p>
+                    <h2 className="pv-display text-3xl sm:text-4xl font-extrabold text-slate-900 leading-tight">Sistema Académico</h2>
+                    <p className="text-sm text-slate-500 mt-2">Ingresa tus credenciales para continuar</p>
+                  </Reveal>
 
                   {/* form */}
                   <form onSubmit={handleSubmit} className="space-y-4">
@@ -180,9 +191,9 @@ const Login = () => {
                     <button
                       type="submit"
                       disabled={loading}
-                      className={`w-full h-11 rounded-xl text-sm font-extrabold tracking-wide transition-all duration-200 flex items-center justify-center gap-2 mt-2 ${loading
+                      className={`w-full h-12 rounded-full text-sm font-extrabold tracking-wide transition-all duration-300 flex items-center justify-center gap-2 mt-3 ${loading
                         ? "bg-slate-300 text-slate-500 cursor-not-allowed"
-                        : "bg-gradient-to-r from-indigo-600 to-indigo-800 !text-white hover:from-indigo-500 hover:to-indigo-700 shadow-lg shadow-indigo-600/30 hover:shadow-xl hover:shadow-indigo-600/40 hover:scale-[1.01] active:scale-[0.99]"
+                        : "bg-gradient-to-r from-indigo-600 to-indigo-800 !text-white hover:from-indigo-500 hover:to-indigo-700 shadow-lg shadow-indigo-600/30 hover:shadow-xl hover:shadow-indigo-600/40 hover:scale-[1.02] active:scale-[0.98]"
                         }`}
                     >
                       {loading ? <><Loader2 size={15} className="animate-spin" /> Iniciando sesión…</> : "Iniciar Sesión"}

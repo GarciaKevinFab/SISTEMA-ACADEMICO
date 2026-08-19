@@ -178,8 +178,10 @@ export function PublicHeader({ active = "" }) {
         window.addEventListener("scroll", onScroll, { passive: true });
         return () => window.removeEventListener("scroll", onScroll);
     }, []);
+    // "Inicio" lleva a la página INFORMATIVA del instituto (WordPress),
+    // como en el header original; la marca lleva al home del sistema.
     const links = [
-        ["/", "Inicio"],
+        ["https://iesppallende.edu.pe/", "Inicio"],
         ["/public/admission", "Admisión"],
         ["/public/procedures", "Mesa de Partes"],
         ["/public/verificador", "Verificador"],
@@ -192,8 +194,10 @@ export function PublicHeader({ active = "" }) {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between h-16">
                     <a href="/" className="flex items-center gap-3 min-w-0 group">
-                        <img src="/logo.png" alt="IESPP" draggable="false"
-                            className="h-9 w-9 object-contain transition-transform duration-300 group-hover:scale-110" />
+                        <span className="grid place-items-center h-11 w-11 rounded-full bg-white shadow-lg shadow-blue-950/30 shrink-0 transition-transform duration-300 group-hover:scale-110">
+                            <img src="/logo.png" alt="Escudo IESPP" draggable="false"
+                                className="h-9 w-9 object-contain" />
+                        </span>
                         <div className="leading-tight min-w-0 hidden xs:block sm:block">
                             <p className="text-white font-extrabold text-sm truncate tracking-tight">
                                 IESPP Gustavo Allende Llavería
