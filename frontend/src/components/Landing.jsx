@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
+import {
+    InjectPublicStyles, Reveal, CountUp, HeroFade, ParallaxBg,
+} from "./public/publicFx";
 
 const Landing = () => {
     const [menuOpen, setMenuOpen] = useState(false);
@@ -173,7 +176,10 @@ const Landing = () => {
     };
 
     return (
-        <div className="h-[100dvh] bg-white flex flex-col overflow-y-auto overflow-x-hidden overscroll-contain font-sans selection:bg-indigo-100 selection:text-indigo-900">
+        /* min-h + scroll del documento: las animaciones ligadas al scroll
+           (HeroFade/Parallax) leen window.scrollY */
+        <div className="pv-font min-h-[100dvh] bg-white flex flex-col overflow-x-hidden font-sans selection:bg-indigo-100 selection:text-indigo-900">
+            <InjectPublicStyles />
             {/* Header / Navbar */}
             <header className="sticky top-0 z-50">
                 <div className="bg-blue-950/90 backdrop-blur-md border-b border-white/10 shadow-lg">
@@ -327,42 +333,49 @@ const Landing = () => {
 
             <main className="flex-1">
                 {/* Hero Section */}
-                <section
-                    id="inicio"
-                    className="relative bg-cover bg-center"
-                    style={{
-                        backgroundImage: "url('/gustavo_portada.png')",
-                        backgroundSize: "cover",
-                        backgroundPosition: "center",
-                        backgroundRepeat: "no-repeat",
-                    }}
-                >
-                    <div className="absolute inset-0 bg-gradient-to-b from-blue-950/80 via-blue-950/50 to-blue-950/90" />
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_0%,_rgba(0,0,0,0.4)_100%)]" />
+                <section id="inicio" className="relative overflow-hidden">
+                    {/* Fondo con parallax lento + veladuras */}
+                    <ParallaxBg
+                        image="/gustavo_portada.png"
+                        speed={0.25}
+                        overlay={
+                            <>
+                                <div className="absolute inset-0 bg-gradient-to-b from-blue-950/85 via-blue-950/55 to-blue-950/95" />
+                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_0%,_rgba(0,0,0,0.45)_100%)]" />
+                                <div className="pv-glow absolute -top-32 left-1/2 -translate-x-1/2 w-[720px] h-[420px] rounded-full bg-indigo-500/25 blur-[120px]" />
+                            </>
+                        }
+                    />
 
                     <div className="relative z-10">
                         <div className="min-h-[calc(100dvh-80px)] sm:min-h-[calc(100dvh-85px)] flex items-center justify-center">
                             <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
-                                <div className="max-w-4xl mx-auto text-center text-white">
-                                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 backdrop-blur-md mb-6">
-                                        <span className="flex h-2 w-2 rounded-full bg-green-400 animate-pulse"></span>
-                                        <span className="text-xs sm:text-sm font-medium text-blue-100">Admisión 2026 Abierta</span>
-                                    </div>
+                                <HeroFade className="max-w-4xl mx-auto text-center text-white">
+                                    <Reveal variant="scale" as="div">
+                                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 backdrop-blur-md mb-6">
+                                            <span className="flex h-2 w-2 rounded-full bg-green-400 animate-pulse"></span>
+                                            <span className="text-xs sm:text-sm font-medium text-blue-100">Admisión 2026 Abierta</span>
+                                        </div>
+                                    </Reveal>
 
-                                    <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight drop-shadow-2xl space-y-2">
-                                        <span className="block">Formando</span>
-                                        <span className="block text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 via-white to-indigo-200 pb-2">
-                                            Educadores de Excelencia
-                                        </span>
-                                    </h1>
+                                    <Reveal delay={120}>
+                                        <h1 className="pv-display text-4xl sm:text-6xl lg:text-7xl font-extrabold drop-shadow-2xl space-y-2">
+                                            <span className="block">Formando</span>
+                                            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 via-white to-indigo-200 pb-2">
+                                                Educadores de Excelencia
+                                            </span>
+                                        </h1>
+                                    </Reveal>
 
-                                    <p className="mt-6 text-base sm:text-xl lg:text-2xl text-blue-100 leading-relaxed max-w-2xl mx-auto drop-shadow-lg font-light">
-                                        Instituto de Educación Superior Pedagógico Público "Gustavo Allende Llavería" —
-                                        <span className="font-medium text-white"> comprometidos con la formación integral</span> de futuros docentes.
-                                    </p>
+                                    <Reveal delay={260}>
+                                        <p className="mt-6 text-base sm:text-xl lg:text-2xl text-blue-100 leading-relaxed max-w-2xl mx-auto drop-shadow-lg font-light">
+                                            Instituto de Educación Superior Pedagógico Público "Gustavo Allende Llavería" —
+                                            <span className="font-medium text-white"> comprometidos con la formación integral</span> de futuros docentes.
+                                        </p>
+                                    </Reveal>
 
                                     {/* ── Hero Buttons ── */}
-                                    <div className="mt-10 flex flex-col sm:flex-row gap-4 sm:justify-center items-center">
+                                    <Reveal delay={400} className="mt-10 flex flex-col sm:flex-row gap-4 sm:justify-center items-center">
                                         <a
                                             href="/public/admission"
                                             className="w-full sm:w-auto min-w-[200px] inline-flex items-center justify-center px-8 py-4 rounded-xl bg-white text-indigo-900 font-bold hover:bg-indigo-50 hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)]"
@@ -383,10 +396,10 @@ const Landing = () => {
                                         >
                                             Acceso al Sistema
                                         </a>
-                                    </div>
+                                    </Reveal>
 
-                                    {/* ✅ NUEVO: Verificador link debajo de los botones principales */}
-                                    <div className="mt-5 flex justify-center">
+                                    {/* Verificador debajo de los botones principales */}
+                                    <Reveal delay={520} className="mt-5 flex justify-center">
                                         <a
                                             href="/public/verificador"
                                             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-emerald-500/15 border border-emerald-400/25 text-emerald-200 text-sm font-semibold hover:bg-emerald-500/25 hover:text-white transition-all duration-300 backdrop-blur-sm"
@@ -396,25 +409,33 @@ const Landing = () => {
                                             </svg>
                                             Verificar Grados y Títulos
                                         </a>
-                                    </div>
+                                    </Reveal>
 
                                     <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-6">
                                         {[
-                                            ["39+", "Años de experiencia"],
-                                            ["2,500+", "Egresados Exitosos"],
-                                            ["98%", "Inserción laboral"],
-                                        ].map(([num, label], idx) => (
-                                            <div
-                                                key={idx}
-                                                className="group rounded-2xl bg-white/5 border border-white/10 px-6 py-5 backdrop-blur-md shadow-xl hover:bg-white/10 transition-colors duration-300"
-                                            >
-                                                <div className="text-3xl sm:text-4xl font-black tracking-tight text-white group-hover:scale-110 transition-transform duration-300 origin-center">{num}</div>
-                                                <div className="text-sm font-medium text-blue-200 mt-1 uppercase tracking-wide">{label}</div>
-                                            </div>
+                                            [39, "+", "Años de experiencia"],
+                                            [2500, "+", "Egresados Exitosos"],
+                                            [98, "%", "Inserción laboral"],
+                                        ].map(([num, suf, label], idx) => (
+                                            <Reveal key={idx} delay={620 + idx * 120} variant="up">
+                                                <div className="group rounded-2xl bg-white/5 border border-white/10 px-6 py-5 backdrop-blur-md shadow-xl hover:bg-white/10 transition-colors duration-300">
+                                                    <div className="pv-display text-3xl sm:text-4xl font-extrabold text-white group-hover:scale-110 transition-transform duration-300 origin-center">
+                                                        <CountUp value={num} suffix={suf} />
+                                                    </div>
+                                                    <div className="text-sm font-medium text-blue-200 mt-1 uppercase tracking-wide">{label}</div>
+                                                </div>
+                                            </Reveal>
                                         ))}
                                     </div>
-                                </div>
+                                </HeroFade>
                             </div>
+                        </div>
+
+                        {/* Indicador de scroll */}
+                        <div className="pv-float absolute bottom-6 left-1/2 -translate-x-1/2 text-white/50" aria-hidden="true">
+                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                            </svg>
                         </div>
                     </div>
                 </section>
@@ -423,17 +444,17 @@ const Landing = () => {
                 <section id="carreras" className="py-20 sm:py-24 bg-gray-50 relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div>
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="text-center mb-16 max-w-3xl mx-auto">
+                        <Reveal className="text-center mb-16 max-w-3xl mx-auto">
                             <h2 className="text-sm font-bold text-indigo-600 tracking-widest uppercase mb-3">
                                 Oferta Académica
                             </h2>
-                            <p className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 tracking-tight">
+                            <p className="pv-display text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900">
                                 Nuestros Programas de Estudio
                             </p>
                             <p className="mt-4 text-lg text-gray-600">
                                 Diseñados para responder a los desafíos educativos del siglo XXI con innovación y calidad.
                             </p>
-                        </div>
+                        </Reveal>
 
                         <div className="grid grid-cols-1 gap-8 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
                             {[
@@ -441,11 +462,9 @@ const Landing = () => {
                                 { title: "Educación Inicial", desc: "Especialízate en el desarrollo cognitivo y emocional de niños de 0 a 5 años." },
                                 { title: "Educación Primaria", desc: "Lidera la enseñanza integral y pedagógica de niños de 6 a 12 años." },
                                 { title: "Educación Física", desc: "Promueve la salud, el deporte y el bienestar físico en las instituciones educativas." },
-                            ].map((c) => (
-                                <div
-                                    key={c.title}
-                                    className="group bg-white rounded-2xl border border-gray-100 p-8 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden"
-                                >
+                            ].map((c, ci) => (
+                                <Reveal key={c.title} delay={ci * 110}
+                                    className="pv-lift group bg-white rounded-2xl border border-gray-100 p-8 shadow-sm relative overflow-hidden">
                                     <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-bl-[100px] -mr-4 -mt-4 transition-transform group-hover:scale-110" />
 
                                     <div className="relative">
@@ -467,7 +486,7 @@ const Landing = () => {
                                             </span>
                                         </div>
                                     </div>
-                                </div>
+                                </Reveal>
                             ))}
                         </div>
                     </div>
@@ -478,8 +497,8 @@ const Landing = () => {
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-600 via-indigo-700 to-indigo-800"></div>
                     <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
 
-                    <div className="relative max-w-4xl mx-auto text-center py-20 sm:py-28 px-4 sm:px-6 lg:px-8">
-                        <h2 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight mb-6">
+                    <Reveal variant="scale" className="relative max-w-4xl mx-auto text-center py-20 sm:py-28 px-4 sm:px-6 lg:px-8">
+                        <h2 className="pv-display text-3xl sm:text-5xl font-extrabold text-white mb-6">
                             ¿Listo para transformar el futuro?
                         </h2>
                         <p className="text-lg sm:text-xl text-indigo-100 mb-10 max-w-2xl mx-auto leading-relaxed">
@@ -494,20 +513,20 @@ const Landing = () => {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                             </svg>
                         </a>
-                    </div>
+                    </Reveal>
                 </section>
 
                 {/* Contacto */}
                 <section id="contacto" className="py-20 bg-blue-950 relative overflow-hidden">
                     <div className="absolute inset-0 bg-blue-900/10"></div>
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-                        <div className="text-center mb-12">
-                            <h2 className="text-3xl font-extrabold text-white">Estamos aquí para ayudarte</h2>
+                        <Reveal className="text-center mb-12">
+                            <h2 className="pv-display text-3xl font-extrabold text-white">Estamos aquí para ayudarte</h2>
                             <p className="mt-2 text-blue-200">Contáctanos o visítanos en nuestro campus.</p>
-                        </div>
+                        </Reveal>
 
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
-                            <div className="rounded-2xl bg-white/5 border border-white/10 p-8 sm:p-10 shadow-2xl relative overflow-hidden group backdrop-blur-md">
+                            <Reveal variant="left" className="rounded-2xl bg-white/5 border border-white/10 p-8 sm:p-10 shadow-2xl relative overflow-hidden group backdrop-blur-md">
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full mix-blend-overlay filter blur-[100px] opacity-20 -mr-16 -mt-16 animate-pulse"></div>
 
                                 <h3 className="text-2xl font-bold text-white mb-8 border-b border-white/10 pb-4">Información de Contacto</h3>
@@ -543,9 +562,9 @@ const Landing = () => {
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            </Reveal>
 
-                            <div className="rounded-2xl bg-white/5 border border-white/10 p-8 sm:p-10 shadow-lg hover:shadow-xl transition-all backdrop-blur-md flex flex-col justify-center">
+                            <Reveal variant="right" delay={120} className="rounded-2xl bg-white/5 border border-white/10 p-8 sm:p-10 shadow-lg hover:shadow-xl transition-all backdrop-blur-md flex flex-col justify-center">
                                 <div className="flex items-center gap-3 mb-6">
                                     <div className="p-3 bg-indigo-500/20 rounded-lg text-indigo-300 border border-indigo-500/30">
                                         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -569,7 +588,7 @@ const Landing = () => {
                                         <span className="font-bold text-gray-400">Cerrado</span>
                                     </div>
                                 </div>
-                            </div>
+                            </Reveal>
                         </div>
                     </div>
                 </section>

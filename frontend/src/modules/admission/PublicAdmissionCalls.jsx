@@ -13,6 +13,9 @@ import { AdmissionCalls } from "../../services/admission.service";
 
 import PublicAdmissionCallDetails from "./PublicAdmissionCallDetails";
 import ApplicationWizard from "./ApplicationWizard";
+import {
+  InjectPublicStyles, Reveal, HeroFade, PublicHeader,
+} from "@/components/public/publicFx";
 
 import {
   Calendar, Clock, FileText, Search, Award, MapPin, Phone, Mail,
@@ -110,7 +113,7 @@ const CallCard = ({ call, onDetails, onReglamento }) => {
   const isOpen = label === "Inscripciones abiertas";
 
   return (
-    <div className={`rounded-2xl border bg-white overflow-hidden transition-all duration-300 hover:shadow-lg ${isOpen ? "border-emerald-200 shadow-sm" : "border-slate-200 shadow-sm"}`}>
+    <div className={`pv-lift rounded-2xl border bg-white overflow-hidden shadow-sm ${isOpen ? "border-emerald-200" : "border-slate-200"}`}>
       {/* Top accent */}
       {isOpen && <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-400" />}
 
@@ -415,106 +418,123 @@ const PublicAdmissionCalls = () => {
     }
   };
 
-  /* ── Loading ── */
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 size={36} className="animate-spin text-blue-500" />
-          <p className="text-sm text-slate-500 font-medium">Cargando portal…</p>
-        </div>
-      </div>
-    );
-  }
+  const openCallsCount = admissionCalls.filter(
+    (c) => getCallBadge(c).label === "Inscripciones abiertas"
+  ).length;
 
   return (
     <>
-      <div className="min-h-screen bg-[#F8F9FA] flex flex-col font-sans text-slate-800">
+      <div className="pv-font min-h-screen bg-slate-50 flex flex-col text-slate-800">
+        <InjectPublicStyles />
 
-        {/* ── Header ── */}
-        <header className="bg-gradient-to-r from-blue-700 to-indigo-700 border-b border-white/10 sticky top-0 z-50">
-          <div className="w-full px-6 py-4 md:px-12 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4 min-w-0">
-              <img src="/logo.png" alt="Logo Institucional" className="h-14 w-auto object-contain shrink-0" />
-              <div className="hidden md:block h-10 w-px bg-white/20 shrink-0" />
-              <div className="min-w-0">
-                <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight leading-tight">
-                  Portal de Admisión
-                </h1>
-                <p className="text-sm text-white/75 font-medium">
-                  IESPP "Gustavo Allende Llavería"
-                </p>
-              </div>
+        {/* ── Header público común ── */}
+        <PublicHeader active="/public/admission" />
+
+        {/* ── Hero ── */}
+        <section className="relative -mt-16 overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-950 text-white">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+            <div className="pv-glow absolute -top-24 -right-24 h-72 w-72 sm:h-96 sm:w-96 rounded-full bg-blue-500/25 blur-3xl" />
+            <div className="pv-glow absolute -bottom-32 -left-24 h-72 w-72 sm:h-96 sm:w-96 rounded-full bg-indigo-500/20 blur-3xl" />
+            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-blue-950/60 to-transparent" />
+          </div>
+          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-16 sm:pt-32 sm:pb-20 min-h-[40vh] flex items-center">
+            <HeroFade className="max-w-3xl">
               <button
                 type="button"
                 onClick={() => navigate("/", { replace: true })}
-                className="shrink-0 p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
-                aria-label="Volver"
+                className="inline-flex items-center gap-1.5 rounded-full bg-white/10 hover:bg-white/20 px-3.5 py-1.5 text-[12px] font-bold text-blue-100 transition-colors mb-6"
               >
-                <ArrowLeft className="h-5 w-5" />
+                <ArrowLeft size={13} /> Volver al inicio
               </button>
-            </div>
-            <Button
-              type="button" variant="ghost"
-              onClick={() => (window.location.href = "/login")}
-              className="text-white hover:text-white hover:bg-white/15 font-semibold shrink-0 rounded-xl hidden sm:flex"
-            >
-              Acceso al Sistema
-            </Button>
+              <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.3em] text-blue-300/90">
+                IESPP "Gustavo Allende Llavería"
+              </p>
+              <h1 className="pv-display mt-3 text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-[0.95]">
+                Admisión
+              </h1>
+              <p className="mt-4 text-base sm:text-lg text-blue-100/85 leading-relaxed max-w-2xl">
+                Conoce las convocatorias vigentes, postula en línea y consulta
+                los resultados de tu proceso de admisión.
+              </p>
+              {!loading && (
+                <div className="mt-6 flex flex-wrap items-center gap-2.5">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/15 px-4 py-1.5 text-[12px] font-bold text-white">
+                    <Calendar size={13} className="text-blue-300" />
+                    {admissionCalls.length} convocatoria{admissionCalls.length === 1 ? "" : "s"}
+                  </span>
+                  {openCallsCount > 0 && (
+                    <span className="inline-flex items-center gap-2 rounded-full bg-emerald-400/15 border border-emerald-300/30 px-4 py-1.5 text-[12px] font-extrabold text-emerald-200">
+                      <CheckCircle2 size={13} /> Inscripciones abiertas
+                    </span>
+                  )}
+                </div>
+              )}
+            </HeroFade>
           </div>
-        </header>
+        </section>
 
         {/* ── Main ── */}
-        <div className="w-full px-4 sm:px-6 py-8 md:px-12 flex-1">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 flex-1">
+          {loading ? (
+            <div className="min-h-[40vh] flex items-center justify-center">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 size={36} className="animate-spin text-blue-500" />
+                <p className="text-sm text-slate-500 font-medium">Cargando portal…</p>
+              </div>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
 
             {/* ── Left: Calls list ── */}
             <div className="xl:col-span-2 space-y-6">
               {/* Section title */}
-              <div className="border-l-4 border-blue-600 pl-4">
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-                  Convocatorias de Admisión
+              <Reveal variant="up">
+                <h2 className="pv-display text-3xl sm:text-4xl font-extrabold text-slate-900">
+                  Convocatorias
                 </h2>
-                <p className="text-slate-500 mt-1 text-base">
-                  Explore nuestras oportunidades académicas y postule hoy mismo.
+                <p className="text-slate-500 mt-2 text-base sm:text-lg">
+                  Explora nuestras oportunidades académicas y postula hoy mismo.
                 </p>
-              </div>
+              </Reveal>
 
               {admissionCalls.length === 0 ? (
-                <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-12 text-center space-y-4">
-                  <div className="h-16 w-16 rounded-2xl bg-slate-100 grid place-items-center mx-auto">
-                    <Calendar className="h-8 w-8 text-slate-300" />
+                <Reveal variant="scale">
+                  <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-12 text-center space-y-4">
+                    <div className="h-16 w-16 rounded-2xl bg-slate-100 grid place-items-center mx-auto">
+                      <Calendar className="h-8 w-8 text-slate-300" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-700">No hay convocatorias activas</h3>
+                      <p className="text-slate-500 text-sm mt-1 max-w-sm mx-auto">
+                        Actualmente no contamos con procesos de admisión abiertos. Revise nuevamente más tarde.
+                      </p>
+                    </div>
+                    <Button type="button" variant="outline" className="rounded-xl"
+                      onClick={fetchPublicAdmissionCalls}>
+                      Reintentar
+                    </Button>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-700">No hay convocatorias activas</h3>
-                    <p className="text-slate-500 text-sm mt-1 max-w-sm mx-auto">
-                      Actualmente no contamos con procesos de admisión abiertos. Revise nuevamente más tarde.
-                    </p>
-                  </div>
-                  <Button type="button" variant="outline" className="rounded-xl"
-                    onClick={fetchPublicAdmissionCalls}>
-                    Reintentar
-                  </Button>
-                </div>
+                </Reveal>
               ) : (
                 <div className="space-y-5">
-                  {admissionCalls.map((call) => (
-                    <CallCard
-                      key={call.id}
-                      call={call}
-                      onDetails={handleViewDetails}
-                      onReglamento={handleOpenReglamento}
-                    />
+                  {admissionCalls.map((call, i) => (
+                    <Reveal key={call.id} variant="up" delay={Math.min(i, 4) * 90}>
+                      <CallCard
+                        call={call}
+                        onDetails={handleViewDetails}
+                        onReglamento={handleOpenReglamento}
+                      />
+                    </Reveal>
                   ))}
                 </div>
               )}
             </div>
 
             {/* ── Sidebar ── */}
-            <div className="space-y-6">
+            <Reveal variant="right" delay={120} className="space-y-6">
 
               {/* Consultar resultados */}
-              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden sticky top-24">
+              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden xl:sticky xl:top-24">
                 <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-blue-50/40 to-white">
                   <div className="flex items-center gap-2.5">
                     <div className="h-8 w-8 rounded-lg bg-blue-100 grid place-items-center">
@@ -604,8 +624,9 @@ const PublicAdmissionCalls = () => {
                   ))}
                 </div>
               </div>
-            </div>
+            </Reveal>
           </div>
+          )}
         </div>
       </div>
 
