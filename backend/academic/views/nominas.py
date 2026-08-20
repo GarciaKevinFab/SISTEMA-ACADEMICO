@@ -1111,7 +1111,7 @@ class NominasMatriculaPDFView(APIView):
             ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
         ]))
         story.append(sum_row)
-        story.append(Spacer(1, 0.9 * cm))
+        story.append(Spacer(1, 0.6 * cm))
 
         # ════════════════════════════════════════════════════
         # FIRMAS — Director / Secretario / V°B° DRE-UGEL
@@ -1147,7 +1147,9 @@ class NominasMatriculaPDFView(APIView):
             ("LEFTPADDING", (0, 0), (-1, -1), 6),
             ("RIGHTPADDING", (0, 0), (-1, -1), 6),
         ]))
-        story.append(sig_tbl)
+        # Bloque INDIVISIBLE: si no cabe completo en la página, pasa entero a
+        # la siguiente — antes se partía (líneas en una hoja, rótulos en otra)
+        story.append(KeepTogether([sig_tbl]))
 
         try:
             doc.build(story)
