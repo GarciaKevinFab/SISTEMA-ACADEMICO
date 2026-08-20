@@ -102,7 +102,7 @@ from .views.evaluation import (
     EvaluationActaConsolidadaView, EvaluationSubsanacionListView,
     EvaluationActasCalificacionSubsaZipView,
     EvaluationActasAreaZipView, EvaluationReporteRendimientoView,
-    EvaluationSilabosSesionesView,
+    EvaluationSilabosSesionesView, EvaluationSilabosSesionesPdfView,
 )
 from .views.evaluation_pdf import (
     TeacherSelfSchedulePdfView,
@@ -233,6 +233,8 @@ urlpatterns = [
          EvaluationActasCalificacionSubsaZipView.as_view()),
     path("admin/evaluation/actas-area.zip",    EvaluationActasAreaZipView.as_view()),
     path("admin/evaluation/silabos-sesiones",  EvaluationSilabosSesionesView.as_view()),
+    path("admin/evaluation/silabos-sesiones.pdf",
+         EvaluationSilabosSesionesPdfView.as_view()),
     path("admin/evaluation/actas-area-pdf.zip", EvaluationActasAreaPdfZipView.as_view()),
     path("admin/evaluation/actas-calificacion-subsanacion-pdf.zip",
          EvaluationActasCalificacionSubsaPdfZipView.as_view()),

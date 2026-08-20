@@ -610,6 +610,10 @@ export const EvaluationAdmin = {
     silabosSesiones: async (params = {}) =>
         requestJsonSmart("GET", "/academic/admin/evaluation/silabos-sesiones",
             null, { params }),
+    /** Reporte PDF por docente: sílabos y sesiones (fecha, hora, semana, tema) */
+    silabosSesionesPdf: async (params = {}) =>
+        api.get("/academic/admin/evaluation/silabos-sesiones.pdf",
+            { params, responseType: "blob" }),
 
     /* ── Versiones PDF ── */
     actaConsolidadaPdf: async (params = {}) =>

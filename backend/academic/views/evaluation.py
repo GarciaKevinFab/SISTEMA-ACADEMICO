@@ -1069,6 +1069,138 @@ class EvaluationSilabosSesionesView(APIView):
         })
 
 
+class EvaluationSilabosSesionesPdfView(APIView):
+    """
+    GET /academic/admin/evaluation/silabos-sesiones.pdf
+        ?period=2026-II[&career_id][&semester][&anio][&q]
+    Reporte PDF agrupado POR DOCENTE: qué sílabos subió (o le faltan) y el
+    detalle de sus sesiones de aprendizaje — semana, fecha de clase, tema y
+    la fecha/hora exacta en que las subió. Mismos filtros que el monitor;
+    `q` filtra por nombre del docente.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if err := _require_grades_admin(request):
+            return err
+        period = (request.query_params.get("period") or "").strip().upper()
+        if not period:
+            return Response({"detail": "period es requerido"}, status=400)
+        q = (request.query_params.get("q") or "").strip().lower()
+
+        from html import escape as esc
+        from academic.pdf_render import html_to_pdf_bytes
+        from .evaluation_pdf import _pdf_shell
+        from .utils import romanos_mayusculas
+
+        secs = (_sections_for(
+            period, request.query_params.get("career_id"),
+            request.query_params.get("semester"),
+            anio=request.query_params.get("anio"))
+            .select_related("syllabus")
+            .prefetch_related("sesiones_aprendizaje"))
+
+        docentes = {}
+        for sec in secs:
+            pc = sec.plan_course
+            docente = ""
+            if sec.teacher:
+                u = getattr(sec.teacher, "user", None)
+                docente = ((getattr(u, "full_name", "") or "").strip()
+                           or str(sec.teacher))
+            docente = docente or "— SIN DOCENTE ASIGNADO —"
+            if q and q not in docente.lower():
+                continue
+            try:
+                tiene_silabo = bool(sec.syllabus and sec.syllabus.file)
+            except Exception:
+                tiene_silabo = False
+            curso = romanos_mayusculas(pc.effective_name if pc else "")
+            sesiones = list(sec.sesiones_aprendizaje.all())
+            d = docentes.setdefault(docente, {"secciones": [], "sesiones": []})
+            d["secciones"].append({
+                "curso": curso,
+                "ciclo": pc.semester if pc else "",
+                "sec": sec.label or "A",
+                "carrera": (pc.plan.career.name
+                            if pc and pc.plan and pc.plan.career else ""),
+                "silabo": tiene_silabo,
+                "n_sesiones": len(sesiones),
+            })
+            for s in sesiones:
+                d["sesiones"].append({
+                    "curso": curso,
+                    "semana": s.semana or "",
+                    "fecha": s.fecha.strftime("%d/%m/%Y") if s.fecha else "",
+                    "tema": s.tema or "",
+                    "subido": (timezone.localtime(s.created_at)
+                               .strftime("%d/%m/%Y %H:%M")
+                               if s.created_at else ""),
+                })
+
+        bloques = []
+        for docente in sorted(docentes):
+            d = docentes[docente]
+            n_sil = sum(1 for x in d["secciones"] if x["silabo"])
+            filas_sec = "".join(
+                f"<tr><td>{esc(x['curso'])}</td>"
+                f"<td class='c'>{x['ciclo']} - \"{esc(x['sec'])}\"</td>"
+                f"<td>{esc(x['carrera'])}</td>"
+                + ("<td class='c' style='color:#047857'><b>Subido</b></td>"
+                   if x["silabo"] else
+                   "<td class='c' style='color:#B91C1C'><b>Falta</b></td>")
+                + f"<td class='c'>{x['n_sesiones']}</td></tr>"
+                for x in d["secciones"])
+            filas_ses = "".join(
+                f"<tr><td>{esc(fila['curso'])}</td>"
+                f"<td class='c'>{fila['semana'] or '—'}</td>"
+                f"<td class='c'>{fila['fecha']}</td><td>{esc(fila['tema'])}</td>"
+                f"<td class='c'>{fila['subido'] or '—'}</td></tr>"
+                for fila in sorted(d["sesiones"],
+                                   key=lambda x: (x["curso"], x["fecha"])))
+            detalle_ses = (
+                "<p style='font-size:8.5px;margin:6px 0 2px'>"
+                "<b>Sesiones de aprendizaje subidas</b></p>"
+                "<table><thead><tr><th>Curso</th><th>Semana</th>"
+                "<th>Fecha de clase</th><th>Tema</th><th>Subido el</th></tr>"
+                f"</thead><tbody>{filas_ses}</tbody></table>"
+                if filas_ses else
+                "<p style='font-size:8.5px;color:#B91C1C;margin:4px 0 0'>"
+                "Sin sesiones de aprendizaje subidas.</p>")
+            bloques.append(
+                "<div class='grupo'>"
+                f"<h2>{esc(docente)} <span style='font-weight:normal;color:#666'>"
+                f"— {len(d['secciones'])} curso(s) · {n_sil} sílabo(s) subido(s) · "
+                f"{len(d['sesiones'])} sesión(es)</span></h2>"
+                "<table><thead><tr><th>Curso / Módulo</th><th>Ciclo - Sec.</th>"
+                "<th>Carrera</th><th>Sílabo</th><th>Sesiones</th></tr></thead>"
+                f"<tbody>{filas_sec}</tbody></table>"
+                + detalle_ses + "</div>")
+
+        hoy = timezone.localtime(timezone.now()).strftime("%d/%m/%Y %H:%M")
+        cuerpo = (
+            "<style> th { background:#E7E6E6; color:#111; } "
+            "h2 { font-size:10.5px; background:#EFF3F8; padding:4px 8px; "
+            "margin:14px 0 4px; } </style>"
+            "<h2 style='background:none;text-align:center;font-size:12px'>"
+            f"SÍLABOS Y SESIONES DE APRENDIZAJE POR DOCENTE — {esc(period)}</h2>"
+            f"<p style='font-size:8.5px;color:#555;margin:0'>Emitido el {hoy} · "
+            f"{len(docentes)} docente(s) en el filtro</p>"
+            + "".join(bloques
+                      or ["<p style='color:#777'>Sin secciones para el filtro.</p>"]))
+        html = _pdf_shell(f"MONITOREO DE SÍLABOS Y SESIONES — {period}", cuerpo)
+        try:
+            pdf = html_to_pdf_bytes(html)
+        except Exception as exc:
+            return Response({"detail": f"No se pudo generar el PDF: {exc}"},
+                            status=500)
+        return HttpResponse(
+            pdf, content_type="application/pdf",
+            headers={"Content-Disposition":
+                     f'attachment; filename="silabos-sesiones-{period}.pdf"'})
+
+
 class EvaluationActasCalificacionSubsaZipView(APIView):
     """
     GET /academic/admin/evaluation/actas-calificacion-subsanacion.zip

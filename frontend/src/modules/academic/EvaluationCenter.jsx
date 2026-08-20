@@ -951,6 +951,23 @@ function SilabosSesionesTab({ period, careers }) {
     const [semester, setSemester] = useState("");
     const [q, setQ] = useState("");
     const [abierto, setAbierto] = useState(null);   // section_id con sesiones desplegadas
+    const [descargando, setDescargando] = useState(false);
+
+    // Reporte PDF agrupado por docente (usa los mismos filtros del monitor)
+    const descargarPdf = async () => {
+        setDescargando(true);
+        try {
+            const res = await Evaluation.silabosSesionesPdf({
+                period,
+                ...(careerId ? { career_id: careerId } : {}),
+                ...(semester ? { semester } : {}),
+                ...(q.trim() ? { q: q.trim() } : {}),
+            });
+            downloadBlob(res, `silabos-sesiones-${period}.pdf`);
+        } catch (e) {
+            toast.error(await blobError(e, "No se pudo generar el reporte"));
+        } finally { setDescargando(false); }
+    };
 
     const load = useCallback(async () => {
         if (!period) return;
@@ -1043,6 +1060,12 @@ function SilabosSesionesTab({ period, careers }) {
                     <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={load} disabled={loading}>
                         {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                         Actualizar
+                    </Button>
+                    <Button size="sm" className="h-9 gap-1.5 bg-rose-600 hover:bg-rose-700"
+                        onClick={descargarPdf} disabled={descargando}
+                        title="Reporte PDF agrupado por docente: sílabos subidos/faltantes y cada sesión con semana, fecha, tema y fecha/hora de subida">
+                        {descargando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                        Reporte PDF
                     </Button>
                 </div>
 

@@ -156,6 +156,18 @@ def _get_institution_data() -> dict:
         if v:
             out[k] = v
 
+    # Autoridades y resoluciones: el UI de Institución las guarda con las
+    # MISMAS claves que usan las actas (director_name / rd_encargatura /
+    # resolucion_autorizacion) — la nómina salía con "—" porque buscaba
+    # otras claves. Fallbacks con los datos institucionales vigentes.
+    if not out["director_name"]:
+        out["director_name"] = "GARCIA PORRAS, MARIA ELVIRA"
+    if not out["director_resolution"]:
+        out["director_resolution"] = _grab("rd_encargatura") or "R.D.R. N° 017-2026-DREJ"
+    if not out["rvm"]:
+        out["rvm"] = (_grab("resolucion_autorizacion")
+                      or "R.D. N° 306-2016-MINEDU/VMGP/DIGEDD/DIFOID")
+
     # Si en el catálogo hay códigos de ubigeo (department/province/district)
     # y los nombres legibles aún no están seteados, resolverlos desde el JSON
     # de ubigeo_pe.
@@ -226,6 +238,37 @@ def _logo_abs_path(inst_data: dict):
 # ──────────────────────────────────────────────────────────────
 #  Helpers de query
 # ──────────────────────────────────────────────────────────────
+
+def _sistema_logo_path():
+    """Logo del SISTEMA (Tarma) para el lado derecho del membrete."""
+    try:
+        from academic.views.acta_excel import _institution_logo_paths
+        _inst, sist = _institution_logo_paths()
+        return sist if sist and os.path.isfile(sist) else None
+    except Exception:
+        return None
+
+
+def _tipos_matricula(students, period):
+    """student_id → tipo de SU matrícula confirmada del período (para G/R)."""
+    ids = [s.id for s in students]
+    m = {}
+    try:
+        for e in Enrollment.objects.filter(
+                student_id__in=ids, period=str(period).strip(),
+                status=Enrollment.STATUS_CONFIRMED,
+        ).values("student_id", "tipo_matricula"):
+            m[e["student_id"]] = (e["tipo_matricula"] or "").upper()
+    except Exception:
+        pass
+    return m
+
+
+def _gp_de(tipo):
+    """Columna 'Gratuito o Pagante': institución PÚBLICA → todos G (gratuito);
+    matrícula de reincorporación → G/R (indicación de Secretaría)."""
+    return "G/R" if tipo == "REINCORPORACION" else "G"
+
 
 def _resolve_career(career_id) -> Career | None:
     if not career_id:
@@ -395,7 +438,7 @@ class NominasMatriculaXlsxView(APIView):
             apply_border(rng)
             return c
 
-        # ── Logo ──
+        # ── Logos (institucional a la izquierda, sistema a la derecha) ──
         logo_path = _logo_abs_path(inst)
         if logo_path:
             try:
@@ -405,7 +448,16 @@ class NominasMatriculaXlsxView(APIView):
                 ws.add_image(img, "A1")
             except Exception:
                 pass
-        # Reservar altura para el logo (filas 1-4)
+        sist_path = _sistema_logo_path()
+        if sist_path:
+            try:
+                img2 = XLImage(sist_path)
+                img2.width = 95
+                img2.height = 95
+                ws.add_image(img2, "Q1")
+            except Exception:
+                pass
+        # Reservar altura para los logos (filas 1-4)
         for r in range(1, 5):
             ws.row_dimensions[r].height = 22
 
@@ -530,6 +582,7 @@ class NominasMatriculaXlsxView(APIView):
         hombres = mujeres = 0
         gratuitos = pagantes = 0
         today_str = date.today().strftime("%d-%m-%Y")
+        tipos = _tipos_matricula(students, period)
 
         for i, st in enumerate(students):
             r = START + i
@@ -555,8 +608,9 @@ class NominasMatriculaXlsxView(APIView):
             merge_set(f"J{r}:M{r}",
                       _full_name_apellidos_primero(st).upper(),
                       font=normal, alignment=left)
-            # Gratuito o Pagante (N:O)
-            merge_set(f"N{r}:O{r}", "G", font=normal, alignment=center)
+            # Gratuito o Pagante (N:O) — G, o G/R si es reincorporación
+            merge_set(f"N{r}:O{r}", _gp_de(tipos.get(st.id, "")),
+                      font=normal, alignment=center)
             # Sexo
             ws[f"P{r}"] = sexo_letra
             ws[f"P{r}"].font = normal
@@ -783,10 +837,20 @@ class NominasMatriculaPDFView(APIView):
         else:
             logo_img = ""
 
+        # Logo del SISTEMA (Tarma) al lado derecho, como los demás documentos
+        sist_path = _sistema_logo_path()
+        sist_img = ""
+        if sist_path:
+            try:
+                sist_img = Image(sist_path, width=2.0 * cm, height=2.0 * cm)
+                sist_img.hAlign = "CENTER"
+            except Exception:
+                sist_img = ""
+
         hdr_tbl = Table(
             [[logo_img,
               Paragraph("NÓMINA DE MATRÍCULA", sty_h1),
-              ""]],
+              sist_img]],
             colWidths=[2.5 * cm, avail_w - 5.0 * cm, 2.5 * cm],
         )
         hdr_tbl.setStyle(TableStyle([
@@ -942,6 +1006,7 @@ class NominasMatriculaPDFView(APIView):
             Paragraph("Fecha de<br/>Nacimiento", sty_th),
             Paragraph("Edad", sty_th),
         ]
+        tipos = _tipos_matricula(students, period)
         table_data = [thead]
         for i, st in enumerate(students, start=1):
             sexo = (st.sexo or "").strip().upper()
@@ -956,7 +1021,8 @@ class NominasMatriculaPDFView(APIView):
                 Paragraph(str(i), sty_td),
                 Paragraph(str(st.num_documento or ""), sty_td),
                 Paragraph(_full_name_apellidos_primero(st).upper(), sty_td_name),
-                Paragraph("P", sty_td),
+                # Institución pública: todos GRATUITOS; reincorporación → G/R
+                Paragraph(_gp_de(tipos.get(st.id, "")), sty_td),
                 Paragraph(sexo_letra, sty_td),
                 Paragraph(fnac, sty_td),
                 Paragraph(str(_calc_age(st.fecha_nac) or ""), sty_td),
@@ -1006,8 +1072,8 @@ class NominasMatriculaPDFView(APIView):
         # alineado a la izquierda, con la fecha a la derecha
         # ════════════════════════════════════════════════════
         total_alumnos = len(students)
-        gratuitos = 0
-        pagantes = total_alumnos
+        gratuitos = total_alumnos   # institución pública: todos gratuitos
+        pagantes = 0
 
         sum_inner = Table([
             [Paragraph("Resumen", sty_lbl), Paragraph("Total", sty_lbl)],
@@ -1053,31 +1119,33 @@ class NominasMatriculaPDFView(APIView):
         dir_name = (inst.get("director_name") or "").upper() or "—"
         sec_name = (inst.get("secretary_name") or "").upper() or "—"
 
-        sig_col_w = (avail_w - 0.6 * cm) / 3
+        # Tres firmas con SEPARACIÓN real entre líneas (columnas de aire)
+        gap = 1.0 * cm
+        sig_col_w = (avail_w - 2 * gap) / 3
 
         sig_tbl = Table([
-            ["", "", ""],
-            [Paragraph(dir_name, sty_sig),
-             Paragraph(sec_name, sty_sig),
+            ["", "", "", "", ""],
+            [Paragraph(dir_name, sty_sig), "",
+             Paragraph(sec_name, sty_sig), "",
+             Paragraph("", sty_sig)],
+            [Paragraph("DIRECTOR(A) GENERAL", sty_sig), "",
+             Paragraph("SECRETARIO(A) ACADÉMICO", sty_sig), "",
              Paragraph("V° B° DRE / UGEL", sty_sig)],
-            [Paragraph("DIRECTOR(A) GENERAL", sty_sig),
-             Paragraph("SECRETARIO(A) ACADÉMICO", sty_sig),
-             ""],
-            [Paragraph("Firma, Post Firma y Sello", sty_sig_sub),
-             Paragraph("Firma, Post Firma y Sello", sty_sig_sub),
-             ""],
-        ], colWidths=[sig_col_w, sig_col_w, sig_col_w])
+            [Paragraph("Firma, Post Firma y Sello", sty_sig_sub), "",
+             Paragraph("Firma, Post Firma y Sello", sty_sig_sub), "",
+             Paragraph("Firma y Sello", sty_sig_sub)],
+        ], colWidths=[sig_col_w, gap, sig_col_w, gap, sig_col_w])
         sig_tbl.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("ALIGN",  (0, 0), (-1, -1), "CENTER"),
-            # Línea de firma sobre la fila 1
-            ("LINEABOVE", (0, 1), (0, 1), 0.7, LINE),
-            ("LINEABOVE", (1, 1), (1, 1), 0.7, LINE),
-            ("LINEABOVE", (2, 1), (2, 1), 0.7, LINE),
-            ("TOPPADDING", (0, 1), (-1, 1), 2),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 30),  # espacio para firmar
-            ("LEFTPADDING", (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            # Línea de firma SOLO sobre las columnas de firma (no el aire)
+            ("LINEABOVE", (0, 1), (0, 1), 0.8, LINE),
+            ("LINEABOVE", (2, 1), (2, 1), 0.8, LINE),
+            ("LINEABOVE", (4, 1), (4, 1), 0.8, LINE),
+            ("TOPPADDING", (0, 1), (-1, 1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 42),  # espacio para firmar
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
         ]))
         story.append(sig_tbl)
 
