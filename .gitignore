@@ -64,3 +64,11 @@ yarn-error.log*
 # El repo es público — NUNCA versionar esto.
 backend/informe/
 *_nomina*.csv
+
+########################
+# GRAPHIFY (grafo de conocimiento, salida generada)
+########################
+graphify-out/
+
+# Volcado de crash de Git Bash (Windows)
+bash.exe.stackdump
