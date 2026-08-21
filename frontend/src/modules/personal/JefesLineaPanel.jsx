@@ -38,7 +38,18 @@ function PickerDocente({ fila, onClose, onHecho }) {
     const [sel, setSel] = useState(fila?.responsable?.teacher_id || null);
     const [resolucion, setResolucion] = useState(fila?.resolucion || "");
     const [desde, setDesde] = useState(fila?.designado_desde || "");
+    // Programas a cargo: define el alcance de los reportes del coordinador.
+    // Es lista porque el de Educación Física lleva EF y Comunicación.
+    const [carreras, setCarreras] = useState([]);
+    const [selCarreras, setSelCarreras] = useState(
+        () => new Set((fila?.careers || []).map((c) => c.id)));
     const timer = useRef(null);
+
+    useEffect(() => {
+        api.get("/academic/careers")
+            .then(({ data }) => setCarreras(data?.items || data?.rows || data || []))
+            .catch(() => setCarreras([]));
+    }, []);
 
     const buscar = useCallback(async (texto) => {
         setLoading(true);
@@ -65,6 +76,7 @@ function PickerDocente({ fila, onClose, onHecho }) {
             const { data } = await api.put(`/personal/jefes-linea/${fila.id}`, {
                 teacher_id: quitar ? null : sel,
                 resolucion, designado_desde: desde,
+                career_ids: quitar ? [] : [...selCarreras],
             });
             toast.success(quitar ? "Responsable retirado" : "Responsable designado");
             onHecho(data);
@@ -134,6 +146,39 @@ function PickerDocente({ fila, onClose, onHecho }) {
                             {sel === d.teacher_id && <CheckCircle2 size={16} className="text-blue-600 shrink-0" />}
                         </button>
                     ))}
+                </div>
+
+                {/* Programas a cargo: alcance de los reportes del coordinador */}
+                <div className="px-5 py-3 border-t border-slate-100">
+                    <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                        Programas a cargo
+                    </label>
+                    <p className="text-[10.5px] text-slate-400 mt-0.5">
+                        Define qué docentes y estudiantes ve en sus reportes. Se
+                        puede marcar más de uno (Educación Física lleva también
+                        Comunicación).
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                        {carreras.length === 0 ? (
+                            <span className="text-[11px] text-slate-400">Sin programas registrados.</span>
+                        ) : carreras.map((c) => {
+                            const puesto = selCarreras.has(c.id);
+                            return (
+                                <button key={c.id} type="button"
+                                    onClick={() => setSelCarreras((s0) => {
+                                        const n = new Set(s0);
+                                        if (n.has(c.id)) n.delete(c.id); else n.add(c.id);
+                                        return n;
+                                    })}
+                                    className={"px-3 h-8 rounded-full text-[11.5px] font-bold border transition-colors "
+                                        + (puesto
+                                            ? "adm-soft border-blue-300"
+                                            : "adm-plain border-slate-200 text-slate-500 hover:border-blue-300")}>
+                                    {puesto && "✓ "}{c.name}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
 
                 <div className="px-5 py-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3">

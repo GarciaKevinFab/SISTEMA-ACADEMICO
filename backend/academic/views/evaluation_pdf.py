@@ -30,7 +30,7 @@ from academic.pdf_render import html_to_pdf_bytes
 
 from .evaluation import (
     _require_grades_admin, _sections_for, _bundle_map, _section_eval_row,
-    _entry_for, _final_of,
+    _entry_for, _final_of, _require_reporte_area,
 )
 from .acta_excel import (
     _roster, _acta_area_inst, _roman, _cualitativa_de_vigesimal,
@@ -1098,7 +1098,7 @@ class EvaluationRendimientoPdfView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if err := _require_grades_admin(request):
+        if err := _require_reporte_area(request):
             return err
         period, career_id, semester, anio = _params(request)
         if not period:
@@ -1194,7 +1194,7 @@ class EvaluationAsistenciaReporteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, fmt="pdf"):
-        if err := _require_grades_admin(request):
+        if err := _require_reporte_area(request):
             return err
         period, career_id, semester, anio = _params(request)
         if not period:

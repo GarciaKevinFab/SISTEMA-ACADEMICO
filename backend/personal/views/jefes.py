@@ -23,7 +23,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from catalogs.models import Teacher
+from catalogs.models import Career, Teacher
 from personal.models import JefeLinea
 
 from .comun import es_admin_personal, jefe_dict, nombre_de_teacher, \
@@ -121,6 +121,21 @@ class JefeLineaDetailView(_AdminView):
             j.activo = str(data.get("activo")).lower() not in ("false", "0", "")
 
         j.save()
+
+        # Programas a cargo del coordinador de área. Es lista porque el de
+        # Educación Física lleva Educación Física y Comunicación.
+        if "career_ids" in data:
+            crudo = data.get("career_ids")
+            if isinstance(crudo, str):
+                crudo = [x for x in crudo.split(",") if x.strip()]
+            elif crudo is None:
+                crudo = []
+            try:
+                ids = [int(x) for x in crudo]
+            except (TypeError, ValueError):
+                return Response({"detail": "career_ids inválido."}, status=400)
+            j.careers.set(Career.objects.filter(id__in=ids))
+
         return Response(jefe_dict(j, request))
 
 

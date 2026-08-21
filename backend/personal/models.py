@@ -85,6 +85,14 @@ class JefeLinea(models.Model):
         upload_to="personal/rd/", null=True, blank=True)
     resolucion_subida = models.DateTimeField(null=True, blank=True)
 
+    # PROGRAMAS A CARGO — solo aplica a los coordinadores de área académica.
+    # Es M2M a propósito: el coordinador de Educación Física tiene a su cargo
+    # Educación Física Y Comunicación, así que uno-a-uno no alcanzaba.
+    # De aquí sale el alcance de sus reportes: ve a los docentes y estudiantes
+    # de estos programas y de ningún otro.
+    careers = models.ManyToManyField(
+        "catalogs.Career", blank=True, related_name="coordinadores")
+
     # PLAN DE TRABAJO — lo sube el propio jefe de línea desde su panel
     plan_trabajo = models.FileField(
         upload_to="personal/planes/", null=True, blank=True)

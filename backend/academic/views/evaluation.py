@@ -53,6 +53,45 @@ def _require_grades_admin(request):
     return None
 
 
+def _require_reporte_area(request):
+    """Gate de los reportes que también ve un COORDINADOR DE ÁREA.
+
+    Los admin de notas siguen viéndolo todo. Un coordinador ve únicamente
+    los programas que tiene a cargo (`personal.JefeLinea.careers`): está
+    obligado a indicar `career_id` y solo se le aceptan los suyos, así que
+    no puede espiar otros programas cambiando el parámetro a mano.
+
+    Se usa solo en los reportes de seguimiento (sílabos y sesiones,
+    rendimiento, asistencia); el resto del módulo admin sigue cerrado.
+    """
+    if _is_grades_admin(request.user):
+        return None
+    try:
+        from personal.coordinacion import carreras_coordinadas
+        propias = carreras_coordinadas(request.user)
+    except Exception:
+        propias = []
+    if not propias:
+        return Response({"detail": "No autorizado."}, status=403)
+
+    crudo = (request.query_params.get("career_id") or "").strip()
+    if not crudo:
+        return Response(
+            {"detail": "Indica el programa (career_id) del que quieres el "
+                       "reporte.", "career_ids": propias},
+            status=400)
+    try:
+        pedido = int(crudo)
+    except (TypeError, ValueError):
+        return Response({"detail": "career_id inválido."}, status=400)
+    if pedido not in propias:
+        return Response(
+            {"detail": "Ese programa no está a tu cargo.",
+             "career_ids": propias},
+            status=403)
+    return None
+
+
 def _period_defaults(code: str):
     """Fechas por defecto para crear un AcademicPeriod (Sem I: mar–jul, Sem II: ago–dic)."""
     from datetime import date
@@ -1004,7 +1043,7 @@ class EvaluationSilabosSesionesView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if err := _require_grades_admin(request):
+        if err := _require_reporte_area(request):
             return err
         period = (request.query_params.get("period") or "").strip().upper()
         if not period:
@@ -1082,7 +1121,7 @@ class EvaluationSilabosSesionesPdfView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if err := _require_grades_admin(request):
+        if err := _require_reporte_area(request):
             return err
         period = (request.query_params.get("period") or "").strip().upper()
         if not period:
@@ -1340,7 +1379,7 @@ class EvaluationReporteRendimientoView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if err := _require_grades_admin(request):
+        if err := _require_reporte_area(request):
             return err
         period = (request.query_params.get("period") or "").strip().upper()
         if not period:

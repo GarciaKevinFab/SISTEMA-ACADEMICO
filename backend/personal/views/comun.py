@@ -105,6 +105,9 @@ def jefe_dict(j, request=None, publico=False):
                       if j.resolucion_archivo else ""),
         "rd_subida": (j.resolucion_subida.isoformat()
                       if j.resolucion_subida else ""),
+        # Programas a cargo (solo los coordinadores de área los usan)
+        "careers": [{"id": c.id, "name": c.name}
+                    for c in j.careers.all()],
         "responsable": None,
         "plan_trabajo_url": url_de(request, j.plan_trabajo),
         "plan_trabajo_nombre": (j.plan_trabajo.name.rsplit("/", 1)[-1]
