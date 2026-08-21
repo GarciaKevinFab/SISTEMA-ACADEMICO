@@ -1,11 +1,13 @@
 // Plana docente PÚBLICA (/public/docentes) — transparencia MINEDU: los
 // docentes trabajan para el Estado, así que sus hojas de vida son de
 // acceso público. Sin filtros muestra a TODOS con foto y nombres; filtros
-// por especialidad, curso, DNI y grado académico. Cada tarjeta descarga
-// el currículum en PDF (el mismo que emite el docente).
+// por especialidad, curso, DNI y grado académico. Cada tarjeta abre el
+// currículum en PDF en una vista previa (el mismo que emite el docente).
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
     Search, GraduationCap, FileText, Loader2, UserRound, BookOpen, X,
+    Download, ExternalLink,
 } from "lucide-react";
 import {
     InjectPublicStyles, Reveal, HeroFade, PublicHeader,
@@ -19,6 +21,9 @@ export default function PublicTeachersDirectory() {
     const [grados, setGrados] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filtros, setFiltros] = useState(VACIO);
+    const [cvDocente, setCvDocente] = useState(null);   // vista previa del CV
+    const [cvSrc, setCvSrc] = useState(null);
+    const [cvError, setCvError] = useState(false);
 
     const buscar = useCallback(async (f = VACIO) => {
         setLoading(true);
@@ -43,6 +48,29 @@ export default function PublicTeachersDirectory() {
 
     const cvUrl = (t) =>
         `${api.defaults.baseURL || ""}/catalogs/public/teachers/${t.id}/cv.pdf`;
+
+    // El CV se pide por XHR y se muestra como blob: así se ve dentro de la
+    // página en vez de descargarse (el endpoint lo emite como adjunto).
+    useEffect(() => {
+        if (!cvDocente) { setCvSrc(null); setCvError(false); return; }
+        let vivo = true;
+        let url = null;
+        setCvSrc(null);
+        setCvError(false);
+        api.get(`/catalogs/public/teachers/${cvDocente.id}/cv.pdf`,
+            { responseType: "blob" })
+            .then(({ data }) => {
+                if (!vivo) return;
+                url = URL.createObjectURL(
+                    new Blob([data], { type: "application/pdf" }));
+                setCvSrc(url);
+            })
+            .catch(() => { if (vivo) setCvError(true); });
+        return () => {
+            vivo = false;
+            if (url) URL.revokeObjectURL(url);
+        };
+    }, [cvDocente]);
 
     return (
         <div className="pv-font min-h-[100dvh] bg-slate-50 overflow-x-hidden">
@@ -196,15 +224,84 @@ export default function PublicTeachersDirectory() {
                                         {t.cursos.length > 2 && ` +${t.cursos.length - 2}`}
                                     </p>
                                 )}
-                                <a href={cvUrl(t)} target="_blank" rel="noreferrer"
+                                <button type="button" onClick={() => setCvDocente(t)}
                                     className="mt-4 inline-flex items-center gap-1.5 px-4 h-9 rounded-full bg-blue-950 text-white text-[12px] font-extrabold hover:bg-blue-900 hover:scale-[1.04] transition-all duration-300 shadow-md shadow-blue-950/20">
                                     <FileText className="w-3.5 h-3.5" /> Currículum
-                                </a>
+                                </button>
                             </Reveal>
                         ))}
                     </div>
                 )}
             </main>
+
+            {/* ── Vista previa del currículum ── */}
+            {cvDocente && createPortal(
+                <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
+                    onClick={() => setCvDocente(null)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b bg-slate-50">
+                            <div className="min-w-0">
+                                <h3 className="font-extrabold text-slate-800 text-sm truncate">
+                                    {cvDocente.nombre}
+                                </h3>
+                                <p className="text-[11px] text-slate-500 truncate">
+                                    Hoja de vida documentada — transparencia MINEDU
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                                <a href={`${cvUrl(cvDocente)}?inline=1`} target="_blank" rel="noreferrer"
+                                    title="Abrir en una pestaña nueva"
+                                    className="inline-flex items-center justify-center h-9 w-9 rounded-lg hover:bg-slate-200 text-slate-600">
+                                    <ExternalLink className="w-4 h-4" />
+                                </a>
+                                <a href={cvUrl(cvDocente)} title="Descargar PDF"
+                                    className="inline-flex items-center justify-center h-9 w-9 rounded-lg hover:bg-slate-200 text-slate-600">
+                                    <Download className="w-4 h-4" />
+                                </a>
+                                <button type="button" onClick={() => setCvDocente(null)} title="Cerrar"
+                                    className="inline-flex items-center justify-center h-9 w-9 rounded-lg hover:bg-slate-200 text-slate-600">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 min-h-0 bg-slate-100">
+                            {cvError ? (
+                                <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
+                                    <FileText className="w-10 h-10 text-slate-300" />
+                                    <p className="text-sm font-semibold text-slate-600">
+                                        No se pudo cargar el currículum
+                                    </p>
+                                    <a href={`${cvUrl(cvDocente)}?inline=1`} target="_blank" rel="noreferrer"
+                                        className="text-sm font-bold text-blue-700 hover:underline">
+                                        Abrirlo en una pestaña nueva
+                                    </a>
+                                </div>
+                            ) : !cvSrc ? (
+                                <div className="h-full flex flex-col items-center justify-center gap-3 text-slate-400">
+                                    <Loader2 className="w-7 h-7 animate-spin" />
+                                    <p className="text-xs">Generando el currículum…</p>
+                                </div>
+                            ) : (
+                                <object data={cvSrc} type="application/pdf"
+                                    className="w-full h-full" aria-label="Currículum en PDF">
+                                    <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
+                                        <p className="text-sm font-semibold text-slate-600">
+                                            Tu navegador no puede mostrar el PDF aquí
+                                        </p>
+                                        <a href={`${cvUrl(cvDocente)}?inline=1`} target="_blank" rel="noreferrer"
+                                            className="text-sm font-bold text-blue-700 hover:underline">
+                                            Abrirlo en una pestaña nueva
+                                        </a>
+                                    </div>
+                                </object>
+                            )}
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
 
             <footer className="bg-blue-950 border-t border-white/10 py-8 text-center">
                 <p className="text-blue-200/60 text-xs">

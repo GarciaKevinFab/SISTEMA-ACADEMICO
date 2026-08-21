@@ -385,6 +385,10 @@ export const Payments = {
     remove: async (payment_id) => (await api.delete(`/admission-payments/${payment_id}`)).data,
     receiptPdf: async (payment_id) =>
         await api.get(`/admission-payments/${payment_id}/receipt.pdf`, { responseType: "blob" }),
+    // Voucher servido por Django con `inline`: como blob se puede
+    // incrustar en el visor aunque /media/ llegue como descarga.
+    voucherFile: async (payment_id) =>
+        (await api.get(`/admission-payments/${payment_id}/voucher`, { responseType: "blob" })).data,
 };
 
 /* ------------------------------------------

@@ -41,6 +41,7 @@ from .payments import (
     payment_void,
     payment_delete,
     payment_receipt_pdf,
+    payment_voucher_file,
     payment_admin_create,
 )
 
@@ -137,6 +138,7 @@ __all__ = [
     'payment_void',
     'payment_delete',
     'payment_receipt_pdf',
+    'payment_voucher_file',
     'payment_admin_create',
     # Evaluations
     'eval_list_for_scoring',

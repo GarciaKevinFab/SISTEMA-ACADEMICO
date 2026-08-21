@@ -13,12 +13,13 @@ Flujo:
   4. Postulante consulta resultado público y ve sus credenciales
 """
 import logging
+import mimetypes
 import secrets
 import string
 from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.http import HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -527,6 +528,41 @@ def payment_receipt_pdf(request, payment_id):
 
     resp = HttpResponse(data, content_type="application/pdf")
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+
+# ═══════════════════════════════════════════════════════
+# Voucher del pago servido por Django (vista previa)
+# ═══════════════════════════════════════════════════════
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def payment_voucher_file(request, payment_id: int):
+    """
+    Sirve el voucher con `Content-Disposition: inline`.
+
+    Los archivos de /media/ los entrega nginx y llegan al navegador como
+    descarga, asi que su visor de PDF deja el recuadro en blanco al
+    incrustarlos. Finanzas pide este endpoint por XHR y lo muestra como
+    blob, que si se puede incrustar (para el navegador es mismo origen).
+    """
+    try:
+        payment = Payment.objects.get(pk=payment_id)
+    except Payment.DoesNotExist:
+        raise Http404("Pago no encontrado")
+
+    if not payment.voucher:
+        raise Http404("El pago no tiene voucher adjunto")
+
+    filename = payment.voucher.name.split("/")[-1]
+    content_type, _ = mimetypes.guess_type(filename)
+
+    resp = FileResponse(
+        payment.voucher.open("rb"),
+        content_type=content_type or "application/octet-stream",
+    )
+    resp["Content-Disposition"] = f'inline; filename="{filename}"'
     return resp
 
 

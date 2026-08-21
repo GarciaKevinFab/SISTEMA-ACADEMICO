@@ -450,10 +450,16 @@ Tarma, {hoy.strftime('%d/%m/%Y')}</p>
         if documentado and anexos:
             pdf = self._anexar_documentos(pdf, anexos)
 
+        # ?inline=1 → el navegador lo abre en su visor en vez de
+        # descargarlo (lo usa la vista previa de la plana docente).
+        modo = "inline" if str(
+            request.query_params.get("inline", "")
+        ).lower() in ("1", "true", "si") else "attachment"
+
         return HttpResponse(
             pdf, content_type="application/pdf",
             headers={"Content-Disposition":
-                     f'attachment; filename="{_cv_filename(nombre, ct)}"'})
+                     f'{modo}; filename="{_cv_filename(nombre, ct)}"'})
 
     @staticmethod
     def _anexar_documentos(pdf_base: bytes, anexos):

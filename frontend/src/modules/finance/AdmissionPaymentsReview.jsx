@@ -4,6 +4,7 @@
  * Permite ver, aprobar, rechazar y eliminar pagos de postulantes.
  */
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
     Card, CardContent, CardHeader, CardTitle,
 } from "../../components/ui/card";
@@ -37,6 +38,11 @@ const STATUS_BADGES = {
     VOIDED:         { className: "bg-red-100 text-red-700 border-red-200",         label: "Anulado", Icon: XCircle },
 };
 
+// ── Detección de tipo de voucher (misma lógica que matrícula) ──
+const isPdfVoucher = (url) => !!url && /\.pdf(\?|$)/i.test(url);
+const isImageVoucher = (url) =>
+    !!url && /\.(jpe?g|png|gif|webp|bmp|heic|heif)(\?|$)/i.test(url);
+
 const CHANNEL_LABELS = {
     AGENCIA_BN: "Agencia BN",
     CAJERO_MULTIRED: "Cajero Multired",
@@ -56,6 +62,9 @@ export default function AdmissionPaymentsReview() {
     const [actionLoading, setActionLoading] = useState(false);
     const [previewPayment, setPreviewPayment] = useState(null);
     const [previewZoom, setPreviewZoom] = useState(1);
+    const [previewImgError, setPreviewImgError] = useState(false);
+    const [previewSrc, setPreviewSrc] = useState(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
     const [deletingPayment, setDeletingPayment] = useState(null);
     const [voidingPayment, setVoidingPayment] = useState(null);
 
@@ -89,6 +98,31 @@ export default function AdmissionPaymentsReview() {
     }, [callFilter, statusFilter, search]);
 
     useEffect(() => { fetchPayments(); }, [fetchPayments]);
+
+    // Baja el voucher por XHR y lo muestra como blob. Incrustar la URL de
+    // /media/ directamente deja el visor en blanco (nginx lo entrega como
+    // descarga); el blob es mismo origen para el navegador y si se ve.
+    useEffect(() => {
+        if (!previewPayment?.voucher_url) { setPreviewSrc(null); return; }
+        let vivo = true;
+        let url = null;
+        setPreviewLoading(true);
+        Payments.voucherFile(previewPayment.id)
+            .then((blob) => {
+                if (!vivo) return;
+                url = URL.createObjectURL(blob);
+                setPreviewSrc(url);
+            })
+            .catch(() => {
+                // Sin el endpoint nuevo caemos a la URL directa de /media/
+                if (vivo) setPreviewSrc(previewPayment.voucher_url);
+            })
+            .finally(() => { if (vivo) setPreviewLoading(false); });
+        return () => {
+            vivo = false;
+            if (url) URL.revokeObjectURL(url);
+        };
+    }, [previewPayment]);
 
     // Actions
     const handleApprove = async (payment) => {
@@ -294,7 +328,7 @@ export default function AdmissionPaymentsReview() {
                                                                 variant="ghost" size="sm"
                                                                 className="h-7 w-7 p-0"
                                                                 title="Ver voucher"
-                                                                onClick={() => { setPreviewPayment(p); setPreviewZoom(1); }}
+                                                                onClick={() => { setPreviewPayment(p); setPreviewZoom(1); setPreviewImgError(false); }}
                                                             >
                                                                 <Eye className="h-3.5 w-3.5" />
                                                             </Button>
@@ -339,59 +373,132 @@ export default function AdmissionPaymentsReview() {
             </Card>
 
             {/* ── Voucher Preview Modal ── */}
-            {previewPayment && (
-                <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col">
-                        <div className="flex items-center justify-between p-4 border-b">
-                            <div>
-                                <h3 className="font-bold text-gray-900">
-                                    Voucher - {previewPayment.applicant_name}
+            {previewPayment && createPortal(
+                <div
+                    className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4"
+                    onClick={() => setPreviewPayment(null)}
+                >
+                    <div
+                        className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-5 py-3 border-b bg-slate-50">
+                            <div className="min-w-0">
+                                <h3 className="font-bold text-gray-900 truncate">
+                                    Voucher — {previewPayment.applicant_name}
                                 </h3>
-                                <p className="text-xs text-gray-500">
-                                    DNI: {previewPayment.applicant_dni} | Sec: {previewPayment.nro_secuencia} | S/. {previewPayment.amount?.toFixed(2)}
+                                <p className="text-xs text-gray-500 truncate">
+                                    DNI: {previewPayment.applicant_dni}
+                                    {previewPayment.nro_secuencia && ` · Sec: ${previewPayment.nro_secuencia}`}
+                                    {previewPayment.codigo_caja && ` · Caja: ${previewPayment.codigo_caja}`}
+                                    {" · S/. "}
+                                    {Number(previewPayment.amount || 0).toFixed(2)}
                                 </p>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <Button variant="ghost" size="sm" onClick={() => setPreviewZoom((z) => Math.max(0.5, z - 0.25))}>
-                                    <ZoomOut className="h-4 w-4" />
-                                </Button>
-                                <span className="text-xs text-gray-500 w-10 text-center">{Math.round(previewZoom * 100)}%</span>
-                                <Button variant="ghost" size="sm" onClick={() => setPreviewZoom((z) => Math.min(3, z + 0.25))}>
-                                    <ZoomIn className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="sm" onClick={() => setPreviewPayment(null)}>
+                            <div className="flex items-center gap-1 ml-3 shrink-0">
+                                {isImageVoucher(previewPayment.voucher_url) && !previewImgError && (
+                                    <>
+                                        <Button
+                                            variant="ghost" size="sm" title="Alejar"
+                                            className="h-8 w-8 p-0"
+                                            onClick={() => setPreviewZoom((z) => Math.max(0.5, z - 0.25))}
+                                        >
+                                            <ZoomOut className="h-4 w-4" />
+                                        </Button>
+                                        <span className="text-xs text-gray-500 w-10 text-center">
+                                            {Math.round(previewZoom * 100)}%
+                                        </span>
+                                        <Button
+                                            variant="ghost" size="sm" title="Acercar"
+                                            className="h-8 w-8 p-0"
+                                            onClick={() => setPreviewZoom((z) => Math.min(3, z + 0.25))}
+                                        >
+                                            <ZoomIn className="h-4 w-4" />
+                                        </Button>
+                                    </>
+                                )}
+                                {previewPayment.voucher_url && (
+                                    <a
+                                        href={previewPayment.voucher_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-slate-100 text-slate-600"
+                                        title="Abrir en nueva pestaña"
+                                    >
+                                        <Download className="h-4 w-4" />
+                                    </a>
+                                )}
+                                <Button
+                                    variant="ghost" size="sm"
+                                    className="h-8 w-8 p-0 text-slate-500 hover:text-slate-800"
+                                    onClick={() => setPreviewPayment(null)}
+                                >
                                     <X className="h-4 w-4" />
                                 </Button>
                             </div>
                         </div>
-                        <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-gray-100">
+
+                        {/* Content */}
+                        <div className="flex-1 min-h-0 overflow-auto p-4 flex items-center justify-center bg-gray-100">
                             {!previewPayment.voucher_url ? (
                                 <div className="text-center text-gray-500 py-8">
                                     <Paperclip className="h-10 w-10 mx-auto mb-2 opacity-40" />
                                     <p className="font-medium">Sin voucher adjunto</p>
                                 </div>
-                            ) : /\.pdf(\?|$)/i.test(previewPayment.voucher_url) ? (
-                                <iframe
-                                    src={previewPayment.voucher_url}
-                                    className="w-full h-[70vh] rounded border bg-white"
-                                    title="Voucher PDF"
-                                />
+                            ) : previewLoading || !previewSrc ? (
+                                <div className="flex flex-col items-center gap-2 text-gray-400 py-16">
+                                    <RefreshCw className="h-6 w-6 animate-spin" />
+                                    <p className="text-xs">Cargando voucher…</p>
+                                </div>
+                            ) : isPdfVoucher(previewPayment.voucher_url) ? (
+                                // El <object> con el blob muestra el PDF dentro del modal; si aun
+                                // asi el navegador no lo incrusta, cae al respaldo con enlace.
+                                <object
+                                    data={previewSrc}
+                                    type="application/pdf"
+                                    className="w-full h-[65vh] rounded border bg-white"
+                                    aria-label="Voucher PDF"
+                                >
+                                    <div className="text-center text-gray-600 py-10 px-4">
+                                        <FileText className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                                        <p className="font-medium">No se puede mostrar el PDF aquí</p>
+                                        <a
+                                            href={previewPayment.voucher_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-blue-600 hover:underline"
+                                        >
+                                            <Download className="h-4 w-4" /> Abrir voucher en una pestaña nueva
+                                        </a>
+                                    </div>
+                                </object>
+                            ) : previewImgError ? (
+                                <div className="text-center text-gray-600 py-10 px-4">
+                                    <AlertTriangle className="h-10 w-10 mx-auto mb-2 text-amber-500 opacity-70" />
+                                    <p className="font-medium">No se pudo cargar el archivo</p>
+                                    <a
+                                        href={previewPayment.voucher_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-blue-600 hover:underline"
+                                    >
+                                        <Download className="h-4 w-4" /> Abrirlo en una pestaña nueva
+                                    </a>
+                                </div>
                             ) : (
                                 <img
-                                    src={previewPayment.voucher_url}
+                                    src={previewSrc}
                                     alt="Voucher"
-                                    className="max-w-full rounded shadow transition-transform"
-                                    style={{ transform: `scale(${previewZoom})` }}
-                                    onError={(e) => {
-                                        e.target.style.display = "none";
-                                        e.target.parentNode.innerHTML =
-                                            '<div class="text-center text-gray-500 py-8"><p class="font-medium">No se pudo cargar la imagen</p><p class="text-sm mt-1">Intenta abrir el enlace en otra pestaña.</p></div>';
-                                    }}
+                                    className="max-w-full rounded shadow transition-transform duration-200"
+                                    style={{ transform: `scale(${previewZoom})`, transformOrigin: "center center" }}
+                                    onError={() => setPreviewImgError(true)}
                                 />
                             )}
                         </div>
+
                         {previewPayment.status === "PENDING_REVIEW" && (
-                            <div className="flex items-center justify-end gap-2 p-4 border-t">
+                            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t bg-slate-50">
                                 <Button
                                     variant="outline"
                                     className="text-red-600 border-red-200 hover:bg-red-50"
@@ -410,7 +517,8 @@ export default function AdmissionPaymentsReview() {
                             </div>
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* ── Void Confirmation ── */}
