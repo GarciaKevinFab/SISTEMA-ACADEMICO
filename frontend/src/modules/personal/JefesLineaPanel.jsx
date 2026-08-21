@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { SCOPE } from "./personalStyles";
+import { comoLista } from "./lista";
 
 const NAVY = "#1F4E79";
 
@@ -46,8 +47,11 @@ function PickerDocente({ fila, onClose, onHecho }) {
     const timer = useRef(null);
 
     useEffect(() => {
+        // El endpoint responde {careers: [...]}, no el array pelado: sin
+        // comoLista() esto guardaba el objeto y el .map() de abajo reventaba
+        // con "map is not a function".
         api.get("/academic/careers")
-            .then(({ data }) => setCarreras(data?.items || data?.rows || data || []))
+            .then(({ data }) => setCarreras(comoLista(data, ["careers", "items", "rows"])))
             .catch(() => setCarreras([]));
     }, []);
 

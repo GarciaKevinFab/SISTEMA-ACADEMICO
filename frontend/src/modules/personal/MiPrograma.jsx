@@ -18,6 +18,7 @@ import {
 import ModuleShell from "@/components/module/ModuleShell";
 import { api } from "../../lib/api";
 import { InjectPersonalStyles, SCOPE } from "./personalStyles";
+import { comoLista } from "./lista";
 
 const API = (p) => `${api.defaults.baseURL || ""}${p}`;
 
@@ -43,7 +44,7 @@ export default function MiPrograma() {
             const { data } = await api.get("/personal/me/programa", {
                 params: { period, career_id: careerId, semester: n },
             });
-            setAlumnos(data?.estudiantes || []);
+            setAlumnos(comoLista(data?.estudiantes));
         } catch (e) {
             toast.error(e?.response?.data?.detail || "No se pudieron cargar los alumnos");
         } finally { setCargandoAlumnos(false); }
@@ -52,7 +53,7 @@ export default function MiPrograma() {
     useEffect(() => {
         api.get("/catalogs/periods")
             .then(({ data }) => {
-                const its = data?.items || data?.results || data || [];
+                const its = comoLista(data, ["items", "results", "periods"]);
                 setPeriodos(its);
                 const act = its.find((p) => p.is_active) || its[0];
                 if (act?.code) setPeriod(act.code);
@@ -104,7 +105,7 @@ export default function MiPrograma() {
                         </label>
                         <select value={careerId} onChange={(e) => setCareerId(e.target.value)}
                             className="mt-1 h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white min-w-[230px]">
-                            {(data?.careers || []).map((c) => (
+                            {comoLista(data?.careers).map((c) => (
                                 <option key={c.id} value={c.id}>{c.name}</option>
                             ))}
                         </select>
@@ -171,11 +172,11 @@ export default function MiPrograma() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {(data?.ciclos || []).length === 0 ? (
+                                            {comoLista(data?.ciclos).length === 0 ? (
                                                 <tr><td colSpan={7} className="py-10 text-center text-[12px] text-slate-400">
                                                     Sin secciones registradas en este período.
                                                 </td></tr>
-                                            ) : data.ciclos.map((c, i) => (
+                                            ) : comoLista(data?.ciclos).map((c, i) => (
                                               <React.Fragment key={c.ciclo}>
                                                 <tr onClick={() => verAlumnos(c.ciclo)}
                                                     className={"border-t border-slate-100 cursor-pointer hover:bg-blue-50/60 " + (i % 2 ? "bg-slate-50/60" : "")}>
@@ -250,11 +251,11 @@ export default function MiPrograma() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {(data?.docentes || []).length === 0 ? (
+                                            {comoLista(data?.docentes).length === 0 ? (
                                                 <tr><td colSpan={4} className="py-10 text-center text-[12px] text-slate-400">
                                                     Sin docentes con carga en este período.
                                                 </td></tr>
-                                            ) : data.docentes.map((d, i) => (
+                                            ) : comoLista(data?.docentes).map((d, i) => (
                                                 <tr key={d.teacher_id || `s${i}`} className={"border-t border-slate-100 " + (i % 2 ? "bg-slate-50/60" : "")}>
                                                     <td className="px-4 py-3">
                                                         <span className="flex items-center gap-2 text-[12.5px] font-bold text-slate-800">
