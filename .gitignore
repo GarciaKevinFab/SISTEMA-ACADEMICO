@@ -72,3 +72,11 @@ graphify-out/
 
 # Volcado de crash de Git Bash (Windows)
 bash.exe.stackdump
+
+########################
+# RESPALDOS Y BASE DE DATOS (datos reales de alumnos)
+########################
+# El repo es publico: nunca versionar volcados ni respaldos.
+backend/db.sqlite3*
+backend/full_backup*.json
+backend/media/backups/
