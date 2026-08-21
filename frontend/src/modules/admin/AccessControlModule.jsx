@@ -481,6 +481,7 @@ const UsersTab = () => {
   });
 
   const [rolesOptions, setRolesOptions] = useState([]);
+  const [rolFiltro, setRolFiltro] = useState("");
   const [editing, setEditing] = useState(null);
   const [editForm, setEditForm] = useState({ full_name: "", email: "", roles: [] });
   const [pwdForm, setPwdForm] = useState({ new_password: "", confirm_password: "" });
@@ -546,13 +547,17 @@ const UsersTab = () => {
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await UsersService.list({ page, page_size: pageSize, ...(debouncedQ ? { q: debouncedQ } : {}) });
+      const data = await UsersService.list({
+        page, page_size: pageSize,
+        ...(debouncedQ ? { q: debouncedQ } : {}),
+        ...(rolFiltro ? { role: rolFiltro } : {}),
+      });
       const norm = normalizeUsers(data);
       setList(norm.items); setCount(norm.count);
     } catch {
       toast.error("Error al cargar usuarios"); setList([]); setCount(0);
     } finally { setLoading(false); }
-  }, [debouncedQ, page, pageSize]);
+  }, [debouncedQ, page, pageSize, rolFiltro]);
 
   const fetchRoles = useCallback(async () => {
     try {
@@ -733,6 +738,20 @@ const UsersTab = () => {
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center bg-slate-50 border border-slate-100 rounded-xl p-2">
           <SearchInput value={q} onChange={setQ} placeholder="Nombre, usuario o email..." />
+          {/* Filtro por rol: con 1275 usuarios, buscar por nombre no alcanza
+              para responder "quiénes son los docentes". */}
+          <select
+            value={rolFiltro}
+            onChange={(e) => { setRolFiltro(e.target.value); setPage(1); }}
+            title="Filtrar por rol"
+            className="h-9 px-3 rounded-lg border border-slate-200 bg-white text-xs font-600 text-slate-700 min-w-[150px] shrink-0"
+          >
+            <option value="">Todos los roles</option>
+            {(rolesOptions || []).map((r) => {
+              const nombre = typeof r === "string" ? r : (r?.name || r?.code || "");
+              return nombre ? <option key={nombre} value={nombre}>{nombre}</option> : null;
+            })}
+          </select>
           <div className="flex gap-2 flex-wrap justify-end">
             <Button
               variant="outline" size="sm"

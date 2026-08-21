@@ -276,6 +276,22 @@ def users_collection(request):
         q = (request.query_params.get("q") or "").strip()
 
         qs = User.objects.all().order_by("id")
+
+        # Filtro por ROL. Los roles viven en DOS tablas según cómo se
+        # asignaron (acl.UserRole y la M2M directa User.roles): se consultan
+        # ambas, igual que el resto del sistema, o el filtro dejaría fuera a
+        # media base según por dónde se creó cada usuario.
+        rol = (request.query_params.get("role") or "").strip()
+        if rol:
+            ids = set(
+                UserRole.objects.filter(role__name__iexact=rol)
+                .values_list("user_id", flat=True)
+            ) | set(
+                User.objects.filter(roles__name__iexact=rol)
+                .values_list("id", flat=True)
+            )
+            qs = qs.filter(id__in=ids)
+
         if q:
             qs = qs.filter(
                 Q(username__icontains=q) |

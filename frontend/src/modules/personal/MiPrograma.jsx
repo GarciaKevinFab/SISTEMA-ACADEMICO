@@ -19,8 +19,9 @@ import ModuleShell from "@/components/module/ModuleShell";
 import { api } from "../../lib/api";
 import { InjectPersonalStyles, SCOPE } from "./personalStyles";
 import { comoLista } from "./lista";
+import { descargar } from "./descargas";
 
-const API = (p) => `${api.defaults.baseURL || ""}${p}`;
+
 
 export default function MiPrograma() {
     const [data, setData] = useState(null);
@@ -34,6 +35,15 @@ export default function MiPrograma() {
     const [ciclo, setCiclo] = useState(null);
     const [alumnos, setAlumnos] = useState([]);
     const [cargandoAlumnos, setCargandoAlumnos] = useState(false);
+    // Las descargas van por axios (que lleva el JWT), no por <a href>: una
+    // pestaña nueva no manda el header Authorization y el backend responde 401.
+    const [bajando, setBajando] = useState("");
+
+    const bajar = async (ruta, nombre, clave) => {
+        setBajando(clave);
+        await descargar(ruta, nombre);
+        setBajando("");
+    };
 
     const verAlumnos = async (n) => {
         if (ciclo === n) { setCiclo(null); setAlumnos([]); return; }
@@ -81,11 +91,11 @@ export default function MiPrograma() {
 
     const q = `period=${encodeURIComponent(period)}&career_id=${encodeURIComponent(careerId)}`;
     const REPORTES = [
-        ["Sílabos y sesiones", ClipboardList, `/academic/admin/evaluation/silabos-sesiones.pdf?${q}`],
-        ["Rendimiento (Excel)", BarChart3, `/academic/admin/evaluation/rendimiento.xlsx?${q}`],
-        ["Rendimiento (PDF)", BarChart3, `/academic/admin/evaluation/rendimiento.pdf?${q}`],
-        ["Asistencia (PDF)", CheckCircle2, `/academic/admin/evaluation/asistencia.pdf?${q}`],
-        ["Asistencia (Excel)", CheckCircle2, `/academic/admin/evaluation/asistencia.xlsx?${q}`],
+        ["Sílabos y sesiones", ClipboardList, `/academic/admin/evaluation/silabos-sesiones.pdf?${q}`, `silabos-sesiones-${period}.pdf`],
+        ["Rendimiento (Excel)", BarChart3, `/academic/admin/evaluation/rendimiento.xlsx?${q}`, `rendimiento-${period}.xlsx`],
+        ["Rendimiento (PDF)", BarChart3, `/academic/admin/evaluation/rendimiento.pdf?${q}`, `rendimiento-${period}.pdf`],
+        ["Asistencia (PDF)", CheckCircle2, `/academic/admin/evaluation/asistencia.pdf?${q}`, `asistencia-${period}.pdf`],
+        ["Asistencia (Excel)", CheckCircle2, `/academic/admin/evaluation/asistencia.xlsx?${q}`, `asistencia-${period}.xlsx`],
     ];
 
     return (
@@ -97,34 +107,38 @@ export default function MiPrograma() {
                 subtitle="Coordinación de Área Académica — seguimiento de docentes y estudiantes"
                 accent="linear-gradient(135deg, #0EA5E9, #1F4E79)"
             >
-                {/* Filtros */}
-                <div className="flex flex-wrap items-end gap-3">
-                    <div>
-                        <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                {/* Filtros — en una barra propia, no sueltos sobre el fondo */}
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 flex flex-wrap items-end gap-3">
+                    <div className="min-w-[240px] flex-1">
+                        <label className="block text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
                             Programa
                         </label>
                         <select value={careerId} onChange={(e) => setCareerId(e.target.value)}
-                            className="mt-1 h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white min-w-[230px]">
+                            className="mt-1 w-full h-10 px-3 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-400">
                             {comoLista(data?.careers).map((c) => (
                                 <option key={c.id} value={c.id}>{c.name}</option>
                             ))}
                         </select>
                     </div>
-                    <div>
-                        <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                    <div className="w-[160px]">
+                        <label className="block text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
                             Período
                         </label>
                         <select value={period} onChange={(e) => setPeriod(e.target.value)}
-                            className="mt-1 h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white min-w-[140px]">
+                            className="mt-1 w-full h-10 px-3 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-400">
                             {periodos.map((p) => (
                                 <option key={p.code || p.id} value={p.code}>{p.code}</option>
                             ))}
                         </select>
                     </div>
                     <button onClick={cargar}
-                        className="adm-outline inline-flex items-center gap-1.5 px-3 h-10 rounded-xl border border-slate-200 text-[12px] font-bold">
+                        className="adm-outline inline-flex items-center gap-1.5 px-4 h-10 rounded-xl border border-slate-300 text-[12px] font-bold">
                         <RefreshCw size={13} /> Actualizar
                     </button>
+                    <span className="ml-auto text-[11px] text-slate-400 self-center">
+                        {comoLista(data?.docentes).length} docentes ·{" "}
+                        {comoLista(data?.ciclos).reduce((n, c) => n + (c.matriculados || 0), 0)} matriculados
+                    </span>
                 </div>
 
                 {error ? (
@@ -146,11 +160,15 @@ export default function MiPrograma() {
                                 Reportes del programa
                             </p>
                             <div className="mt-2 flex flex-wrap gap-2">
-                                {REPORTES.map(([rotulo, Icon, ruta]) => (
-                                    <a key={rotulo} href={API(ruta)} target="_blank" rel="noreferrer"
-                                        className="inline-flex items-center gap-1.5 px-4 h-9 rounded-xl bg-blue-50 text-blue-700 text-[12px] font-bold hover:bg-blue-100">
-                                        <Icon size={14} /> {rotulo}
-                                    </a>
+                                {REPORTES.map(([rotulo, Icon, ruta, archivo]) => (
+                                    <button key={rotulo} disabled={!!bajando}
+                                        onClick={() => bajar(ruta, archivo, rotulo)}
+                                        className="adm-soft inline-flex items-center gap-1.5 px-4 h-9 rounded-xl text-[12px] font-bold disabled:opacity-60">
+                                        {bajando === rotulo
+                                            ? <Loader2 size={14} className="animate-spin" />
+                                            : <Icon size={14} />}
+                                        {rotulo}
+                                    </button>
                                 ))}
                             </div>
                         </section>
@@ -209,14 +227,17 @@ export default function MiPrograma() {
                                                             ) : (
                                                                 <div className="flex flex-wrap gap-1.5">
                                                                     {alumnos.map((a) => (
-                                                                        <a key={a.student_id}
-                                                                            href={API(`/academic/schedules/export/pdf?academic_period=${encodeURIComponent(period)}&student_id=${a.student_id}`)}
-                                                                            target="_blank" rel="noreferrer"
-                                                                            title={`Horario de ${a.nombre}`}
-                                                                            className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full bg-white ring-1 ring-slate-200 text-[11.5px] font-bold text-slate-700 hover:ring-blue-300 hover:text-blue-700">
-                                                                            <CalendarDays size={12} className="text-slate-300" />
+                                                                        <button key={a.student_id} disabled={!!bajando}
+                                                                            title={`Descargar el horario de ${a.nombre}`}
+                                                                            onClick={() => bajar(
+                                                                                `/academic/schedules/export/pdf?academic_period=${encodeURIComponent(period)}&student_id=${a.student_id}`,
+                                                                                `horario-${a.nombre}-${period}.pdf`, `al${a.student_id}`)}
+                                                                            className="adm-outline inline-flex items-center gap-1.5 px-3 h-8 rounded-full ring-1 ring-slate-200 text-[11.5px] font-bold hover:ring-blue-300 disabled:opacity-60">
+                                                                            {bajando === `al${a.student_id}`
+                                                                                ? <Loader2 size={12} className="animate-spin" />
+                                                                                : <CalendarDays size={12} className="text-slate-400" />}
                                                                             {a.nombre}
-                                                                        </a>
+                                                                        </button>
                                                                     ))}
                                                                 </div>
                                                             )}
@@ -277,11 +298,16 @@ export default function MiPrograma() {
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         {d.teacher_id && (
-                                                            <a href={API(`/academic/teachers/me/horario.pdf?teacher_id=${d.teacher_id}&period=${encodeURIComponent(period)}`)}
-                                                                target="_blank" rel="noreferrer"
-                                                                className="inline-flex items-center gap-1.5 px-3 h-8 rounded-xl bg-blue-50 text-blue-700 text-[11.5px] font-bold hover:bg-blue-100">
-                                                                <CalendarDays size={13} /> Descargar
-                                                            </a>
+                                                            <button disabled={!!bajando}
+                                                                onClick={() => bajar(
+                                                                    `/academic/teachers/me/horario.pdf?teacher_id=${d.teacher_id}&period=${encodeURIComponent(period)}`,
+                                                                    `horario-${d.nombre}-${period}.pdf`, `doc${d.teacher_id}`)}
+                                                                className="adm-soft inline-flex items-center gap-1.5 px-3 h-8 rounded-xl text-[11.5px] font-bold disabled:opacity-60">
+                                                                {bajando === `doc${d.teacher_id}`
+                                                                    ? <Loader2 size={13} className="animate-spin" />
+                                                                    : <CalendarDays size={13} />}
+                                                                Horario
+                                                            </button>
                                                         )}
                                                     </td>
                                                 </tr>

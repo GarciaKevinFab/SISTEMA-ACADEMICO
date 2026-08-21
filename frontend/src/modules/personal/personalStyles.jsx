@@ -18,6 +18,21 @@ export const SCOPE = "adm-scope";
 const NAVY = "#1F4E79";
 
 const CSS = `
+/* ── Campos ──
+   ModuleShell pone \`color:#FFFFFF\` en su div raíz y el reset de Tailwind
+   deja los <input>/<select> en \`color: inherit\`: dentro del módulo salían
+   con texto blanco sobre fondo blanco, es decir invisibles. Se fija el color
+   explícitamente en vez de heredarlo. */
+.adm-scope input,
+.adm-scope select,
+.adm-scope textarea,
+.adm-scope option {
+  color: #0F172A;
+  background-color: #FFFFFF;
+}
+.adm-scope input::placeholder,
+.adm-scope textarea::placeholder { color: #94A3B8; }
+
 /* ── Botones del módulo ── */
 /* Sin \`color: inherit\`: ModuleShell pone \`color:#FFFFFF\` en su raíz y los
    botones del pie del modal salían en blanco sobre fondo claro. Al no
