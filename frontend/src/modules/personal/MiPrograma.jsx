@@ -28,6 +28,26 @@ export default function MiPrograma() {
     const [careerId, setCareerId] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    // Ciclo desplegado con sus alumnos. Se piden aparte porque un programa
+    // completo son cientos y no vale la pena traerlos siempre.
+    const [ciclo, setCiclo] = useState(null);
+    const [alumnos, setAlumnos] = useState([]);
+    const [cargandoAlumnos, setCargandoAlumnos] = useState(false);
+
+    const verAlumnos = async (n) => {
+        if (ciclo === n) { setCiclo(null); setAlumnos([]); return; }
+        setCiclo(n);
+        setAlumnos([]);
+        setCargandoAlumnos(true);
+        try {
+            const { data } = await api.get("/personal/me/programa", {
+                params: { period, career_id: careerId, semester: n },
+            });
+            setAlumnos(data?.estudiantes || []);
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || "No se pudieron cargar los alumnos");
+        } finally { setCargandoAlumnos(false); }
+    };
 
     useEffect(() => {
         api.get("/catalogs/periods")
@@ -156,8 +176,15 @@ export default function MiPrograma() {
                                                     Sin secciones registradas en este período.
                                                 </td></tr>
                                             ) : data.ciclos.map((c, i) => (
-                                                <tr key={c.ciclo} className={"border-t border-slate-100 " + (i % 2 ? "bg-slate-50/60" : "")}>
-                                                    <td className="px-4 py-2.5 font-bold text-slate-700">Ciclo {c.ciclo || "—"}</td>
+                                              <React.Fragment key={c.ciclo}>
+                                                <tr onClick={() => verAlumnos(c.ciclo)}
+                                                    className={"border-t border-slate-100 cursor-pointer hover:bg-blue-50/60 " + (i % 2 ? "bg-slate-50/60" : "")}>
+                                                    <td className="px-4 py-2.5 font-bold text-slate-700">
+                                                        Ciclo {c.ciclo || "—"}
+                                                        <span className="ml-1.5 text-[10px] font-bold text-blue-600">
+                                                            {ciclo === c.ciclo ? "▾ alumnos" : "▸ ver alumnos"}
+                                                        </span>
+                                                    </td>
                                                     <td className="px-4 py-2.5 text-slate-600">{c.secciones}</td>
                                                     <td className="px-4 py-2.5 text-slate-600">{c.matriculados}</td>
                                                     <td className="px-4 py-2.5 text-slate-600">{c.con_nota}</td>
@@ -167,6 +194,35 @@ export default function MiPrograma() {
                                                         {c.promedio ?? "—"}
                                                     </td>
                                                 </tr>
+                                                {ciclo === c.ciclo && (
+                                                    <tr className="border-t border-slate-100 bg-blue-50/30">
+                                                        <td colSpan={7} className="px-4 py-3">
+                                                            {cargandoAlumnos ? (
+                                                                <span className="inline-flex items-center gap-2 text-[12px] text-slate-400">
+                                                                    <Loader2 size={13} className="animate-spin" /> Cargando alumnos…
+                                                                </span>
+                                                            ) : alumnos.length === 0 ? (
+                                                                <span className="text-[12px] text-slate-400">
+                                                                    Sin alumnos matriculados en este ciclo.
+                                                                </span>
+                                                            ) : (
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {alumnos.map((a) => (
+                                                                        <a key={a.student_id}
+                                                                            href={API(`/academic/schedules/export/pdf?academic_period=${encodeURIComponent(period)}&student_id=${a.student_id}`)}
+                                                                            target="_blank" rel="noreferrer"
+                                                                            title={`Horario de ${a.nombre}`}
+                                                                            className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full bg-white ring-1 ring-slate-200 text-[11.5px] font-bold text-slate-700 hover:ring-blue-300 hover:text-blue-700">
+                                                                            <CalendarDays size={12} className="text-slate-300" />
+                                                                            {a.nombre}
+                                                                        </a>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                              </React.Fragment>
                                             ))}
                                         </tbody>
                                     </table>

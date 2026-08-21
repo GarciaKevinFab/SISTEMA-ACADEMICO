@@ -172,26 +172,49 @@ def _window_info_for_period(per: AcademicPeriod) -> dict:
 #  RESOLUCIÓN DE ESTUDIANTE
 # ══════════════════════════════════════════════════════════════
 
+def _coordina_al_alumno(user, st) -> bool:
+    """¿El usuario coordina el programa de ese alumno?
+
+    Es el tercer caso permitido, además del admin de matrícula y del propio
+    alumno: un coordinador de área ve a los estudiantes de los programas que
+    tiene a cargo, y solo a esos.
+    """
+    if not st:
+        return False
+    try:
+        from personal.coordinacion import carreras_coordinadas
+        propias = carreras_coordinadas(user)
+    except Exception:
+        return False
+    if not propias:
+        return False
+    plan = getattr(st, "plan", None)
+    return getattr(plan, "career_id", None) in propias
+
+
 def _resolve_student_from_request(request, dni=None, student_id=None):
     if dni:
-        if not _can_admin_enroll(request.user):
-            return None, Response({"detail": "No autorizado."}, status=403)
+        es_admin = _can_admin_enroll(request.user)
         st = StudentProfile.objects.filter(num_documento=str(dni).strip()).first()
+        # El 403 se devuelve exista o no el DNI: si no, responder 404 a quien
+        # no tiene permiso delata qué documentos están registrados.
+        if not es_admin and not _coordina_al_alumno(request.user, st):
+            return None, Response({"detail": "No autorizado."}, status=403)
         if not st:
             return None, Response({"detail": "Estudiante no encontrado por DNI."}, status=404)
         return st, None
 
     if student_id:
-        if not _can_admin_enroll(request.user):
-            st = StudentProfile.objects.filter(id=int(student_id), user=request.user).first()
-            if not st:
-                return None, Response({"detail": "No autorizado para este estudiante."}, status=403)
-            return st, None
-        else:
+        if _can_admin_enroll(request.user):
             st = StudentProfile.objects.filter(id=int(student_id)).first()
             if not st:
                 return None, Response({"detail": "Estudiante no encontrado por ID."}, status=404)
             return st, None
+        st = StudentProfile.objects.filter(id=int(student_id)).first()
+        propio = bool(st and st.user_id and st.user_id == request.user.id)
+        if not propio and not _coordina_al_alumno(request.user, st):
+            return None, Response({"detail": "No autorizado para este estudiante."}, status=403)
+        return st, None
 
     st = getattr(request.user, "student_profile", None)
     if not st:

@@ -60,13 +60,23 @@ class MiProgramaView(APIView):
                              "period": "", "docentes": [], "ciclos": []})
 
         secciones = list(_sections_for(period, career_id=career_id))
-        return Response({
+        salida = {
             "careers": opciones,
             "career_id": career_id,
             "period": period,
             "docentes": _docentes(secciones),
             "ciclos": _ciclos(secciones),
-        })
+        }
+        # Con ?semester= devuelve además los alumnos de ese ciclo, para poder
+        # bajar sus horarios. Se pide aparte porque un programa completo son
+        # cientos de alumnos y no tiene sentido mandarlos siempre.
+        ciclo = (request.query_params.get("semester") or "").strip()
+        if ciclo.isdigit():
+            del_ciclo = [x for x in secciones
+                         if str(getattr(x.plan_course, "semester", "")) == ciclo]
+            salida["semester"] = int(ciclo)
+            salida["estudiantes"] = _estudiantes(del_ciclo)
+        return Response(salida)
 
 
 def _nombre_docente(t):
@@ -78,8 +88,33 @@ def _nombre_docente(t):
         or (getattr(u, "username", "") if u else "") or f"Docente {t.id}"
 
 
+def _con_silabo(ids):
+    """IDs de secciones que ya tienen sílabo subido."""
+    from academic.models import Syllabus
+    return set(Syllabus.objects.filter(section_id__in=ids)
+               .values_list("section_id", flat=True))
+
+
+def _matriculados(ids):
+    """{section_id: {student_id, …}} de matrículas no anuladas.
+
+    La sección cuelga de EnrollmentItem, NO de Enrollment: consultar
+    Enrollment.section_id revienta con FieldError.
+    """
+    from academic.models import Enrollment, EnrollmentItem
+    por = {}
+    filas = (EnrollmentItem.objects
+             .filter(section_id__in=ids)
+             .exclude(enrollment__status=Enrollment.STATUS_CANCELLED)
+             .values("section_id", "enrollment__student_id"))
+    for f in filas:
+        por.setdefault(f["section_id"], set()).add(f["enrollment__student_id"])
+    return por
+
+
 def _docentes(secciones):
     """Un renglón por docente, con los cursos que dicta en el programa."""
+    con_silabo = _con_silabo([s.id for s in secciones])
     por = {}
     for sec in secciones:
         t = sec.teacher
@@ -93,7 +128,7 @@ def _docentes(secciones):
         curso = sec.plan_course.course.name
         if curso not in fila["cursos"]:
             fila["cursos"].append(curso)
-        if getattr(sec, "syllabus", None):
+        if sec.id in con_silabo:
             fila["con_silabo"] += 1
     filas = sorted(por.values(), key=lambda f: f["nombre"])
     return filas
@@ -101,15 +136,12 @@ def _docentes(secciones):
 
 def _ciclos(secciones):
     """Consolidado de notas por ciclo, para ver el rendimiento de un vistazo."""
-    from academic.models import Enrollment, SectionGrades
+    from academic.models import SectionGrades
 
     ids = [s.id for s in secciones]
     bundles = {b.section_id: (b.grades or {})
                for b in SectionGrades.objects.filter(section_id__in=ids)}
-    matriculas = {}
-    for e in Enrollment.objects.filter(section_id__in=ids).values(
-            "section_id", "student_id"):
-        matriculas.setdefault(e["section_id"], set()).add(e["student_id"])
+    matriculas = _matriculados(ids)
 
     por = {}
     for sec in secciones:
@@ -152,3 +184,28 @@ def _nota(valor):
         return float(valor)
     except (TypeError, ValueError):
         return None
+
+
+def _estudiantes(secciones):
+    """Alumnos matriculados en esas secciones, sin repetir."""
+    from students.models import Student
+
+    ids = [s.id for s in secciones]
+    alumnos = set()
+    for conjunto in _matriculados(ids).values():
+        alumnos |= conjunto
+    if not alumnos:
+        return []
+
+    filas = [{
+        "student_id": st.id,
+        "nombre": " ".join(p for p in (st.apellido_paterno, st.apellido_materno,
+                                       st.nombres) if p).strip() or st.nombres,
+        "documento": st.num_documento or "",
+    } for st in Student.objects.filter(id__in=alumnos)]
+    try:
+        from students.name_utils import clave_orden
+        filas.sort(key=lambda f: clave_orden(f["nombre"]))
+    except Exception:
+        filas.sort(key=lambda f: f["nombre"])
+    return filas
