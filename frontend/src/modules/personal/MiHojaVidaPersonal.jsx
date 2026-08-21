@@ -38,12 +38,68 @@ const DOCS = [
 const inputCls =
     "mt-1 w-full h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-400";
 
-/* ── Foto de perfil (va al portal público) ─────────────────────────── */
-function MiFoto({ perfil, onCambio }) {
+/* ── Mi ficha: los datos los completa la propia persona ────────────── */
+const GRADOS = [
+    ["", "—"], ["SECUNDARIA", "Secundaria completa"], ["TECNICO", "Técnico (a)"],
+    ["PROFESOR", "Profesor (a)"], ["BACHILLER", "Bachiller (a)"],
+    ["LICENCIADO", "Licenciado (a)"], ["MAGISTER", "Magister (a)"],
+    ["DOCTOR", "Doctor (a)"],
+];
+const CONDICIONES = [
+    ["", "—"], ["NOMBRADO", "Nombrado (a)"], ["CONTRATADO", "Contratado (a)"],
+    ["LOCADOR", "Locador (a) de servicios"],
+];
+const SEXOS = [["", "—"], ["M", "Masculino"], ["F", "Femenino"]];
+
+// Se envían al backend con estos nombres; el perfil los devuelve con alias
+// distintos para celular y correo, de ahí el mapeo al cargar.
+const CAMPOS = [
+    "apellido_paterno", "apellido_materno", "nombres", "document", "sexo",
+    "fecha_nac", "cargo", "area", "grado_academico", "condicion_laboral",
+    "rd_nombramiento", "rd_fecha", "email", "phone", "telefono_fijo",
+    "direccion", "region", "provincia", "distrito",
+];
+
+function Campo({ label, children, ancho = "" }) {
+    return (
+        <div className={ancho}>
+            <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                {label}
+            </label>
+            {children}
+        </div>
+    );
+}
+
+function MiFicha({ perfil, onCambio }) {
+    const [form, setForm] = useState({});
+    const [guardando, setGuardando] = useState(false);
     const [subiendo, setSubiendo] = useState(false);
     const input = useRef(null);
 
-    const subir = async (file) => {
+    useEffect(() => {
+        const f = {};
+        for (const k of CAMPOS) f[k] = perfil[k] ?? "";
+        f.phone = perfil.celular ?? "";
+        f.email = perfil.email_institucional ?? "";
+        setForm(f);
+    }, [perfil]);
+
+    const set = (k) => (e) =>
+        setForm((f) => ({ ...f, [k]: e?.target ? e.target.value : e }));
+
+    const guardar = async () => {
+        setGuardando(true);
+        try {
+            const { data } = await api.put("/personal/me/profile", form);
+            onCambio(data);
+            toast.success("Datos actualizados");
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || "No se pudieron guardar los datos");
+        } finally { setGuardando(false); }
+    };
+
+    const subirFoto = async (file) => {
         if (!file) return;
         setSubiendo(true);
         try {
@@ -58,32 +114,129 @@ function MiFoto({ perfil, onCambio }) {
     };
 
     return (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 flex flex-wrap items-center gap-4">
-            <div className="h-24 w-24 rounded-2xl overflow-hidden ring-1 ring-slate-200 bg-slate-50 grid place-items-center shrink-0">
-                {perfil.photo_url
-                    ? <img src={perfil.photo_url} alt="" className="h-full w-full object-cover" />
-                    : <UserRound className="h-9 w-9 text-slate-300" />}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-5">
+            <div className="flex flex-wrap items-center gap-4">
+                <div className="h-24 w-24 rounded-2xl overflow-hidden ring-1 ring-slate-200 bg-slate-50 grid place-items-center shrink-0">
+                    {perfil.photo_url
+                        ? <img src={perfil.photo_url} alt="" className="h-full w-full object-cover" />
+                        : <UserRound className="h-9 w-9 text-slate-300" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                        {perfil.tipo_label}
+                    </p>
+                    <h3 className="text-[15px] font-extrabold text-slate-800 leading-snug">
+                        {perfil.nombre_completo || perfil.full_name}
+                    </h3>
+                    <p className="mt-1 text-[11px] text-slate-400 leading-relaxed max-w-xl">
+                        Completa tu ficha: estos datos, junto con tu foto y tu cargo,
+                        se publican en el portal de transparencia. Usa una foto tipo
+                        carnet con fondo claro.
+                    </p>
+                    <input type="file" hidden accept="image/*" ref={input}
+                        onChange={(e) => { subirFoto(e.target.files?.[0]); e.target.value = ""; }} />
+                    <button onClick={() => input.current?.click()} disabled={subiendo}
+                        className="adm-primary mt-3 inline-flex items-center gap-1.5 px-4 h-9 rounded-xl text-[12px] font-extrabold">
+                        {subiendo ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                        {perfil.photo_url ? "Cambiar foto" : "Subir mi foto"}
+                    </button>
+                </div>
             </div>
-            <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
-                    {perfil.tipo_label}
+
+            <section>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-blue-900">
+                    Identificación
                 </p>
-                <h3 className="text-[15px] font-extrabold text-slate-800 leading-snug">
-                    {perfil.nombre_completo || perfil.full_name}
-                </h3>
-                <p className="text-[12px] text-slate-500">
-                    {[perfil.cargo, perfil.area].filter(Boolean).join(" · ") || "Sin cargo registrado"}
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Campo label="Apellido paterno">
+                        <input className={inputCls} value={form.apellido_paterno || ""} onChange={set("apellido_paterno")} />
+                    </Campo>
+                    <Campo label="Apellido materno">
+                        <input className={inputCls} value={form.apellido_materno || ""} onChange={set("apellido_materno")} />
+                    </Campo>
+                    <Campo label="Nombres">
+                        <input className={inputCls} value={form.nombres || ""} onChange={set("nombres")} />
+                    </Campo>
+                    <Campo label="DNI">
+                        <input className={inputCls} value={form.document || ""} inputMode="numeric"
+                            onChange={(e) => setForm((f) => ({ ...f, document: e.target.value.replace(/[^0-9]/g, "") }))} />
+                    </Campo>
+                    <Campo label="Sexo">
+                        <select className={inputCls} value={form.sexo || ""} onChange={set("sexo")}>
+                            {SEXOS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                    </Campo>
+                    <Campo label="Fecha de nacimiento">
+                        <input type="date" className={inputCls} value={form.fecha_nac || ""} onChange={set("fecha_nac")} />
+                    </Campo>
+                </div>
+            </section>
+
+            <section>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-blue-900">
+                    Cargo y vínculo
                 </p>
-                <p className="mt-1.5 text-[11px] text-slate-400 leading-relaxed max-w-xl">
-                    Tu foto se publica en el portal de transparencia junto con tus
-                    datos generales y tu cargo. Usa una foto tipo carnet, fondo claro.
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Campo label="Cargo" ancho="sm:col-span-2">
+                        <input className={inputCls} value={form.cargo || ""} onChange={set("cargo")}
+                            placeholder="Según el Reglamento Institucional" />
+                    </Campo>
+                    <Campo label="Área / Unidad">
+                        <input className={inputCls} value={form.area || ""} onChange={set("area")} />
+                    </Campo>
+                    <Campo label="Grado académico">
+                        <select className={inputCls} value={form.grado_academico || ""} onChange={set("grado_academico")}>
+                            {GRADOS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                    </Campo>
+                    <Campo label="Condición laboral">
+                        <select className={inputCls} value={form.condicion_laboral || ""} onChange={set("condicion_laboral")}>
+                            {CONDICIONES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                    </Campo>
+                    <Campo label="N° R.D. / Contrato">
+                        <input className={inputCls} value={form.rd_nombramiento || ""} onChange={set("rd_nombramiento")} />
+                    </Campo>
+                    <Campo label="Fecha de la R.D.">
+                        <input type="date" className={inputCls} value={form.rd_fecha || ""} onChange={set("rd_fecha")} />
+                    </Campo>
+                </div>
+            </section>
+
+            <section>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-blue-900">
+                    Contacto
                 </p>
-                <input type="file" hidden accept="image/*" ref={input}
-                    onChange={(e) => { subir(e.target.files?.[0]); e.target.value = ""; }} />
-                <button onClick={() => input.current?.click()} disabled={subiendo}
-                    className="adm-primary mt-3 inline-flex items-center gap-1.5 px-4 h-9 rounded-xl text-[12px] font-extrabold">
-                    {subiendo ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
-                    {perfil.photo_url ? "Cambiar foto" : "Subir mi foto"}
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Campo label="Correo">
+                        <input className={inputCls} value={form.email || ""} onChange={set("email")} />
+                    </Campo>
+                    <Campo label="Celular">
+                        <input className={inputCls} value={form.phone || ""} onChange={set("phone")} />
+                    </Campo>
+                    <Campo label="Teléfono fijo">
+                        <input className={inputCls} value={form.telefono_fijo || ""} onChange={set("telefono_fijo")} />
+                    </Campo>
+                    <Campo label="Dirección" ancho="sm:col-span-3">
+                        <input className={inputCls} value={form.direccion || ""} onChange={set("direccion")} />
+                    </Campo>
+                    <Campo label="Región">
+                        <input className={inputCls} value={form.region || ""} onChange={set("region")} />
+                    </Campo>
+                    <Campo label="Provincia">
+                        <input className={inputCls} value={form.provincia || ""} onChange={set("provincia")} />
+                    </Campo>
+                    <Campo label="Distrito">
+                        <input className={inputCls} value={form.distrito || ""} onChange={set("distrito")} />
+                    </Campo>
+                </div>
+            </section>
+
+            <div className="flex justify-end">
+                <button onClick={guardar} disabled={guardando}
+                    className="adm-primary inline-flex items-center gap-1.5 px-5 h-10 rounded-xl text-[12.5px] font-extrabold">
+                    {guardando ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
+                    Guardar mis datos
                 </button>
             </div>
         </div>
@@ -291,7 +444,7 @@ export default function MiHojaVidaPersonal() {
             <InjectPersonalStyles />
             {perfil && (
                 <div className="max-w-5xl mx-auto px-4 pt-6 space-y-4">
-                    <MiFoto perfil={perfil} onCambio={setPerfil} />
+                    <MiFicha perfil={perfil} onCambio={setPerfil} />
                     {perfil.tipo === "LOCADOR" && (
                         <DocumentosLocador perfil={perfil} onCambio={setPerfil} />
                     )}

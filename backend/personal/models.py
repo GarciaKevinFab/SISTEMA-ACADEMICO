@@ -124,7 +124,12 @@ class Personal(models.Model):
     # Mismos vocabularios que catalogs.Teacher: el PDF de la hoja de vida
     # los resuelve por Teacher.X, así que los rótulos deben coincidir.
     SEXOS = [("M", "Masculino"), ("F", "Femenino")]
+    # De menor a mayor. El personal administrativo y los locadores 107 no
+    # siempre tienen grado universitario, de ahi los dos primeros: sin ellos
+    # quedaban obligados a declarar un grado que no tienen.
     GRADOS_ACADEMICOS = [
+        ("SECUNDARIA", "Secundaria completa"),
+        ("TECNICO", "Técnico (a)"),
         ("PROFESOR", "Profesor (a)"),
         ("BACHILLER", "Bachiller (a)"),
         ("LICENCIADO", "Licenciado (a)"),

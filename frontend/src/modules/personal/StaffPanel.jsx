@@ -17,7 +17,8 @@ import { SCOPE } from "./personalStyles";
 const NAVY = "#1F4E79";
 
 const GRADOS = [
-    ["", "—"], ["PROFESOR", "Profesor (a)"], ["BACHILLER", "Bachiller (a)"],
+    ["", "—"], ["SECUNDARIA", "Secundaria completa"], ["TECNICO", "Técnico (a)"],
+    ["PROFESOR", "Profesor (a)"], ["BACHILLER", "Bachiller (a)"],
     ["LICENCIADO", "Licenciado (a)"], ["MAGISTER", "Magister (a)"],
     ["DOCTOR", "Doctor (a)"],
 ];

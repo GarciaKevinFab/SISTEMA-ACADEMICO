@@ -306,15 +306,19 @@ class TeacherCVPdfView(APIView):
             ("DNI", ct.document or ""),
             ("Fecha de nacimiento",
              ct.fecha_nac.strftime("%d/%m/%Y") if ct.fecha_nac else ""),
-            ("Sexo", dict(Teacher.SEXOS).get(ct.sexo, "")),
-            ("Grado académico", dict(Teacher.GRADOS_ACADEMICOS).get(
+            # `ct` puede ser un catalogs.Teacher o un personal.Personal: se
+            # resuelven los rótulos contra SU propia clase, no contra Teacher.
+            # El personal tiene grados que el docente no (Técnico, Secundaria)
+            # y con `Teacher.` se imprimía el código crudo.
+            ("Sexo", dict(type(ct).SEXOS).get(ct.sexo, "")),
+            ("Grado académico", dict(type(ct).GRADOS_ACADEMICOS).get(
                 ct.grado_academico, ct.grado_academico or "")),
             ("Teléfono fijo", ct.telefono_fijo or ""),
             ("Celular", ct.phone or ""),
             ("Correo electrónico", ct.email or ""),
             ("Dirección", ct.direccion or ""),
             ("Región / Provincia / Distrito", ubigeo),
-            ("Condición laboral", dict(Teacher.CONDICIONES).get(
+            ("Condición laboral", dict(type(ct).CONDICIONES).get(
                 ct.condicion_laboral, ct.condicion_laboral or "")),
             ("N° R.D. de Nombramiento / Contrato", ct.rd_nombramiento or ""),
         ]

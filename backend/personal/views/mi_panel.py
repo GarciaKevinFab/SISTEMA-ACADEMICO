@@ -87,15 +87,19 @@ class MiPersonalView(_MeView):
 class MiPerfilView(_MeView):
     """Datos generales de la ficha propia (mismo contrato que el docente)."""
 
+    # Toda la ficha la completa la propia persona: Administración solo crea la
+    # cuenta con lo mínimo y quien entra rellena el resto (pedido de Dirección).
     TEXTOS = {
         "apellido_paterno": 80, "apellido_materno": 80, "nombres": 120,
         "telefono_fijo": 30, "direccion": 200, "region": 80, "provincia": 80,
         "distrito": 80, "phone": 30, "email": 254, "specialization": 120,
-        "document": 30,
+        "document": 30, "cargo": 160, "area": 120, "rd_nombramiento": 120,
     }
+    FECHAS = ("fecha_nac", "rd_fecha")
     OPCIONES = {
         "sexo": {"", "M", "F"},
         "grado_academico": {""} | {c for c, _ in Personal.GRADOS_ACADEMICOS},
+        "condicion_laboral": {""} | {c for c, _ in Personal.CONDICIONES},
     }
 
     def _ficha(self, request):
@@ -184,17 +188,19 @@ class MiPerfilView(_MeView):
                                     status=400)
                 setattr(p, campo, v)
 
-        if "fecha_nac" in data:
-            v = str(data.get("fecha_nac") or "").strip()
-            if v:
-                d = parse_date(v)
-                if not d:
-                    return Response(
-                        {"detail": "fecha_nac inválida (YYYY-MM-DD)"},
-                        status=400)
-                p.fecha_nac = d
-            else:
-                p.fecha_nac = None
+        for campo in self.FECHAS:
+            if campo not in data:
+                continue
+            v = str(data.get(campo) or "").strip()
+            if not v:
+                setattr(p, campo, None)
+                continue
+            d = parse_date(v)
+            if not d:
+                return Response(
+                    {"detail": f"«{campo}» inválida (usa el formato YYYY-MM-DD)."},
+                    status=400)
+            setattr(p, campo, d)
 
         foto = request.FILES.get("photo")
         if foto is not None:
