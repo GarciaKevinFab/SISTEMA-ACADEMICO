@@ -102,6 +102,12 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
 
+    # Va primero: marca la request como segura ANTES de que cualquier vista
+    # arme una URL absoluta. Sin esto, si nginx no reenvia X-Forwarded-Proto,
+    # las URLs de media salen en http:// y el navegador reporta Mixed Content
+    # en una pagina servida por HTTPS.
+    "common.proxy_https.ForzarHttpsDetrasDelProxy",
+
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
