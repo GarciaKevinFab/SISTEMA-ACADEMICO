@@ -81,6 +81,9 @@ class MiPersonalView(_MeView):
             "es_locador": bool(p and p.tipo == Personal.LOCADOR),
             "personal_id": p.id if p else None,
             "cargo": p.cargo if p else "",
+            # Programas a cargo: si trae alguno, es coordinador de área y el
+            # menú le muestra "Mi Programa".
+            "careers": [c for j in jefaturas for c in (j.get("careers") or [])],
         })
 
 

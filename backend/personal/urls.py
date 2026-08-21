@@ -8,7 +8,7 @@ from .views import (
     StaffListView, StaffDetailView, StaffAccesoView, StaffCvPdfView,
     # Panel propio
     MiPersonalView, MiPerfilView, MiCvListView, MiCvDetailView, MiCvPdfView,
-    MiPlanTrabajoView, MiRdView, MisDocumentosView,
+    MiPlanTrabajoView, MiRdView, MisDocumentosView, MiProgramaView,
     # Portal público
     DirectorioPublicoView, StaffCvPublicPdfView,
 )
@@ -27,6 +27,7 @@ urlpatterns = [
     path("me/plan-trabajo",      MiPlanTrabajoView.as_view()),
     path("me/rd",                MiRdView.as_view()),
     path("me/documentos",        MisDocumentosView.as_view()),
+    path("me/programa",          MiProgramaView.as_view()),
 
     # ── Jefes de línea (admin) ──
     path("jefes-linea",                 JefesLineaListView.as_view()),

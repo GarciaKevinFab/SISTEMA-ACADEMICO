@@ -54,6 +54,7 @@ import TeacherHojaVida from "../modules/academic/TeacherHojaVida";
 import PersonalModule from "../modules/personal/PersonalModule";
 import MiPlanTrabajo from "../modules/personal/MiPlanTrabajo";
 import MiHojaVidaPersonal from "../modules/personal/MiHojaVidaPersonal";
+import MiPrograma from "../modules/personal/MiPrograma";
 
 /* ✅ Verificador de Grados y Títulos (público) */
 import PublicGraduateVerifier from "../modules/graduates/PublicGraduateVerifier";
@@ -240,6 +241,18 @@ export default function AppRouter() {
                     element={
                         <RequireAuth>
                             <MiHojaVidaPersonal />
+                        </RequireAuth>
+                    }
+                />
+
+                {/* Coordinación de Área Académica: seguimiento de los docentes
+                    y estudiantes de los programas a cargo. El backend acota el
+                    alcance a esos programas. */}
+                <Route
+                    path="/dashboard/personal/mi-programa"
+                    element={
+                        <RequireAuth>
+                            <MiPrograma />
                         </RequireAuth>
                     }
                 />

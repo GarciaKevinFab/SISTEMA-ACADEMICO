@@ -727,7 +727,30 @@ class TeacherSelfSchedulePdfView(APIView):
         from academic.models import Teacher as AcademicTeacher, Section, SectionScheduleSlot
         from catalogs.models import Teacher as CatalogTeacher, Period
 
-        teacher = AcademicTeacher.objects.filter(user=request.user).first()
+        # Con ?teacher_id= lo baja otra persona: un admin de notas, cualquiera;
+        # un coordinador de área, solo los docentes de los programas que tiene
+        # a cargo. Sin el parámetro, sigue siendo el horario propio.
+        objetivo = request.user
+        pedido = (request.query_params.get("teacher_id") or "").strip()
+        if pedido:
+            from .evaluation import _is_grades_admin
+            permitido = _is_grades_admin(request.user)
+            if not permitido:
+                try:
+                    from personal.coordinacion import puede_ver_docente
+                    permitido = puede_ver_docente(
+                        request.user, pedido,
+                        (request.query_params.get("period") or "").strip().upper() or None)
+                except Exception:
+                    permitido = False
+            if not permitido:
+                return Response(
+                    {"detail": "Ese docente no está en los programas a tu cargo."},
+                    status=403)
+            teacher = AcademicTeacher.objects.filter(pk=pedido).first()
+            objetivo = getattr(teacher, "user", None) or request.user
+        else:
+            teacher = AcademicTeacher.objects.filter(user=request.user).first()
         if not teacher:
             return Response({"detail": "No se encontró perfil de docente."}, status=404)
 
@@ -743,12 +766,14 @@ class TeacherSelfSchedulePdfView(APIView):
             sections = sections.filter(period=period_code)
         sections = list(sections)
         if not sections:
+            quien = "Ese docente no tiene" if pedido else "No tienes"
             return Response(
-                {"detail": f"No tienes secciones asignadas en {period_code or 'el período actual'}."},
+                {"detail": f"{quien} secciones asignadas en "
+                           f"{period_code or 'el período actual'}."},
                 status=404)
 
         # ── Datos personales (catalogs.Teacher: perfil editable) ──
-        ct = CatalogTeacher.objects.filter(user=request.user).first()
+        ct = CatalogTeacher.objects.filter(user=objetivo).first()
         grado = dict(CatalogTeacher.GRADOS_ACADEMICOS).get(
             getattr(ct, "grado_academico", "") or "", "")
         celular = getattr(ct, "phone", "") or ""

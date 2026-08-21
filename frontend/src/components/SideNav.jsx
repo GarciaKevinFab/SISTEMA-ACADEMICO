@@ -126,6 +126,7 @@ const SideNav = () => {
   // así que el único que lo sabe es el backend. Se consulta una vez.
   const [esJefeLinea, setEsJefeLinea] = useState(false);
   const [tienePersonal, setTienePersonal] = useState(false);
+  const [esCoordinador, setEsCoordinador] = useState(false);
   useEffect(() => {
     if (!user) { setEsJefeLinea(false); setTienePersonal(false); return; }
     let vivo = true;
@@ -134,6 +135,7 @@ const SideNav = () => {
         if (!vivo) return;
         setEsJefeLinea(!!data?.es_jefe_linea);
         setTienePersonal(!!data?.personal_id);
+        setEsCoordinador((data?.careers || []).length > 0);
       })
       .catch(() => { if (vivo) { setEsJefeLinea(false); setTienePersonal(false); } });
     return () => { vivo = false; };
@@ -220,6 +222,13 @@ const SideNav = () => {
           show: esJefeLinea,
         },
         {
+          // Coordinador de área: seguimiento de los docentes y estudiantes de
+          // los programas que tiene a cargo. Solo aparece si le asignaron uno.
+          id: "mi-programa", title: "Mi Programa", path: "/dashboard/personal/mi-programa",
+          icon: GraduationCap,
+          show: esCoordinador,
+        },
+        {
           // Hoja de vida del administrativo / locador 107
           id: "mi-hv-personal", title: "Mi Hoja de Vida",
           path: "/dashboard/personal/mi-hoja-de-vida", icon: BookOpenCheck,
@@ -263,7 +272,7 @@ const SideNav = () => {
         },
       ],
     },
-  ], [user, roles, grantedPerms, canSeeStudentModule, esJefeLinea, tienePersonal]);
+  ], [user, roles, grantedPerms, canSeeStudentModule, esJefeLinea, tienePersonal, esCoordinador]);
 
   /* ── helpers ── */
   const expanded = !isCollapsed || isMobileOpen;
