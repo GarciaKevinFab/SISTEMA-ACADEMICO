@@ -160,3 +160,66 @@ class AlcanceCoordinadorTest(TestCase):
         r = cli.get("/api/academic/admin/evaluation/silabos-sesiones",
                     {"period": "2026-II"})
         self.assertEqual(r.status_code, 403, r.data)
+
+
+class RendimientoPorCicloTest(TestCase):
+    """El bundle del acta se indexa por user_id o pk y la nota vive en
+    final_grade / PROMEDIO_FINAL / FINAL. Leerlo a mano daba siempre 0."""
+
+    def setUp(self):
+        from academic.models import (Course, Plan, PlanCourse, Section,
+                                     Enrollment, EnrollmentItem, SectionGrades)
+        from students.models import Student
+
+        car = Career.objects.create(name="Educación Inicial", code="EI")
+        plan = Plan.objects.create(career=car, name="Plan EI 2020")
+        curso = Course.objects.create(code="C1", name="Didáctica", credits=3)
+        pc = PlanCourse.objects.create(plan=plan, course=curso, semester=1)
+        self.sec = Section.objects.create(plan_course=pc, label="A",
+                                          period="2026-I")
+
+        # Tres alumnos: uno aprobado, uno desaprobado, uno sin nota.
+        self.alumnos = []
+        for i, doc in enumerate(("10000001", "10000002", "10000003")):
+            u = _user(f"al{i}")
+            st = Student.objects.create(num_documento=doc, nombres=f"Alumno {i}",
+                                        user=u, plan=plan)
+            self.alumnos.append(st)
+            e = Enrollment.objects.create(student=st, period="2026-I",
+                                          status=Enrollment.STATUS_CONFIRMED)
+            EnrollmentItem.objects.create(enrollment=e, plan_course=pc,
+                                          section=self.sec)
+
+        SectionGrades.objects.create(section=self.sec, grades={
+            # por user_id, con final_grade
+            str(self.alumnos[0].user_id): {"final_grade": 15},
+            # por pk, con PROMEDIO_FINAL (la otra clave y el otro rotulo)
+            str(self.alumnos[1].id): {"PROMEDIO_FINAL": 8},
+        })
+        self.car = car
+
+    def test_cuenta_las_notas_cargadas(self):
+        from personal.views.programa import _ciclos
+        from academic.views.evaluation import _sections_for
+
+        secciones = list(_sections_for("2026-I", career_id=self.car.id))
+        self.assertEqual(len(secciones), 1)
+
+        [d] = _ciclos(secciones)
+        self.assertEqual(d["ciclo"], 1)
+        self.assertEqual(d["matriculados"], 3)
+        # Lo que fallaba: con_nota daba 0 aunque el acta tuviera notas.
+        self.assertEqual(d["con_nota"], 2)
+        self.assertEqual(d["aprobados"], 1)
+        self.assertEqual(d["desaprobados"], 1)
+        self.assertEqual(d["promedio"], 11.5)
+
+    def test_sin_actas_no_inventa_promedio(self):
+        from academic.models import SectionGrades
+        from personal.views.programa import _ciclos
+        from academic.views.evaluation import _sections_for
+
+        SectionGrades.objects.all().delete()
+        [d] = _ciclos(list(_sections_for("2026-I", career_id=self.car.id)))
+        self.assertEqual(d["con_nota"], 0)
+        self.assertIsNone(d["promedio"])

@@ -135,55 +135,40 @@ def _docentes(secciones):
 
 
 def _ciclos(secciones):
-    """Consolidado de notas por ciclo, para ver el rendimiento de un vistazo."""
-    from academic.models import SectionGrades
+    """Consolidado de notas por ciclo, para ver el rendimiento de un vistazo.
 
-    ids = [s.id for s in secciones]
-    bundles = {b.section_id: (b.grades or {})
-               for b in SectionGrades.objects.filter(section_id__in=ids)}
-    matriculas = _matriculados(ids)
+    Se apoya en _section_eval_row, que es la MISMA fuente que usa el reporte
+    oficial de rendimiento: resuelve el roster canónico de la sección, deja
+    LICENCIA fuera y busca la entrada del acta por user_id o por pk, que son
+    claves duales. Leer el bundle a mano fallaba: la nota vive en
+    final_grade / PROMEDIO_FINAL / FINAL, no en "final" ni "promedio", así
+    que salía todo en cero aunque hubiera actas cargadas.
+    """
+    from academic.views.evaluation import _bundle_map, _section_eval_row
 
+    bmap = _bundle_map(secciones)
     por = {}
     for sec in secciones:
+        fila = _section_eval_row(sec, bmap)
         ciclo = getattr(sec.plan_course, "semester", None) or 0
         d = por.setdefault(ciclo, {
             "ciclo": ciclo, "secciones": 0, "matriculados": 0,
             "con_nota": 0, "aprobados": 0, "desaprobados": 0, "_suma": 0.0,
         })
+        finales = list((fila.get("_finals") or {}).values())
         d["secciones"] += 1
-        d["matriculados"] += len(matriculas.get(sec.id, ()))
-        for valor in (bundles.get(sec.id) or {}).values():
-            nota = _nota(valor)
-            if nota is None:
-                continue
-            d["con_nota"] += 1
-            d["_suma"] += nota
-            if nota >= 11:
-                d["aprobados"] += 1
-            else:
-                d["desaprobados"] += 1
+        d["matriculados"] += fila.get("n_students", 0)
+        d["con_nota"] += len(finales)
+        d["aprobados"] += sum(1 for f in finales if f >= 11)
+        d["desaprobados"] += sum(1 for f in finales if f < 11)
+        d["_suma"] += sum(finales)
 
     salida = []
     for d in sorted(por.values(), key=lambda x: x["ciclo"]):
-        n = d.pop("_suma")
-        d["promedio"] = round(n / d["con_nota"], 2) if d["con_nota"] else None
+        suma = d.pop("_suma")
+        d["promedio"] = round(suma / d["con_nota"], 2) if d["con_nota"] else None
         salida.append(d)
     return salida
-
-
-def _nota(valor):
-    """La nota final de un alumno dentro del bundle de la sección."""
-    if isinstance(valor, dict):
-        for k in ("final", "promedio", "nota", "prom"):
-            if k in valor:
-                valor = valor[k]
-                break
-        else:
-            return None
-    try:
-        return float(valor)
-    except (TypeError, ValueError):
-        return None
 
 
 def _estudiantes(secciones):
