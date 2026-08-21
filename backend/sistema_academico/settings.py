@@ -91,6 +91,7 @@ INSTALLED_APPS = [
     "finance",
     "minedu",
     "notifications",
+    "personal",
     "portal",
     "reports",
     "research",

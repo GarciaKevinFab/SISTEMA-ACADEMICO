@@ -6,9 +6,10 @@ import {
   LayoutDashboard, ShieldCheck, Settings, BookOpenCheck, UserPlus,
   ClipboardList, Wallet, HardDrive, Microscope, LogOut,
   ChevronLeft, ChevronRight, UserCircle, Menu, X, GraduationCap,
-  Award, Wrench, CalendarDays,
+  Award, Wrench, CalendarDays, Briefcase,
 } from "lucide-react";
 import { PERMS, PERM_ALIASES } from "../auth/permissions";
+import { api } from "../lib/api";
 
 /* ─── inject font + nav styles ─── */
 const NAV_STYLE = `
@@ -120,6 +121,24 @@ const SideNav = () => {
     return req.some((p) => grantedPerms.has(p));
   };
 
+  // ── ¿Qué soy en el módulo Personal? ──
+  // Un jefe de línea es un DOCENTE designado en un cargo: no tiene rol propio,
+  // así que el único que lo sabe es el backend. Se consulta una vez.
+  const [esJefeLinea, setEsJefeLinea] = useState(false);
+  const [tienePersonal, setTienePersonal] = useState(false);
+  useEffect(() => {
+    if (!user) { setEsJefeLinea(false); setTienePersonal(false); return; }
+    let vivo = true;
+    api.get("/personal/me")
+      .then(({ data }) => {
+        if (!vivo) return;
+        setEsJefeLinea(!!data?.es_jefe_linea);
+        setTienePersonal(!!data?.personal_id);
+      })
+      .catch(() => { if (vivo) { setEsJefeLinea(false); setTienePersonal(false); } });
+    return () => { vivo = false; };
+  }, [user]);
+
   const canSeeStudentModule = useMemo(() => {
     if (!user) return false;
     const roleOk = hasRole("STUDENT", "ADMIN_SYSTEM") ||
@@ -174,6 +193,14 @@ const SideNav = () => {
             && !canAny(PERMS["academic.view"], PERMS["academic.sections.view"], PERMS["academic.plans.view"], PERMS["academic.reports.view"], PERMS["academic.grades.edit"], PERMS["academic.attendance.view"]),
         },
         {
+          // Jefes de línea (Ley N° 30512), administrativos y locadores 107.
+          // Por ROL, como Mesa de Control: no depende de re-sembrar el ACL.
+          id: "personal", title: "Administrativos", path: "/dashboard/personal", icon: Briefcase,
+          show: hasRole("ADMIN_SYSTEM", "ACCESS_ADMIN", "ADMIN_ACADEMIC",
+            "ADMIN_ACADEMICO", "REGISTRAR", "HR_ADMIN")
+            || canAny(PERMS["admin.access.manage"]),
+        },
+        {
           id: "mesa-control", title: "Mesa de Control", path: "/dashboard/mesa-control", icon: Wrench,
           // Mismo criterio que el backend (_can_admin_enroll): por rol, no por permiso
           show: hasRole("REGISTRAR", "ADMIN_ACADEMIC", "ADMIN_ACADEMICO", "ADMIN_SYSTEM"),
@@ -183,6 +210,20 @@ const SideNav = () => {
           id: "hoja-vida", title: "Mi Hoja de Vida", path: "/dashboard/teacher/hoja-de-vida",
           icon: BookOpenCheck,
           show: hasRole("TEACHER", "DOCENTE", "PROFESOR"),
+        },
+        {
+          // Jefe de línea: es docente, entra con su misma cuenta; solo se le
+          // suma la carga de su plan de trabajo. La visibilidad la decide el
+          // backend (/personal/me), no el rol.
+          id: "mi-plan", title: "Mi Plan de Trabajo", path: "/dashboard/personal/mi-plan",
+          icon: ClipboardList,
+          show: esJefeLinea,
+        },
+        {
+          // Hoja de vida del administrativo / locador 107
+          id: "mi-hv-personal", title: "Mi Hoja de Vida",
+          path: "/dashboard/personal/mi-hoja-de-vida", icon: BookOpenCheck,
+          show: hasRole("ADMINISTRATIVO", "LOCADOR_107") || tienePersonal,
         },
         { id: "student", title: "Estudiante", path: "/dashboard/student", icon: GraduationCap, show: canSeeStudentModule },
         {
@@ -222,7 +263,7 @@ const SideNav = () => {
         },
       ],
     },
-  ], [user, roles, grantedPerms, canSeeStudentModule]);
+  ], [user, roles, grantedPerms, canSeeStudentModule, esJefeLinea, tienePersonal]);
 
   /* ── helpers ── */
   const expanded = !isCollapsed || isMobileOpen;

@@ -36,6 +36,7 @@ urlpatterns = [
     path("api/research/", include("research.urls")),
     path("api/audit", include("audit.urls")),
     path("api/academic/", include("academic.urls")),
+    path("api/personal/", include("personal.urls")),
 
     # Rutas genéricas
     path("api/", include("reports.urls")),

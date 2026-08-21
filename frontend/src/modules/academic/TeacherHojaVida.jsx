@@ -186,7 +186,14 @@ function Dato({ label, value }) {
     );
 }
 
-export default function TeacherHojaVida() {
+// El mismo formulario sirve para el personal administrativo y los locadores
+// 107: solo cambian los endpoints (el backend de `personal` replica campo a
+// campo el contrato del docente). Por eso las rutas entran por props.
+export default function TeacherHojaVida({
+    cvBase = "/catalogs/teachers/me/cv",
+    profileBase = "/academic/teachers/me/profile",
+    archivoPdf = "hoja-de-vida.pdf",
+}) {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [emit, setEmit] = useState(false);
@@ -210,8 +217,8 @@ export default function TeacherHojaVida() {
         setLoading(true);
         try {
             const [cv, prof] = await Promise.allSettled([
-                api.get("/catalogs/teachers/me/cv"),
-                api.get("/academic/teachers/me/profile"),
+                api.get(cvBase),
+                api.get(profileBase),
             ]);
             if (cv.status === "fulfilled") {
                 setItems(cv.value.data?.items || []);
@@ -221,7 +228,7 @@ export default function TeacherHojaVida() {
             }
             if (prof.status === "fulfilled") setPerfil(prof.value.data);
         } finally { setLoading(false); }
-    }, []);
+    }, [cvBase, profileBase]);
     useEffect(() => { load(); }, [load]);
 
     const porSeccion = useMemo(() => {
@@ -258,7 +265,7 @@ export default function TeacherHojaVida() {
     const guardarDatos = async () => {
         setSavingDatos(true);
         try {
-            const { data } = await api.put("/academic/teachers/me/profile", datos);
+            const { data } = await api.put(profileBase, datos);
             setPerfil((p) => ({ ...(p || {}), ...(data || datos) }));
             toast.success("Datos personales actualizados");
             setOpenDatos(false);
@@ -289,8 +296,8 @@ export default function TeacherHojaVida() {
             fd.append("seccion", seccion.key);
             for (const [k, v] of Object.entries(form)) fd.append(k, v ?? "");
             if (archivo) fd.append("archivo", archivo);
-            if (editing) await api.put(`/catalogs/teachers/me/cv/${editing.id}`, fd);
-            else await api.post("/catalogs/teachers/me/cv", fd);
+            if (editing) await api.put(`${cvBase}/${editing.id}`, fd);
+            else await api.post(cvBase, fd);
             toast.success(editing ? "Ítem actualizado" : "Ítem agregado");
             setOpen(false);
             load();
@@ -302,7 +309,7 @@ export default function TeacherHojaVida() {
     const borrar = async (item) => {
         if (!window.confirm("¿Eliminar este ítem de tu hoja de vida?")) return;
         try {
-            await api.delete(`/catalogs/teachers/me/cv/${item.id}`);
+            await api.delete(`${cvBase}/${item.id}`);
             toast.success("Ítem eliminado");
             load();
         } catch (e) {
@@ -317,12 +324,12 @@ export default function TeacherHojaVida() {
         }
         setEmit(true);
         try {
-            const res = await api.get("/catalogs/teachers/me/cv/pdf",
+            const res = await api.get(`${cvBase}/pdf`,
                 { responseType: "blob" });
             const blob = res?.data instanceof Blob ? res.data : new Blob([res.data]);
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement("a");
-            a.href = url; a.download = "hoja-de-vida.pdf";
+            a.href = url; a.download = archivoPdf;
             document.body.appendChild(a); a.click(); a.remove();
             setTimeout(() => window.URL.revokeObjectURL(url), 60000);
             toast.success("Hoja de Vida emitida (descriptivo + documentado)");

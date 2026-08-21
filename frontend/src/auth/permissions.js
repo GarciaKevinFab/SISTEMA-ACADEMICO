@@ -433,4 +433,6 @@ export const ROLE_LABELS = {
     RESEARCH_COORDINATOR: "Coordinación de Investigación",
     TEACHER_RESEARCHER: "Docente Investigador",
     CALLS_COMMITTEE: "Comité de Convocatorias",
+    ADMINISTRATIVO: "Personal Administrativo",
+    LOCADOR_107: "Locador 107 – MINEDU",
 };

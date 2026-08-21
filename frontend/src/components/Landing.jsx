@@ -6,7 +6,7 @@
 import React from "react";
 import {
     MessagesSquare, Blocks, BookOpen, Activity, ShieldCheck, ArrowRight,
-    MapPin, Phone, Mail, Clock, GraduationCap,
+    MapPin, Phone, Mail, Clock, GraduationCap, Briefcase,
 } from "lucide-react";
 import {
     InjectPublicStyles, Reveal, CountUp, HeroFade, ParallaxBg, PublicHeader,
@@ -95,6 +95,11 @@ const Landing = () => {
                                         className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-sky-500/15 border border-sky-400/25 text-sky-200 text-sm font-semibold hover:bg-sky-500/25 hover:text-white transition-all duration-300 backdrop-blur-sm">
                                         <GraduationCap className="w-4 h-4" />
                                         Plana Docente
+                                    </a>
+                                    <a href="/public/personal"
+                                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-indigo-500/15 border border-indigo-400/25 text-indigo-200 text-sm font-semibold hover:bg-indigo-500/25 hover:text-white transition-all duration-300 backdrop-blur-sm">
+                                        <Briefcase className="w-4 h-4" />
+                                        Personal Administrativo
                                     </a>
                                 </Reveal>
                             </HeroFade>
@@ -306,6 +311,7 @@ const Landing = () => {
                                     ["/public/procedures", "Mesa de Partes"],
                                     ["/public/verificador", "Verificar Grados y Títulos"],
                                     ["/public/docentes", "Plana Docente"],
+                                    ["/public/personal", "Personal Administrativo"],
                                     ["/login", "Acceso al Sistema"],
                                 ].map(([href, label]) => (
                                     <a key={href} href={href}

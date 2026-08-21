@@ -279,6 +279,14 @@ ROLE_POLICIES = {
 
     "TEACHER_RESEARCHER": ["research.projects.view", "research.projects.edit", "research.calls.view"],
     "CALLS_COMMITTEE": ["research.calls.view", "research.calls.manage"],
+
+    # ── Módulo Personal (observación MINEDU, Ley N° 30512) ──
+    # Entran solo a SU panel (hoja de vida, documentos): el backend resuelve
+    # la ficha por request.user, así que no necesitan permisos de catálogo.
+    # Los JEFES DE LÍNEA no llevan rol propio: son docentes y siguen entrando
+    # con su misma cuenta y contraseña de docente.
+    "ADMINISTRATIVO": [],
+    "LOCADOR_107": [],
 }
 
 PERM_ALIASES = {

@@ -8,6 +8,7 @@ import { PERMS } from "../auth/permissions";
 /* Públicas */
 import Landing from "../components/Landing";
 import PublicTeachersDirectory from "../modules/academic/PublicTeachersDirectory";
+import PublicPersonalDirectory from "../modules/personal/PublicPersonalDirectory";
 import StudentSchedulePage from "../modules/student/StudentSchedulePage";
 import Login from "../components/Login";
 
@@ -48,6 +49,11 @@ import StudentModule from "../modules/student/StudentModule";
 import StudentPaymentsPanel from "../modules/student/StudentPaymentsPanel";
 import StudentMeritoPanel from "../modules/student/StudentMeritoPanel";
 import TeacherHojaVida from "../modules/academic/TeacherHojaVida";
+
+/* ✅ Módulo Administrativos (Ley N° 30512 — observación MINEDU) */
+import PersonalModule from "../modules/personal/PersonalModule";
+import MiPlanTrabajo from "../modules/personal/MiPlanTrabajo";
+import MiHojaVidaPersonal from "../modules/personal/MiHojaVidaPersonal";
 
 /* ✅ Verificador de Grados y Títulos (público) */
 import PublicGraduateVerifier from "../modules/graduates/PublicGraduateVerifier";
@@ -92,6 +98,10 @@ export default function AppRouter() {
 
             {/* Plana docente pública (transparencia MINEDU) */}
             <Route path="/public/docentes" element={<PublicTeachersDirectory />} />
+
+            {/* Personal administrativo público (transparencia MINEDU): un solo
+                enlace con jefes de línea, administrativos y locadores 107 */}
+            <Route path="/public/personal" element={<PublicPersonalDirectory />} />
 
             {/* 403 */}
             <Route path="/403" element={<Forbidden />} />
@@ -198,6 +208,38 @@ export default function AppRouter() {
                     element={
                         <RequireAuth>
                             <TeacherHojaVida />
+                        </RequireAuth>
+                    }
+                />
+
+                {/* Administrativos — jefes de línea (Ley N° 30512), personal
+                    administrativo y locadores 107. El backend gatea por rol. */}
+                <Route
+                    path="/dashboard/personal"
+                    element={
+                        <RequireAuth>
+                            <PersonalModule />
+                        </RequireAuth>
+                    }
+                />
+
+                {/* Plan de trabajo del jefe de línea (es docente: entra con su
+                    misma cuenta, solo se le suma esta pantalla) */}
+                <Route
+                    path="/dashboard/personal/mi-plan"
+                    element={
+                        <RequireAuth>
+                            <MiPlanTrabajo />
+                        </RequireAuth>
+                    }
+                />
+
+                {/* Hoja de vida del administrativo / locador 107 */}
+                <Route
+                    path="/dashboard/personal/mi-hoja-de-vida"
+                    element={
+                        <RequireAuth>
+                            <MiHojaVidaPersonal />
                         </RequireAuth>
                     }
                 />
