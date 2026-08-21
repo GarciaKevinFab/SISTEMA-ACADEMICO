@@ -1344,7 +1344,7 @@ export default function AcademicModule() {
     return (
         <>
             <InjectStyles />
-            <div style={pageStyle} className="acad-module min-h-[100dvh] w-full min-w-0 overflow-x-hidden p-3 sm:p-4 md:p-6 pb-24 md:pb-16">
+            <div style={pageStyle} className="legacy-academic acad-module min-h-[100dvh] w-full min-w-0 overflow-x-hidden p-3 sm:p-4 md:p-6 pb-24 md:pb-16">
                 <div className="w-full min-w-0 rounded-2xl md:rounded-3xl bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-xl shadow-slate-200/40 p-4 md:p-6 space-y-6">
 
                     {/* Header del módulo */}

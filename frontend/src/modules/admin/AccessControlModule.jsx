@@ -401,7 +401,7 @@ const AccessControlModule = () => {
   return (
     <>
       <InjectAdminStyles />
-      <div className="acl-module h-full overflow-y-auto p-4 md:p-6 pb-16 space-y-5">
+      <div className="legacy-academic acl-module h-full overflow-y-auto p-4 md:p-6 pb-16 space-y-5">
 
         {/* Header */}
         <div className="acl-header-card rounded-2xl bg-white shadow-sm px-5 py-4 flex items-center justify-between gap-4">

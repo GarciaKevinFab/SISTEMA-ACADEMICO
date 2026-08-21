@@ -1,4 +1,32 @@
-/* Reset básico - SCROLL FIX */
+/* Estilos heredados del Módulo Académico.
+ *
+ * ⚠️ ACOTADOS a `.legacy-academic`. Antes eran GLOBALES: `main`, `header`,
+ * `input`, `select`, `textarea`, `button` y `table` con `!important`. Como
+ * basta con que `AcademicModule` importe este archivo para que entre al
+ * bundle, esas reglas pisaban TODA la aplicación — incluidas las páginas
+ * públicas, que no tienen nada que ver con el módulo. Consecuencias que
+ * causaba:
+ *
+ *   · el portal público salía azul marino con los títulos invisibles
+ *     (`main { background:#1C2A44; color:#030303 }`);
+ *   · la barra de vidrio pública quedaba como un bloque sólido (`header`);
+ *   · todos los campos de toda la app llevaban borde negro de 2px y 20px
+ *     de alto extra por el `padding:10px !important`, de modo que los
+ *     formularios largos no entraban en pantalla;
+ *   · todos los botones de acción salían grises (`#d9dbe0`).
+ *
+ * Ahora la clase la ponen en su div raíz los dos módulos que importan este
+ * archivo (`AcademicModule` → `.acad-module`, `AccessControlModule` →
+ * `.acl-module`), así que su aspecto no cambia y el resto de la aplicación
+ * recupera su propio diseño.
+ *
+ * Las reglas de `main` y `header` se eliminaron en vez de acotarse: el
+ * selector habría quedado muerto (la clase va DENTRO del <main> del Layout)
+ * y ninguno de los dos módulos las necesita, porque cada uno pinta su
+ * propio fondo.
+ */
+
+/* ── Reset básico — SCROLL FIX (global a propósito) ── */
 html {
   height: 100%;
 }
@@ -14,55 +42,44 @@ body {
 
 /* NO forzar overflow con !important — dejar que Tailwind lo maneje */
 
-main {
-  background-color: #1C2A44 !important;
-  color: #030303 !important;
-  padding: 0;
-  margin: 0;
-}
+/* ── A partir de aquí, solo dentro de los módulos heredados ── */
 
 /* Fondo de las tarjetas */
-.app-card {
+.legacy-academic .app-card {
   background-color: #1C2A44 !important;
   color: #ffffff !important;
   border: 1px solid #1C2A44 !important;
 }
 
 /* Tablas */
-table {
+.legacy-academic table {
   background-color: #ffffff !important;
   color: #000000 !important;
 }
 
-table th,
-table td {
+.legacy-academic table th,
+.legacy-academic table td {
   border: 1px solid #1C2A44 !important;
 }
 
 /* Botones */
-button,
-.button {
+.legacy-academic button,
+.legacy-academic .button {
   background-color: #d9dbe0 !important;
   color: #1C2A44 !important;
   border-radius: 10px;
   transition: background-color 0.3s;
 }
 
-button:hover,
-.button:hover {
+.legacy-academic button:hover,
+.legacy-academic .button:hover {
   background-color: #d9dbe0 !important;
 }
 
-/* Encabezados */
-header {
-  background-color: #1C2A44 !important;
-  color: #FFFFFF !important;
-}
-
 /* Campos de entrada */
-input,
-textarea,
-select {
+.legacy-academic input,
+.legacy-academic textarea,
+.legacy-academic select {
   background-color: #ffffff !important;
   border: 2px solid #1C2A44 !important;
   border-radius: 5px !important;
@@ -71,23 +88,23 @@ select {
   font-size: 14px !important;
 }
 
-input:focus,
-textarea:focus,
-select:focus {
+.legacy-academic input:focus,
+.legacy-academic textarea:focus,
+.legacy-academic select:focus {
   outline: none !important;
   border: 2px solid #2196F3 !important;
   background-color: #f1f1f1 !important;
 }
 
 /* Fondos con transparencia */
-.card-custom-background {
+.legacy-academic .card-custom-background {
   background: rgba(160, 1, 1, 0.6);
 }
 
-.table-custom-background {
+.legacy-academic .table-custom-background {
   background: rgba(255, 255, 255, 0.87);
 }
 
-.table-header-background {
+.legacy-academic .table-header-background {
   background: rgba(255, 255, 255, 0.877);
 }
