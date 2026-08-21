@@ -763,7 +763,7 @@ class NominasMatriculaPDFView(APIView):
         from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
         from reportlab.platypus import (
             BaseDocTemplate, PageTemplate, Frame, Table, TableStyle,
-            Paragraph, Spacer, Image, KeepTogether,
+            Paragraph, Spacer, Image, CondPageBreak,
         )
 
         # ── Paleta clara (al estilo del Excel oficial) ──
@@ -1116,8 +1116,8 @@ class NominasMatriculaPDFView(APIView):
         # ════════════════════════════════════════════════════
         # FIRMAS — Director / Secretario / V°B° DRE-UGEL
         # ════════════════════════════════════════════════════
-        dir_name = (inst.get("director_name") or "").upper() or "—"
-        sec_name = (inst.get("secretary_name") or "").upper() or "—"
+        # Sin nombres impresos: los tres firman con post firma y sello, así
+        # que al pie va solo la línea y el cargo.
 
         # Tres firmas con SEPARACIÓN real entre líneas (columnas de aire)
         gap = 1.0 * cm
@@ -1125,9 +1125,6 @@ class NominasMatriculaPDFView(APIView):
 
         sig_tbl = Table([
             ["", "", "", "", ""],
-            [Paragraph(dir_name, sty_sig), "",
-             Paragraph(sec_name, sty_sig), "",
-             Paragraph("", sty_sig)],
             [Paragraph("DIRECTOR(A) GENERAL", sty_sig), "",
              Paragraph("SECRETARIO(A) ACADÉMICO", sty_sig), "",
              Paragraph("V° B° DRE / UGEL", sty_sig)],
@@ -1142,14 +1139,21 @@ class NominasMatriculaPDFView(APIView):
             ("LINEABOVE", (0, 1), (0, 1), 0.8, LINE),
             ("LINEABOVE", (2, 1), (2, 1), 0.8, LINE),
             ("LINEABOVE", (4, 1), (4, 1), 0.8, LINE),
-            ("TOPPADDING", (0, 1), (-1, 1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 42),  # espacio para firmar
+            ("TOPPADDING", (0, 1), (-1, 1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 48),  # espacio para firmar
             ("LEFTPADDING", (0, 0), (-1, -1), 6),
             ("RIGHTPADDING", (0, 0), (-1, -1), 6),
         ]))
-        # Bloque INDIVISIBLE: si no cabe completo en la página, pasa entero a
-        # la siguiente — antes se partía (líneas en una hoja, rótulos en otra)
-        story.append(KeepTogether([sig_tbl]))
+        # KeepTogether no bastaba: el bloque se seguía partiendo (líneas en una
+        # hoja, rótulos en la otra). Medimos el alto real del bloque y
+        # reservamos ese espacio: si no queda en la hoja, pasa entero a la
+        # siguiente.
+        try:
+            sig_h = sig_tbl.wrap(avail_w, doc.height)[1]
+        except Exception:
+            sig_h = 3.2 * cm
+        story.append(CondPageBreak(sig_h + 6))
+        story.append(sig_tbl)
 
         try:
             doc.build(story)
